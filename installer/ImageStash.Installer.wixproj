@@ -1,0 +1,26 @@
+<!--
+  WiX 6.0.2, not 7: WiX 7's build refuses to run until the Open Source Maintenance Fee EULA is accepted in the project
+  (error WIX7015), while 6.0.2 builds without that step; its fee applies only to users who generate revenue with it.
+-->
+<Project Sdk="WixToolset.Sdk/6.0.2">
+  <PropertyGroup>
+    <OutputName>ImageStash</OutputName>
+    <!-- PublishDir is the folder tools/publish.ps1 wrote; Version comes from Directory.Build.props unless -p:Version= says otherwise. -->
+    <DefineConstants>PublishDir=$(PublishDir);Version=$(Version)</DefineConstants>
+    <!--
+      ICE38, ICE64 and ICE91 presume a per-machine package: this per-user package installs into the profile by design.
+      ICE60: the bundled e_sqlite3.dll carries a version and no language, and Windows Installer compares it by version.
+    -->
+    <SuppressIces>ICE38;ICE64;ICE91;ICE60</SuppressIces>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="WixToolset.Util.wixext" Version="6.0.2" />
+  </ItemGroup>
+  <Target Name="RequirePublishedFolder" BeforeTargets="Build;CoreCompile">
+    <PropertyGroup>
+      <PublishedExecutable>$([System.IO.Path]::Combine('$(PublishDir)', 'ImageStash.Windows.exe'))</PublishedExecutable>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(PublishedExecutable)')"
+           Text="-p:PublishDir= must name the folder tools/publish.ps1 wrote, holding ImageStash.Windows.exe: '$(PublishDir)'" />
+  </Target>
+</Project>

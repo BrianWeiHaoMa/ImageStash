@@ -1,0 +1,58 @@
+<!--
+  The MSI that puts the published ImageStash folder on the PC for the signed-in user, without administrator rights, and
+  removes it again (F1, N8). It never touches %LOCALAPPDATA%\ImageStash (the stash and settings, F6) or the Run value
+  ImageStash, which ImageStash itself sets or clears at every start (F1).
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+  <!-- The UpgradeCode is written once and never changed: every version shares it, so a newer one replaces an older one. -->
+  <Package Name="ImageStash" Manufacturer="Brian Wei Hao Ma" Version="$(Version)" UpgradeCode="63258392-F785-442F-8EF1-A2B363CDFBAC" Scope="perUser">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of ImageStash is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="ImageStash.ico" SourceFile="..\src\ImageStash.Windows\ImageStash.ico" />
+    <Property Id="ARPPRODUCTICON" Value="ImageStash.ico" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+
+    <!--
+      A running ImageStash is ended before its files are replaced or removed: WM_CLOSE only hides its window (G3), so it
+      is sent the end-session messages and then terminated, an admitted kill (E3, G28), never left for a reboot.
+    -->
+    <util:CloseApplication Id="EndRunningImageStash" Target="ImageStash.Windows.exe" EndSessionMessage="yes" TerminateProcess="0" RebootPrompt="no" Timeout="3" />
+    <!--
+      Windows Installer's Restart Manager usually ends the copy first, at InstallValidate. Where it does not, this close
+      is what frees the files, so it must come before any of them is removed or replaced; the extension schedules it just
+      before InstallFiles, which in an uninstall comes after RemoveFiles, so its step is moved to open the script.
+    -->
+    <InstallExecuteSequence>
+      <Custom Action="override Wix4CloseApplications_$(sys.BUILDARCHSHORT)" After="InstallInitialize" />
+    </InstallExecuteSequence>
+
+    <!--
+      The install folder as the key path wrote it, read back so that uninstall removes exactly that folder whole. Not
+      while an upgrade removes the older version: the folder stays, and whatever the person keeps in it (a stash moved
+      there through Settings included, E2) survives the newer build (G31).
+    -->
+    <Property Id="REMEMBERED_INSTALLFOLDER">
+      <RegistrySearch Root="HKCU" Key="Software\ImageStash" Name="InstallFolder" Type="raw" />
+    </Property>
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsFolder" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="ImageStash" />
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="ImageStash">
+      <Component Id="InstallFolderRegistration" Directory="INSTALLFOLDER" Guid="0B6D2E4A-58C1-4F0E-9A3D-6E2C71B5F804">
+        <RegistryValue Root="HKCU" Key="Software\ImageStash" Name="InstallFolder" Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
+        <RemoveFolder Id="RemoveInstallFolder" On="uninstall" />
+        <util:RemoveFolderEx On="uninstall" Property="REMEMBERED_INSTALLFOLDER" Condition="NOT UPGRADINGPRODUCTCODE" />
+      </Component>
+      <Component Id="StartMenuShortcut" Directory="ProgramMenuFolder" Guid="5C9A1F37-2D84-4B6E-8E05-B1F3D7A9C260">
+        <Shortcut Id="ImageStashShortcut" Name="ImageStash" Target="[INSTALLFOLDER]ImageStash.Windows.exe" WorkingDirectory="INSTALLFOLDER" />
+        <RegistryValue Root="HKCU" Key="Software\ImageStash" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+      <Files Include="$(PublishDir)\**" Directory="INSTALLFOLDER" />
+    </Feature>
+  </Package>
+</Wix>
