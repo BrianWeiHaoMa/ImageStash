@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <AssemblyTitle>ImageStash</AssemblyTitle>
+    <Product>ImageStash</Product>
+    <ApplicationIcon>ImageStash.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="ImageStash.ico" LogicalName="ImageStash.ico" />
+    <EmbeddedResource Include="ImageStash-recording.ico" LogicalName="ImageStash-recording.ico" />
+    <InternalsVisibleTo Include="ImageStash.Windows.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ImageStash\ImageStash.csproj" />
+  </ItemGroup>
+
+</Project>
