@@ -12,7 +12,7 @@ One process runs per Windows session. Inside it one UI thread owns every window,
 
 ## Foundations
 
-- **.NET 10**, long-term support, published self-contained for win-x64 as one folder (F1). The portable assembly targets `net10.0`; the Windows assembly targets `net10.0-windows`.
+- **.NET 10**, long-term support, published self-contained for win-x64 as one folder (F1), the folder the release's MSI installer puts on the PC. The portable assembly targets `net10.0`; the Windows assembly targets `net10.0-windows`.
 - **Avalonia 12.1.4** with its Fluent theme (F2, F10): every window, the tray icon, the file pickers, the system theme.
 - **SkiaSharp 3.119.4**, the version Avalonia.Skia 12.1.4 depends on, used directly: it decodes all four formats frame by frame, draws the layers on screen and into the saved file, encodes PNG and JPEG, and names installed font families. One pixel engine for screen and file is what makes "as shown" (G21) hold by construction.
 - **KGySoft.Drawing.Core 10.0.2**: writes GIF frame by frame to a stream, each frame with its own palette and delay, because SkiaSharp does not write GIF and a recording must reach disk as it is captured (R7). Its binaries carry no use restriction (KGy SOFT License 1.0).
