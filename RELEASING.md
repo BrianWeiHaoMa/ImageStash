@@ -83,9 +83,11 @@ administrator"; a standard account, or an administrator account with User Accoun
 at the repository root, on the interactive desktop, since some desktop checks confirm they run unelevated as
 ImageStash does and the installer phase installs from that shell to show the MSI needs no administrator rights;
 with a primary display of at least 1280 x 800 at 100 % scale (the desktop checks place their windows from the
-display, so a larger one serves too; other scales are untried), left unlocked; Microsoft Edge installed (some
-desktop checks open it); ImageStash not running, `%LOCALAPPDATA%\ImageStash` absent (move it aside first) and every
-window on the primary display minimised:
+display, so a larger one serves too; other scales are untried), left unlocked and awake for the whole run (a locked
+or sleeping desktop takes no input, and the desktop checks then time out); the .NET SDK `global.json` pins installed
+(`dotnet --version` in the repository root prints it), and the internet reachable for the first package restore;
+Microsoft Edge installed (some desktop checks open it); ImageStash not running, `%LOCALAPPDATA%\ImageStash` absent
+(move it aside first) and every window on the primary display minimised:
 
 ```powershell
 powershell.exe -NoProfile -File tools/check-release.ps1 -Output $env:TEMP\ImageStash-release
@@ -111,7 +113,8 @@ the store version of the commit it is given.
 ## When a run fails
 
 - A failed local run or CI run: the last `check-release: phase <phase> failed ...` line names the phase and the
-  reason. Fix on `main` and run or push again.
+  reason. Fix on `main` and go on from step 5 with the fixed commit, so that the commit you tag is one the whole
+  suite passed on.
 - A failed Release run publishes nothing: the release is created by the workflow's last step, which runs only when
   every step before it passed. Fix the cause on `main`, then move the tag to the fixed commit and push it again:
   `git tag -d v<version>`, `git push origin :refs/tags/v<version>`, then steps 5 to 7 on the fixed commit (with

@@ -187,6 +187,15 @@ public static class ReadmeDesk
         return count;
     }
 
+    // The colours a grab holds: a photograph brings thousands, the window's own text and chrome a few, whatever accent
+    // colour the PC has.
+    private static int Colours(int[] pixels)
+    {
+        var seen = new HashSet<int>();
+        foreach (var pixel in pixels) { seen.Add(pixel & 0xFFFFFF); }
+        return seen.Count;
+    }
+
     private static int[] Pixels(Bitmap bitmap)
     {
         var data = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
@@ -201,12 +210,12 @@ public static class ReadmeDesk
 
     /// <summary>
     /// Grabs the rectangle from the screen every quarter second until two grabs in a row differ in no more than a
-    /// blinking caret's pixels and at least <paramref name="pictured"/> percent of the later is picture rather than the
-    /// window's white and grey (a pixel strongly coloured, or dark), and writes it as a PNG at <paramref name="path"/>:
-    /// a window still drawing, or waiting on a picture it has not decoded yet, is never taken. Null once written;
-    /// otherwise why not.
+    /// blinking caret's pixels, at least <paramref name="pictured"/> percent of the later is picture rather than the
+    /// window's white and grey (a pixel strongly coloured, or dark), and it holds at least <paramref name="colours"/>
+    /// distinct colours, and writes it as a PNG at <paramref name="path"/>: a window still drawing, or waiting on a
+    /// picture it has not decoded yet, is never taken. Null once written; otherwise why not.
     /// </summary>
-    public static string TakeSettled(int left, int top, int right, int bottom, string path, int milliseconds, int pictured)
+    public static string TakeSettled(int left, int top, int right, int bottom, string path, int milliseconds, int pictured, int colours)
     {
         Physical();
         int width = right - left, height = bottom - top;
@@ -215,6 +224,7 @@ public static class ReadmeDesk
         var clock = Stopwatch.StartNew();
         int[] previous = null;
         var share = 0;
+        var distinct = 0;
         while (true)
         {
             using (var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb))
@@ -226,7 +236,8 @@ public static class ReadmeDesk
                     var differing = 0;
                     for (var at = 0; at < pixels.Length; at++) { if (pixels[at] != previous[at]) { differing++; } }
                     share = (int)(100L * Pictured(pixels) / pixels.Length);
-                    if (differing <= tolerance && share >= pictured)
+                    distinct = colours > 0 ? Colours(pixels) : 0;
+                    if (differing <= tolerance && share >= pictured && distinct >= colours)
                     {
                         bitmap.Save(path, ImageFormat.Png);
                         return null;
@@ -236,8 +247,12 @@ public static class ReadmeDesk
             }
             if (clock.ElapsedMilliseconds > milliseconds)
             {
-                return share < pictured
-                    ? "after " + milliseconds + " ms only " + share + " % of it shows pictures, not " + pictured + " %: they never drew"
+                if (share < pictured)
+                {
+                    return "after " + milliseconds + " ms only " + share + " % of it shows pictures, not " + pictured + " %: they never drew";
+                }
+                return distinct < colours
+                    ? "after " + milliseconds + " ms it holds only " + distinct + " colours, not " + colours + ": its photographs never drew"
                     : "it kept changing for " + milliseconds + " ms";
             }
             Thread.Sleep(250);
@@ -349,12 +364,14 @@ function TypeWord([string] $word) { foreach ($letter in $word.ToUpperInvariant()
 # The pointer moved off every window the scenes show, so no hover shows in a picture.
 function PointerAside { [ReadmeDesk]::MovePointer($area[2] - 4, [int](($area[1] + $area[3]) / 2)) }
 
-# <pictured>: the percent of the scene that must be picture once its pictures have drawn, above the scene without them:
-# the others showed 18 to 23 % here, so 12; the paste scene's one photograph tile 3.2 %, and the same grab with that
-# tile left out 2.0 % (dark text and the accent count too), so 3, the share being cut to a whole percent.
-function Take([string] $scene, [int[]] $rect, [int] $pictured) {
+# Each scene is taken only once its pictures have drawn. <pictured>: the percent of the scene that must be picture, 12
+# for the three scenes full of photographs (18 to 23 % here). <colours>: the distinct colours it must hold, for the
+# paste scene, whose one photograph tile counts only 1.2 % of its pixels as picture beside 0.7 % of accent blue, so a
+# share there would judge the PC's accent colour; its colours tell it apart instead: 12,194 with the tile, 2,851 with
+# the tile left out, 200 fewer with the accent greyed, so 6,000.
+function Take([string] $scene, [int[]] $rect, [int] $pictured, [int] $colours) {
     PointerAside
-    $why = [ReadmeDesk]::TakeSettled($rect[0], $rect[1], $rect[2], $rect[3], (Join-Path $staging "$scene.png"), 20000, $pictured)
+    $why = [ReadmeDesk]::TakeSettled($rect[0], $rect[1], $rect[2], $rect[3], (Join-Path $staging "$scene.png"), 20000, $pictured, $colours)
     Need ($null -eq $why) "its picture could not be taken: $why"
     Write-Host "took the $scene scene ($($rect[2] - $rect[0]) x $($rect[3] - $rect[1]))"
 }
@@ -453,7 +470,7 @@ try {
     $beside = (($flyout[3] -le $caret[1]) -and ($caret[1] - $flyout[3] -le 24 * $scale)) -or (($flyout[1] -ge $caret[1] + $caret[3]) -and ($flyout[1] - $caret[1] - $caret[3] -le 24 * $scale))
     Need $beside "the flyout ($($flyout -join ', ')) is not beside the chat window's caret ($($caret -join ', '))"
     $chatFrame = [ReadmeDesk]::FrameRect($chatWindow)
-    Take 'paste' @([math]::Min($chatFrame[0], $flyout[0]), [math]::Min($chatFrame[1], $flyout[1]), [math]::Max($chatFrame[2], $flyout[2]), [math]::Max($chatFrame[3], $flyout[3])) 3
+    Take 'paste' @([math]::Min($chatFrame[0], $flyout[0]), [math]::Min($chatFrame[1], $flyout[1]), [math]::Max($chatFrame[2], $flyout[2]), [math]::Max($chatFrame[3], $flyout[3])) 0 6000
 
     $scene = 'grid'
     $null = [ReadmeDesk]::Press([uint16[]]@(0x1B))
@@ -467,7 +484,7 @@ try {
     $chips = @(Elements $root '' $button | Where-Object { $_.Current.Name -like '#*' })
     Need ($chips.Count -ge 3) "the chip row shows $($chips.Count) tag chips, not three or more"
     Need ((Counted $root) -like '13 items*') "the pinned window does not list the 13 items: $(Counted $root)"
-    Take 'grid' ([ReadmeDesk]::FrameRect((StashWindow))) 12
+    Take 'grid' ([ReadmeDesk]::FrameRect((StashWindow))) 12 0
 
     $scene = 'preview'
     ClickOn (One (Elements $root 'Search your stash' $edit) 'the search box')
@@ -478,13 +495,13 @@ try {
     $null = [ReadmeDesk]::Press([uint16[]]@(0x09))
     $null = [ReadmeDesk]::Press([uint16[]]@(0x20))
     Need (WaitFor { ((Elements $root 'Edit' $button).Count -eq 1) -and ((Elements $root 'monday' $text).Count -ge 1) -and (@(Elements $root '' $text | Where-Object { $_.Current.Name -like 'Edited here*' }).Count -ge 1) } 5000) "Space did not open the preview of the edited item with its Edit button and ""Edited here"""
-    Take 'preview' ([ReadmeDesk]::FrameRect((StashWindow))) 12
+    Take 'preview' ([ReadmeDesk]::FrameRect((StashWindow))) 12 0
 
     $scene = 'editor'
     ClickOn (One (Elements $root 'Edit' $button) "the preview's Edit")
     $tool = $null
     Need (WaitFor { $script:tool = One (Elements $root 'Text' $button) "the tool row's Text"; ($script:tool.GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern).Current.ToggleState -eq [Windows.Automation.ToggleState]::On) -and ((Elements $root 'Meme' $button).Count -eq 1) -and ((Elements $root 'Click the picture to add text' $text).Count -eq 1) } 5000) "the preview's Edit did not open the editor with the Text tool and its row (Meme, ""Click the picture to add text"")"
-    Take 'editor' ([ReadmeDesk]::FrameRect((StashWindow))) 12
+    Take 'editor' ([ReadmeDesk]::FrameRect((StashWindow))) 12 0
 
     # All or nothing: every committed picture is held for writing and read before any is written, so a picture another
     # program holds stops the run with none changed, and a write that fails puts back the ones already written.
