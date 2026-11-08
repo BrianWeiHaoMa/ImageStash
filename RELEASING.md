@@ -36,9 +36,17 @@ refuses a tag of another form, a tag naming another version, and a version with 
    `powershell.exe -NoProfile -File tools/check-release.ps1 -Tag v<version> -Only identity -Notes $env:TEMP\notes.md`
    and read `$env:TEMP\notes.md`.
 3. Commit both files, for example `Release <version>`.
-4. Regenerate the README's pictures: dispatch the README screenshots workflow
-   (`.github/workflows/readme-screenshots.yml`) on `main`, or run `tools/make-readme-screenshots.ps1` locally, and
-   merge the commit it makes. Neither exists in the repository yet; until they do, skip this step.
+4. Take the README's pictures again, so the tag's tree shows the build it releases: in the repository's Actions tab,
+   run the workflow README screenshots (`.github/workflows/readme-screenshots.yml`) on `main`. It takes the pictures
+   of `main` as pushed, so first check that `git log origin/main..main` lists only step 3's commit (the version and
+   the changelog, which change no picture), pushing any commit beneath it with `git push origin HEAD~1:main`. Once
+   it passes it has committed the pictures that changed to `main`, or nothing when none did; then
+   `git pull --rebase origin main` puts its commit beneath yours. Or take them locally:
+   `powershell.exe -NoProfile -File tools/make-readme-screenshots.ps1` from PowerShell on the interactive desktop,
+   with ImageStash not running and `%LOCALAPPDATA%\ImageStash` moved aside, leaving the desktop to it for a minute;
+   then commit what it changed under `docs/screenshots/`. A failed run changes no picture, and its last line names
+   the scene that failed. A commit the workflow pushes starts no CI run of its own, which is why step 5 pushes yours
+   after it.
 5. Push `main` and wait for the CI workflow's run on that commit to pass (the repository's Actions tab, workflow CI).
    Its artifact `ImageStash-<version>-win-x64` holds the three assets that commit builds.
 6. Tag and push the tag:

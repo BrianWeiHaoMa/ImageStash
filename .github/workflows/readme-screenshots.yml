@@ -1,0 +1,57 @@
+# Takes the README's pictures of the current build with tools/make-readme-screenshots.ps1 on the runner's desktop and
+# commits the ones that changed to the branch it was dispatched on. Dispatched by hand before a release (RELEASING.md).
+name: README screenshots
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  screenshots:
+    # The pictures need an interactive desktop; the repository variable DESKTOP_RUNNER, when set, names the runner
+    # label to use instead of the hosted image.
+    runs-on: ${{ vars.DESKTOP_RUNNER || 'windows-2025' }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        # Windows PowerShell 5.1, which the scripts are written for; the Windows default, pwsh, is PowerShell 7.
+        shell: powershell
+    steps:
+      # A dispatch on a tag has no branch to commit the pictures to, so nothing runs after this.
+      - name: Require a branch
+        run: |
+          if ($env:GITHUB_REF_TYPE -ne 'branch') {
+            Write-Host "readme-screenshots: dispatched on the $env:GITHUB_REF_TYPE $env:GITHUB_REF_NAME, not a branch; dispatch it on a branch."
+            exit 1
+          }
+      # Its credentials stay, since the last step pushes with the job's token.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - name: Report and raise the runner's desktop
+        run: powershell.exe -NoProfile -File tools/runner-desktop.ps1
+      - name: Take the pictures
+        run: powershell.exe -NoProfile -File tools/make-readme-screenshots.ps1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: readme-screenshots
+          path: docs/screenshots
+          if-no-files-found: error
+      # A push made with the job's token starts no other workflow run.
+      - name: Commit the pictures that changed
+        run: |
+          if (-not (git status --porcelain docs/screenshots)) {
+            Write-Host 'The pictures are as committed; nothing to commit.'
+            exit 0
+          }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/screenshots
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git commit -m "Take the README's pictures again" -m "README screenshots run $env:GITHUB_RUN_NUMBER: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git push origin "HEAD:refs/heads/$env:GITHUB_REF_NAME"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
