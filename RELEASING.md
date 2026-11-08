@@ -78,13 +78,14 @@ fails: `identity` (only with `-Tag`), `build`, `portable` (`tests/ImageStash.Tes
 desktop, which is what the workflows run. Its comment-based help (`Get-Help tools/check-release.ps1 -Full`) lists its
 parameters.
 
-The whole run is a person's, on a Windows 11 x64 PC: from PowerShell (never Git Bash) at the repository root, on the
-interactive desktop of a standard (not administrator) Windows account, since some desktop checks confirm they run
-unelevated as ImageStash does and the installer phase shows the MSI needs no administrator rights; with a primary
-display of at least 1280 x 800 at 100 % scale (the desktop checks place their windows from the display, so a larger
-one serves too; other scales are untried), left unlocked; Microsoft Edge installed (some desktop checks open it);
-ImageStash not running, `%LOCALAPPDATA%\ImageStash` absent (move it aside first) and every window on the primary
-display minimised:
+The whole run is a person's, on a Windows 11 x64 PC: from an unelevated PowerShell (never Git Bash, and not "Run as
+administrator"; a standard account, or an administrator account with User Account Control on, as Windows sets it)
+at the repository root, on the interactive desktop, since some desktop checks confirm they run unelevated as
+ImageStash does and the installer phase installs from that shell to show the MSI needs no administrator rights;
+with a primary display of at least 1280 x 800 at 100 % scale (the desktop checks place their windows from the
+display, so a larger one serves too; other scales are untried), left unlocked; Microsoft Edge installed (some
+desktop checks open it); ImageStash not running, `%LOCALAPPDATA%\ImageStash` absent (move it aside first) and every
+window on the primary display minimised:
 
 ```powershell
 powershell.exe -NoProfile -File tools/check-release.ps1 -Output $env:TEMP\ImageStash-release
@@ -124,8 +125,8 @@ The CI and Release workflows run on GitHub's hosted Windows Server 2025 image (`
 `tools/check-release.ps1 -NoDesktop`: the tag's identity (Release only), the build, the portable checks and the
 assets. The hosted job runs as an administrator with User Account Control off, so the other phases cannot judge
 ImageStash there: some desktop checks confirm they run unelevated, as ImageStash does, and rightly fail on that job;
-the published check drives the same desktop; and an install by an administrator cannot show that the MSI needs no
-administrator rights. Those phases are step 5's local run on a standard account.
+the published check drives the same desktop; and an elevated install cannot show that the MSI needs no
+administrator rights. Those phases are step 5's local run from an unelevated shell.
 
 The README screenshots workflow is the one job that needs a desktop. It runs on
 `runs-on: ${{ vars.DESKTOP_RUNNER || 'windows-2025' }}`: the hosted image unless the repository variable
