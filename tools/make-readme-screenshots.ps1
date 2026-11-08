@@ -273,13 +273,13 @@ public static class ChatWindow
         Func<double, int> units = value => (int)Math.Round(value * scale);
         var form = new Form { Text = "Chat", StartPosition = FormStartPosition.Manual, Bounds = new Rectangle(x, y, width, height), BackColor = Color.White, Font = new Font("Segoe UI", 11f) };
         var inner = form.ClientSize;
-        var box = new TextBox { Text = "ha, perfect ", BorderStyle = BorderStyle.FixedSingle, Font = new Font("Segoe UI", 12f) };
+        var box = new TextBox { Text = "be right there ", BorderStyle = BorderStyle.FixedSingle, Font = new Font("Segoe UI", 12f) };
         box.SetBounds(units(16), inner.Height - units(16) - box.PreferredHeight, inner.Width - units(32), box.PreferredHeight);
         form.Controls.Add(box);
-        Say(form, "Sam: did the release go out?", false, units(16), units);
-        Say(form, "just now", true, units(70), units);
-        Say(form, "how did the demo go?", true, units(124), units);
-        Say(form, "Sam: screenshots or it didn't happen", false, units(178), units);
+        Say(form, "Sam: movie starts at 8, where are you?", false, units(16), units);
+        Say(form, "leaving now!", true, units(70), units);
+        Say(form, "just need to find my keys", true, units(124), units);
+        Say(form, "and my other shoe", true, units(178), units);
         form.Shown += delegate { box.Focus(); box.SelectionStart = box.Text.Length; box.SelectionLength = 0; };
         Application.Run(form);
     }
@@ -349,8 +349,9 @@ function TypeWord([string] $word) { foreach ($letter in $word.ToUpperInvariant()
 # The pointer moved off every window the scenes show, so no hover shows in a picture.
 function PointerAside { [ReadmeDesk]::MovePointer($area[2] - 4, [int](($area[1] + $area[3]) / 2)) }
 
-# <pictured>: the percent of the scene that must be picture once its pictures have drawn, about half what this desktop
-# showed (the paste scene's one tile 4.7 %, the others 23 to 25 %), and well above the scene without them.
+# <pictured>: the percent of the scene that must be picture once its pictures have drawn, above the scene without them:
+# the others showed 18 to 23 % here, so 12; the paste scene's one photograph tile 3.2 %, and the same grab with that
+# tile left out 2.0 % (dark text and the accent count too), so 3, the share being cut to a whole percent.
 function Take([string] $scene, [int[]] $rect, [int] $pictured) {
     PointerAside
     $why = [ReadmeDesk]::TakeSettled($rect[0], $rect[1], $rect[2], $rect[3], (Join-Path $staging "$scene.png"), 20000, $pictured)
@@ -444,9 +445,9 @@ try {
         $summoned = WaitFor { [StashWindows]::Showing($copy.Id) -eq 'flyout' } 3000
     }
     Need $summoned 'the real Ctrl+Alt+Space over the chat window did not show the flyout'
-    TypeWord 'sh'
+    TypeWord 'my'
     $root = Root
-    Need (WaitFor { ((SearchText $root) -eq 'sh') -and ((Counted $root) -like '1 item*') } 5000) "two letters typed into the search box did not find one item: '$(SearchText $root)', $(Counted $root)"
+    Need (WaitFor { ((SearchText $root) -eq 'my') -and ((Counted $root) -like '1 item*') } 5000) "two letters typed into the search box did not find one item: '$(SearchText $root)', $(Counted $root)"
     Need (WaitFor { (Footer $root) -eq "Enter $dot Paste into Chat | Ctrl+C $dot Copy" } 5000) "the footer does not name the chat window: '$(Footer $root)'"
     $flyout = [ReadmeDesk]::FrameRect((StashWindow))
     $beside = (($flyout[3] -le $caret[1]) -and ($caret[1] - $flyout[3] -le 24 * $scale)) -or (($flyout[1] -ge $caret[1] + $caret[3]) -and ($flyout[1] - $caret[1] - $caret[3] -le 24 * $scale))

@@ -1,0 +1,23 @@
+# Where the demo pictures come from
+
+The photographs in this folder fill the demo stash that the README's pictures are taken over (`DemoStashTests`). Each
+is a copy of a file on Wikimedia Commons whose page dedicates it to the public domain under CC0 1.0, so this repository
+may redistribute and caption it; the captions are layers ImageStash draws over it, never baked into these files. No
+picture shows a person, a logo or a brand. A new picture here needs its row, with a license from this list: CC0 1.0,
+Public domain, CC BY 4.0 (its row is then its attribution), the Unsplash License or the Pexels License.
+
+| File | Shows | Source | Author | License | Changes |
+|---|---|---|---|---|---|
+| `coffee first.jpg` | A cup of black coffee on coffee beans | [Commons](https://commons.wikimedia.org/wiki/File:Coffee_cup_surrounded_by_coffee_beans.jpg) | Petr Kratochvil | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | None: the file as Commons serves it, 615 x 410 |
+| `everyone staring.jpg` | A herd of goats in a field, one staring at the camera | [Commons](https://commons.wikimedia.org/wiki/File:Capra_aegagrus_hircus_in_Glindow_2022-05-25_03.jpg) | Leonhard Lenz | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Commons' 1280-pixel copy downscaled to 1000 x 667, re-encoded as JPEG |
+| `five more minutes.jpg` | A tabby cat asleep on a white blanket | [Commons](https://commons.wikimedia.org/wiki/File:Cat_dozing_off_on_a_blanket_%28Unsplash%29.jpg) | Erik-Jan Leusink (via Unsplash) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Commons' 1280-pixel copy downscaled to 1000 x 666, re-encoded as JPEG |
+| `i saw that.jpg` | An owl with orange eyes looking straight ahead | [Commons](https://commons.wikimedia.org/wiki/File:Orange_eyed_owl_%28Unsplash%29.jpg) | Harm Weustink (via Unsplash) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Commons' 1280-pixel copy downscaled to 1000 x 752, re-encoded as JPEG |
+| `monday.jpg` | A tabby cat yawning as it stretches on a plank | [Commons](https://commons.wikimedia.org/wiki/File:Cat_yawning_Pixabay.jpg) | Jonathan Sautter (via Pixabay) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | None: the file as Commons serves it, 960 x 640 |
+| `nope.jpg` | A goat by a wooden fence | [Commons](https://commons.wikimedia.org/wiki/File:Capra-aegagrus-hircus-1.jpg) | MartinThoma | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Commons' 1280-pixel copy with its top 9 % cropped (a passer-by's legs), downscaled to 1000 x 683, re-encoded as JPEG |
+| `on my way.jpg` | A snail crawling over gravel | [Commons](https://commons.wikimedia.org/wiki/File:Snail_in_Lankawi,_Malaysia.jpg) | AMarmotNamedPhilX | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Commons' 1280-pixel copy downscaled to 1000 x 750, re-encoded as JPEG |
+| `party time.jpg` | A row of cupcakes with mint frosting and sprinkles | [Commons](https://commons.wikimedia.org/wiki/File:The_Perfect_Cupcake_%28Unsplash%29.jpg) | Brooke Lark (via Unsplash) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Commons' 1280-pixel copy downscaled to 1000 x 666, re-encoded as JPEG |
+| `pizza tonight.jpg` | A mushroom pizza on a wooden board | [Commons](https://commons.wikimedia.org/wiki/File:Pizza_with_mushrooms_and_cheese.jpg) | LEi - DESIGN (via Foodiesfeed) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Commons' 960-pixel copy downscaled to 667 x 1000, re-encoded as JPEG |
+| `snack time.jpg` | A hamster eating a slice of cucumber | [Commons](https://commons.wikimedia.org/wiki/File:Pet_Hamster_eating_cucumber.JPG) | Bernard Ladenthin | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Commons' 1280-pixel copy downscaled to 1000 x 750, re-encoded as JPEG |
+| `sunflower.jpg` | A sunflower against a blue sky | [Commons](https://commons.wikimedia.org/wiki/File:Son%C4%8Dnica_-_Sunflower_-_Helianthus_annuus_%281%29.JPG) | Jonson22 | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Commons' 1280-pixel copy downscaled to 1000 x 750, re-encoded as JPEG |
+| `wait what.jpg` | A black dog tilting its head | [Commons](https://commons.wikimedia.org/wiki/File:Black_dog_head_tilt.jpg) | Reid Campbell | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Commons' 960-pixel copy downscaled to 800 x 1000, re-encoded as JPEG |
+| `who me.jpg` | A raccoon resting its chin on a log | [Commons](https://commons.wikimedia.org/wiki/File:Raccoon_on_Log.jpg) | Alexas_Fotos (via Pixabay) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | Commons' 1280-pixel copy downscaled to 1000 x 666, re-encoded as JPEG |

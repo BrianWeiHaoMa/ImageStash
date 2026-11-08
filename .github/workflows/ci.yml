@@ -1,5 +1,7 @@
-# Runs the whole release suite, tools/check-release.ps1, on every pushed branch and pull request, and keeps the
-# release's assets as an artifact: a green run proves everything a release needs short of publishing it.
+# Runs the release suite's phases that need no desktop, tools/check-release.ps1 -NoDesktop (the build, the portable
+# checks and the release's assets), on every pushed branch and pull request, and keeps the assets as an artifact. The
+# hosted job runs elevated, so the desktop, published and installer phases cannot pass or prove anything here; they run
+# in the whole suite on a Windows PC before a tag (RELEASING.md).
 name: CI
 
 on:
@@ -12,11 +14,9 @@ permissions:
 
 jobs:
   release-check:
-    # The desktop checks need an interactive desktop; the repository variable DESKTOP_RUNNER, when set, names the
-    # runner label to use instead of the hosted image.
-    runs-on: ${{ vars.DESKTOP_RUNNER || 'windows-2025' }}
-    # A desktop check that hangs on a runner without a usable desktop is stopped here, not at the six-hour default.
-    timeout-minutes: 120
+    runs-on: windows-2025
+    # The phases take about a quarter of an hour here; a run that hangs is stopped well short of the six-hour default.
+    timeout-minutes: 45
     defaults:
       run:
         # Windows PowerShell 5.1, which the scripts are written for; the Windows default, pwsh, is PowerShell 7.
@@ -33,10 +33,8 @@ jobs:
         run: |
           $version = "$(([xml](Get-Content -Raw Directory.Build.props)).Project.PropertyGroup.Version)".Trim()
           [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "version=$version`n")
-      - name: Report and raise the runner's desktop
-        run: powershell.exe -NoProfile -File tools/runner-desktop.ps1
-      - name: Run the release suite
-        run: powershell.exe -NoProfile -File tools/check-release.ps1 -Output "$env:RUNNER_TEMP\release"
+      - name: Run the release suite's hosted phases
+        run: powershell.exe -NoProfile -File tools/check-release.ps1 -NoDesktop -Output "$env:RUNNER_TEMP\release"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ImageStash-${{ steps.version.outputs.version }}-win-x64

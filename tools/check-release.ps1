@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
-The comprehensive suite a release must pass, as one command that a person, the CI workflow and the Release workflow
-run alike. Its phases, in order, stopping at the first that fails:
+The comprehensive suite a release must pass, as one command run whole on a Windows PC before a tag, and with
+-NoDesktop by the CI and Release workflows. Its phases, in order, stopping at the first that fails:
 
   identity   only with -Tag: the tag is v<a.b.c>, <a.b.c> is Directory.Build.props's version, and CHANGELOG.md has a
              "## [<a.b.c>]" section, whose body is written to -Notes when given (the release's notes)
@@ -16,11 +16,14 @@ run alike. Its phases, in order, stopping at the first that fails:
 
 Each phase prints a line as it starts and as it ends, with its seconds. A failing phase ends the run with a line
 naming the phase and, for a child process, its exit code; the script then exits 1. -Only runs one phase alone.
+-NoDesktop runs, in order, only the phases that need no desktop: identity (with -Tag), build, portable and assets,
+which is what GitHub's hosted runner can judge (its job runs elevated, so the desktop, published and installer phases
+cannot pass or prove anything there). -NoDesktop with -Only is refused with a "refused:" line before any phase.
 
--Output, a new or empty folder, is required for a whole run and for -Only assets or installer (which reads the two
-folders assets wrote), and is ignored by the other phases. -Changelog names the changelog identity reads, by default
-the repository's CHANGELOG.md. -PublishedCheck names the script the published phase runs, by default
-tools/check-published.ps1.
+-Output, a new or empty folder, is required for a whole run, for -NoDesktop and for -Only assets or installer (which
+reads the two folders assets wrote), and is ignored by the other phases. -Changelog names the changelog identity
+reads, by default the repository's CHANGELOG.md. -PublishedCheck names the script the published phase runs, by
+default tools/check-published.ps1.
 
 The desktop, published and installer phases use the real desktop, %LOCALAPPDATA%\ImageStash, the Run value, the
 clipboard and the Recycle Bin, so a run that includes any of them refuses, before any phase starts, while ImageStash
@@ -31,6 +34,9 @@ primary display first. Start it from PowerShell, never Git Bash.
 powershell.exe -NoProfile -File tools/check-release.ps1 -Output $env:TEMP\ImageStash-release
 
 .EXAMPLE
+powershell.exe -NoProfile -File tools/check-release.ps1 -NoDesktop -Output $env:TEMP\ImageStash-hosted
+
+.EXAMPLE
 powershell.exe -NoProfile -File tools/check-release.ps1 -Tag v1.0.0 -Only identity -Notes $env:TEMP\notes.md
 #>
 param(
@@ -39,6 +45,7 @@ param(
     [string] $Notes = '',
     [ValidateSet('identity', 'build', 'portable', 'desktop', 'published', 'assets', 'installer')]
     [string] $Only = '',
+    [switch] $NoDesktop,
     [string] $Changelog = '',
     [string] $PublishedCheck = ''
 )
@@ -188,10 +195,15 @@ function Test-Installer {
     if ($code -ne 0) { return "check-installer.ps1 exited $code" }
 }
 
+if ($NoDesktop -and $Only) {
+    Stop-Run "refused: -NoDesktop and -Only $Only both choose the phases; give one of them; nothing was run"
+}
 if ($Only -eq 'identity' -and -not $Tag) {
     Stop-Run '-Only identity needs -Tag v<a.b.c>; nothing was run'
 }
-$run = if ($Only) { @($Only) } else { @($phases | Where-Object { $_ -ne 'identity' -or $Tag }) }
+$run = if ($Only) { @($Only) } else {
+    @($phases | Where-Object { ($_ -ne 'identity' -or $Tag) -and -not ($NoDesktop -and $usesDesktop -contains $_) })
+}
 if (-not $Output -and @($run | Where-Object { $needsOutput -contains $_ }).Count -gt 0) {
     Stop-Run "-Output <new or empty folder> is needed by the $(@($run | Where-Object { $needsOutput -contains $_ }) -join ' and ') phase(s); nothing was run"
 }
