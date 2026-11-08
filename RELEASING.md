@@ -75,7 +75,7 @@ where any `skipped:` line is a failure but the earlier-build phase's, below), `a
 comment-based help (`Get-Help tools/check-release.ps1 -Full`) lists its parameters.
 
 To run it locally, from PowerShell (never Git Bash) at the repository root, on the interactive desktop of a PC whose
-primary display is 1280 x 800 at 100 % (see the runner's needs below), with ImageStash not running, `%LOCALAPPDATA%\ImageStash` absent (move it aside first) and every window on the primary display
+primary display is at least 1280 x 800 at 100 % (see the runner's needs below), with ImageStash not running, `%LOCALAPPDATA%\ImageStash` absent (move it aside first) and every window on the primary display
 minimised:
 
 ```powershell
@@ -113,8 +113,8 @@ Both workflows run on `runs-on: ${{ vars.DESKTOP_RUNNER || 'windows-2025' }}`: G
 image unless the repository variable `DESKTOP_RUNNER` (Settings, Secrets and variables, Actions, Variables) names
 another runner label, which switches every desktop job without a commit; delete the variable to go back.
 `tools/runner-desktop.ps1`, the first step of each job, prints the session and the display and, on a GitHub runner,
-raises a display smaller than 1280 x 800 to 1280 x 800, failing the job on one line when the session is not
-interactive or the display stays below 1280 x 800. Run locally, it only reports.
+raises a display smaller than 1280 x 800, the smallest the desktop checks run on, to that size, failing the job on one
+line when the session is not interactive or the display stays smaller. Run locally, it only reports.
 
 GitHub's hosted Windows runners run as an administrator with User Account Control off, so the `desktop` phase cannot
 pass there: some desktop checks confirm they run unelevated, as ImageStash does, and judge a window of higher rights
@@ -125,9 +125,9 @@ A self-hosted runner needs:
 
 - Windows 11 x64 (or the Server equivalent), with the runner application started from a signed-in desktop session
   (its `run.cmd`), not installed as a Windows service, which runs in session 0 with no desktop to click or capture;
-- a primary display of 1280 x 800 at 100 % scale, the one size the desktop checks are known to pass at (several
-  place windows for a display 1280 pixels wide and fail on a wider one), left unlocked and without a screen saver
-  while jobs run;
+- a primary display of at least 1280 x 800 at 100 % scale, the smallest the desktop checks run on: they place their
+  windows from the display, so a larger one serves too, though so far they have been seen to pass at that size and
+  scale, and other scales are untried; left unlocked and without a screen saver while jobs run;
 - a standard (not administrator) Windows account used only for this, since the suite uses that account's real
   `%LOCALAPPDATA%\ImageStash`, Run value, clipboard and Recycle Bin, and installs and uninstalls the MSI for it;
 - Git, Windows PowerShell 5.1, Microsoft Edge (some desktop checks open it), the .NET SDK that `global.json` names

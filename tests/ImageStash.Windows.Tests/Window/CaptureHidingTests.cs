@@ -43,7 +43,8 @@ public sealed class CaptureHidingTests
         using var desk = await CaptureDesk.Open(["hiding kept one.png", "hiding kept two.png"]);
         var shown = desk.Shown;
         // Inside the flyout's place at the primary display's top right (CaptureDesk.FlyoutInFront).
-        var area = new PixelRect(820, 40, 220, 200);
+        var display = DisplayPlaces.Primary();
+        var area = DisplayPlaces.UnderFlyout(display, desk.FlyoutClient(display));
         // A pattern of the check's own beneath the flyout, not topmost so the flyout comes in front of it: what lies beneath
         // is still, not a desktop the check does not own, and every pixel of it is compared.
         using var pattern = PatternWindow.Show(area, window => window.Topmost = false);
@@ -440,7 +441,8 @@ public sealed class CaptureHidingTests
         using var desk = await CaptureDesk.Open(["menu kept.png"]);
         var shown = desk.Shown;
         // Where the flyout stands at the primary display's top right (CaptureDesk.FlyoutInFront), with its + button and menu.
-        var area = new PixelRect(640, 20, 640, 440);
+        var display = DisplayPlaces.Primary();
+        var area = DisplayPlaces.AroundPlusMenu(display, desk.FlyoutClient(display));
         // A pattern of the check's own beneath the flyout and its menu, not topmost so both come in front of it: what lies
         // beneath is known, not a grab of a desktop the check does not own, taken at another moment.
         using var beneath = PatternWindow.Show(area, window => window.Topmost = false);
@@ -482,7 +484,10 @@ public sealed class CaptureHidingTests
         using var desk = await CaptureDesk.Open(["tip kept.png"]);
         var shown = desk.Shown;
         // Around the + button and its tooltip, with the window at the primary display's top right or pinned at PinnedPlace.
-        var area = pinned ? new PixelRect(500, 180, 760, 480) : new PixelRect(640, 20, 640, 440);
+        var display = DisplayPlaces.Primary();
+        var area = pinned
+            ? DisplayPlaces.AroundPinnedPlusButton(display, new PixelRect(PinnedPlace.Position, PixelSize.FromSize(new Size(PinnedPlace.Width, PinnedPlace.Height), display.Scaling)))
+            : DisplayPlaces.AroundPlusMenu(display, desk.FlyoutClient(display));
         var beneath = await Task.Run(() => new WindowsScreen().Grab(area, withPointer: false).Value!);
         var popups = new List<PopupRoot>();
         using var opened = TrayDesktop.Get(() => TemplatedControl.TemplateAppliedEvent.AddClassHandler<PopupRoot>((popup, _) => popups.Add(popup)));
@@ -524,7 +529,9 @@ public sealed class CaptureHidingTests
     {
         using var desk = await CaptureDesk.Open(["menu open.png"]);
         var shown = desk.Shown;
-        var area = new PixelRect(640, 20, 640, 440);
+        // Where the flyout stands at the primary display's top right (CaptureDesk.FlyoutInFront), with its + menu.
+        var display = DisplayPlaces.Primary();
+        var area = DisplayPlaces.AroundPlusMenu(display, desk.FlyoutClient(display));
         var beneath = await Task.Run(() => new WindowsScreen().Grab(area, withPointer: false).Value!);
         await desk.FlyoutInFront();
         TestMouse.Click(TestMouse.Centre(TrayDesktop.Get(() => shown.AddButton)));

@@ -237,19 +237,25 @@ public sealed class CaptureDesk : IDisposable
     /// <summary>The chat is the window in front and a letter typed now reaches it.</summary>
     public void ChatKeepsTheKeystrokes(string when) => Chat.KeepsTheKeystrokes(when);
 
-    /// <summary>The stash window shown at the top right of the primary display, at its minimum height, which leaves the notification clear, and clicked to the front.</summary>
+    /// <summary>The stash window's client as <see cref="FlyoutInFront"/> shows it on <paramref name="display"/>: its width, at its minimum height, in physical pixels.</summary>
+    public PixelSize FlyoutClient(Display display) =>
+        TrayDesktop.Get(() => PixelSize.FromSize(new Size(Shown.Window.Width, WindowSize.Minimum.Height), display.Scaling));
+
+    /// <summary>The stash window shown at the top right of the primary display (<see cref="DisplayPlaces.Flyout"/>), at its minimum height, which leaves the notification clear, and clicked to the front.</summary>
     public async Task FlyoutInFront()
     {
         var window = Shown.Window;
+        var display = DisplayPlaces.Primary();
+        var flyout = DisplayPlaces.Flyout(display, FlyoutClient(display));
         TrayDesktop.Run(() =>
         {
-            var area = window.Screens.Primary!.WorkingArea;
             window.Height = WindowSize.Minimum.Height;
-            window.Position = new PixelPoint(area.Right - (int)window.Width - 20, area.Y + 20);
+            window.Position = flyout.Position;
             // On a short display a stack of notifications reaches up to the top right.
-            if (Notification.Shown is { IsVisible: true } standing && new PixelRect(window.Position, PixelSize.FromSize(new Size(window.Width, window.Height), window.RenderScaling)).Intersects(Outer(standing)))
+            if (Notification.Shown is { IsVisible: true } standing && flyout.Intersects(Outer(standing)))
             {
-                window.Position = new PixelPoint(area.X + 20, area.Y + 20);
+                var margin = DisplayPlaces.Scaled(display, 20);
+                window.Position = new PixelPoint(display.WorkingArea.X + margin, display.WorkingArea.Y + margin);
             }
 
             window.Show();

@@ -193,12 +193,13 @@ public sealed class PresetTarget : ITarget
 
 /// <summary>
 /// The real seam, but with the tray icon in the middle of the primary display, so a notification shows above it: an
-/// unactivated Windows draws its watermark over every window in the bottom-right corner, and into every grab.
+/// unactivated Windows draws its watermark over every window in the bottom-right corner, and into every grab. The icon
+/// stays below the display's centre line, or the notification would stand below it instead (<see cref="DisplayPlaces.TrayIcon"/>).
 /// </summary>
 public sealed class TrayIconMidScreen(WindowsQuietWindows real) : IQuietWindows
 {
-    /// <summary>Where the icon is said to be, in physical pixels.</summary>
-    public static readonly PixelRect Icon = new(680, 520, 24, 24);
+    /// <summary>Where the icon is said to be, in physical pixels, on the primary display as the Screen seam reports it now.</summary>
+    public static PixelRect Icon => DisplayPlaces.TrayIcon(DisplayPlaces.Primary());
 
     public void ShowWithoutActivating(Avalonia.Controls.Window window) => real.ShowWithoutActivating(window);
 

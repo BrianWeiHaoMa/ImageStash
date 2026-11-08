@@ -6,6 +6,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ImageStash.Files;
 using ImageStash.Seams;
@@ -135,6 +136,9 @@ public sealed class SettingsWindowTests
         {
             var first = open = TrayDesktop.Get(() => SettingsWindow.Open(open, () => settings.Page()));
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => first.IsVisible && first.FrameSize is not null && InsideWorkingArea(first)));
+            // The page places itself once more, its frame then known, at this priority (SettingsWindow.ShowCentred): on a
+            // working area taller than the page, it is inside it before then, centred as if it had no frame.
+            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
 
             TrayDesktop.Run(() =>
             {

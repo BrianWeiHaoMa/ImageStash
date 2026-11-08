@@ -33,7 +33,7 @@ namespace ImageStash.Windows.Tests.Window;
 /// (G15, G3). Its ways in (F5, G34): a real press of <c>Ctrl+Shift+PrtScn</c>, registered as ImageStash binds its four
 /// shortcuts, opens the overlay in record mode, a real press again starts the waiting recording and another stops it;
 /// the <c>+</c> menu's Record a clip opens the overlay once the menu has closed, and chosen while a region waits, starts
-/// it. These checks show a counter at (400, 380), 560 × 280, the overlay over the primary display, the frame and the bar
+/// it. These checks show a counter below the primary display's middle, the overlay over the primary display, the frame and the bar
 /// around a region over the counter or over the chat at (100, 100), the flyout at the primary display's top right or
 /// above the tray with its menu; they drag across it, move the pointer into it, click inside it, on Record, Stop and
 /// Cancel, on the <c>+</c> button and its entry, type a letter, Esc and the record shortcut, and read the screen's pixels
@@ -48,8 +48,8 @@ public sealed class RecordClipTests
 
     private static readonly Shortcut RecordShortcut = Shortcut.Parse("Ctrl+Shift+PrtScn").Value!;
 
-    /// <summary>Where the counter goes: clear of the chat at (100, 100), beneath a notification shown above (680, 520).</summary>
-    private static readonly PixelRect CounterPlace = new(400, 380, 560, 280);
+    /// <summary>Where the counter goes: clear of the chat at (100, 100), beneath a notification shown above the stand-in tray icon.</summary>
+    private static readonly PixelRect CounterPlace = DisplayPlaces.Counter(DisplayPlaces.Primary());
 
     [TestMethod]
     public async Task ARealDragOverTheCounterWaitsForRecordThenRecordsEachSampleWithThePointerAndNothingOfANotificationThenStopSavesItCopiedAndAnnounced()

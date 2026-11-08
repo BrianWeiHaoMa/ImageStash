@@ -397,7 +397,10 @@ public sealed class CaptureNotificationTests
     [TestMethod]
     public async Task ACardStaysAboveTheFlyoutAboveTheTrayBeforeAndAfterItsEditOpensItAndAfterACaptureSoItsUndoClosesThatEdit()
     {
-        using var desk = await CaptureDesk.Open(["stash captured.png"]);
+        // The card above the stand-in icon by the display's middle, under which the flyout, summoned with no tray icon to
+        // stand above, is centred on any display; the working area's corner, where the card stands without an icon, lies
+        // under a centred flyout only on a small display.
+        using var desk = await CaptureDesk.Open(["stash captured.png"], midScreen: true);
         var item = desk.Items().Single();
         var flyout = desk.Shown.Window;
         var handle = TrayDesktop.Get(() => flyout.TryGetPlatformHandle()!.Handle);

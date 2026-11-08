@@ -23,9 +23,9 @@ namespace ImageStash.Windows.Tests.Window;
 /// ImageStash binds its shortcuts (F5): over the chat, the screen frozen within a second, a notification showing then
 /// left out of the saved pixels (S4), Recent unchanged, and a second press cancelled with Esc; over the flyout, the
 /// flyout hidden within a second and back with its query and selection (G3); held by another program at start, named
-/// while the tray's entry still takes one (G33, G34). These checks show the pattern at (560, 160), or at (400, 320)
-/// under a notification shown above the point (680, 520), the overlay over the primary display, and drag the mouse
-/// across it.
+/// while the tray's entry still takes one (G33, G34). These checks show the pattern at (560, 160), or one under a
+/// notification shown above a point below the primary display's middle, the overlay over the primary display, and drag
+/// the mouse across it.
 /// </summary>
 [TestClass]
 public sealed class ScreenshotTests
@@ -42,7 +42,7 @@ public sealed class ScreenshotTests
         var recent = await RecentIds(desk);
         using var pressed = CaptureShortcuts.Register(desk);
         Assert.IsEmpty(pressed.Named(), "all four registered; another program, or a running ImageStash, holds none");
-        using var pattern = PatternWindow.Show(new PixelRect(400, 320, 560, 320));
+        using var pattern = PatternWindow.Show(DisplayPlaces.UnderNotification(DisplayPlaces.Primary()));
         await pattern.OnScreen(new WindowsScreen());
         TrayDesktop.Run(() => desk.Notifications.Raise("A notification of the check's own"));
         await Eventually(() => TrayDesktop.Get(() => desk.Notification.Shown is not null));

@@ -338,7 +338,7 @@ public sealed class NotificationTests
         var notifications = new Notices(new MovableClock());
         var notification = TrayDesktop.Get(() => new Notification(notifications, new TrayIconMidScreen(new WindowsQuietWindows(tray)), screen, named.Add));
         // Under the notification and wherever its tooltip shows.
-        using var pattern = PatternWindow.Show(new PixelRect(400, 320, 560, 320));
+        using var pattern = PatternWindow.Show(DisplayPlaces.UnderNotification(DisplayPlaces.Primary()));
         await pattern.OnScreen(screen);
         TestMouse.MoveTo(TestMouse.Away);
         Border? card = null;

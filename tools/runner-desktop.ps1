@@ -4,11 +4,11 @@ Reports the desktop a CI job runs on and, on a GitHub Actions runner, makes it o
 the current Windows session (query session's line for it, its id, whether the process is interactive and can open the
 input desktop) and the primary display's size in physical pixels and its scale, before and after.
 
-While GITHUB_ACTIONS is true, a display smaller than 1280 x 800 is raised to 1280 x 800 at 32 bits, the one size the
-desktop checks are shown to pass at (several place windows for a display 1280 pixels wide and fail on a wider one), by
+While GITHUB_ACTIONS is true, a display smaller than 1280 x 800 is raised to 1280 x 800 at 32 bits, the smallest
+display the desktop checks run on (they place their windows from the display, so a larger one serves too), by
 ChangeDisplaySettingsEx, kept in the registry for the session; a larger display is left as it is. The script then
 exits 1, naming what it found, when the session is session 0 or not interactive, when it cannot open the input desktop,
-or when the display is still smaller than 1280 x 800, the size the desktop checks pass at, so a job stops on one
+or when the display is still smaller than 1280 x 800, the smallest the desktop checks run on, so a job stops on one
 readable line instead of on checks that time out. -Test, on a runner or anywhere else, makes the same decisions but only
 asks the adapter whether it would accept each size (CDS_TEST), changing nothing. Off a runner and without -Test it only
 reports, changes nothing and exits 0, so a person's display is never changed.
@@ -168,7 +168,7 @@ Write-Display 'after'
 $width = [RunnerDisplay]::Width()
 $height = [RunnerDisplay]::Height()
 if ($width -lt 1280 -or $height -lt 800) {
-    $problems.Add("the display is $width x $height, smaller than the 1280 x 800 the desktop checks pass at")
+    $problems.Add("the display is $width x $height, smaller than 1280 x 800, the smallest the desktop checks run on")
 }
 if ($problems.Count -gt 0) {
     foreach ($problem in $problems) { Write-Host "runner-desktop: unusable: $problem" }
