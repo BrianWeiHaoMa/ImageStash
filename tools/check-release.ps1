@@ -6,8 +6,8 @@ run alike. Its phases, in order, stopping at the first that fails:
   identity   only with -Tag: the tag is v<a.b.c>, <a.b.c> is Directory.Build.props's version, and CHANGELOG.md has a
              "## [<a.b.c>]" section, whose body is written to -Notes when given (the release's notes)
   build      dotnet build ImageStash.sln -c Release
-  portable   dotnet test tests/ImageStash.Tests
-  desktop    dotnet test tests/ImageStash.Windows.Tests
+  portable   dotnet test tests/ImageStash.Tests, failing on a nonzero exit or on any check skipped (inconclusive)
+  desktop    dotnet test tests/ImageStash.Windows.Tests, failing the same way
   published  tools/check-published.ps1, failing on a nonzero exit or on any line beginning "skipped:" but the
              earlier-build phase's "skipped: no -EarlierCommit ..." line, which every run without that parameter prints
   assets     tools/build-release-assets.ps1 into -Output, and at the version with its patch raised by one into
@@ -128,15 +128,29 @@ function Test-Build {
     if ($code -ne 0) { return "dotnet build exited $code" }
 }
 
-function Test-Portable {
-    $code = Invoke-Child 'dotnet' @('test', (Join-Path $root 'tests\ImageStash.Tests'))
-    if ($code -ne 0) { return "dotnet test tests/ImageStash.Tests exited $code" }
+# A test project's run holds only when every check in it ran and passed: dotnet test exits 0 when a check ends
+# inconclusive (reported as skipped), and a release runs them all, as the published phase's skipped: rule says.
+function Test-Project([string] $project) {
+    $summaries = New-Object System.Collections.Generic.List[string]
+    $skipped = New-Object System.Collections.Generic.List[string]
+    $code = Invoke-Child 'dotnet' @('test', (Join-Path $root $project)) {
+        param($line)
+        if ($line -match '^(Passed|Failed)!\s+-\s+Failed:\s*\d+,\s*Passed:\s*\d+,\s*Skipped:\s*(\d+),') { $summaries.Add($Matches[2]) }
+        elseif ($line -match '^\s+Skipped\s+(\S+)') { $skipped.Add($Matches[1]) }
+    }
+    $name = $project.Replace('\', '/')
+    if ($code -ne 0) { return "dotnet test $name exited $code" }
+    if ($summaries.Count -eq 0) { return "dotnet test $name exited 0 but printed no Passed! summary, so what ran is unknown" }
+    $count = 0
+    foreach ($each in $summaries) { $count += [int] $each }
+    if ($count -gt 0) {
+        return "dotnet test $name exited 0 but skipped $count check(s), and a release runs them all: $($skipped -join ' | ')"
+    }
 }
 
-function Test-Desktop {
-    $code = Invoke-Child 'dotnet' @('test', (Join-Path $root 'tests\ImageStash.Windows.Tests'))
-    if ($code -ne 0) { return "dotnet test tests/ImageStash.Windows.Tests exited $code" }
-}
+function Test-Portable { Test-Project 'tests\ImageStash.Tests' }
+
+function Test-Desktop { Test-Project 'tests\ImageStash.Windows.Tests' }
 
 function Test-Published {
     $script = if ($PublishedCheck) { Resolve-Full $PublishedCheck } else { Join-Path $PSScriptRoot 'check-published.ps1' }

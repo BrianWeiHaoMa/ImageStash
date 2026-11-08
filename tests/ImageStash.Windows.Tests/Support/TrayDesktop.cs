@@ -84,6 +84,13 @@ public sealed class TrayDesktop
 
     private static T OnTheUiThread<T>(Func<T> work, MethodInfo asked)
     {
+        // Asked from work already running here (a helper that reads a control, called inside a check's own Get): queued
+        // and waited on, it would wait on this very thread; it runs in place, as the dispatcher would run it.
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            return work();
+        }
+
         if (blocked is { } since)
         {
             Assert.Fail($"the tray desktop's UI thread has been blocked since an earlier check: {since}");

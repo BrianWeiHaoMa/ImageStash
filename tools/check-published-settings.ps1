@@ -2,7 +2,7 @@
 .SYNOPSIS
 The Settings page on the published copy, run by check-published.ps1 inside its session after
 check-published-open-with.ps1 (it uses check-published-paste.ps1's PasteDesk, check-published-screenshot.ps1's
-ScreenshotDesk and check-published.ps1's StashWindows and CopyReadBack), over the check's own stash and settings. The
+ScreenshotDesk and stash-windows.ps1's StashWindows and check-published.ps1's CopyReadBack), over the check's own stash and settings. The
 tray menu, opened with a posted right-click, lists Settings between Pause shortcuts and Quit ImageStash, and its
 Settings, chosen through UI Automation, brings a window titled "ImageStash settings" to the front with G32's rows named
 in order and the stash folder in use. A PowerShell of the phase's own holds Ctrl+Shift+F8: the Take a screenshot field,

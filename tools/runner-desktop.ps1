@@ -4,8 +4,9 @@ Reports the desktop a CI job runs on and, on a GitHub Actions runner, makes it o
 the current Windows session (query session's line for it, its id, whether the process is interactive and can open the
 input desktop) and the primary display's size in physical pixels and its scale, before and after.
 
-While GITHUB_ACTIONS is true, a display smaller than 1920 x 1080 is raised to 1920 x 1080 at 32 bits, or, when the
-adapter refuses that, to 1280 x 800 (ChangeDisplaySettingsEx, kept in the registry for the session); the script then
+While GITHUB_ACTIONS is true, a display smaller than 1280 x 800 is raised to 1280 x 800 at 32 bits, the one size the
+desktop checks are shown to pass at (several place windows for a display 1280 pixels wide and fail on a wider one), by
+ChangeDisplaySettingsEx, kept in the registry for the session; a larger display is left as it is. The script then
 exits 1, naming what it found, when the session is session 0 or not interactive, when it cannot open the input desktop,
 or when the display is still smaller than 1280 x 800, the size the desktop checks pass at, so a job stops on one
 readable line instead of on checks that time out. -Test, on a runner or anywhere else, makes the same decisions but only
@@ -155,14 +156,12 @@ if (-not $inputDesktop) { $problems.Add('the input desktop cannot be opened, so 
 $width = [RunnerDisplay]::Width()
 $height = [RunnerDisplay]::Height()
 $verb = if ($Test) { 'would accept' } else { 'changed to' }
-if ($width -lt 1920 -or $height -lt 1080) {
-    foreach ($size in @(1920, 1080), @(1280, 800)) {
-        $result = [RunnerDisplay]::Change($size[0], $size[1], [bool] $Test)
-        if ($result -eq 0) {
-            Write-Host "runner-desktop: the adapter $verb $($size[0]) x $($size[1])"
-            break
-        }
-        Write-Host "runner-desktop: the adapter refused $($size[0]) x $($size[1]) (ChangeDisplaySettingsEx returned $result)"
+if ($width -lt 1280 -or $height -lt 800) {
+    $result = [RunnerDisplay]::Change(1280, 800, [bool] $Test)
+    if ($result -eq 0) {
+        Write-Host "runner-desktop: the adapter $verb 1280 x 800"
+    } else {
+        Write-Host "runner-desktop: the adapter refused 1280 x 800 (ChangeDisplaySettingsEx returned $result)"
     }
 }
 Write-Display 'after'

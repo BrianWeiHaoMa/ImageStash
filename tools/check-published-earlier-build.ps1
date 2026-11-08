@@ -2,7 +2,7 @@
 .SYNOPSIS
 A stash and settings an earlier build wrote, opened by the published copy, run by check-published.ps1 inside its
 session, last (it uses check-published-paste.ps1's PasteDesk, check-published-screenshot.ps1's ScreenshotDesk,
-check-published-open-with.ps1's OpenWithDesk and check-published.ps1's StashWindows and CopyReadBack), over the
+check-published-open-with.ps1's OpenWithDesk and stash-windows.ps1's StashWindows and check-published.ps1's CopyReadBack), over the
 check's own %LOCALAPPDATA%\ImageStash. The copy is stopped first, so the earlier build runs alone (G3, E1), and that
 folder emptied, so the earlier build meets a first run. The earlier build is the commit -EarlierCommit names, one whose
 store is at version 1, taken with git archive into -Work (no worktree, no change to .git) and published by its own

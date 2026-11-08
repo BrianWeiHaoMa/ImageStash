@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
 The paste into the stash on the published copy, run by check-published.ps1 inside its session after
-check-published-paste.ps1 (it uses that script's PasteDesk and check-published.ps1's StashWindows and CopyReadBack): a
+check-published-paste.ps1 (it uses that script's PasteDesk and stash-windows.ps1's StashWindows and check-published.ps1's CopyReadBack): a
 picture placed on the clipboard as a browser's Copy image places it, "PNG" and then CF_DIBV5, and no file list; the copy
 started afresh over the check's own stash, so the real Ctrl+Alt+Space is its own again; the flyout the shortcut
 summons, two real letters typed into its search box and the real Ctrl+V: the stash root then holds one new

@@ -2,7 +2,7 @@
 .SYNOPSIS
 Open with... on the published copy, run by check-published.ps1 inside its session after check-published-editor.ps1 (it
 uses check-published-paste.ps1's PasteDesk, check-published-screenshot.ps1's ScreenshotDesk,
-check-published-capture.ps1's CaptureDesk and check-published.ps1's StashWindows and CopyReadBack), over the check's
+check-published-capture.ps1's CaptureDesk and stash-windows.ps1's StashWindows and check-published.ps1's CopyReadBack), over the check's
 own stash, with this script standing for the program a person would choose. An unedited PNG, found by its name typed
 into the search box, gets its item menu from the menu key, where Open with... stands between Save a copy... and Reveal
 in File Explorer; a real click on it brings the shell's Open-with dialog to the front while the flyout stays, the row

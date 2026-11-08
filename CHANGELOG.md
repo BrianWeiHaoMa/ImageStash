@@ -9,7 +9,7 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 - A stash of your reaction pictures and GIFs that lives in the Windows 11 tray and starts with Windows.
 - The paste moment: `Ctrl+Alt+Space` opens the stash beside the text caret, two typed letters find a picture, and Enter pastes it into the chat you were typing in without ever sending the message.
 - Filling the stash: drop files, a folder or pictures from a browser onto the window, paste a copied picture with `Ctrl+V`, import files with `Ctrl+O`, screenshot a region with `Ctrl+PrtScn`, record a few seconds of the screen as a GIF with `Ctrl+Shift+PrtScn`, and stash the clipboard's picture with `Ctrl+Alt+V`.
-- PNG, JPEG, GIF and WebP, still or animated, kept as the files they came as.
+- PNG and JPEG as stills (an animated PNG is handled as a still), and GIF and WebP, still or animated, kept as the files they came as.
 - Finding pictures again by thumbnail, name, tag, favorite and recent use, with tag chips and a search that narrows as you type.
 - Renaming, tagging, favoriting, multi-selecting and deleting with Undo; dragging a picture out as a file; copying with `Ctrl+C`; Save a copy, Open with and Reveal in File Explorer.
 - An editor with five tools (Text, Crop, Trim, Hide and Draw) whose edits stay as layers over the untouched original, so every edit can be changed or reverted later.

@@ -2,7 +2,7 @@
 .SYNOPSIS
 Move... on the published copy, run by check-published.ps1 inside its session after check-published-settings.ps1 (it
 uses the PasteDesk, PasteInClipboard, ScreenshotDesk, CaptureDesk and OpenWithDesk of the paste, paste-in,
-screenshot, capture and Open with... phases and check-published.ps1's StashWindows and CopyReadBack), over the check's
+screenshot, capture and Open with... phases and stash-windows.ps1's StashWindows and check-published.ps1's CopyReadBack), over the check's
 own stash and settings. The Settings page's Move..., chosen through UI Automation, opens Windows' folder picker, into
 which the phase types a folder of its own under -Work. A folder that is not empty, the Open with... folder and the
 stash folder itself are each refused by name on the row, settings.json unchanged. Then three Moves, each to a new

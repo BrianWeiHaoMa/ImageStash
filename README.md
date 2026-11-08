@@ -19,7 +19,7 @@ On a Windows 11 PC (x64), download one of these from the
 
 - **`ImageStash-<version>-win-x64.msi`**, the installer: it installs ImageStash for you alone, with no administrator
   rights, in `%LOCALAPPDATA%\Programs\ImageStash`, with a Start Menu entry. Uninstalling it (Settings, Apps,
-  Installed apps) removes that folder and keeps your pictures, which live elsewhere unless you move them into it.
+  Installed apps) removes what it installed and keeps your pictures, even ones you moved into that folder.
 - **`ImageStash-<version>-win-x64.zip`**: the same program as a folder. Unzip it anywhere you like and run
   `ImageStash.Windows.exe` in it.
 
@@ -49,8 +49,7 @@ right-click menu holds the captures, Settings (where each shortcut can be change
 ## Things to know
 
 - **Your pictures stay on your PC,** as ordinary files in `%LOCALAPPDATA%\ImageStash\stash`, which Settings can move.
-  Uninstalling keeps them, unless you moved them into the program's own folder. Back that folder up, or use Export
-  stash… in Settings to carry everything to another PC.
+  Uninstalling keeps them. Back that folder up, or use Export stash… in Settings to carry everything to another PC.
 - **Nothing leaves your PC.** There is no account, cloud, sync or telemetry, and a link is never fetched.
 - **There is no updater.** A new version is a new download from the releases page; installing it over the old one
   keeps your pictures, tags, edits and settings.

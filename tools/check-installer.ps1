@@ -9,9 +9,11 @@ installs quietly for the signed-in user, adding no ALLUSERS, with exactly the pu
 first run, pinned, with its settings, its stash and the Run value; one picture is stashed through the tray menu's
 Stash clipboard image; the -Upgrade MSI installs over that running copy, ending it, with the upgrade's files in place,
 a folder the person keeps in the install folder untouched and %LOCALAPPDATA%\ImageStash byte for byte as it was; the shortcut starts it again, showing nothing until a tray click,
-which lists the item; a deleted file comes back by msiexec /fa; the older MSI is refused; and the uninstall over a
-running copy removes the install folder whole (a stray file with it), the shortcut, the registration and its key,
-leaving %LOCALAPPDATA%\ImageStash and the Run value as they were. Exits with the number of checks that failed.
+which lists the item; a deleted file comes back by msiexec /fa; the older MSI is refused; the uninstall over a
+running copy removes every installed file, the shortcut, the registration and its key, leaving %LOCALAPPDATA%\ImageStash,
+the Run value, and a stash and a stray file the person kept in the install folder as they were (G29); and, installed
+again with nothing of the person's in the folder, the uninstall removes the folder whole. Exits with the number of
+checks that failed.
 
 It refuses to start while ImageStash runs, while %LOCALAPPDATA%\ImageStash exists, so a person's stash is never under
 it, and while ImageStash is installed or its install folder, shortcut or key exists, since its cleanup removes only
@@ -408,10 +410,18 @@ try {
     $versions = @(Registered | ForEach-Object { ProductInfo $_ 'VersionString' }) -join ', '
     Check ($versions -eq "$($to.Version)") "the one registration is still at $($to.Version): $versions"
 
-    # F1, N8, F6: the uninstall over a running copy removes the folder whole and nothing of the person's.
+    # F1, N8, F6, G29: the uninstall over a running copy removes what the MSI installed and nothing of the person's. A
+    # stash moved into the install folder (E2) is removed by none of G29's routes, so it and a stray file survive, and
+    # the folder stays holding only them.
     $copy = StartFromShortcut
     Check (($null -ne $copy) -and ((SummonByTray $copy) -ge 0)) 'the shortcut started the copy once more, and a tray click shows its window'
-    Set-Content -LiteralPath (Join-Path $installDir 'left by the person.txt') -Value 'a stray file'
+    $persons = Join-Path $work 'kept by the person'
+    New-Item -ItemType Directory -Path (Join-Path $persons 'stash\originals') | Out-Null
+    Set-Content -LiteralPath (Join-Path $persons 'stash\stash.db') -Value 'a stash moved here'
+    Set-Content -LiteralPath (Join-Path $persons 'stash\originals\picture.png') -Value 'an original'
+    Set-Content -LiteralPath (Join-Path $persons 'left by the person.txt') -Value 'a stray file'
+    $personsTree = Tree $persons
+    Copy-Item -Path (Join-Path $persons '*') -Destination $installDir -Recurse
     $beforeUninstall = SettledAppData
     $runBeforeUninstall = StoredRunValue
     $log = Join-Path $work 'uninstall.log'
@@ -419,7 +429,10 @@ try {
     Check ($exit -eq 0) "msiexec /x $(Split-Path $to.Msi -Leaf) /qn over the running copy exited 0, not 3010 (F1, N8): $exit"
     Check (CloseStepBeforeFiles $log) 'its log runs the step that ends a running copy before its first file operation (G3, E3)'
     Check ((AnyCopies).Count -eq 0) 'no ImageStash.Windows process remains'
-    Check (-not (Test-Path -LiteralPath $installDir)) "$installDir is gone whole, the stray file with it (F1, N8)"
+    $left = Tree $installDir
+    Check ($left -eq $personsTree) "$installDir holds exactly what the person kept there, byte for byte: the stash\stash.db moved there and a stray file (G29, E2)"
+    $installedLeft = @(Get-ChildItem -LiteralPath $to.Published -Force | Where-Object { Test-Path -LiteralPath (Join-Path $installDir $_.Name) })
+    Check ($installedLeft.Count -eq 0) "none of the installed files remains in $installDir (F1, N8): $($installedLeft.Name | Select-Object -First 3)"
     Check (-not (Test-Path -LiteralPath $shortcut)) 'the Start Menu shortcut is gone'
     Check ((Registered).Count -eq 0) 'no registration remains, so Apps lists no ImageStash'
     Check (-not (Test-Path -LiteralPath $appKey)) "$appKey is gone"
@@ -429,6 +442,16 @@ try {
         Compare-Object ($beforeUninstall -split "`n") ($afterUninstall -split "`n") | ForEach-Object { Write-Host "     $($_.SideIndicator) $($_.InputObject)" }
     }
     Check ((StoredRunValue) -eq $runBeforeUninstall) 'the Run value is as it was before the uninstall: ImageStash owns it (F1)'
+
+    # F1, N8: with nothing of the person's in it, the uninstall removes the install folder whole.
+    if (Test-Path -LiteralPath $installDir) { Remove-Item -LiteralPath $installDir -Recurse -Force }
+    $exit = Msiexec "/i `"$($to.Msi)`" /qn /l*v `"$(Join-Path $work 'reinstall.log')`""
+    Check (($exit -eq 0) -and ((Tree $installDir) -eq $to.Files)) "with the person's things taken out, msiexec /i $(Split-Path $to.Msi -Leaf) installed the published files again: $exit"
+    $exit = Msiexec "/x `"$($to.Msi)`" /qn /l*v `"$(Join-Path $work 'uninstall-empty.log')`""
+    Check ($exit -eq 0) "msiexec /x $(Split-Path $to.Msi -Leaf) /qn exited 0: $exit"
+    Check (-not (Test-Path -LiteralPath $installDir)) "$installDir, holding nothing but what the MSI installed, is gone whole (F1, N8)"
+    Check ((-not (Test-Path -LiteralPath $shortcut)) -and ((Registered).Count -eq 0) -and (-not (Test-Path -LiteralPath $appKey))) "the shortcut, the registration and $appKey are gone"
+    Check ((Tree $appData) -eq $afterUninstall) "every file under $appData is still byte-identical (F6)"
 }
 catch {
     Write-Host "FAIL the installer check stopped: $($_.Exception.Message)"

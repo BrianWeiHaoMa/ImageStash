@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
 Take a screenshot's three ways in on the published copy, run by check-published.ps1 inside its session after
-check-published-paste-in.ps1 (it uses check-published-paste.ps1's PasteDesk and check-published.ps1's StashWindows and
+check-published-paste-in.ps1 (it uses check-published-paste.ps1's PasteDesk and stash-windows.ps1's StashWindows and check-published.ps1's
 CopyReadBack): the real Ctrl+PrtScn shows the screenshot's overlay over every display, in front, within a second, and
 a real Esc closes it; the tray menu, opened with a posted right-click, lists the entries G34 orders that are built, and
 its Take a screenshot, chosen through UI Automation, shows the overlay; the flyout a posted tray click shows, its +

@@ -10,7 +10,8 @@ written by `tools/build-release-assets.ps1` from one publish of the current tree
 
 - `ImageStash-<version>-win-x64.msi`: installs ImageStash for the signed-in user without administrator rights, under
   `%LOCALAPPDATA%\Programs\ImageStash`, with a Start Menu entry; a newer MSI upgrades it in place, and uninstalling
-  removes the folder and leaves the stash and settings under `%LOCALAPPDATA%\ImageStash`.
+  removes what it installed, and the folder once nothing else is in it, and leaves the stash and settings under
+  `%LOCALAPPDATA%\ImageStash`, and anything the person keeps in the install folder.
 - `ImageStash-<version>-win-x64.zip`: the same folder, under `ImageStash/`, to copy onto a PC and run.
 - `SHA256SUMS.txt`: the SHA-256 of the MSI and the zip, in the `sha256sum` shape.
 
@@ -66,14 +67,15 @@ release exists.
 
 `tools/check-release.ps1` is the whole suite a release must pass, and the only thing the workflows run. Its phases,
 in order, stopping at the first that fails: `identity` (only with `-Tag`), `build`, `portable`
-(`tests/ImageStash.Tests`), `desktop` (`tests/ImageStash.Windows.Tests`), `published` (`tools/check-published.ps1`,
+(`tests/ImageStash.Tests`), `desktop` (`tests/ImageStash.Windows.Tests`; in both, a check skipped as inconclusive is a
+failure), `published` (`tools/check-published.ps1`,
 where any `skipped:` line is a failure but the earlier-build phase's, below), `assets`
 (`tools/build-release-assets.ps1`, at the version and at the version with its patch raised by one) and `installer`
 (`tools/check-installer.ps1`, which installs, upgrades, repairs and uninstalls the MSI for the signed-in user). Its
 comment-based help (`Get-Help tools/check-release.ps1 -Full`) lists its parameters.
 
-To run it locally, from PowerShell (never Git Bash) at the repository root, on the interactive desktop, with ImageStash
-not running, `%LOCALAPPDATA%\ImageStash` absent (move it aside first) and every window on the primary display
+To run it locally, from PowerShell (never Git Bash) at the repository root, on the interactive desktop of a PC whose
+primary display is 1280 x 800 at 100 % (see the runner's needs below), with ImageStash not running, `%LOCALAPPDATA%\ImageStash` absent (move it aside first) and every window on the primary display
 minimised:
 
 ```powershell
@@ -111,20 +113,21 @@ Both workflows run on `runs-on: ${{ vars.DESKTOP_RUNNER || 'windows-2025' }}`: G
 image unless the repository variable `DESKTOP_RUNNER` (Settings, Secrets and variables, Actions, Variables) names
 another runner label, which switches every desktop job without a commit; delete the variable to go back.
 `tools/runner-desktop.ps1`, the first step of each job, prints the session and the display and, on a GitHub runner,
-raises a display smaller than 1920 x 1080 to 1920 x 1080, or else to 1280 x 800, failing the job on one line when
-the session is not interactive or the display stays below 1280 x 800. Run locally, it only reports.
+raises a display smaller than 1280 x 800 to 1280 x 800, failing the job on one line when the session is not
+interactive or the display stays below 1280 x 800. Run locally, it only reports.
 
-GitHub's hosted Windows runners run as an administrator with User Account Control off, so a run there shows the MSI
-installs per user (no `ALLUSERS`, everything under `%LOCALAPPDATA%`) but cannot show it needs no administrator rights.
-That is shown only by a run from a standard, unelevated account: run the suite locally from such a shell before the
-first release and after any change under `installer/`, or use a self-hosted runner as below.
+GitHub's hosted Windows runners run as an administrator with User Account Control off, so the `desktop` phase cannot
+pass there: some desktop checks confirm they run unelevated, as ImageStash does, and judge a window of higher rights
+by it. The suite stops at that phase, so a run on the hosted image publishes nothing, and a release needs the
+self-hosted runner below. Its standard, unelevated account is also what shows the MSI needs no administrator rights.
 
 A self-hosted runner needs:
 
 - Windows 11 x64 (or the Server equivalent), with the runner application started from a signed-in desktop session
   (its `run.cmd`), not installed as a Windows service, which runs in session 0 with no desktop to click or capture;
-- a display of at least 1280 x 800 (the desktop checks are known to pass at 1280 x 800 and 100 % scale), left
-  unlocked and without a screen saver while jobs run;
+- a primary display of 1280 x 800 at 100 % scale, the one size the desktop checks are known to pass at (several
+  place windows for a display 1280 pixels wide and fail on a wider one), left unlocked and without a screen saver
+  while jobs run;
 - a standard (not administrator) Windows account used only for this, since the suite uses that account's real
   `%LOCALAPPDATA%\ImageStash`, Run value, clipboard and Recycle Bin, and installs and uninstalls the MSI for it;
 - Git, Windows PowerShell 5.1, Microsoft Edge (some desktop checks open it), the .NET SDK that `global.json` names

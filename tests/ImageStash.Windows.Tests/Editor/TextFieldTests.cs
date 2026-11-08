@@ -366,7 +366,16 @@ public sealed class TextFieldTests
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => editor.Session!.Layers.Layers.Single() is TextLayer { Font: var font } && font == family));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => editor.Session!.Typing && ReferenceEquals(shown.Focused, editor.Field)));
         TrayDesktop.Run(() => CollectionAssert.AreEqual(new[] { family }, AllFonts(editor)!.GetVisualDescendants().OfType<ToggleButton>().Where(each => each.IsChecked == true).Select(AutomationProperties.GetName).ToList(), "the list stays open, the family chosen checked"));
-        TestMouse.Click(TrayDesktop.Get(() => editor.Canvas.PointToScreen(editor.At(0.9, 0.9))));
+        // The list stands over the picture's right part: the press goes to the picture beside it, not to an entry under it.
+        var beside = TrayDesktop.Get(() =>
+        {
+            var list = AllFonts(editor)!;
+            var at = editor.Canvas.PointToScreen(editor.At(0.1, 0.9));
+            var (from, to) = (list.PointToScreen(default), list.PointToScreen(new Avalonia.Point(list.Bounds.Width, list.Bounds.Height)));
+            Assert.IsFalse(at.X >= from.X && at.X < to.X && at.Y >= from.Y && at.Y < to.Y, $"the press at {at} is on the picture, beside the list at {from}..{to}");
+            return at;
+        });
+        TestMouse.Click(beside);
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => AllFonts(editor) is null));
         TrayDesktop.Run(() => Assert.IsTrue(editor.Session!.Typing && editor.Session.Layers.Layers.Count == 1 && ReferenceEquals(shown.Focused, editor.Field), "a press on the picture closes the list and does nothing more"));
 

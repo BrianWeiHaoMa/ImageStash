@@ -2,7 +2,7 @@
 .SYNOPSIS
 The editor on the published copy, run by check-published.ps1 inside its session after check-published-capture.ps1 (it
 uses check-published-paste.ps1's PasteDesk, check-published-screenshot.ps1's ScreenshotDesk,
-check-published-capture.ps1's CaptureDesk and check-published.ps1's StashWindows and CopyReadBack), over the check's
+check-published-capture.ps1's CaptureDesk and stash-windows.ps1's StashWindows and check-published.ps1's CopyReadBack), over the check's
 own stash: a screenshot from the real Ctrl+PrtScn and a real drag; a real click on its card's Edit shows the stash
 window in front, in the editor on that item with Text current, the card still above it with its Undo, until its close
 button dismisses it; a real click on the Text row's Caption bar and one on the picture, words typed and Ctrl+S save it. The

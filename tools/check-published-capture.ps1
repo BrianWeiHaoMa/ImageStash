@@ -2,7 +2,7 @@
 .SYNOPSIS
 The captures on the published copy, run by check-published.ps1 inside its session after check-published-screenshot.ps1
 (it uses check-published-paste.ps1's PasteDesk, check-published-paste-in.ps1's PasteInClipboard,
-check-published-screenshot.ps1's ScreenshotDesk and check-published.ps1's StashWindows and CopyReadBack): Record a clip
+check-published-screenshot.ps1's ScreenshotDesk and stash-windows.ps1's StashWindows and check-published.ps1's CopyReadBack): Record a clip
 from the tray menu, listed third, from the flyout's + menu, listed after Take a screenshot, and from the real
 Ctrl+Shift+PrtScn, each showing the overlay in record mode, closed again, so it adds nothing. Then, over the check's own
 stash: a picture on the clipboard as a browser's Copy image places it and the real Ctrl+Alt+V add one "Screenshot

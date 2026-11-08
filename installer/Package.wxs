@@ -1,7 +1,7 @@
 <!--
   The MSI that puts the published ImageStash folder on the PC for the signed-in user, without administrator rights, and
-  removes it again (F1, N8). It never touches %LOCALAPPDATA%\ImageStash (the stash and settings, F6) or the Run value
-  ImageStash, which ImageStash itself sets or clears at every start (F1).
+  removes it again (F1, N8), keeping anything the person put inside it (G29). It never touches %LOCALAPPDATA%\ImageStash
+  (the stash and settings, F6) or the Run value ImageStash, which ImageStash itself sets or clears at every start (F1).
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
   <!-- The UpgradeCode is written once and never changed: every version shares it, so a newer one replaces an older one. -->
@@ -27,15 +27,6 @@
       <Custom Action="override Wix4CloseApplications_$(sys.BUILDARCHSHORT)" After="InstallInitialize" />
     </InstallExecuteSequence>
 
-    <!--
-      The install folder as the key path wrote it, read back so that uninstall removes exactly that folder whole. Not
-      while an upgrade removes the older version: the folder stays, and whatever the person keeps in it (a stash moved
-      there through Settings included, E2) survives the newer build (G31).
-    -->
-    <Property Id="REMEMBERED_INSTALLFOLDER">
-      <RegistrySearch Root="HKCU" Key="Software\ImageStash" Name="InstallFolder" Type="raw" />
-    </Property>
-
     <StandardDirectory Id="LocalAppDataFolder">
       <Directory Id="ProgramsFolder" Name="Programs">
         <Directory Id="INSTALLFOLDER" Name="ImageStash" />
@@ -43,10 +34,14 @@
     </StandardDirectory>
 
     <Feature Id="ImageStash">
+      <!--
+        Uninstall removes the files it installed and then the install folder only once it is empty: whatever the person
+        keeps in it, a stash moved there through Settings included (E2), is removed by none of G29's routes, so it
+        survives an uninstall as it survives an upgrade (G31). No recursive folder removal belongs here.
+      -->
       <Component Id="InstallFolderRegistration" Directory="INSTALLFOLDER" Guid="0B6D2E4A-58C1-4F0E-9A3D-6E2C71B5F804">
         <RegistryValue Root="HKCU" Key="Software\ImageStash" Name="InstallFolder" Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
         <RemoveFolder Id="RemoveInstallFolder" On="uninstall" />
-        <util:RemoveFolderEx On="uninstall" Property="REMEMBERED_INSTALLFOLDER" Condition="NOT UPGRADINGPRODUCTCODE" />
       </Component>
       <Component Id="StartMenuShortcut" Directory="ProgramMenuFolder" Guid="5C9A1F37-2D84-4B6E-8E05-B1F3D7A9C260">
         <Shortcut Id="ImageStashShortcut" Name="ImageStash" Target="[INSTALLFOLDER]ImageStash.Windows.exe" WorkingDirectory="INSTALLFOLDER" />
