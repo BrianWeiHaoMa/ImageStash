@@ -1,0 +1,47 @@
+# Runs the whole release suite, tools/check-release.ps1, on every pushed branch and pull request, and keeps the
+# release's assets as an artifact: a green run proves everything a release needs short of publishing it.
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  release-check:
+    # The desktop checks need an interactive desktop; the repository variable DESKTOP_RUNNER, when set, names the
+    # runner label to use instead of the hosted image.
+    runs-on: ${{ vars.DESKTOP_RUNNER || 'windows-2025' }}
+    # A desktop check that hangs on a runner without a usable desktop is stopped here, not at the six-hour default.
+    timeout-minutes: 120
+    defaults:
+      run:
+        # Windows PowerShell 5.1, which the scripts are written for; the Windows default, pwsh, is PowerShell 7.
+        shell: powershell
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - name: Read the version
+        id: version
+        run: |
+          $version = "$(([xml](Get-Content -Raw Directory.Build.props)).Project.PropertyGroup.Version)".Trim()
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "version=$version`n")
+      - name: Report and raise the runner's desktop
+        run: powershell.exe -NoProfile -File tools/runner-desktop.ps1
+      - name: Run the release suite
+        run: powershell.exe -NoProfile -File tools/check-release.ps1 -Output "$env:RUNNER_TEMP\release"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ImageStash-${{ steps.version.outputs.version }}-win-x64
+          path: |
+            ${{ runner.temp }}/release/ImageStash-${{ steps.version.outputs.version }}-win-x64.msi
+            ${{ runner.temp }}/release/ImageStash-${{ steps.version.outputs.version }}-win-x64.zip
+            ${{ runner.temp }}/release/SHA256SUMS.txt
+          if-no-files-found: error
