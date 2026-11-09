@@ -113,7 +113,7 @@ public sealed class WindowsTrayTests
         using var pointer = TestMouse.PutBackAfterwards();
         using var shown = ShownWindow.Open();
         await shown.OpenStash();
-        using var other = FrontWindow.Show(new Avalonia.PixelPoint(100, 400));
+        using var other = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 100, 400));
         var window = shown.Window;
         var tray = new WindowsTray();
         try
@@ -128,7 +128,7 @@ public sealed class WindowsTrayTests
             FrontWindow.WaitUntilInFront(handle);
             await Task.Delay(300);
             // Overlapping the other window, whose middle stays clear for the click that puts it in front.
-            TrayDesktop.Run(() => window.Position = new Avalonia.PixelPoint(320, 40));
+            TrayDesktop.Run(() => window.Position = DisplayPlaces.At(DisplayPlaces.Primary(), 320, 40));
             await Task.Delay(300);
             var at = TrayDesktop.Get(() => window.Position);
 
@@ -190,9 +190,9 @@ public sealed class WindowsTrayTests
             var handle = TrayDesktop.Get(() => window.TryGetPlatformHandle()!.Handle);
             FrontWindow.WaitUntilInFront(handle);
             // Overlapping the app, whose title bar stays clear for the click that puts it in front.
-            TrayDesktop.Run(() => window.Position = new Avalonia.PixelPoint(320, 180));
+            TrayDesktop.Run(() => window.Position = DisplayPlaces.At(DisplayPlaces.Primary(), 320, 180));
             await Task.Delay(300);
-            using var app = TargetApp.Start("ImageStash check over the pinned window", 100, 100);
+            using var app = TargetApp.Start("ImageStash check over the pinned window", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
             var outcomes = new List<string>();
             for (var attempt = 1; attempt <= 10; attempt++)
             {

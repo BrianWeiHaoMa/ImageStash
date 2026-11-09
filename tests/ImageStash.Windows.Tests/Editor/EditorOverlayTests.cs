@@ -121,7 +121,11 @@ public sealed partial class EditorOverlayTests
         var left = rendered.Colors(picture.X + 1, picture.Y + 1, picture.Width / 2 - 2, picture.Height - 2);
         var right = rendered.Colors(picture.X + picture.Width / 2 + 1, picture.Y + 1, picture.Width / 2 - 2, picture.Height - 2);
 
-        CollectionAssert.AreEquivalent(dark ? new[] { 0xFF3A3B42u, 0xFF2E2F35u } : new[] { 0xFFFFFFFFu, 0xFFE6E7ECu }, left.ToList(), "G6: the checkerboard's two colours show through");
+        var squares = dark ? new[] { 0xFF3A3B42u, 0xFF2E2F35u } : new[] { 0xFFFFFFFFu, 0xFFE6E7ECu };
+        var commonest = rendered.Commonest(new Rect(picture.X + 1, picture.Y + 1, picture.Width / 2 - 2, picture.Height - 2), 2);
+        CollectionAssert.AreEquivalent(squares, commonest, $"G6: the checkerboard's two colours show through, the most of any: {string.Join(", ", rendered.ColorCounts(picture.X + 1, picture.Y + 1, picture.Width / 2 - 2, picture.Height - 2).OrderByDescending(pair => pair.Value).Take(5).Select(pair => $"{pair.Key:X8} × {pair.Value}"))}");
+        // A square's edge falling between two display pixels at a fractional scale blends the two; nothing else shows.
+        Assert.IsTrue(left.All(color => RenderedWindow.Between(color, squares[0], squares[1])), $"every other colour a blend of the two: {string.Join(", ", left.Select(color => color.ToString("X8")))}");
         CollectionAssert.AreEquivalent(new[] { 0xFF00A000u }, right.ToList(), "the opaque half as it is");
     }
 

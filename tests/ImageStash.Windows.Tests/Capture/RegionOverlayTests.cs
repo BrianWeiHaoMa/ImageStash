@@ -155,7 +155,7 @@ public sealed class RegionOverlayTests
             var screen = new WindowsScreen();
             var pattern = PatternWindow.Show();
             await pattern.OnScreen(screen);
-            var front = FrontWindow.Show(new PixelPoint(100, 400));
+            var front = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 100, 400));
             // Shown activated, it is in front at once unless Windows refused it the activation; only then is it clicked,
             // since a click in the moment after its own activation was seen to leave no window in front at all.
             if (!await InFrontSoon(front.Handle))

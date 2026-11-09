@@ -36,16 +36,16 @@ public sealed class RecordingFrameTests
     public async Task OverAChatTheFrameAndTheBarLeaveItInFrontWithTheKeystrokesAndTheRegionClickableWaitingAndRecording()
     {
         using var desk = await FrameDesk.Open();
-        var region = new PixelRect(150, 160, 300, 150);
+        var region = DisplayPlaces.Rect(DisplayPlaces.Primary(), 150, 160, 300, 150);
 
         desk.Show(region);
         var (frame, bar) = await desk.Shown();
 
-        Assert.AreEqual(frame, Under(new PixelPoint(region.X - 1, region.Y + 70)), "the band on the region's left is the frame's");
-        Assert.AreEqual(frame, Under(new PixelPoint(region.X + 120, region.Y - 2)), "the band on the region's top is the frame's");
+        Assert.AreEqual(frame, Under(new PixelPoint(region.X - 1, region.Y + DisplayPlaces.Scaled(DisplayPlaces.Primary(), 70))), "the band on the region's left is the frame's");
+        Assert.AreEqual(frame, Under(new PixelPoint(region.X + DisplayPlaces.Scaled(DisplayPlaces.Primary(), 120), region.Y - 2)), "the band on the region's top is the frame's");
         var window = Rectangle(frame);
-        Assert.AreEqual(frame, Under(new PixelPoint(window.X + 6, window.Y + 6)), "the label, at the frame window's top-left, is the frame's");
-        Assert.AreEqual(desk.Chat.Window, Under(new PixelPoint(window.Right - 6, window.Y + 6)), "beside the label, above the band, the chat");
+        Assert.AreEqual(frame, Under(new PixelPoint(window.X + DisplayPlaces.Scaled(DisplayPlaces.Primary(), 6), window.Y + DisplayPlaces.Scaled(DisplayPlaces.Primary(), 6))), "the label, at the frame window's top-left, is the frame's");
+        Assert.AreEqual(desk.Chat.Window, Under(new PixelPoint(window.Right - DisplayPlaces.Scaled(DisplayPlaces.Primary(), 6), window.Y + DisplayPlaces.Scaled(DisplayPlaces.Primary(), 6))), "beside the label, above the band, the chat");
         Assert.AreEqual(desk.Chat.Window, Under(region.Center), "inside the region, the chat: the region stays live (G15)");
         desk.Chat.KeepsTheKeystrokes("with the frame and the bar up while the region waits");
         var pressed = desk.Chat.Messages().Count;
@@ -88,7 +88,7 @@ public sealed class RecordingFrameTests
         });
         Thread.Sleep(300);
         Assert.AreEqual(desk.Chat.Window, FrontWindow.GetForegroundWindow(), "the chat still in front: the change took no activation");
-        Assert.AreEqual(frame, Under(new PixelPoint(window.X + 6, window.Y + 6)), "the label, at the frame window's top-left, is the frame's");
+        Assert.AreEqual(frame, Under(new PixelPoint(window.X + DisplayPlaces.Scaled(DisplayPlaces.Primary(), 6), window.Y + DisplayPlaces.Scaled(DisplayPlaces.Primary(), 6))), "the label, at the frame window's top-left, is the frame's");
         Assert.AreEqual(desk.Chat.Window, Under(region.Center), "inside the region, the chat, while it records");
         Assert.IsGreaterThanOrEqualTo(region.Bottom, Rectangle(bar).Y, "the bar beneath the region");
         foreach (var button in TrayDesktop.Get(() => new[] { desk.Frame.Bar!.StopButton!, desk.Frame.Bar!.CancelButton! }))
@@ -116,7 +116,7 @@ public sealed class RecordingFrameTests
     public async Task TheBarAsksWindowsForItsOwnRoundedCornersWaitingAndRecordingAndTheFrameKeepsItsSquareOnes()
     {
         using var desk = await FrameDesk.Open();
-        desk.Show(new PixelRect(600, 180, 160, 60));
+        desk.Show(DisplayPlaces.Rect(DisplayPlaces.Primary(), 600, 180, 160, 60));
         var (frame, bar) = await desk.Shown();
 
         Assert.AreEqual(CornerPreference.Round, CornerPreference.Of(bar), "the bar rounded as Windows 11 rounds its own windows while the region waits (F13)");
@@ -133,7 +133,7 @@ public sealed class RecordingFrameTests
     public async Task TheFrameAndTheBarAreInNoGrabWaitingOrRecordingWhichShowsWhatLiesBeneathThem()
     {
         using var desk = await FrameDesk.Open(PatternWindow.Place);
-        var region = new PixelRect(600, 180, 160, 60);
+        var region = DisplayPlaces.Rect(DisplayPlaces.Primary(), 600, 180, 160, 60);
 
         desk.Show(region);
         var (frame, bar) = await desk.Shown();
@@ -146,7 +146,7 @@ public sealed class RecordingFrameTests
                 await Task.Delay(300);
             }
 
-            Assert.AreEqual(frame, Under(new PixelPoint(region.X - 1, region.Y + 30)), $"the band over the pattern {look}");
+            Assert.AreEqual(frame, Under(new PixelPoint(region.X - 1, region.Y + DisplayPlaces.Scaled(DisplayPlaces.Primary(), 30))), $"the band over the pattern {look}");
             Assert.IsTrue(Rectangle(bar).Intersects(desk.Pattern!.Bounds), $"the bar over the pattern {look}: {Rectangle(bar)}");
             var grab = desk.Screen.Grab(desk.Pattern.Bounds, withPointer: false);
             Assert.IsTrue(grab.Succeeded, grab.Failure?.Sentence);
@@ -162,8 +162,8 @@ public sealed class RecordingFrameTests
     public async Task ForARegionAsTallAsTheWorkingAreaTheBarIsOverItsBottomEdgeAndInNoGrab()
     {
         var area = TrayDesktop.Get(() => new WindowsScreen().Displays().Single(display => display.IsPrimary).WorkingArea);
-        var region = new PixelRect(area.X + 360, area.Y, 480, area.Height);
-        using var desk = await FrameDesk.Open(new PixelRect(region.X, area.Bottom - 180, 480, 170));
+        var region = new PixelRect(area.X + DisplayPlaces.Scaled(DisplayPlaces.Primary(), 360), area.Y, DisplayPlaces.Scaled(DisplayPlaces.Primary(), 480), area.Height);
+        using var desk = await FrameDesk.Open(new PixelRect(region.X, area.Bottom - DisplayPlaces.Scaled(DisplayPlaces.Primary(), 180), DisplayPlaces.Scaled(DisplayPlaces.Primary(), 480), DisplayPlaces.Scaled(DisplayPlaces.Primary(), 170)));
 
         desk.Show(region);
         var (frame, bar) = await desk.Shown();
@@ -177,7 +177,7 @@ public sealed class RecordingFrameTests
             }
 
             var placed = Rectangle(bar);
-            Assert.IsTrue(placed.X >= region.X && placed.Right <= region.Right && placed.Y > area.Bottom - 120 && placed.Bottom <= area.Bottom - 10, $"inside the region over its bottom edge, above the taskbar, {look}: {placed} in {region}");
+            Assert.IsTrue(placed.X >= region.X && placed.Right <= region.Right && placed.Y > area.Bottom - DisplayPlaces.Scaled(DisplayPlaces.Primary(), 120) && placed.Bottom <= area.Bottom - DisplayPlaces.Scaled(DisplayPlaces.Primary(), 10), $"inside the region over its bottom edge, above the taskbar, {look}: {placed} in {region}");
             Assert.IsTrue(placed.Intersects(desk.Pattern!.Bounds), $"the bar over the pattern {look}: {placed}");
             var grab = desk.Screen.Grab(desk.Pattern.Bounds, withPointer: false);
             Assert.IsTrue(grab.Succeeded, grab.Failure?.Sentence);
@@ -194,7 +194,7 @@ public sealed class RecordingFrameTests
     {
         var area = TrayDesktop.Get(() => new WindowsScreen().Displays().Single(display => display.IsPrimary).WorkingArea);
         // Right edge on the working area's, bottom a few pixels above its bottom: no room below, room above.
-        var region = new PixelRect(area.Right - 240, area.Bottom - 166, 240, 160);
+        var region = new PixelRect(area.Right - DisplayPlaces.Scaled(DisplayPlaces.Primary(), 240), area.Bottom - DisplayPlaces.Scaled(DisplayPlaces.Primary(), 166), DisplayPlaces.Scaled(DisplayPlaces.Primary(), 240), DisplayPlaces.Scaled(DisplayPlaces.Primary(), 160));
         using var desk = await FrameDesk.Open();
 
         desk.Show(region);
@@ -229,14 +229,14 @@ public sealed class RecordingFrameTests
         var primary = desk.Screen.Displays().Single(display => display.IsPrimary);
 
         var shown = TrayDesktop.Get(() => new RecordingFrame(new ShapeRefused(new WindowsQuietWindows(desk.Tray), from: 1), desk.Screen, desk.Named.Add)
-            .Show(new SelectedRegion(primary, new PixelRect(150, 160, 300, 150)), TimeSpan.FromSeconds(30), () => { }, () => { }, () => { }));
+            .Show(new SelectedRegion(primary, DisplayPlaces.Rect(primary, 150, 160, 300, 150)), TimeSpan.FromSeconds(30), () => { }, () => { }, () => { }));
 
         Assert.AreEqual(new Failure("Record a clip", RecordingFrame.Title, "Windows would not show the frame around the region"), shown.Failure, "a frame shown whole would cover the region (G15)");
         await Eventually(() => FindWindowW(null, RecordingFrame.Title) == 0 && FindWindowW(null, RecordingBar.Title) == 0);
         desk.Chat.KeepsTheKeystrokes("after the refusal");
 
         var refusedLater = TrayDesktop.Get(() => new RecordingFrame(new ShapeRefused(new WindowsQuietWindows(desk.Tray), from: 2), desk.Screen, desk.Named.Add));
-        var waited = TrayDesktop.Get(() => refusedLater.Show(new SelectedRegion(primary, new PixelRect(150, 160, 300, 150)), TimeSpan.FromSeconds(30), () => { }, () => { }, () => { }));
+        var waited = TrayDesktop.Get(() => refusedLater.Show(new SelectedRegion(primary, DisplayPlaces.Rect(primary, 150, 160, 300, 150)), TimeSpan.FromSeconds(30), () => { }, () => { }, () => { }));
         Assert.IsTrue(waited.Succeeded, waited.Failure?.Sentence);
         await Eventually(() => FindWindowW(null, RecordingFrame.Title) != 0 && FindWindowW(null, RecordingBar.Title) != 0);
         var recorded = TrayDesktop.Get(() => refusedLater.Recording(new FixedReadings()));
@@ -255,7 +255,7 @@ public sealed class RecordingFrameTests
         try
         {
             TrayDesktop.Run(() => Application.Current!.RequestedThemeVariant = ThemeVariant.Light);
-            desk.Show(new PixelRect(150, 160, 300, 150));
+            desk.Show(DisplayPlaces.Rect(DisplayPlaces.Primary(), 150, 160, 300, 150));
             var (frame, bar) = await desk.Shown();
             var looks = new List<(string Theme, (Color Ground, Color Window, IReadOnlyList<Color> Words) Look)> { ("light, waiting", TrayDesktop.Get(desk.BarLook)) };
             TrayDesktop.Run(() => Application.Current!.RequestedThemeVariant = ThemeVariant.Dark);
@@ -319,11 +319,13 @@ public sealed class RecordingFrameTests
     });
 
     [TestMethod]
-    public void StopAndCancelStandWhereTheyStoodWhileTheReadingsNarrowAndWiden() => TrayDesktop.Run(StandStill);
+    [DataRow(30)]
+    [DataRow(60)]
+    public void StopAndCancelStandWhereTheyStoodWhileTheReadingsNarrowAndWiden(int capSeconds) => TrayDesktop.Run(() => StandStill(capSeconds * 1000));
 
-    private static void StandStill()
+    private static void StandStill(long cap)
     {
-        var bar = new RecordingBar(TimeSpan.FromSeconds(30), () => { }, () => { }, () => { });
+        var bar = new RecordingBar(TimeSpan.FromMilliseconds(cap), () => { }, () => { }, () => { });
         var window = new Avalonia.Controls.Window { ShowActivated = false, Position = new PixelPoint(-8000, 700), Content = bar };
         window.Show();
         try
@@ -333,7 +335,7 @@ public sealed class RecordingFrameTests
             bar.Measure(Size.Infinity);
             (window.Width, window.Height) = (bar.DesiredSize.Width, bar.DesiredSize.Height);
             Point[]? first = null;
-            var readingsInTurn = new[] { new Readings(0, 0), new Readings(29_900, 5_452_595), new Readings(12_300, 629_146), new Readings(30_000, 10_485_655_143), new Readings(1_000, 1_000) };
+            var readingsInTurn = new[] { new Readings(0, 0), new Readings(cap - 100, 5_452_595), new Readings(12_300, 629_146), new Readings(cap, 10_485_655_143), new Readings(cap - 100, 10_485_760_000), new Readings(1_000, 1_000) };
             foreach (var readings in readingsInTurn)
             {
                 bar.Refresh(readings);
@@ -358,7 +360,7 @@ public sealed class RecordingFrameTests
     public async Task ThePointerRestingOnRecordAndStopShowsTheThemesRedWithItsWordsReadable()
     {
         using var desk = await FrameDesk.Open();
-        desk.Show(new PixelRect(150, 160, 300, 150));
+        desk.Show(DisplayPlaces.Rect(DisplayPlaces.Primary(), 150, 160, 300, 150));
         var (frame, bar) = await desk.Shown();
         void Rests(Func<Button> button, string what)
         {
@@ -444,7 +446,7 @@ public sealed class RecordingFrameTests
                 await shown.OnScreen(new WindowsScreen());
             }
 
-            var chat = TargetApp.Start("ImageStash check chat", 100, 100);
+            var chat = TargetApp.Start("ImageStash check chat", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
             chat.ClickTitleBar();
             return new FrameDesk(pointer, new WindowsTray(), chat, shown);
         }

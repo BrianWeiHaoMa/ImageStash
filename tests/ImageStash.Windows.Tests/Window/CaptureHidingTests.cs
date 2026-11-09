@@ -33,7 +33,8 @@ public sealed class CaptureHidingTests
     private const ushort VkEscape = 0x1B;
 
     /// <summary>Where the pinned window goes in these checks: clear of the chat window at (100, 100), larger than the window's minimum with its frame, inside the working area.</summary>
-    private static readonly PixelRect PinnedPlace = new(560, 260, 600, 480);
+    // Its position in physical pixels, (560, 260) at 100 %; its size in device-independent units, as the settings keep it.
+    private static PixelRect PinnedPlace => new(DisplayPlaces.At(DisplayPlaces.Primary(), 560, 260), new PixelSize(600, 480));
 
     [TestMethod]
     [DataRow(true, DisplayName = "a drag released")]
@@ -103,7 +104,7 @@ public sealed class CaptureHidingTests
     {
         using var desk = await CaptureDesk.Open(["pinned kept.png"]);
         var shown = desk.Shown;
-        var area = new PixelRect(PinnedPlace.X + 100, PinnedPlace.Y + 60, 260, 200);
+        var area = DisplayPlaces.Rect(DisplayPlaces.Primary(), 660, 320, 260, 200);
         // A pattern of the check's own beneath the pinned window, not topmost so the pinned window comes in front of it:
         // what lies beneath is known, not a grab of a desktop the check does not own, taken at another moment.
         using var beneath = PatternWindow.Show(area, window => window.Topmost = false);
@@ -187,7 +188,7 @@ public sealed class CaptureHidingTests
         var taking = desk.Take();
         await desk.OverlayInFront();
         TrayDesktop.Run(window.Close);
-        TestMouse.Click(new PixelPoint(300, 600));
+        TestMouse.Click(DisplayPlaces.At(DisplayPlaces.Primary(), 300, 600));
         await taking;
 
         await Task.Delay(300);
@@ -211,7 +212,7 @@ public sealed class CaptureHidingTests
 
         var taking = desk.Take();
         await desk.OverlayInFront();
-        await CaptureDesk.Drag(new PixelPoint(150, 160), new PixelPoint(400, 320));
+        await CaptureDesk.Drag(DisplayPlaces.At(DisplayPlaces.Primary(), 150, 160), DisplayPlaces.At(DisplayPlaces.Primary(), 400, 320));
         await taking;
         await desk.CardShown();
         await Task.Delay(500);
@@ -244,7 +245,7 @@ public sealed class CaptureHidingTests
             TrayDesktop.ChooseFromRealMenuThroughTheIcon(tray, 0, 2);
             await desk.OverlayInFront();
             TrayDesktop.Run(() => Assert.AreEqual(WindowState.Minimized, window.WindowState, "while the overlay is up (G3)"));
-            await CaptureDesk.Drag(new PixelPoint(150, 160), new PixelPoint(400, 320));
+            await CaptureDesk.Drag(DisplayPlaces.At(DisplayPlaces.Primary(), 150, 160), DisplayPlaces.At(DisplayPlaces.Primary(), 400, 320));
             await TrayDesktop.Get(() => taking!);
             await desk.CardShown();
             await Task.Delay(500);
@@ -273,7 +274,7 @@ public sealed class CaptureHidingTests
 
         var recording = desk.Record();
         await desk.OverlayInFront();
-        await CaptureDesk.Drag(new PixelPoint(150, 160), new PixelPoint(400, 320));
+        await CaptureDesk.Drag(DisplayPlaces.At(DisplayPlaces.Primary(), 150, 160), DisplayPlaces.At(DisplayPlaces.Primary(), 400, 320));
         await desk.WhileWaiting();
         TrayDesktop.Run(() => Assert.AreEqual(WindowState.Minimized, window.WindowState, "while the region waits (G3)"));
         desk.ClickRecord();
@@ -302,7 +303,7 @@ public sealed class CaptureHidingTests
 
         var recording = desk.Record();
         await desk.OverlayInFront();
-        await CaptureDesk.Drag(new PixelPoint(150, 160), new PixelPoint(400, 320));
+        await CaptureDesk.Drag(DisplayPlaces.At(DisplayPlaces.Primary(), 150, 160), DisplayPlaces.At(DisplayPlaces.Primary(), 400, 320));
         await desk.WhileWaiting();
         TrayDesktop.Run(() => Assert.AreEqual(WindowState.Minimized, window.WindowState, "minimised for the recording (G3)"));
         // As a click on its taskbar button restores it, and the user then minimises it again by its button.
@@ -376,7 +377,7 @@ public sealed class CaptureHidingTests
         TrayDesktop.Run(() => Assert.IsTrue(window.IsVisible, "the summon shows it as a summon does (G1)"));
         // The user puts it away again before the capture ends.
         TrayDesktop.Run(window.Hide);
-        TestMouse.Click(new PixelPoint(300, 600));
+        TestMouse.Click(DisplayPlaces.At(DisplayPlaces.Primary(), 300, 600));
         await taking;
 
         await Task.Delay(300);
@@ -396,7 +397,7 @@ public sealed class CaptureHidingTests
         TrayDesktop.Run(window.SummonFromTray);
         TrayDesktop.Run(() => Assert.AreEqual(WindowState.Normal, window.WindowState, "a summon restores a minimised pinned window (G1)"));
         TrayDesktop.Run(() => window.WindowState = WindowState.Minimized);
-        TestMouse.Click(new PixelPoint(300, 600));
+        TestMouse.Click(DisplayPlaces.At(DisplayPlaces.Primary(), 300, 600));
         await taking;
 
         await Task.Delay(300);
@@ -413,7 +414,7 @@ public sealed class CaptureHidingTests
         var recording = desk.Record();
         await desk.OverlayInFront();
         TrayDesktop.Run(() => Assert.IsFalse(window.IsVisible, "hidden for the recording (G3)"));
-        await CaptureDesk.Drag(new PixelPoint(150, 160), new PixelPoint(400, 320));
+        await CaptureDesk.Drag(DisplayPlaces.At(DisplayPlaces.Primary(), 150, 160), DisplayPlaces.At(DisplayPlaces.Primary(), 400, 320));
         await desk.WhileWaiting();
         TrayDesktop.Run(() => Assert.IsFalse(window.IsVisible, "still hidden while the region waits (G3)"));
         TrayDesktop.Run(window.SummonFromTray);

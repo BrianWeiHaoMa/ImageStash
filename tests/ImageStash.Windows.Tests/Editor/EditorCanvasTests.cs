@@ -30,6 +30,9 @@ public sealed class EditorCanvasTests
     /// <summary>A checker of four-pixel squares in two colours, which a blur changes; neither is black nor a handle's colour.</summary>
     internal static readonly SKColor Light = new(200, 60, 60), Dark = new(60, 200, 60);
 
+    /// <summary>A handle's inside.</summary>
+    private const uint White = 0xFFFFFFFF;
+
     internal static SKColor Checker(int x, int y) => (x / 4 + y / 4) % 2 == 0 ? Light : Dark;
 
     internal static uint Argb(SKColor color) => 0xFF000000u | ((uint)color.Red << 16) | ((uint)color.Green << 8) | color.Blue;
@@ -54,12 +57,15 @@ public sealed class EditorCanvasTests
 
         TrayDesktop.Run(() => Assert.AreEqual(new HideLayer(new PixelRect(16, 12, 32, 24), HideKind.Blur, null), editor.Session!.Layers.Layers.Single(), "one blur over the pixels the drag covered (G23)"));
         Assert.IsGreaterThan(0, Differences(before, blurred, Inside(picture, scale, 18, 14, 28, 20)), "the pixels inside are blurred");
-        Assert.AreEqual(0, Differences(before, blurred, Inside(picture, scale, 0, 0, 64, 8)), "the pixels above it, away from its handles, as they were");
-        Assert.AreEqual(0, Differences(before, blurred, Inside(picture, scale, 54, 0, 10, 48)), "and right of it");
+        var (above, right) = TrayDesktop.Get(() => (
+            editor.InRendering(new Rect(editor.OnCanvas(0, 0), new Point(editor.OnCanvas(64, 0).X, editor.OnCanvas(0, 12).Y - ShownEditor.BeyondHandle))),
+            editor.InRendering(new Rect(new Point(editor.OnCanvas(48, 0).X + ShownEditor.BeyondHandle, editor.OnCanvas(0, 0).Y), editor.OnCanvas(64, 48)))));
+        Assert.AreEqual(0, Differences(before, blurred, above), "the pixels above it, beyond its handles, as they were");
+        Assert.AreEqual(0, Differences(before, blurred, right), "and right of it");
         var handle = AppliedLook.SelectionMark(shown);
         foreach (var (x, y) in new[] { (16, 12), (48, 12), (16, 36), (48, 36) })
         {
-            Assert.Contains(handle, blurred.Colors(picture.X + (x - 3) * scale, picture.Y + (y - 3) * scale, 6 * scale, 6 * scale), $"a handle drawn at the corner ({x}, {y})");
+            CollectionAssert.AreEquivalent(new[] { White }, blurred.Colors(TrayDesktop.Get(() => editor.InsideHandle(editor.OnCanvas(x, y)))).ToList(), $"a handle drawn at the corner ({x}, {y}): its white");
         }
 
         // Nothing selected, no handle; Black box chosen, a second drag covers wholly.
@@ -75,17 +81,20 @@ public sealed class EditorCanvasTests
         TrayDesktop.Run(() => ShownWindow.Press(editor.Canvas, Key.Escape));
         var deselected = await RenderedWindow.Of(shown);
         CollectionAssert.AreEquivalent(new[] { 0xFF000000u }, deselected.Colors(picture.X + 2 * scale, picture.Y + 2 * scale, 8 * scale, 8 * scale).ToList(), "one colour inside: black (G23)");
-        Assert.DoesNotContain(handle, deselected.Colors(picture.X - 6, picture.Y - 6, picture.Width + 12, picture.Height + 12), "no handle with nothing selected");
+        Assert.DoesNotContain(handle, deselected.Colors(TrayDesktop.Get(() => editor.InRendering(editor.Box.Inflate(ShownEditor.BeyondHandle)))), "no handle with nothing selected");
 
         // A click selects the blur; its bottom-right handle resizes it; a drag inside, away from the handles, moves it.
         TrayDesktop.Run(() =>
         {
             editor.Click(32 / 64d, 24 / 48d);
             Assert.AreEqual(0, editor.Session!.Selected);
-            editor.Drag((48 / 64d, 36 / 48d), (52 / 64d, 40 / 48d));
-            Assert.AreEqual(new PixelRect(16, 12, 36, 28), ((HideLayer)editor.Session.Layers.Layers[0]).Rect, "the corner dragged out");
-            editor.Drag((30 / 64d, 24 / 48d), (35 / 64d, 27 / 48d));
-            Assert.AreEqual(new PixelRect(21, 15, 36, 28), ((HideLayer)editor.Session.Layers.Layers[0]).Rect, "moved by the drag's offset");
+            // Each drag goes far enough on the canvas to pass the drag threshold, six units, whatever a picture pixel spans.
+            var by = (int)Math.Ceiling(editor.OnOriginal(6));
+            editor.Drag(editor.OnCanvas(48, 36), editor.OnCanvas(48 + by, 36 + by));
+            Assert.AreEqual(new PixelRect(16, 12, 32 + by, 24 + by), ((HideLayer)editor.Session.Layers.Layers[0]).Rect, "the corner dragged out");
+            // Up and left, where the picture has room: the grown blur already reaches its right and bottom edges.
+            editor.Drag(editor.OnCanvas(30, 24), editor.OnCanvas(30 - by, 24 - by));
+            Assert.AreEqual(new PixelRect(16 - by, 12 - by, 32 + by, 24 + by), ((HideLayer)editor.Session.Layers.Layers[0]).Rect, "moved by the drag's offset");
         });
     }
 
@@ -106,7 +115,8 @@ public sealed class EditorCanvasTests
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => editor.Size().StartsWith("32 × 24 · ")));
         TrayDesktop.Run(() =>
         {
-            Assert.AreEqual(new Rect(editor.Box.X, editor.Box.Y, 32, 24), editor.Box, "the 32 × 24 output shown at its own size");
+            var scaling = shown.Window.RenderScaling;
+            Assert.AreEqual(new Rect(editor.Box.X, editor.Box.Y, 32 / scaling, 24 / scaling), editor.Box, "the 32 × 24 output shown at its own size: one of its pixels to one of the display's");
             editor.Drag((0.25, 0.25), (0.75, 0.75));
             Assert.AreEqual(new PixelRect(16, 12, 32, 24), ((HideLayer)editor.Session!.Layers.Layers.OfType<HideLayer>().Single()).Rect, "on the original's grid, not the output's (G23)");
             ShownWindow.Press(editor.Canvas, Key.Escape);
@@ -162,8 +172,7 @@ public sealed class EditorCanvasTests
             Assert.AreEqual(0, editor.Session!.Selected, "a click on the box's ink selects it (G23)");
         });
         var selected = await RenderedWindow.Of(shown);
-        var handle = AppliedLook.SelectionMark(shown);
-        Assert.Contains(handle, selected.Colors(picture.X + 45 * scale, picture.Y + 33 * scale, 6 * scale, 6 * scale), "its corner handle");
+        CollectionAssert.AreEquivalent(new[] { White }, selected.Colors(TrayDesktop.Get(() => editor.InsideHandle(editor.OnCanvas(48, 36)))).ToList(), "its corner handle's white");
 
         TrayDesktop.Run(() =>
         {
@@ -249,13 +258,15 @@ public sealed class EditorCanvasTests
         {
             var item = Numbered(i);
             await EditorOverlayTests.Open(shown, item);
-            var (operation, size, box) = TrayDesktop.Get(() =>
+            var (operation, size, inside, outside, corner) = TrayDesktop.Get(() =>
             {
                 editor.Choose("Hide");
                 editor.Choose("Black box");
                 editor.Drag((0.25, 0.25), (0.75, 0.75));
                 ShownWindow.Press(editor.Canvas, Key.Escape);
-                return (editor.Canvas.DrawOperation()!, editor.Canvas.Bounds.Size, editor.Box);
+                // Its own renderer draws at 96 DPI, so canvas units are its pixels: sampled through the canvas's mapping, at
+                // the first of its pixels wholly inside a checker square (a square spans fewer pixels than four at a scale above 1).
+                return (editor.Canvas.DrawOperation()!, editor.Canvas.Bounds.Size, editor.OnCanvas(32, 24), editor.OnCanvas(0, 0), editor.OnCanvas(60, 44));
             });
 
             await endings[i].End(item);
@@ -264,9 +275,9 @@ public sealed class EditorCanvasTests
             // The pixels are the observation: a render through RenderTargetBitmap swallows what the operation throws.
             var pixels = TrayDesktop.Get(() => RenderedAlone(operation, size));
             var name = endings[i].Name;
-            Assert.AreEqual(0xFF000000u, pixels.At((int)(box.X + 32), (int)(box.Y + 24)), $"after {name}: black inside the hide, as it was when taken");
-            Assert.AreEqual(Argb(Checker(2, 2)), pixels.At((int)(box.X + 2), (int)(box.Y + 2)), $"after {name}: the picture's own colour outside it");
-            Assert.AreEqual(Argb(Checker(60, 44)), pixels.At((int)(box.X + 60), (int)(box.Y + 44)), $"after {name}: and in its far corner");
+            Assert.AreEqual(0xFF000000u, pixels.At((int)inside.X, (int)inside.Y), $"after {name}: black inside the hide, as it was when taken");
+            Assert.AreEqual(Argb(Checker(2, 2)), pixels.At((int)Math.Ceiling(outside.X), (int)Math.Ceiling(outside.Y)), $"after {name}: the picture's own colour outside it");
+            Assert.AreEqual(Argb(Checker(60, 44)), pixels.At((int)Math.Ceiling(corner.X), (int)Math.Ceiling(corner.Y)), $"after {name}: and in its far corner");
             if (TrayDesktop.Get(() => shown.Editing.IsOpen))
             {
                 TrayDesktop.Run(() => editor.Session!.Deselect());
@@ -310,8 +321,7 @@ public sealed class EditorCanvasTests
         });
         var level = await RenderedWindow.Of(shown);
         var (rotate, centre) = TrayDesktop.Get(() => (RotateHandle(editor), Centre(editor)));
-        var round = TrayDesktop.Get(() => InRendering(shown, editor, rotate));
-        Assert.Contains(handle, level.Colors(round.X - 5, round.Y - 5, 10, 10), "the round handle above the box's top centre (G21)");
+        CollectionAssert.AreEquivalent(new[] { White }, level.Colors(TrayDesktop.Get(() => editor.InsideRoundHandle(rotate))).ToList(), "the round handle above the box's top centre, its white (G21)");
         // The handles are the accent's, which the window's accent buttons show too: only the canvas is read.
         var canvas = TrayDesktop.Get(() => RenderedWindow.Place(shown.Window, editor.Canvas));
         var flat = level.Bounds(handle, canvas);
@@ -345,7 +355,6 @@ public sealed class EditorCanvasTests
         using var editor = new ShownEditor(shown);
         var items = await shown.OpenStash(shown.Picture("square.png", 600, 600, (_, _) => TextFieldTests.Grey));
         await EditorOverlayTests.Open(shown, items[0]);
-        var handle = AppliedLook.SelectionMark(shown);
         var rotate = TrayDesktop.Get(() =>
         {
             Assert.IsLessThan(600, editor.Box.Height, "the picture scaled down to the canvas");
@@ -358,8 +367,7 @@ public sealed class EditorCanvasTests
             return at;
         });
         var rendered = await RenderedWindow.Of(shown);
-        var round = TrayDesktop.Get(() => InRendering(shown, editor, rotate));
-        Assert.Contains(handle, rendered.Colors(round.X - 5, round.Y - 5, 10, 10), "drawn there");
+        CollectionAssert.AreEquivalent(new[] { White }, rendered.Colors(TrayDesktop.Get(() => editor.InsideRoundHandle(rotate))).ToList(), "drawn there, its white");
         TrayDesktop.Run(() =>
         {
             editor.Drag(rotate, Centre(editor) + new Vector(80, 0));
@@ -440,7 +448,6 @@ public sealed class EditorCanvasTests
         using var editor = new ShownEditor(shown);
         var items = await shown.OpenStash(shown.Picture("grey.png", 200, 150, (_, _) => TextFieldTests.Grey));
         await EditorOverlayTests.Open(shown, items[0]);
-        var handle = AppliedLook.SelectionMark(shown);
         var band = TrayDesktop.Get(() =>
         {
             editor.Choose("Caption bar");
@@ -453,8 +460,7 @@ public sealed class EditorCanvasTests
         var rendered = await RenderedWindow.Of(shown);
         foreach (var (x, y) in new[] { (band.Left, band.Top), (band.Right, band.Top), (band.Left, band.Bottom), (band.Right, band.Bottom) })
         {
-            var corner = TrayDesktop.Get(() => InRendering(shown, editor, editor.OnCanvas(x, y)));
-            Assert.Contains(handle, rendered.Colors(corner.X - 3, corner.Y - 3, 6, 6), $"a handle at the band's corner ({x}, {y}) (G21)");
+            CollectionAssert.AreEquivalent(new[] { White }, rendered.Colors(TrayDesktop.Get(() => editor.InsideHandle(editor.OnCanvas(x, y)))).ToList(), $"a handle at the band's corner ({x}, {y}), its white over the band and beyond it (G21)");
         }
 
         var (size, height) = TrayDesktop.Get(() => (((CaptionBarLayer)editor.Session!.Layers.Layers[0]).FontSize, editor.Box.Height));
@@ -486,13 +492,6 @@ public sealed class EditorCanvasTests
     {
         var box = Text(editor).Box;
         return editor.OnCanvas(box.X + box.Width / 2f, box.Y + box.Height / 2f);
-    }
-
-    /// <summary>A point of the canvas where the rendering shows it, in physical pixels.</summary>
-    private static Point InRendering(ShownWindow shown, ShownEditor editor, Point onCanvas)
-    {
-        var canvas = RenderedWindow.Place(shown.Window, editor.Canvas);
-        return new Point(canvas.X + onCanvas.X * shown.Window.RenderScaling, canvas.Y + onCanvas.Y * shown.Window.RenderScaling);
     }
 
     /// <summary>Esc, or Ctrl with S, pressed on the canvas; waits for the editor to close and the window to return to the grid.</summary>

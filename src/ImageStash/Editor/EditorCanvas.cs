@@ -36,7 +36,7 @@ public sealed class EditorCanvas : Control
     /// <summary>How near, in the canvas's units, a press must come to a layer or a handle to be on it; half is the drag threshold (L2).</summary>
     public const double PressReach = 8;
 
-    private const double HandleSize = 8;
+    internal const double HandleSize = 8;
 
     // L2: the original outside the crop's frame dimmed, the frame a white line, its size in a dark pill.
     private static readonly IBrush Dimmed = new SolidColorBrush(Color.FromArgb(0x8C, 0x0C, 0x0E, 0x16));
@@ -172,7 +172,7 @@ public sealed class EditorCanvas : Control
             return;
         }
 
-        context.FillRectangle(ShownPicture.Checkerboard(dark), mapping.Box);
+        context.FillRectangle(ShownPicture.Checkerboard(dark, TopLevel.GetTopLevel(this)?.RenderScaling ?? 1), mapping.Box);
         context.Custom(DrawOperation()!);
         var original = new LayerPixelSize(shown.Frame.Width, shown.Frame.Height);
         if (!shown.Compare && shown.Tool is CropTool crop)

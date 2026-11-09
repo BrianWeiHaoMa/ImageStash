@@ -15,8 +15,7 @@ public static class ShownPicture
     /// <summary>The checkerboard's squares, in device-independent pixels.</summary>
     private const int Square = 8;
 
-    private static ImageBrush? lightCheckerboard;
-    private static ImageBrush? darkCheckerboard;
+    private static readonly Dictionary<(bool Dark, double Scaling), ImageBrush> Checkerboards = [];
 
     /// <summary>
     /// Where a picture of <paramref name="pixels"/> shows inside <paramref name="area"/> on a display of
@@ -33,21 +32,42 @@ public static class ShownPicture
         return new Rect(x, y, size.Width, size.Height);
     }
 
-    /// <summary>The checkerboard as a brush tiling two squares of each colour, with colours for the theme.</summary>
-    public static ImageBrush Checkerboard(bool dark) => dark ? darkCheckerboard ??= Tiled(dark) : lightCheckerboard ??= Tiled(dark);
+    /// <summary>
+    /// The checkerboard as a brush tiling two squares of each colour, with colours for the theme, its tile drawn pixel for
+    /// pixel on a display of <paramref name="scaling"/>; called on the UI thread, which renders.
+    /// </summary>
+    public static ImageBrush Checkerboard(bool dark, double scaling)
+    {
+        if (!Checkerboards.TryGetValue((dark, scaling), out var brush))
+        {
+            brush = Tiled(dark, scaling);
+            Checkerboards[(dark, scaling)] = brush;
+        }
 
-    private static ImageBrush Tiled(bool dark)
+        return brush;
+    }
+
+    /// <summary>
+    /// A checkerboard square's side in display pixels on a display of <paramref name="scaling"/>: <see cref="Square"/>
+    /// units, rounded to whole pixels, so every square is whole and the same size.
+    /// </summary>
+    public static int SquarePixels(double scaling) => Math.Max(1, (int)Math.Round(Square * scaling));
+
+    // The tile is made in display pixels at the display's own DPI: a tile of device-independent pixels, drawn on a
+    // fractionally scaled display, left the rest of each tile empty, the surround showing between the squares.
+    private static ImageBrush Tiled(bool dark, double scaling)
     {
         var (light, shade) = dark ? (Color.FromRgb(0x3A, 0x3B, 0x42), Color.FromRgb(0x2E, 0x2F, 0x35)) : (Color.FromRgb(0xFF, 0xFF, 0xFF), Color.FromRgb(0xE6, 0xE7, 0xEC));
-        var tile = new WriteableBitmap(new PixelSize(2 * Square, 2 * Square), new Vector(96, 96), PixelFormats.Bgra8888, AlphaFormat.Opaque);
+        var square = SquarePixels(scaling);
+        var tile = new WriteableBitmap(new PixelSize(2 * square, 2 * square), new Vector(96 * scaling, 96 * scaling), PixelFormats.Bgra8888, AlphaFormat.Opaque);
         using (var pixels = tile.Lock())
         {
             var row = new byte[pixels.RowBytes];
-            for (var y = 0; y < 2 * Square; y++)
+            for (var y = 0; y < 2 * square; y++)
             {
-                for (var x = 0; x < 2 * Square; x++)
+                for (var x = 0; x < 2 * square; x++)
                 {
-                    var color = (x < Square) == (y < Square) ? light : shade;
+                    var color = (x < square) == (y < square) ? light : shade;
                     row[x * 4] = color.B;
                     row[x * 4 + 1] = color.G;
                     row[x * 4 + 2] = color.R;
@@ -64,7 +84,7 @@ public static class ShownPicture
             Stretch = Stretch.None,
             AlignmentX = AlignmentX.Left,
             AlignmentY = AlignmentY.Top,
-            DestinationRect = new RelativeRect(0, 0, 2 * Square, 2 * Square, RelativeUnit.Absolute),
+            DestinationRect = new RelativeRect(0, 0, 2 * square / scaling, 2 * square / scaling, RelativeUnit.Absolute),
         };
     }
 }

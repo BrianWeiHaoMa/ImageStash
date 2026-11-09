@@ -42,4 +42,16 @@ public sealed class ShownPictureTests
         Assert.AreEqual(Math.Round(shown.X * 1.5), shown.X * 1.5, 1e-9, "its corner on a whole display pixel");
         Assert.AreEqual(Math.Round(shown.Y * 1.5), shown.Y * 1.5, 1e-9);
     }
+
+    [TestMethod]
+    [DataRow(1.0, 8)]
+    [DataRow(1.25, 10)]
+    [DataRow(1.5, 12)]
+    [DataRow(1.75, 14)]
+    [DataRow(2.0, 16)]
+    [DataRow(2.25, 18)]
+    public void TheCheckerboardsSquaresAreEightUnitsInWholeDisplayPixelsAtEveryScaling(double scaling, int pixels)
+    {
+        Assert.AreEqual(pixels, ShownPicture.SquarePixels(scaling), "eight units a side, a whole number of display pixels, so the tile is drawn pixel for pixel with no gap (G6)");
+    }
 }

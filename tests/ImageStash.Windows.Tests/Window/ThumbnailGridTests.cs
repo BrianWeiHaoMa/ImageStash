@@ -533,7 +533,7 @@ public sealed class ThumbnailGridTests
             }
             else
             {
-                shown.Window.Position = new PixelPoint(560, 260);
+                shown.Window.Position = DisplayPlaces.At(DisplayPlaces.Primary(), 560, 260);
             }
         });
         await Eventually(() => TrayDesktop.Get(() => shown.Window.InputHitTest(shown.Window.PointToClient(TileCentre(shown, items[0].Id))) is ThumbnailGrid));
@@ -545,7 +545,8 @@ public sealed class ThumbnailGridTests
                 TrayDesktop.Run(() =>
                 {
                     var area = shown.Window.Screens.Primary!.WorkingArea;
-                    shown.Window.Position = new PixelPoint(area.Right - (int)shown.Window.FrameSize!.Value.Width, area.Bottom - (int)shown.Window.FrameSize!.Value.Height);
+                    var frame = PixelSize.FromSize(shown.Window.FrameSize!.Value, shown.Window.RenderScaling);
+                    shown.Window.Position = new PixelPoint(area.Right - frame.Width, area.Bottom - frame.Height);
                 });
                 await Task.Delay(300);
             }

@@ -43,8 +43,8 @@ public sealed class TextSavedTests
         {
             ShownWindow.Press(editor.Canvas, Key.Escape);
             Assert.IsTrue(editor.Session!.Selected is null && !editor.Session.Compare, "deselected, Compare not held: no outline or handle over the picture");
-            Assert.AreEqual(1.0, shown.Window.RenderScaling, "the comparison needs a display at 100 %, where the canvas's units are pixels");
-            Assert.AreEqual(new Size(160, 120), editor.Box.Size, "the picture shown 1 : 1, at its output size");
+            var scaling = shown.Window.RenderScaling;
+            Assert.AreEqual(new Size(160 / scaling, 120 / scaling), editor.Box.Size, "the picture shown 1 : 1, at its output size: one of its pixels to one of the display's");
             Assert.IsEmpty(editor.Canvas.Fallbacks, "Comic Sans MS is installed here: nothing drawn in a fallback");
         });
         var canvas = await RenderedWindow.Of(shown);

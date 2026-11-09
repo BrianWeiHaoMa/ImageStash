@@ -33,11 +33,20 @@ public sealed class PreviewPictureTests
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.PreviewPicture.Image is not null));
         var small = await RenderedWindow.Of(shown);
         var redPixels = small.Count(Red);
-        var underClear = small.Colors(small.Picture.X, small.Picture.Y, 32 * small.Scaling, small.Picture.Height);
+        var (redLeft, redTop, redRight, redBottom) = small.Bounds(Red);
+        // Its transparent half, 32 of its pixels wide, which are 32 of the display's at every scaling.
+        var underClear = small.Colors(small.Picture.X, small.Picture.Y, 32, small.Picture.Height);
 
-        Assert.AreEqual(Math.Round(32 * small.Scaling) * Math.Round(48 * small.Scaling), redPixels, 1, "its own size: one picture pixel to one display pixel, not enlarged");
-        Assert.HasCount(2, underClear, "a checkerboard of two colours under its transparent pixels (G6)");
-        Assert.DoesNotContain(small.Background, underClear, "neither is the area's neutral fill");
+        Assert.AreEqual((32, 48), (redRight - redLeft + 1, redBottom - redTop + 1), "its own size: one picture pixel to one display pixel, not enlarged by the display's scale (G19)");
+        Assert.AreEqual(32 * 48, redPixels, 1, "every one of its red pixels, once");
+        var squares = small.Commonest(new Avalonia.Rect(small.Picture.X, small.Picture.Y, 32, small.Picture.Height), 2);
+        Assert.HasCount(2, squares, "a checkerboard of two colours under its transparent pixels (G6)");
+        Assert.IsTrue(underClear.All(color => RenderedWindow.Between(color, squares[0], squares[1])), $"every other colour there a blend of the two, as a square's edge between two display pixels shows: {string.Join(", ", underClear.Select(color => color.ToString("X8")))}");
+        Assert.DoesNotContain(small.Background, underClear, "no gap between the squares shows the area's neutral fill");
+        var row = Enumerable.Range((int)Math.Ceiling(small.Picture.X), 32).Select(x => small.At(x, (int)(small.Picture.Y + small.Picture.Height / 2))).Where(squares.Contains).ToList();
+        Assert.IsGreaterThanOrEqualTo(2, row.Zip(row.Skip(1)).Count(pair => pair.First != pair.Second), "the two alternate along a row, square after square: a checkerboard, not a gradient between them");
+        var column = Enumerable.Range((int)Math.Ceiling(small.Picture.Y), 48).Select(y => small.At((int)small.Picture.X + 16, y)).Where(squares.Contains).ToList();
+        Assert.IsGreaterThanOrEqualTo(2, column.Zip(column.Skip(1)).Count(pair => pair.First != pair.Second), "and down a column: squares, not stripes");
 
         TrayDesktop.Run(() => shown.Preview.Open(big));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.PreviewPicture.Image is { PixelSize.Width: 3000 }));

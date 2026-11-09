@@ -54,7 +54,7 @@ public sealed class CropToolTests
         var handle = AppliedLook.SelectionMark(shown);
         foreach (var (x, y) in new[] { (64, 48), (256, 48), (64, 192), (256, 192) })
         {
-            Assert.Contains(handle, cropping.Colors(picture.X + x * scale - 6, picture.Y + y * scale - 6, 12, 12), $"a handle at the corner ({x}, {y})");
+            CollectionAssert.AreEquivalent(new[] { 0xFFFFFFFFu }, cropping.Colors(TrayDesktop.Get(() => editor.InsideHandle(editor.OnCanvas(x, y)))).ToList(), $"a handle at the corner ({x}, {y}): its white");
         }
 
         TrayDesktop.Run(() => editor.PressButton("Compare"));

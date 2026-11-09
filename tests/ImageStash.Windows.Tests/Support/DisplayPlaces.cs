@@ -20,6 +20,18 @@ public static class DisplayPlaces
     /// <summary><paramref name="length"/>, a length on a display at 100 %, on <paramref name="display"/>.</summary>
     public static int Scaled(Display display, int length) => (int)Math.Round(length * display.Scaling);
 
+    /// <summary>
+    /// The point (<paramref name="x"/>, <paramref name="y"/>) on the checks' reference display, 1280 × 800 at 100 %, on
+    /// <paramref name="display"/>: each coordinate scaled from zero, the primary display's origin, rounded once. A check's
+    /// literal place on the desktop is converted once, here or by <see cref="Rect"/>; a point relative to a window's own
+    /// top-left converts the same way.
+    /// </summary>
+    public static PixelPoint At(Display display, int x, int y) => new(Scaled(display, x), Scaled(display, y));
+
+    /// <summary>The rectangle at (<paramref name="x"/>, <paramref name="y"/>), <paramref name="width"/> × <paramref name="height"/>, on the reference display, on <paramref name="display"/>, as <see cref="At"/> converts a point.</summary>
+    public static PixelRect Rect(Display display, int x, int y, int width, int height) =>
+        new(Scaled(display, x), Scaled(display, y), Scaled(display, width), Scaled(display, height));
+
     /// <summary>The flyout's client, <paramref name="client"/> physical pixels, its top-right corner a margin in from the working area's.</summary>
     public static PixelRect Flyout(Display display, PixelSize client)
     {

@@ -104,7 +104,7 @@ public sealed class CaptureDesk : IDisposable
             shown.Window.Hide();
             return (notification, capture);
         });
-        var chat = TargetApp.Start("ImageStash check chat", 100, 100);
+        var chat = TargetApp.Start("ImageStash check chat", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
         chat.ClickTitleBar();
         return new CaptureDesk(pointer, shown, tray, clock, notifications, notification, capture, chat);
     }

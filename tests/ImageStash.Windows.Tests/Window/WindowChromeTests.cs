@@ -87,7 +87,9 @@ public sealed class WindowChromeTests
         TrayDesktop.Run(shown.Window.SummonPinned);
         await Task.Delay(300);
         var area = TrayDesktop.Get(() => shown.Window.Screens.Primary!.WorkingArea);
-        var moved = new PixelRect(area.X + 50, area.Y + 40, Math.Min(760, area.Width - 100), Math.Min(600, area.Height - 80));
+        var primary = DisplayPlaces.Primary();
+        var moved = new PixelRect(area.X + DisplayPlaces.Scaled(primary, 50), area.Y + DisplayPlaces.Scaled(primary, 40),
+            Math.Min(DisplayPlaces.Scaled(primary, 760), area.Width - DisplayPlaces.Scaled(primary, 100)), Math.Min(DisplayPlaces.Scaled(primary, 600), area.Height - DisplayPlaces.Scaled(primary, 80)));
 
         // As a drag of the border or a snap reaches the window: a placement that is not the window's own.
         TrayDesktop.Run(() => Assert.IsTrue(SetWindowPos(shown.Window.TryGetPlatformHandle()!.Handle, 0, moved.X, moved.Y, moved.Width, moved.Height, NoZOrderNoActivate)));
@@ -196,7 +198,8 @@ public sealed class WindowChromeTests
         });
         await Task.Delay(300);
         var handle = TrayDesktop.Get(() => window.TryGetPlatformHandle()!.Handle);
-        TrayDesktop.Run(() => Assert.IsTrue(SetWindowPos(handle, 0, 100, 40, 700, 640, NoZOrderNoActivate)));
+        var place = DisplayPlaces.Rect(DisplayPlaces.Primary(), 100, 40, 700, 640);
+        TrayDesktop.Run(() => Assert.IsTrue(SetWindowPos(handle, 0, place.X, place.Y, place.Width, place.Height, NoZOrderNoActivate)));
         await Task.Delay(300);
         var start = TrayDesktop.Get(() => CaptureDesk.Outer(window));
         var scaling = TrayDesktop.Get(() => window.RenderScaling);
@@ -270,9 +273,9 @@ public sealed class WindowChromeTests
         });
 
         // A drag of the title bar onto this display, then of the border, asking 300 × 300.
-        TrayDesktop.Run(() => Assert.IsTrue(SetWindowPos(handle, 0, area.X + 120, area.Y + 90, 0, 0, NoSizeNoZOrderNoActivate)));
+        TrayDesktop.Run(() => Assert.IsTrue(SetWindowPos(handle, 0, area.X + DisplayPlaces.Scaled(DisplayPlaces.Primary(), 120), area.Y + DisplayPlaces.Scaled(DisplayPlaces.Primary(), 90), 0, 0, NoSizeNoZOrderNoActivate)));
         await Task.Delay(300);
-        TrayDesktop.Run(() => Assert.IsTrue(SetWindowPos(handle, 0, area.X + 120, area.Y + 90, 300, 300, NoZOrderNoActivate)));
+        TrayDesktop.Run(() => Assert.IsTrue(SetWindowPos(handle, 0, area.X + DisplayPlaces.Scaled(DisplayPlaces.Primary(), 120), area.Y + DisplayPlaces.Scaled(DisplayPlaces.Primary(), 90), DisplayPlaces.Scaled(DisplayPlaces.Primary(), 300), DisplayPlaces.Scaled(DisplayPlaces.Primary(), 300), NoZOrderNoActivate)));
         await Task.Delay(300);
 
         TrayDesktop.Run(() => AssertAtTheMinimum(shown.Window, "the move put this display's minimum back in force, so the drag stops at it (G20, G21)"));
@@ -392,19 +395,20 @@ public sealed class WindowChromeTests
         TrayDesktop.Run(shown.Window.SummonPinned);
         await Task.Delay(300);
         var handle = TrayDesktop.Get(() => shown.Window.TryGetPlatformHandle()!.Handle);
-        TrayDesktop.Run(() => Assert.IsTrue(SetWindowPos(handle, 0, 100, 40, 700, 640, NoZOrderNoActivate)));
+        var place = DisplayPlaces.Rect(DisplayPlaces.Primary(), 100, 40, 700, 640);
+        TrayDesktop.Run(() => Assert.IsTrue(SetWindowPos(handle, 0, place.X, place.Y, place.Width, place.Height, NoZOrderNoActivate)));
         await Task.Delay(600);
-        TrayDesktop.Run(() => Assert.AreEqual(new WindowPosition(100, 40), shown.Settings.Current.PinnedPosition, "a move the user makes is remembered (G2)"));
+        TrayDesktop.Run(() => Assert.AreEqual(new WindowPosition(place.X, place.Y), shown.Settings.Current.PinnedPosition, "a move the user makes is remembered (G2)"));
 
         await Minimise(shown, handle, byItsButton);
         await Task.Delay(600);
-        TrayDesktop.Run(() => Assert.AreEqual(new WindowPosition(100, 40), shown.Settings.Current.PinnedPosition, "the minimise's own move is not the user's (G2)"));
+        TrayDesktop.Run(() => Assert.AreEqual(new WindowPosition(place.X, place.Y), shown.Settings.Current.PinnedPosition, "the minimise's own move is not the user's (G2)"));
 
         TrayDesktop.Run(() => shown.Window.WindowState = WindowState.Normal);
         await Task.Delay(300);
-        TrayDesktop.Run(() => shown.Window.Position = new PixelPoint(160, 80));
+        TrayDesktop.Run(() => shown.Window.Position = DisplayPlaces.At(DisplayPlaces.Primary(), 160, 80));
         await Task.Delay(600);
-        TrayDesktop.Run(() => Assert.AreEqual(new WindowPosition(160, 80), shown.Settings.Current.PinnedPosition, "restored and moved, the move is remembered at once"));
+        TrayDesktop.Run(() => Assert.AreEqual(new WindowPosition(DisplayPlaces.Scaled(DisplayPlaces.Primary(), 160), DisplayPlaces.Scaled(DisplayPlaces.Primary(), 80)), shown.Settings.Current.PinnedPosition, "restored and moved, the move is remembered at once"));
 
         await Minimise(shown, handle, byItsButton);
         TrayDesktop.Run(() => shown.Window.Close());
@@ -412,14 +416,14 @@ public sealed class WindowChromeTests
         TrayDesktop.Run(() =>
         {
             Assert.IsFalse(shown.Window.IsVisible, "Close while minimised unpins and hides it (G2)");
-            Assert.AreEqual(new WindowPosition(160, 80), shown.Settings.Current.PinnedPosition, "and its place stays where the user left it");
+            Assert.AreEqual(new WindowPosition(DisplayPlaces.Scaled(DisplayPlaces.Primary(), 160), DisplayPlaces.Scaled(DisplayPlaces.Primary(), 80)), shown.Settings.Current.PinnedPosition, "and its place stays where the user left it");
             shown.Window.SummonPinned();
         });
         await Task.Delay(600);
         TrayDesktop.Run(() =>
         {
             Assert.AreEqual(WindowState.Normal, shown.Window.WindowState);
-            Assert.AreEqual(new PixelPoint(160, 80), shown.Window.Position, "pinned again, where it was before the minimise (G2)");
+            Assert.AreEqual(DisplayPlaces.At(DisplayPlaces.Primary(), 160, 80), shown.Window.Position, "pinned again, where it was before the minimise (G2)");
         });
     }
 
@@ -453,7 +457,7 @@ public sealed class WindowChromeTests
             }
 
             // Its bottom 100 pixels on the primary display, its title bar where a display above it stood.
-            var place = new WindowPosition(area.X + 100, area.Y - (int)(700 * display.Scaling) + 100);
+            var place = new WindowPosition(area.X + DisplayPlaces.Scaled(display, 100), area.Y - DisplayPlaces.Scaled(display, 700) + DisplayPlaces.Scaled(display, 100));
             if (Summon.DisplaysOf(shown.Window.Screens).Any(d => d.WorkingArea.Intersects(new PixelRect(place.X, place.Y, 1, 1))))
             {
                 Assert.Inconclusive("A display stands above the primary one, so the remembered title bar is still on a display.");

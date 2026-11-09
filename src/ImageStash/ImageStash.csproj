@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="ImageStash.Tests" />
+    <InternalsVisibleTo Include="ImageStash.Windows.Tests" />
   </ItemGroup>
 
 </Project>

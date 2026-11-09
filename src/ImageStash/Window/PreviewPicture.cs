@@ -121,8 +121,9 @@ public sealed class PreviewPicture : Control
         {
             if (Image is { } picture)
             {
-                var box = ShownPicture.Fit(picture.PixelSize, area.Size, TopLevel.GetTopLevel(this)?.RenderScaling ?? 1);
-                context.DrawRectangle(ShownPicture.Checkerboard(dark), null, box);
+                var scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
+                var box = ShownPicture.Fit(picture.PixelSize, area.Size, scaling);
+                context.DrawRectangle(ShownPicture.Checkerboard(dark, scaling), null, box);
                 context.DrawImage(picture, new Rect(0, 0, picture.PixelSize.Width, picture.PixelSize.Height), box);
             }
             else if (couldNotRead)

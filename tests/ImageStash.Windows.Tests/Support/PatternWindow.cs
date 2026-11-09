@@ -18,8 +18,8 @@ public sealed class PatternWindow : IDisposable
     /// <summary>The four blocks' colours: top left, top right, bottom left, bottom right.</summary>
     public static readonly uint[] PatternColours = [0xFFC8280A, 0xFF0AB43C, 0xFF1E3CDC, 0xFFF0C814];
 
-    /// <summary>Where the pattern goes unless a check says otherwise: on the primary display, clear of the check's other windows.</summary>
-    public static readonly PixelRect Place = new(560, 160, 240, 160);
+    /// <summary>Where the pattern goes unless a check says otherwise: on the primary display, clear of the check's other windows; (560, 160) 240 × 160 at 100 %.</summary>
+    public static PixelRect Place => DisplayPlaces.Rect(DisplayPlaces.Primary(), 560, 160, 240, 160);
 
     // A block's edge, and the window's, may be drawn blended or rounded: a pixel this close to one is not judged.
     private const int Margin = 3;

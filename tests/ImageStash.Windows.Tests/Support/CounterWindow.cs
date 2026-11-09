@@ -24,7 +24,6 @@ public sealed class CounterWindow : IDisposable
     public static readonly TimeSpan Tick = TimeSpan.FromMilliseconds(100);
 
     private const int Bits = 8;
-    private const int CellHeight = 40;
 
     // A field's edge, and the window's, may be drawn blended: a pixel this close to one is not judged.
     private const int Margin = 3;
@@ -44,6 +43,9 @@ public sealed class CounterWindow : IDisposable
 
     /// <summary>The window, in physical pixels on the desktop.</summary>
     public PixelRect Bounds { get; }
+
+    /// <summary>A cell's height in physical pixels: 40 on a display at 100 %, scaled with the primary display, where the counter stands.</summary>
+    private static int CellHeight => DisplayPlaces.Scaled(DisplayPlaces.Primary(), 40);
 
     /// <summary>The green field beneath the cells, in physical pixels on the desktop.</summary>
     public PixelRect FieldBounds => new(Bounds.X, Bounds.Y + CellHeight, Bounds.Width, Bounds.Height - CellHeight);

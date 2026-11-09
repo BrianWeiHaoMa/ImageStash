@@ -866,7 +866,7 @@ public sealed class TagFieldTests
                 shown.Window.Hide();
                 shown.Window.ShowActivated = true;
                 shown.Window.SummonFromTray();
-                shown.Window.Position = new PixelPoint(40, 40);
+                shown.Window.Position = DisplayPlaces.At(DisplayPlaces.Primary(), 40, 40);
             });
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Window.IsActive));
             TrayDesktop.Run(() =>

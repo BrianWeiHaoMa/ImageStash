@@ -53,7 +53,8 @@ public sealed class DropWindow : IDisposable
                 WindowDecorations = Avalonia.Controls.WindowDecorations.None,
                 Width = 160,
                 Height = 160,
-                Position = new Avalonia.PixelPoint(cursor.X - 80, cursor.Y - 80),
+                // Centred on the cursor: half its layout size, 80, scaled with the display.
+                Position = new Avalonia.PixelPoint(cursor.X - DisplayPlaces.Scaled(DisplayPlaces.Primary(), 80), cursor.Y - DisplayPlaces.Scaled(DisplayPlaces.Primary(), 80)),
                 Content = new Avalonia.Controls.Border { Background = Avalonia.Media.Brushes.White },
             };
             window.Show();

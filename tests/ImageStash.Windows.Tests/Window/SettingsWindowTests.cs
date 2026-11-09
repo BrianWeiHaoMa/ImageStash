@@ -40,7 +40,7 @@ public sealed class SettingsWindowTests
         SettingsWindow? open = null;
         var tray = new WindowsTray();
         // Beside the page, centred on a display of any size, so the click that brings it in front lands on it.
-        using var other = FrontWindow.Show(new PixelPoint(0, 400));
+        using var other = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 0, 400));
         try
         {
             TrayDesktop.Run(() => tray.Show([new TrayMenuEntry("Settings", () => open = SettingsWindow.Open(open, () => settings.Page()), MenuClosed: () => open?.KeepForward()), new TrayMenuEntry("Quit ImageStash", () => { })], "ImageStash menu's Settings check", () => { }));
@@ -81,7 +81,7 @@ public sealed class SettingsWindowTests
         using var pointer = TestMouse.PutBackAfterwards();
         using var shown = ShownWindow.Open();
         await shown.OpenStash();
-        using var other = FrontWindow.Show(new PixelPoint(100, 400));
+        using var other = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 100, 400));
         SettingsWindow? open = null;
         var flyout = shown.Window;
         TrayDesktop.Run(() =>

@@ -34,8 +34,8 @@ public sealed class WindowsTargetTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var seam = new WindowsTarget();
-        using var other = TargetApp.Start("ImageStash check target", 100, 100);
-        using var own = FrontWindow.Show(new PixelPoint(600, 100));
+        using var other = TargetApp.Start("ImageStash check target", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
+        using var own = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 600, 100));
 
         other.ClickTitleBar();
         var inFront = seam.Foreground();
@@ -58,9 +58,9 @@ public sealed class WindowsTargetTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var seam = new WindowsTarget();
-        using var other = TargetApp.Start("ImageStash check before a dialog", 100, 100);
-        using var stash = FrontWindow.Show(new PixelPoint(600, 100));
-        using var dialog = FrontWindow.Show(new PixelPoint(600, 350));
+        using var other = TargetApp.Start("ImageStash check before a dialog", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
+        using var stash = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 600, 100));
+        using var dialog = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 600, 350));
 
         other.ClickTitleBar();
         stash.ClickToFront();
@@ -78,7 +78,7 @@ public sealed class WindowsTargetTests
     public void AWindowOfHigherOrUnreadableRightsIsRefusedByTheConfirmation()
     {
         using var pointer = TestMouse.PutBackAfterwards();
-        using var other = TargetApp.Start("ImageStash check elevated stand-in", 100, 100);
+        using var other = TargetApp.Start("ImageStash check elevated stand-in", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
         other.ClickTitleBar();
         var target = new PasteTarget(other.Window, "Windows PowerShell");
         var own = WindowsTarget.IntegrityOf((uint)Environment.ProcessId);
@@ -94,8 +94,8 @@ public sealed class WindowsTargetTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var seam = new WindowsTarget();
-        using var other = TargetApp.Start("ImageStash check paste target", 100, 100);
-        using var own = FrontWindow.Show(new PixelPoint(600, 100));
+        using var other = TargetApp.Start("ImageStash check paste target", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
+        using var own = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 600, 100));
         other.ClickTitleBar();
         var target = seam.Foreground().Target!;
         own.ClickToFront();
@@ -126,8 +126,8 @@ public sealed class WindowsTargetTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var seam = new WindowsTarget();
-        using var other = TargetApp.Start("ImageStash check held key target", 100, 100);
-        using var bystander = TargetApp.Start("ImageStash check held key bystander", 100, 400, editBox: false);
+        using var other = TargetApp.Start("ImageStash check held key target", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
+        using var bystander = TargetApp.Start("ImageStash check held key bystander", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 400), editBox: false);
         other.ClickTitleBar();
         var target = seam.Foreground().Target!;
         TestClipboard.PutText("probe text");
@@ -168,8 +168,8 @@ public sealed class WindowsTargetTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var seam = new WindowsTarget();
-        using var other = TargetApp.Start("ImageStash check closing target", 100, 100);
-        using var own = FrontWindow.Show(new PixelPoint(600, 100));
+        using var other = TargetApp.Start("ImageStash check closing target", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
+        using var own = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 600, 100));
         other.ClickTitleBar();
         var target = seam.Foreground().Target!;
 
@@ -191,7 +191,7 @@ public sealed class WindowsTargetTests
     public void TheDesktopAndTheTaskbarAreNoTargetAndTheShellIsNamedByItsDescription()
     {
         using var seam = new WindowsTarget();
-        using var own = FrontWindow.Show(new PixelPoint(600, 100));
+        using var own = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 600, 100));
         var taskbar = FindWindowW("Shell_TrayWnd", null);
         Assert.AreNotEqual(nint.Zero, taskbar, "this desktop has a taskbar");
 
@@ -213,8 +213,8 @@ public sealed class WindowsTargetTests
             // Explorer registers the icon while the UI thread keeps pumping.
             await Task.Delay(1000);
             using var seam = new WindowsTarget();
-            using var other = TargetApp.Start("ImageStash check before the tray", 100, 100);
-            using var own = FrontWindow.Show(new PixelPoint(600, 100));
+            using var other = TargetApp.Start("ImageStash check before the tray", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
+            using var own = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 600, 100));
             other.ClickTitleBar();
             Eventually(() => seam.LastBeforeMine() is not null);
             var icon = TrayDesktop.Get(() => new WindowsQuietWindows(tray).TrayIconRectangle());
@@ -242,8 +242,8 @@ public sealed class WindowsTargetTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var seam = new WindowsTarget();
-        using var other = TargetApp.Start("ImageStash check before a switch", 100, 100);
-        using var own = FrontWindow.Show(new PixelPoint(600, 100));
+        using var other = TargetApp.Start("ImageStash check before a switch", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
+        using var own = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 600, 100));
         var expected = new PasteTarget(other.Window, "Windows PowerShell");
         other.ClickTitleBar();
 
@@ -273,8 +273,8 @@ public sealed class WindowsTargetTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var seam = new WindowsTarget();
-        using var other = TargetApp.Start("ImageStash check before a cancelled switch", 100, 100);
-        using var own = FrontWindow.Show(new PixelPoint(600, 100));
+        using var other = TargetApp.Start("ImageStash check before a cancelled switch", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
+        using var own = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 600, 100));
         var escape = Shortcut.Parse("Esc").Value!;
 
         // Alt+Tab held then cancelled with Esc, and Task View opened then closed with Esc, each from the window of
@@ -307,8 +307,8 @@ public sealed class WindowsTargetTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var seam = new WindowsTarget();
-        using var other = TargetApp.Start("ImageStash check before a switch heard late", 100, 100);
-        using var own = FrontWindow.Show(new PixelPoint(600, 100));
+        using var other = TargetApp.Start("ImageStash check before a switch heard late", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
+        using var own = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 600, 100));
         var escape = Shortcut.Parse("Esc").Value!;
         other.ClickTitleBar();
         own.ClickToFront();
@@ -351,9 +351,9 @@ public sealed class WindowsTargetTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var seam = new WindowsTarget();
-        using var earlier = TargetApp.Start("ImageStash check earlier app", 100, 100);
-        using var current = TargetApp.Start("ImageStash check current app", 100, 420);
-        using var own = FrontWindow.Show(new PixelPoint(650, 100));
+        using var earlier = TargetApp.Start("ImageStash check earlier app", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
+        using var current = TargetApp.Start("ImageStash check current app", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 420));
+        using var own = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 650, 100));
         var holder = new PasteTargetHolder();
         earlier.ClickTitleBar();
         own.ClickToFront();
@@ -383,9 +383,9 @@ public sealed class WindowsTargetTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var seam = new WindowsTarget();
-        using var earlier = TargetApp.Start("ImageStash check earlier app read", 100, 100);
-        using var current = TargetApp.Start("ImageStash check current app read", 100, 420);
-        using var own = FrontWindow.Show(new PixelPoint(650, 100));
+        using var earlier = TargetApp.Start("ImageStash check earlier app read", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
+        using var current = TargetApp.Start("ImageStash check current app read", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 420));
+        using var own = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 650, 100));
         earlier.ClickTitleBar();
         own.ClickToFront();
         Eventually(() => seam.LastBeforeMine()?.Handle == earlier.Window);
@@ -416,9 +416,9 @@ public sealed class WindowsTargetTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var seam = new WindowsTarget();
-        using var busy = TargetApp.Start("ImageStash check busy minimised target", 100, 100);
-        using var responsive = TargetApp.Start("ImageStash check responsive target", 100, 420);
-        using var own = FrontWindow.Show(new PixelPoint(650, 100));
+        using var busy = TargetApp.Start("ImageStash check busy minimised target", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
+        using var responsive = TargetApp.Start("ImageStash check responsive target", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 420));
+        using var own = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 650, 100));
         responsive.ClickTitleBar();
         var next = seam.Foreground().Target!;
         busy.ClickTitleBar();
@@ -457,8 +457,8 @@ public sealed class WindowsTargetTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var seam = new WindowsTarget();
-        using var other = TargetApp.Start("ImageStash check minimised target", 100, 100);
-        using var own = FrontWindow.Show(new PixelPoint(650, 100));
+        using var other = TargetApp.Start("ImageStash check minimised target", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
+        using var own = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 650, 100));
         other.ClickTitleBar();
         var target = seam.Foreground().Target!;
         ShowWindowAsync(other.Window, SwMinimize);
@@ -481,8 +481,8 @@ public sealed class WindowsTargetTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var seam = new WindowsTarget();
-        using var other = TargetApp.Start("ImageStash check before a switch heard after it", 100, 100);
-        using var own = FrontWindow.Show(new PixelPoint(650, 100));
+        using var other = TargetApp.Start("ImageStash check before a switch heard after it", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
+        using var own = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 650, 100));
         other.ClickTitleBar();
         own.ClickToFront();
         Eventually(() => seam.LastBeforeMine()?.Handle == other.Window);
@@ -528,13 +528,14 @@ public sealed class WindowsTargetTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var seam = new WindowsTarget();
-        using var other = TargetApp.Start("ImageStash check caret target", 100, 100);
+        // DPI-unaware, as some real chat apps are: its caret comes in its own 96-DPI pixels (E6).
+        using var other = TargetApp.Start("ImageStash check caret target", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100), awareness: TargetAwareness.Unaware);
         other.ClickTitleBar();
         var target = seam.Foreground().Target!;
-        Eventually(() => ScreenCaretOf(other.Window) is not null);
-        var expected = ScreenCaretOf(other.Window);
+        Eventually(() => ScreenCaret.Of(other.Window) is not null);
+        var expected = ScreenCaret.Of(other.Window);
         Assert.IsNotNull(expected, "the edit box in front shows a caret");
-        var editBox = FocusOf(other.Window);
+        var editBox = ScreenCaret.FocusOf(other.Window);
 
         var clock = Stopwatch.StartNew();
         var found = await WindowsCaret.Find(other.Window, ShortcutSummon.CaretBound);
@@ -545,7 +546,13 @@ public sealed class WindowsTargetTests
         Assert.AreEqual(new CaretFound(expected.Value, CaretStep.WindowsCaret), found, "the first step of G1's chain, its client rectangle on the screen");
         Assert.IsLessThan(50, took, "found at once");
         Assert.AreEqual(expected, throughTheSeam);
-        Assert.AreEqual(expected, accessible?.Rectangle, "the accessibility caret object, the chain's second step, locates the same caret");
+        // For a DPI-unaware window on a scaled display, Windows' own caret object places its corner by its rounding of the
+        // window's points and keeps the window's own size (1 × 16 at 150 % for a caret 2 × 24 on the screen); the chain
+        // asks it only for a thread with no Windows caret, so its place is what is compared here. An aware window's is
+        // compared whole in WindowsCaretScalingTests.
+        Assert.IsNotNull(accessible, "the accessibility caret object, the chain's second step");
+        Assert.IsTrue(Math.Abs(accessible.Rectangle.X - expected.Value.X) <= 1 && Math.Abs(accessible.Rectangle.Y - expected.Value.Y) <= 1,
+            $"locates the same caret's place on the screen, within the pixel Windows' scaling of the window's points rounds: {accessible.Rectangle} for {expected}");
     }
 
     [TestMethod]
@@ -563,9 +570,9 @@ public sealed class WindowsTargetTests
     public async Task AWindowWithNoCaretAnswersNoneWithinTheBound()
     {
         using var pointer = TestMouse.PutBackAfterwards();
-        using var plain = TargetApp.Start("ImageStash check window without a caret", 100, 100, editBox: false);
+        using var plain = TargetApp.Start("ImageStash check window without a caret", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100), editBox: false);
         plain.ClickTitleBar();
-        Assert.IsNull(ScreenCaretOf(plain.Window), "its thread shows no Windows caret");
+        Assert.IsNull(ScreenCaret.Of(plain.Window), "its thread shows no Windows caret");
 
         var clock = Stopwatch.StartNew();
         var found = await WindowsCaret.Find(plain.Window, ShortcutSummon.CaretBound);
@@ -626,9 +633,9 @@ public sealed class WindowsTargetTests
     public async Task AnotherTopLevelWindowOfTheSameThreadLendsNoCaret()
     {
         using var pointer = TestMouse.PutBackAfterwards();
-        using var other = TargetApp.Start("ImageStash check caret target", 100, 100);
+        using var other = TargetApp.Start("ImageStash check caret target", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
         other.ClickTitleBar();
-        Assert.IsNotNull(ScreenCaretOf(other.Window), "the edit box shows a caret");
+        Assert.IsNotNull(ScreenCaret.Of(other.Window), "the edit box shows a caret");
         // The thread's default IME window: a top-level window of the edit box's own thread.
         var sameThread = ImmGetDefaultIMEWnd(other.Window);
         Assert.AreNotEqual(nint.Zero, sameThread);
@@ -643,10 +650,10 @@ public sealed class WindowsTargetTests
     public async Task ALookupThatHangsIsAbandonedAtTheBoundAndTheNextLookupStillAnswers()
     {
         using var pointer = TestMouse.PutBackAfterwards();
-        using var hung = TargetApp.Start("ImageStash check hung caret target", 100, 100, editBox: false);
-        using var other = TargetApp.Start("ImageStash check caret target", 600, 100);
+        using var hung = TargetApp.Start("ImageStash check hung caret target", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100), editBox: false);
+        using var other = TargetApp.Start("ImageStash check caret target", DisplayPlaces.At(DisplayPlaces.Primary(), 600, 100));
         hung.ClickTitleBar();
-        Assert.IsNull(ScreenCaretOf(hung.Window), "no Windows caret, so the lookup asks the window itself, which cannot answer");
+        Assert.IsNull(ScreenCaret.Of(hung.Window), "no Windows caret, so the lookup asks the window itself, which cannot answer");
         var thread = OpenThread(ThreadSuspendResume, false, GetWindowThreadProcessId(hung.Window, out _));
         Assert.AreNotEqual(nint.Zero, thread);
         try
@@ -657,7 +664,7 @@ public sealed class WindowsTargetTests
             var took = clock.ElapsedMilliseconds;
             other.ClickTitleBar();
             // Its edit box makes its caret as it takes the focus, a moment after the window comes to the front.
-            Eventually(() => ScreenCaretOf(other.Window) is not null);
+            Eventually(() => ScreenCaret.Of(other.Window) is not null);
             clock.Restart();
             var next = await WindowsCaret.Find(other.Window, ShortcutSummon.CaretBound);
             var nextTook = clock.ElapsedMilliseconds;
@@ -697,29 +704,6 @@ public sealed class WindowsTargetTests
         }
     }
 
-    /// <summary>The Windows caret of <paramref name="window"/>'s thread on the screen, read here apart from the seam, or null for none.</summary>
-    private static PixelRect? ScreenCaretOf(nint window)
-    {
-        var info = new GuiThreadInfo { Size = Marshal.SizeOf<GuiThreadInfo>() };
-        Assert.IsTrue(GetGUIThreadInfo(GetWindowThreadProcessId(window, out _), ref info));
-        if (info.Caret == 0)
-        {
-            return null;
-        }
-
-        var corner = new PointOnScreen { X = info.CaretRectangle.Left, Y = info.CaretRectangle.Top };
-        Assert.IsTrue(ClientToScreen(info.Caret, ref corner));
-        return new PixelRect(corner.X, corner.Y, info.CaretRectangle.Right - info.CaretRectangle.Left, info.CaretRectangle.Bottom - info.CaretRectangle.Top);
-    }
-
-    /// <summary>The focused window of <paramref name="window"/>'s thread.</summary>
-    private static nint FocusOf(nint window)
-    {
-        var info = new GuiThreadInfo { Size = Marshal.SizeOf<GuiThreadInfo>() };
-        Assert.IsTrue(GetGUIThreadInfo(GetWindowThreadProcessId(window, out _), ref info));
-        return info.Focus;
-    }
-
     private static string ClassName(nint window)
     {
         var name = new StringBuilder(256);
@@ -731,21 +715,6 @@ public sealed class WindowsTargetTests
     private struct Rectangle
     {
         public int Left, Top, Right, Bottom;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct PointOnScreen
-    {
-        public int X, Y;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct GuiThreadInfo
-    {
-        public int Size;
-        public uint Flags;
-        public nint Active, Focus, Capture, MenuOwner, MoveSize, Caret;
-        public Rectangle CaretRectangle;
     }
 
     private const int SwMinimize = 6;
@@ -766,14 +735,6 @@ public sealed class WindowsTargetTests
 
     [DllImport("user32.dll", ExactSpelling = true)]
     private static extern uint GetWindowThreadProcessId(nint window, out uint processId);
-
-    [DllImport("user32.dll", ExactSpelling = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetGUIThreadInfo(uint thread, ref GuiThreadInfo info);
-
-    [DllImport("user32.dll", ExactSpelling = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool ClientToScreen(nint window, ref PointOnScreen point);
 
     [DllImport("kernel32.dll", ExactSpelling = true)]
     private static extern nint OpenThread(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint threadId);

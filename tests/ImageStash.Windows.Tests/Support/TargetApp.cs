@@ -11,7 +11,10 @@ namespace ImageStash.Windows.Tests.Support;
 /// "Windows PowerShell", showing a window with an edit box that has focus, or with none when asked, so it shows no
 /// caret. It reports every key message, character,
 /// paste and left-button press and release its window and edit box receive, and on request the edit box's text. It is placed on the primary display,
-/// where a click reaches it, until disposed.
+/// where a click reaches it, until disposed. Its window is per-monitor aware, so it lands where it is asked in physical
+/// pixels whatever the display's scale and however the scale was reached, its size 400 × 260 and its edit box at
+/// (10, 10) 360 × 190 on a display at 100 %, scaled with the display; or DPI-unaware when asked, as some real chat apps
+/// are, which Windows scales from the display's origin.
 /// </summary>
 public sealed class TargetApp : IDisposable
 {
@@ -29,6 +32,7 @@ public sealed class TargetApp : IDisposable
             [StructLayout(LayoutKind.Sequential)]
             struct Message { public IntPtr Window; public uint Id; public IntPtr W, L; public uint Time; public int X, Y; public uint Private; }
             [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern ushort RegisterClassExW(ref WindowClass c);
+            [DllImport("user32.dll")] static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
             [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr CreateWindowExW(uint ex, string cls, string title, uint style, int x, int y, int w, int h, IntPtr parent, IntPtr menu, IntPtr instance, IntPtr param);
             [DllImport("user32.dll")] static extern IntPtr DefWindowProcW(IntPtr window, uint message, IntPtr w, IntPtr l);
             [DllImport("user32.dll")] static extern int GetMessageW(out Message m, IntPtr window, uint a, uint b);
@@ -47,7 +51,9 @@ public sealed class TargetApp : IDisposable
             static readonly WndProc mainProcedure = TopWindow;
             static readonly SubclassProc editProcedure = Edit;
             static IntPtr main, edit;
-            public static void Run(string title, int x, int y, bool withEdit) {
+            public static void Run(string title, int awareness, int x, int y, int width, int height, int editX, int editY, int editWidth, int editHeight, bool withEdit) {
+                // The thread's own awareness decides where its windows land and what DPI they answer, not powershell.exe's.
+                SetThreadDpiAwarenessContext((IntPtr)awareness);
                 WindowClass c = new WindowClass();
                 c.Size = (uint)Marshal.SizeOf(typeof(WindowClass));
                 c.Procedure = mainProcedure;
@@ -56,9 +62,9 @@ public sealed class TargetApp : IDisposable
                 c.Background = (IntPtr)6;
                 c.Name = "ImageStashCheckTarget";
                 RegisterClassExW(ref c);
-                main = CreateWindowExW(0, c.Name, title, 0x10CF0000, x, y, 400, 260, IntPtr.Zero, IntPtr.Zero, c.Instance, IntPtr.Zero);
+                main = CreateWindowExW(0, c.Name, title, 0x10CF0000, x, y, width, height, IntPtr.Zero, IntPtr.Zero, c.Instance, IntPtr.Zero);
                 if (withEdit) {
-                    edit = CreateWindowExW(0, "EDIT", "", 0x50810004, 10, 10, 360, 190, main, IntPtr.Zero, c.Instance, IntPtr.Zero);
+                    edit = CreateWindowExW(0, "EDIT", "", 0x50810004, editX, editY, editWidth, editHeight, main, IntPtr.Zero, c.Instance, IntPtr.Zero);
                     SetWindowSubclass(edit, editProcedure, UIntPtr.Zero, UIntPtr.Zero);
                     SetFocus(edit);
                 }
@@ -96,7 +102,7 @@ public sealed class TargetApp : IDisposable
             static void Say(string line) { lock (typeof(CheckTarget)) { Console.Out.WriteLine(line); Console.Out.Flush(); } }
         }
         '@
-        [CheckTarget]::Run('{{title}}', {{x}}, {{y}}, ${{edit}})
+        [CheckTarget]::Run('{{title}}', {{place}}, ${{edit}})
         """;
 
     private readonly Process process;
@@ -121,12 +127,19 @@ public sealed class TargetApp : IDisposable
     public List<string> Messages() => said.Where(line => line.StartsWith("message ")).Select(line => line.Split(' ')[1]).ToList();
 
     /// <summary>
-    /// Starts it with its window's top-left corner at (<paramref name="x"/>, <paramref name="y"/>), with its edit box
-    /// unless <paramref name="editBox"/> is false, and waits until the window exists.
+    /// Starts it with its window's top-left corner at <paramref name="at"/> in physical pixels,
+    /// with its edit box unless <paramref name="editBox"/> is false, per-monitor aware unless
+    /// <paramref name="awareness"/> says otherwise, and waits until the window exists. An unaware window is handed its
+    /// place and sizes over the primary display's scaling, which Windows scales back, so it lands within a pixel of the
+    /// place asked; <see cref="Bounds"/> says exactly where.
     /// </summary>
-    public static TargetApp Start(string title, int x, int y, bool editBox = true)
+    public static TargetApp Start(string title, PixelPoint at, bool editBox = true, TargetAwareness awareness = TargetAwareness.PerMonitor)
     {
-        var script = Script.Replace("{{title}}", title).Replace("{{x}}", x.ToString()).Replace("{{y}}", y.ToString()).Replace("{{edit}}", editBox ? "true" : "false");
+        var primary = DisplayPlaces.Primary();
+        int[] place = awareness == TargetAwareness.PerMonitor
+            ? [-4, at.X, at.Y, .. new[] { 400, 260, 10, 10, 360, 190 }.Select(length => DisplayPlaces.Scaled(primary, length))]
+            : [-1, (int)Math.Round(at.X / primary.Scaling), (int)Math.Round(at.Y / primary.Scaling), 400, 260, 10, 10, 360, 190];
+        var script = Script.Replace("{{title}}", title).Replace("{{place}}", string.Join(", ", place)).Replace("{{edit}}", editBox ? "true" : "false");
         var start = new ProcessStartInfo("powershell.exe")
         {
             UseShellExecute = false,
@@ -171,7 +184,8 @@ public sealed class TargetApp : IDisposable
     public static void ClickTitleBar(nint window)
     {
         Assert.IsTrue(GetWindowRect(window, out var rectangle));
-        TestMouse.Click(new PixelPoint((rectangle.Left + rectangle.Right) / 2, rectangle.Top + 12));
+        // Inside the caption of an aware and of an unaware window alike: both captions grow with the display.
+        TestMouse.Click(new PixelPoint((rectangle.Left + rectangle.Right) / 2, rectangle.Top + DisplayPlaces.Scaled(DisplayPlaces.Primary(), 12)));
         FrontWindow.WaitUntilInFront(window);
     }
 
@@ -247,4 +261,11 @@ public sealed class TargetApp : IDisposable
     [DllImport("user32.dll", ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetWindowRect(nint window, out Rectangle rectangle);
+}
+
+/// <summary>How a <see cref="TargetApp"/>'s window sees the display's scale: per-monitor aware (its pixels the display's), or DPI-unaware (96 DPI, scaled by Windows).</summary>
+public enum TargetAwareness
+{
+    PerMonitor,
+    Unaware,
 }

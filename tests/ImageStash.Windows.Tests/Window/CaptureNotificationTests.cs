@@ -183,7 +183,7 @@ public sealed class CaptureNotificationTests
     {
         using var targets = new WindowsTarget();
         using var desk = await CaptureDesk.Open(["stash target.png"], platformTarget: targets);
-        using var other = TargetApp.Start("ImageStash check other chat", 100, 420);
+        using var other = TargetApp.Start("ImageStash check other chat", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 420));
         var paste = desk.Shown.Window.PasteTarget;
         TrayDesktop.Run(() => paste.FromPress(new ForegroundReading(false, new PasteTarget(other.Window, "other"))));
         desk.Chat.ClickTitleBar();
@@ -454,7 +454,7 @@ public sealed class CaptureNotificationTests
         var stillCard = await desk.Raise(still, CaptureKind.Screenshot);
         using var editor = new ShownEditor(shown);
         // Pinned clear of the notification above the tray, then minimised.
-        shown.Settings.Change(settings => settings with { PinnedPosition = new WindowPosition(40, 40), PinnedSize = new WindowSize(560, 560) });
+        shown.Settings.Change(settings => settings with { PinnedPosition = new WindowPosition(DisplayPlaces.Scaled(DisplayPlaces.Primary(), 40), DisplayPlaces.Scaled(DisplayPlaces.Primary(), 40)), PinnedSize = new WindowSize(560, 560) });
         TrayDesktop.Run(shown.Window.SummonPinned);
         await Task.Delay(300);
         var where = TrayDesktop.Get(() => shown.Window.Position);

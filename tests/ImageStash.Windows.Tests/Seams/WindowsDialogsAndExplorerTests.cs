@@ -89,7 +89,7 @@ public sealed class WindowsDialogsAndExplorerTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var dialogs = new OpenWithDialog();
-        using var owner = FrontWindow.Show(new PixelPoint(100, 100));
+        using var owner = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
         owner.ClickToFront();
         var folder = Path.Combine(Path.GetTempPath(), "imagestash-open-with-check-" + Guid.NewGuid().ToString("N"));
         var file = Path.Combine(folder, "open with check.png");
@@ -129,7 +129,7 @@ public sealed class WindowsDialogsAndExplorerTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var dialogs = new OpenWithDialog();
-        using var owner = FrontWindow.Show(new PixelPoint(100, 100));
+        using var owner = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
         owner.ClickToFront();
 
         // A name Windows does not allow, which the shell refuses at once; a file that is only missing still gets the dialog (observed).
@@ -145,7 +145,7 @@ public sealed class WindowsDialogsAndExplorerTests
     public async Task TheFolderPickerAnswersAFolderTypedIntoItAndACancelAnswersNothing()
     {
         using var pointer = TestMouse.PutBackAfterwards();
-        using var owner = FrontWindow.Show(new PixelPoint(100, 100));
+        using var owner = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
         owner.ClickToFront();
         var folder = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "imagestash-folder-picker-check-" + Guid.NewGuid().ToString("N"))).FullName;
         var picker = (nint)0;
@@ -189,7 +189,7 @@ public sealed class WindowsDialogsAndExplorerTests
     public async Task TheOneFilePickerAnswersAFileTypedIntoItAndACancelAnswersNothing()
     {
         using var pointer = TestMouse.PutBackAfterwards();
-        using var owner = FrontWindow.Show(new PixelPoint(100, 100));
+        using var owner = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
         owner.ClickToFront();
         var folder = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "imagestash-file-picker-check-" + Guid.NewGuid().ToString("N"))).FullName;
         var file = Path.Combine(folder, "export.zip");

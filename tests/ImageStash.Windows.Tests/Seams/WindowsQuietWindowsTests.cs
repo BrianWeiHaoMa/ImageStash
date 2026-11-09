@@ -49,11 +49,11 @@ public sealed class WindowsQuietWindowsTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var tray = new WindowsTray();
-        using var other = TargetApp.Start("ImageStash check in front", 100, 100);
-        TestMouse.Click(new PixelPoint(300, 112));
+        using var other = TargetApp.Start("ImageStash check in front", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
+        TestMouse.Click(DisplayPlaces.At(DisplayPlaces.Primary(), 300, 112));
         FrontWindow.WaitUntilInFront(other.Window);
 
-        Assert.AreEqual(new PixelRect(100, 100, 400, 260), new WindowsQuietWindows(tray).FrontWindowRectangle(), "where the window in front lies, so the active display is known (G1)");
+        Assert.AreEqual(DisplayPlaces.Rect(DisplayPlaces.Primary(), 100, 100, 400, 260), new WindowsQuietWindows(tray).FrontWindowRectangle(), "where the window in front lies, so the active display is known (G1)");
     }
 
     [TestMethod]
@@ -61,8 +61,8 @@ public sealed class WindowsQuietWindowsTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var tray = new WindowsTray();
-        using var chat = TargetApp.Start("ImageStash check chat", 100, 100);
-        using var other = TargetApp.Start("ImageStash check other", 100, 420);
+        using var chat = TargetApp.Start("ImageStash check chat", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
+        using var other = TargetApp.Start("ImageStash check other", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 420));
         var quiet = new WindowsQuietWindows(tray);
         var takes = new List<Outcome<IDisposable>>();
         var (window, box) = TrayDesktop.Get(() =>
@@ -73,7 +73,7 @@ public sealed class WindowsQuietWindowsTests
                 Content = box,
                 Width = 300,
                 Height = 80,
-                Position = new PixelPoint(700, 100),
+                Position = DisplayPlaces.At(DisplayPlaces.Primary(), 700, 100),
                 WindowDecorations = WindowDecorations.None,
                 ShowInTaskbar = false,
                 Topmost = true,
@@ -129,9 +129,9 @@ public sealed class WindowsQuietWindowsTests
         using var pointer = TestMouse.PutBackAfterwards();
         using var tray = new WindowsTray();
         using var targets = new WindowsTarget();
-        using var chat = TargetApp.Start("ImageStash check chat", 100, 100);
+        using var chat = TargetApp.Start("ImageStash check chat", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
         // ImageStash's own window in front, on the UI thread the quiet window runs on, as the stash window is.
-        using var own = FrontWindow.Show(new PixelPoint(100, 400));
+        using var own = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 100, 400));
         var quiet = new WindowsQuietWindows(tray);
         var takes = new List<Outcome<IDisposable>>();
         var (clicks, activations, deactivations) = (0, 0, 0);
@@ -191,7 +191,7 @@ public sealed class WindowsQuietWindowsTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var tray = new WindowsTray();
-        using var own = FrontWindow.Show(new PixelPoint(100, 400));
+        using var own = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 100, 400));
         var quiet = new WindowsQuietWindows(tray);
         var (activations, deactivations) = (0, 0);
         var window = TrayDesktop.Get(() =>
@@ -242,7 +242,7 @@ public sealed class WindowsQuietWindowsTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var tray = new WindowsTray();
-        using var beneath = TargetApp.Start("ImageStash check beneath", 600, 50, editBox: false);
+        using var beneath = TargetApp.Start("ImageStash check beneath", DisplayPlaces.At(DisplayPlaces.Primary(), 600, 50), editBox: false);
         beneath.ClickTitleBar();
         var quiet = new WindowsQuietWindows(tray);
         var window = TrayDesktop.Get(() =>
@@ -255,14 +255,14 @@ public sealed class WindowsQuietWindowsTests
         {
             var handle = TrayDesktop.Get(() => window.TryGetPlatformHandle()!.Handle);
 
-            var shaped = TrayDesktop.Get(() => quiet.ShowOnly(window, [new PixelRect(0, 0, 40, 20), new PixelRect(100, 50, 30, 30)]));
+            var shaped = TrayDesktop.Get(() => quiet.ShowOnly(window, [DisplayPlaces.Rect(DisplayPlaces.Primary(), 0, 0, 40, 20), DisplayPlaces.Rect(DisplayPlaces.Primary(), 100, 50, 30, 30)]));
 
             Assert.IsTrue(shaped.Succeeded, shaped.Failure?.Sentence);
             Thread.Sleep(300);
-            Assert.AreEqual(handle, Under(new PixelPoint(710, 110)), "a point in the first part");
-            Assert.AreEqual(handle, Under(new PixelPoint(815, 165)), "a point in the second part");
-            Assert.AreEqual(beneath.Window, Under(new PixelPoint(900, 140)), "a point outside the parts: the window beneath (G15)");
-            Assert.AreEqual(beneath.Window, Under(new PixelPoint(745, 110)), "just beside the first part");
+            Assert.AreEqual(handle, Under(DisplayPlaces.At(DisplayPlaces.Primary(), 710, 110)), "a point in the first part");
+            Assert.AreEqual(handle, Under(DisplayPlaces.At(DisplayPlaces.Primary(), 815, 165)), "a point in the second part");
+            Assert.AreEqual(beneath.Window, Under(DisplayPlaces.At(DisplayPlaces.Primary(), 900, 140)), "a point outside the parts: the window beneath (G15)");
+            Assert.AreEqual(beneath.Window, Under(DisplayPlaces.At(DisplayPlaces.Primary(), 745, 110)), "just beside the first part");
         }
         finally
         {
@@ -308,7 +308,7 @@ public sealed class WindowsQuietWindowsTests
             quiet.RoundCorners(rounded);
             quiet.ShowWithoutActivating(rounded);
             var square = QuietWindow(new Border { Background = Avalonia.Media.Brushes.Red });
-            square.Position = new PixelPoint(700, 260);
+            square.Position = DisplayPlaces.At(DisplayPlaces.Primary(), 700, 260);
             quiet.ShowWithoutActivating(square);
             return (rounded, square);
         });
@@ -335,7 +335,7 @@ public sealed class WindowsQuietWindowsTests
         Content = content,
         Width = 300,
         Height = 120,
-        Position = new PixelPoint(700, 100),
+        Position = DisplayPlaces.At(DisplayPlaces.Primary(), 700, 100),
         WindowDecorations = WindowDecorations.None,
         ShowInTaskbar = false,
         Topmost = true,

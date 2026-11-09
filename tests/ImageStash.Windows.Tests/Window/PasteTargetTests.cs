@@ -499,7 +499,7 @@ public sealed class PasteTargetTests
         using var shown = ShownWindow.Open(target: target);
         await shown.OpenStash(shown.Picture("paste front.png"));
         // Another process, as an app the user came from is, clear of the stash window at the display's left edge.
-        using var app = TargetApp.Start("ImageStash check behind the flyout", 700, 400);
+        using var app = TargetApp.Start("ImageStash check behind the flyout", DisplayPlaces.At(DisplayPlaces.Primary(), 700, 400));
         app.ClickTitleBar();
         FrontWindow.WaitUntilInFront(app.Window);
         TrayDesktop.Run(() => shown.Window.ShowActivated = true);

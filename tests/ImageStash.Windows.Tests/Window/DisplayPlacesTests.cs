@@ -98,6 +98,20 @@ public sealed class DisplayPlacesTests
     }
 
     [TestMethod]
+    [DataRow(1.0, 560, 160, 240, 160, DisplayName = "at 100 %")]
+    [DataRow(1.25, 700, 200, 300, 200, DisplayName = "at 125 %")]
+    [DataRow(1.5, 840, 240, 360, 240, DisplayName = "at 150 %")]
+    [DataRow(1.75, 980, 280, 420, 280, DisplayName = "at 175 %")]
+    public void AReferencePlaceIsTheSamePlaceMagnifiedEachCoordinateRoundedOnce(double scaling, int x, int y, int width, int height)
+    {
+        var display = new Display(new PixelRect(0, 0, 2560, 1440), new PixelRect(0, 0, 2560, 1392), scaling, IsPrimary: true);
+
+        Assert.AreEqual(new PixelRect(x, y, width, height), DisplayPlaces.Rect(display, 560, 160, 240, 160));
+        Assert.AreEqual(new PixelPoint(x, y), DisplayPlaces.At(display, 560, 160));
+        Assert.AreEqual(DisplayPlaces.Scaled(display, 12), DisplayPlaces.Rect(display, 0, 0, 12, 0).Width, "one conversion: a length as Scaled gives it");
+    }
+
+    [TestMethod]
     public void TheStandInIconTheChecksSeamAnswersIsTheOneForThisPCsPrimaryDisplay()
     {
         using var tray = new WindowsTray();

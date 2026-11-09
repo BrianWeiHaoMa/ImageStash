@@ -558,7 +558,10 @@ public sealed class ShownWindow : IDisposable
             var window = new StashWindow(listing, notices, keeper, import, handoff, editing, openWith, moving, seams)
             {
                 ShowActivated = false,
-                Position = new PixelPoint(-8000, 100),
+                // Where Windows would put it on showing, at the primary display's left edge: a window created off every
+                // display takes that display's scaling only in part (its size, and PointToScreen, stay at the nearest
+                // display's), which a primary display at another scale shows.
+                Position = DisplayPlaces.At(DisplayPlaces.Primary(), 0, 100),
                 Width = WindowSize.FlyoutDefault.Width,
                 Height = WindowSize.FlyoutDefault.Height,
             };

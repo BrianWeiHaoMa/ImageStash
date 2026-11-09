@@ -246,7 +246,7 @@ public sealed class CaptureCardTests
                 var close = CloseButton(card).TranslatePoint(default, card)!.Value.X;
                 foreach (var control in new Control[] { EditButton(card), UndoButton(card), hint })
                 {
-                    Assert.IsLessThanOrEqualTo(close, control.TranslatePoint(new Point(control.Bounds.Width, 0), card)!.Value.X, $"{words}'s card: nothing of its row under the ×");
+                    Assert.IsLessThanOrEqualTo(close + 1e-9, control.TranslatePoint(new Point(control.Bounds.Width, 0), card)!.Value.X, $"{words}'s card: nothing of its row under the ×");
                 }
             }
         });

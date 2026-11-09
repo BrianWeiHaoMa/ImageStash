@@ -383,7 +383,7 @@ public sealed class RecordClipTests
         using var desk = await CaptureDesk.Open(["summoned while recorded.png"]);
         var window = desk.Shown.Window;
         // The open shortcut's summon with no caret found puts the flyout at the pointer (G1); its place read first.
-        var pointer = new SummonAnchor(new PixelPoint(300, 200));
+        var pointer = new SummonAnchor(DisplayPlaces.At(DisplayPlaces.Primary(), 300, 200));
         TrayDesktop.Run(() => window.SummonFromShortcut(default, pointer));
         await Eventually(() => TrayDesktop.Get(() => window.IsVisible));
         await Task.Delay(300);

@@ -213,7 +213,7 @@ public sealed class TextFieldTests
             Assert.AreEqual(1, editor.Session.Selected);
             var from = editor.OnCanvas(meme.Box.X + meme.Box.Width / 2f, meme.Box.Y + meme.Box.Height / 2f);
             editor.Drag(from, from + new Vector(0, 30));
-            Assert.AreEqual(meme.Box.Y + 30, ((TextLayer)editor.Session.Layers.Layers[1]).Box.Y, "moved by the drag (G21)");
+            Assert.AreEqual(meme.Box.Y + (int)Math.Round(editor.OnOriginal(30)), ((TextLayer)editor.Session.Layers.Layers[1]).Box.Y, "moved by the drag's thirty units on the original's grid (G21)");
 
             // Focus moving to another of the editor's controls closes the field, what was typed kept.
             editor.DoubleClick(from + new Vector(0, 30));
@@ -327,7 +327,10 @@ public sealed class TextFieldTests
         using var pointer = TestMouse.PutBackAfterwards();
         using var shown = ShownWindow.Open(fonts: new PresetFonts());
         using var editor = new ShownEditor(shown);
-        var item = (await shown.OpenStash(shown.Picture("grey.png", 200, 150, (_, _) => Grey))).Single();
+        // Shown at 200 by 150 units on every display, its own pixels to the display's: the list of every font, laid out in
+        // units, stands over its right part and leaves its left part clear for the press below.
+        var primary = DisplayPlaces.Primary();
+        var item = (await shown.OpenStash(shown.Picture("grey.png", DisplayPlaces.Scaled(primary, 200), DisplayPlaces.Scaled(primary, 150), (_, _) => Grey))).Single();
         await EditorOverlayTests.Open(shown, item);
         var window = TrayDesktop.Get(() => shown.Window.TryGetPlatformHandle()!.Handle);
         // The real pointer lands where the last rendered frame drew things.
@@ -370,8 +373,11 @@ public sealed class TextFieldTests
         var beside = TrayDesktop.Get(() =>
         {
             var list = AllFonts(editor)!;
-            var at = editor.Canvas.PointToScreen(editor.At(0.1, 0.9));
             var (from, to) = (list.PointToScreen(default), list.PointToScreen(new Avalonia.Point(list.Bounds.Width, list.Bounds.Height)));
+            // On the picture, halfway between its left edge and the list's, near its bottom, both measured on the screen.
+            var (pictureLeft, pictureRight) = (editor.Canvas.PointToScreen(editor.Box.TopLeft).X, editor.Canvas.PointToScreen(editor.Box.TopRight).X);
+            Assert.IsGreaterThan(pictureLeft + 2, from.X, "the list leaves the picture's left part clear");
+            var at = new Avalonia.PixelPoint((pictureLeft + Math.Min(from.X, pictureRight)) / 2, editor.Canvas.PointToScreen(editor.At(0, 0.9)).Y);
             Assert.IsFalse(at.X >= from.X && at.X < to.X && at.Y >= from.Y && at.Y < to.Y, $"the press at {at} is on the picture, beside the list at {from}..{to}");
             return at;
         });

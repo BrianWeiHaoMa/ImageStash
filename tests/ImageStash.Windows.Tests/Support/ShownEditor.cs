@@ -75,6 +75,40 @@ public sealed class ShownEditor : IDisposable
     /// <summary>The point of the canvas over the point (<paramref name="x"/>, <paramref name="y"/>) of the original's grid.</summary>
     public Point OnCanvas(double x, double y) => Canvas.Mapping()!.ToCanvas((float)x, (float)y);
 
+    /// <summary>How many pixels of the original's grid <paramref name="units"/> of the canvas span, as the canvas maps a drag.</summary>
+    public double OnOriginal(double units) => Canvas.Mapping()!.ToOriginal(units);
+
+    /// <summary>
+    /// How far from a square handle's centre, in the canvas's units, a sample lies beyond it: past the handle's half width
+    /// and one more unit, since the canvas snaps the handle's corner, not its centre, to the pixel grid.
+    /// </summary>
+    public static double BeyondHandle => EditorCanvas.HandleSize / 2 + 1;
+
+    /// <summary>Where a point of the canvas, in its units, shows in the window as <see cref="RenderedWindow"/> renders it, in physical pixels.</summary>
+    public Point InRendering(Point onCanvas)
+    {
+        var canvas = RenderedWindow.Place(shown.Window, Canvas);
+        var scaling = shown.Window.RenderScaling;
+        return new Point(canvas.X + onCanvas.X * scaling, canvas.Y + onCanvas.Y * scaling);
+    }
+
+    /// <summary>
+    /// Where a rectangle of the canvas, in its units, shows in the rendering, in physical pixels, its edges rounded inward,
+    /// so it holds no pixel a boundary blends.
+    /// </summary>
+    public Rect InRendering(Rect onCanvas)
+    {
+        var (topLeft, bottomRight) = (InRendering(onCanvas.TopLeft), InRendering(onCanvas.BottomRight));
+        var (left, top, right, bottom) = (Math.Ceiling(topLeft.X), Math.Ceiling(topLeft.Y), Math.Floor(bottomRight.X), Math.Floor(bottomRight.Y));
+        return new Rect(left, top, Math.Max(0, right - left), Math.Max(0, bottom - top));
+    }
+
+    /// <summary>The rendering's pixels wholly inside the white of the square handle centred at <paramref name="centre"/> on the canvas: a unit either side of its centre.</summary>
+    public Rect InsideHandle(Point centre) => InRendering(new Rect(centre.X - 1, centre.Y - 1, 2, 2));
+
+    /// <summary>The rendering's pixels wholly inside the white of the round handle centred at <paramref name="centre"/>: two units either side of its centre.</summary>
+    public Rect InsideRoundHandle(Point centre) => InRendering(new Rect(centre.X - 2, centre.Y - 2, 4, 4));
+
     /// <summary>A press of the left button on the canvas at <paramref name="at"/>, in its units: the <paramref name="clicks"/>th of a run of clicks there.</summary>
     public void Press(Point at, int clicks = 1, KeyModifiers modifiers = KeyModifiers.None) =>
         Canvas.RaiseEvent(new PointerPressedEventArgs(Canvas, mouse, shown.Window, InWindow(at), 0,

@@ -41,7 +41,7 @@ public sealed class NotificationTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var tray = new WindowsTray();
-        using var chat = TargetApp.Start("ImageStash check chat", 100, 100);
+        using var chat = TargetApp.Start("ImageStash check chat", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
         var clock = new MovableClock();
         var notifications = new Notices(clock);
         var notification = TrayDesktop.Get(() => new Notification(notifications, new WindowsQuietWindows(tray), new WindowsScreen(), _ => { }));
@@ -94,7 +94,7 @@ public sealed class NotificationTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var tray = new WindowsTray();
-        using var own = FrontWindow.Show(new PixelPoint(100, 100));
+        using var own = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
         var notifications = new Notices(new MovableClock());
         var notification = TrayDesktop.Get(() => new Notification(notifications, new WindowsQuietWindows(tray), new WindowsScreen(), _ => { }));
         own.ClickToFront();

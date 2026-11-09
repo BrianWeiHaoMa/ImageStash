@@ -63,7 +63,7 @@ public sealed class EdgeApp : IDisposable
         // Started from a program that is not in front, Edge opens behind whatever the user has there, which would take
         // the click: above every window for the click, then back among the others, in front of them.
         Assert.IsTrue(SetWindowPos(Window, HwndTopmost, 0, 0, 0, 0, KeepPlaceAndSizeWithoutActivating));
-        TestMouse.Click(new PixelPoint((bounds.Left + bounds.Right) / 2, bounds.Top + 12));
+        TestMouse.Click(new PixelPoint((bounds.Left + bounds.Right) / 2, bounds.Top + DisplayPlaces.Scaled(DisplayPlaces.Primary(), 12)));
         FrontWindow.WaitUntilInFront(Window);
         Assert.IsTrue(SetWindowPos(Window, HwndNoTopmost, 0, 0, 0, 0, KeepPlaceAndSizeWithoutActivating));
         var picture = new PixelPoint((bounds.Left + bounds.Right) / 2, (bounds.Top + bounds.Bottom) / 2);

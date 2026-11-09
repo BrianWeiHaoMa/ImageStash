@@ -35,7 +35,7 @@ public sealed class OpenWithTests
         using var pointer = TestMouse.PutBackAfterwards();
         using var shown = ShownWindow.Open();
         using var dialogs = new OpenWithDialog();
-        using var chat = TargetApp.Start("ImageStash check chat", 40, 40);
+        using var chat = TargetApp.Start("ImageStash check chat", DisplayPlaces.At(DisplayPlaces.Primary(), 40, 40));
         var item = (await shown.OpenStash(Flat(shown, "open with hiding.png", Before))).Single();
         await FlyoutInFront(shown);
 
@@ -119,9 +119,9 @@ public sealed class OpenWithTests
         using var pointer = TestMouse.PutBackAfterwards();
         using var shown = ShownWindow.Open();
         using var dialogs = new OpenWithDialog();
-        using var chat = TargetApp.Start("ImageStash check chat", 40, 40);
+        using var chat = TargetApp.Start("ImageStash check chat", DisplayPlaces.At(DisplayPlaces.Primary(), 40, 40));
         var item = (await shown.OpenStash(Flat(shown, "open with pinned.png", Before))).Single();
-        shown.Settings.Change(settings => settings with { PinnedPosition = new WindowPosition(700, 40), PinnedSize = new WindowSize(540, 560) });
+        shown.Settings.Change(settings => settings with { PinnedPosition = new WindowPosition(DisplayPlaces.Scaled(DisplayPlaces.Primary(), 700), DisplayPlaces.Scaled(DisplayPlaces.Primary(), 40)), PinnedSize = new WindowSize(540, 560) });
         TrayDesktop.Run(shown.Window.SummonPinned);
         await Task.Delay(300);
         await ClickToFront(shown);

@@ -180,7 +180,7 @@ public sealed class StashClipboardImageTests
         Assert.IsEmpty(named, "all four registered; another program, or a running ImageStash, holds none");
         // Hidden, as it is while a person types in a chat: the act shows it nowhere.
         TrayDesktop.Run(shown.Window.Hide);
-        using var chat = TargetApp.Start("ImageStash check chat", 100, 100);
+        using var chat = TargetApp.Start("ImageStash check chat", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
         TestClipboard.Put((TestClipboard.Png, png));
         chat.ClickTitleBar();
         try
