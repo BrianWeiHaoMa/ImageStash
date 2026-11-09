@@ -179,6 +179,17 @@ public sealed class Notification
         content.Measure(Size.Infinity);
         var wanted = content.DesiredSize;
         var place = Summon.NotificationPlace(quietWindows.TrayIconRectangle(), Summon.DisplaysOf(shown.Screens), new Store.WindowSize(wanted.Width, wanted.Height));
+        if (shown.IsVisible)
+        {
+            // Never past its old place or its new one, both on the primary display: moved first at its old size, a window
+            // shrinking towards a display to its right stood on it for a moment and took its scaling, the × of the card
+            // left then falling outside the window. So the smaller of the two sizes where it stands, applied now, before
+            // the move; Avalonia applies a size at the next layout pass, a position at once.
+            shown.Width = Math.Min(shown.ClientSize.Width, place.Width / shown.RenderScaling);
+            shown.Height = Math.Min(shown.ClientSize.Height, place.Height / shown.RenderScaling);
+            shown.UpdateLayout();
+        }
+
         shown.Position = place.Position;
         shown.Width = place.Width / shown.RenderScaling;
         shown.Height = place.Height / shown.RenderScaling;

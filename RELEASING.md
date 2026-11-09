@@ -83,11 +83,12 @@ administrator"; a standard account, or an administrator account with User Accoun
 at the repository root, on the interactive desktop, since some desktop checks confirm they run unelevated as
 ImageStash does and the installer phase installs from that shell to show the MSI needs no administrator rights;
 with a primary display of at least 1280 x 800 at 100 % scale (the desktop checks place their windows from the
-display, so a larger one serves too; other scales are untried), left unlocked and awake for the whole run (a locked
-or sleeping desktop takes no input, and the desktop checks then time out); the .NET SDK `global.json` pins installed
-(`dotnet --version` in the repository root prints it), and the internet reachable for the first package restore;
-Microsoft Edge installed (some desktop checks open it); ImageStash not running, `%LOCALAPPDATA%\ImageStash` absent
-(move it aside first) and every window on the primary display minimised:
+display, so a larger one serves too: at 100 % they pass on 1920 x 1080, beside a second display at 150 %, and on
+2560 x 1440; at 150 % about 30 of them fail, and other scales are untried), left unlocked and awake for
+the whole run (a locked or sleeping desktop takes no input, and the desktop checks then time out); the .NET SDK
+`global.json` pins installed (`dotnet --version` in the repository root prints it), and the internet reachable for
+the first package restore; Microsoft Edge installed (some desktop checks open it); ImageStash not running,
+`%LOCALAPPDATA%\ImageStash` absent (move it aside first) and every window on the primary display minimised:
 
 ```powershell
 powershell.exe -NoProfile -File tools/check-release.ps1 -Output $env:TEMP\ImageStash-release

@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ImageStash.Media;
 using ImageStash.Seams;
@@ -17,12 +18,12 @@ namespace ImageStash.Windows.Tests.Window;
 /// <summary>
 /// The notification above the tray as Windows shows it (G16, F4): while another program's window is in front, it
 /// appears without taking the foreground, and a click on it leaves that program with the keystrokes; it is topmost,
-/// without a taskbar button, its caption its words, wholly on the primary display above the tray icon or its corner;
-/// each stays six seconds from its own raising, longer while the pointer is over it, and the window closes once the
-/// last has gone; each window it shows, and the tooltip over it, is left out of screen captures from before its first
-/// showing, and one the platform will not leave out is shown anyway with the refusal named (S4, G35). These checks show
-/// it on the primary display, click it, type a letter into a window of their own, move the mouse pointer over it and
-/// read the screen's pixels under it.
+/// without a taskbar button, its caption its words, wholly on the primary display above the tray icon or its corner,
+/// and stays there while it narrows as one leaves; each stays six seconds from its own raising, longer while the
+/// pointer is over it, and the window closes once the last has gone; each window it shows, and the tooltip over it, is
+/// left out of screen captures from before its first showing, and one the platform will not leave out is shown anyway
+/// with the refusal named (S4, G35). These checks show it on the primary display, click it, type a letter into a window
+/// of their own, move the mouse pointer over it and read the screen's pixels under it.
 /// </summary>
 [TestClass]
 public sealed class NotificationTests
@@ -231,6 +232,47 @@ public sealed class NotificationTests
         });
 
         Assert.IsTrue(top >= 0 && bottom <= height, $"the newest notification shows inside its window: {top:0}–{bottom:0} of {height:0} (G16)");
+    }
+
+    [TestMethod]
+    public async Task WhenTheWiderLeavesItNarrowsToTheOtherWithoutEverReachingPastThePrimaryDisplay()
+    {
+        using var pointer = TestMouse.PutBackAfterwards();
+        using var tray = new WindowsTray();
+        var notifications = new Notices(new MovableClock());
+        var notification = TrayDesktop.Get(() => new Notification(notifications, new WindowsQuietWindows(tray), new WindowsScreen(), _ => { }));
+        TestMouse.MoveTo(TestMouse.Away);
+        TrayDesktop.Run(() => notifications.Raise("Words long enough to wrap, so this notification stands far wider than the other one beside the tray"));
+        TrayDesktop.Run(() => notifications.Raise(Copied));
+        // Placed again once shown, at Background (Notification.Show): after that, before anything is watched.
+        await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+        var taken = new List<(PixelRect Place, double Scaling)>();
+        var (area, scaling, wide) = TrayDesktop.Get(() =>
+        {
+            var window = notification.Shown!;
+            window.PositionChanged += (_, _) => taken.Add((CaptureDesk.Outer(window), window.RenderScaling));
+            window.Resized += (_, _) => taken.Add((CaptureDesk.Outer(window), window.RenderScaling));
+            return (window.Screens.Primary!.WorkingArea, window.RenderScaling, CaptureDesk.Outer(window));
+        });
+
+        TrayDesktop.Run(() => notifications.Close(notifications.Shown[0]));
+        Thread.Sleep(600);
+
+        var (places, outer, close) = TrayDesktop.Get(() =>
+        {
+            var button = CaptureDesk.CloseButton(notification.Shown!);
+            return (taken.ToList(), CaptureDesk.Outer(notification.Shown!), new PixelRect(button.PointToScreen(default), button.PointToScreen(new Point(button.Bounds.Width, button.Bounds.Height))));
+        });
+        TrayDesktop.Run(() => notifications.Close(notifications.Shown.Single()));
+        Assert.IsLessThan(wide.Width * 3 / 4, outer.Width, $"the window at {outer} narrowed from {wide} as the wider left");
+        foreach (var (place, at) in places)
+        {
+            // Past it, the window stands on a display beside it for a moment and takes that display's scaling, and its size with it.
+            Assert.IsTrue(area.Contains(place), $"each place the window takes lies on the primary display's working area {area}: {place}");
+            Assert.AreEqual(scaling, at, $"and keeps that display's scaling, at {place}");
+        }
+
+        Assert.IsTrue(outer.Contains(close), $"the × of the one left, at {close}, lies inside the window at {outer} (G16)");
     }
 
     [TestMethod]

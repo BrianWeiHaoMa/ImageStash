@@ -24,6 +24,8 @@ public sealed class PatternWindow : IDisposable
     // A block's edge, and the window's, may be drawn blended or rounded: a pixel this close to one is not judged.
     private const int Margin = 3;
 
+    private const uint WsExNoActivate = 0x08000000;
+
     private PatternWindow(Avalonia.Controls.Window window, IReadOnlyList<(PixelRect Block, uint Colour)> blocks, PixelRect bounds)
     {
         Window = window;
@@ -139,6 +141,9 @@ public sealed class PatternWindow : IDisposable
         window.Content = canvas;
         window.Width = bounds.Width / scaling;
         window.Height = bounds.Height / scaling;
+        // Never activated means a window Windows cannot activate either: closing the overlay of two displays, Windows hands
+        // the activation to the topmost window beneath it, which would take the chat's keystrokes.
+        Win32Properties.AddWindowStylesCallback(window, (style, extended) => (style, extended | WsExNoActivate));
         beforeShowing?.Invoke(window);
         window.Show();
         return new PatternWindow(window, blocks, bounds);
