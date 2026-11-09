@@ -89,4 +89,49 @@ public sealed class RecordingFrameTests
         Assert.AreEqual(1, RecordingFrame.Band(0.25), "never no band");
         Assert.AreEqual("● REC · 1440 × 810", RecordingFrame.Label(new PixelRect(5, 5, 1440, 810)));
     }
+
+    /// <summary>
+    /// A window's size in layout units never runs past its place in physical pixels, at every scaling, so the frame and
+    /// the bar at a place touching the display's edge stay on the display (G15), and lands on it to the pixel wherever
+    /// Avalonia's conversion can: everywhere but where the place over the scaling, times the scaling, falls a hair short.
+    /// </summary>
+    [TestMethod]
+    [DataRow(1.0)]
+    [DataRow(1.25)]
+    [DataRow(1.5)]
+    [DataRow(1.75)]
+    [DataRow(2.0)]
+    [DataRow(2.25)]
+    public void AWindowsSizeCoversItsPlaceToThePixelAndNoFurtherAtEveryScaling(double scaling)
+    {
+        var display = new PixelRect(0, 0, 2560, 1440);
+        var workingArea = new PixelRect(0, 0, 2560, 1368);
+        var places = new[]
+        {
+            new PixelRect(display.Right - 1200, workingArea.Bottom - 700, 1200, 700),
+            new PixelRect(0, 0, 1001, 333),
+            new PixelRect(display.Right - 317, workingArea.Bottom - 68, 317, 68),
+        }.Concat(Enumerable.Range(1, 400).Select(side => new PixelRect(display.Right - side, 0, side, side + 1)));
+        foreach (var place in places)
+        {
+            var size = RecordingFrame.WindowSize(place.Size, scaling);
+            var shown = new PixelSize(OnScreen(size.Width, scaling), OnScreen(size.Height, scaling));
+
+            Assert.IsTrue(shown.Width <= place.Width && shown.Height <= place.Height, $"{place} at {scaling}: {size} units shown {shown}, past the place");
+            Assert.AreEqual(Reachable(place.Width, scaling), shown.Width, $"{place} at {scaling}: on the place's right edge wherever Avalonia can land there");
+            Assert.AreEqual(Reachable(place.Height, scaling), shown.Height, $"{place} at {scaling}: on the place's bottom edge wherever Avalonia can land there");
+        }
+
+        Assert.AreEqual(scaling == 1.75 ? 229 : 230, OnScreen(RecordingFrame.WindowSize(new PixelSize(230, 230), scaling).Width, scaling), "the one kind of size that lands short, as the probe found it");
+    }
+
+    /// <summary>
+    /// The physical pixels Avalonia gives a window <paramref name="length"/> units long at <paramref name="scaling"/>: the
+    /// length snapped up to whole pixels, then that over the scaling, times the scaling, truncated (probed on this PC's
+    /// display at 100 % to 225 %, every size from 80 to 1,500 pixels: 175 units at 1.75 are 307 pixels, 230 / 1.75 units 229).
+    /// </summary>
+    private static int OnScreen(double length, double scaling) => (int)(Math.Ceiling(length * scaling - 1e-6) / scaling * scaling);
+
+    /// <summary>The nearest to <paramref name="pixels"/> Avalonia can land a window without passing it: the pixels, or one short where their round trip through the scaling falls short.</summary>
+    private static int Reachable(int pixels, double scaling) => pixels / scaling * scaling < pixels ? pixels - 1 : pixels;
 }

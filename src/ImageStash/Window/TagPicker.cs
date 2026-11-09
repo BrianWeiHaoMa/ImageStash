@@ -45,6 +45,10 @@ public sealed class TagPicker : Popup
     private readonly ScrollViewer list;
     private readonly Border card;
     private Action<string> picked = _ => { };
+    private double widestWords;
+
+    /// <summary>The window the list shows in while it is open, whose scaling its width follows; null otherwise.</summary>
+    private TopLevel? openIn;
 
     public TagPicker()
     {
@@ -65,6 +69,7 @@ public sealed class TagPicker : Popup
         // No padding beside the scroller, so its bar stands one hairline from the card's edge, as the submenu's does.
         card = CardLook.Dress(new Border { Child = list, MinWidth = NarrowestCard, MaxWidth = WidestCard, Padding = new Thickness(0, 4) });
         Child = card;
+        Closed += (_, _) => FollowScaling(null);
     }
 
     /// <summary>The entries shown, in order.</summary>
@@ -73,7 +78,8 @@ public sealed class TagPicker : Popup
     /// <summary>
     /// Opens beside <paramref name="anchor"/> showing <paramref name="entries"/>; a click on one calls
     /// <paramref name="onPick"/> with its tag. A press on the anchor is left to it, so it can close the list. Its width is
-    /// found here, from the widest of every entry's words, and kept while it stays open.
+    /// found here, from the widest of every entry's words, and kept while it stays open, made again only for the scaling
+    /// of the display it shows on.
     /// </summary>
     public void Open(Control anchor, IReadOnlyList<TagPickerEntry> entries, Action<string> onPick)
     {
@@ -81,9 +87,37 @@ public sealed class TagPicker : Popup
         PlacementTarget = anchor;
         OverlayInputPassThroughElement = anchor;
         list.MaxHeight = TagListHeight.For(anchor);
-        card.Width = WidthFor(entries);
+        widestWords = WidestWords(entries);
+        card.Width = CardWidth(widestWords, TopLevel.GetTopLevel(anchor)?.RenderScaling ?? 1);
         Show(entries);
         Open();
+        // The list shows in a window of its own beside its anchor, which may lie on another display than the opener's
+        // window, at another scaling: its width follows that window's.
+        FollowScaling(TopLevel.GetTopLevel(card));
+    }
+
+    /// <summary>From now on the card's width is made for <paramref name="window"/>'s scaling, now and whenever it changes; none for null.</summary>
+    private void FollowScaling(TopLevel? window)
+    {
+        if (openIn is not null)
+        {
+            openIn.ScalingChanged -= Rescaled;
+        }
+
+        openIn = window;
+        if (window is not null)
+        {
+            window.ScalingChanged += Rescaled;
+            Rescaled(window, EventArgs.Empty);
+        }
+    }
+
+    private void Rescaled(object? sender, EventArgs e)
+    {
+        if (openIn is { } window)
+        {
+            card.Width = CardWidth(widestWords, window.RenderScaling);
+        }
     }
 
     /// <summary>
@@ -113,11 +147,24 @@ public sealed class TagPicker : Popup
     }
 
     /// <summary>
-    /// The card's width for <paramref name="entries"/>: the widest of their words, measured each (the entries themselves
-    /// are made only as they scroll into view, E4, so the panel alone would widen the card as a longer name shows), beside
-    /// the entry's fixed measures, between the card's narrowest and widest; a wider name is trimmed.
+    /// The card's width for words <paramref name="widestWords"/> wide at <paramref name="scaling"/>, between the card's
+    /// narrowest and widest (a wider name is trimmed): in physical pixels, the entry's fixed measures as the layout rounds
+    /// each to the pixel grid (to the nearest, halves to even: at 1.5 the card's edges take 2 pixels each and the words'
+    /// right margin 52) beside the words rounded up to a whole pixel. Their sum in layout units alone falls a fraction of a
+    /// pixel short of the words at some fractional scalings, and the widest name then shows trimmed.
     /// </summary>
-    private double WidthFor(IReadOnlyList<TagPickerEntry> entries)
+    public static double CardWidth(double widestWords, double scaling)
+    {
+        double Rounded(double length) => Math.Round(length * scaling, MidpointRounding.ToEven);
+        var pixels = Rounded(Edge) + Rounded(EntryLeft) + Rounded(MarkColumn) + Math.Ceiling(widestWords * scaling) + Rounded(EntryRight) + Rounded(Edge);
+        return Math.Clamp(pixels / scaling, NarrowestCard, WidestCard);
+    }
+
+    /// <summary>
+    /// The widest of <paramref name="entries"/>' words, measured each: the entries themselves are made only as they scroll
+    /// into view (E4), so the panel alone would widen the card as a longer name shows.
+    /// </summary>
+    private double WidestWords(IReadOnlyList<TagPickerEntry> entries)
     {
         var typeface = new Typeface(TextElement.GetFontFamily(list), TextElement.GetFontStyle(list), TextElement.GetFontWeight(list), TextElement.GetFontStretch(list));
         var size = TextElement.GetFontSize(list);
@@ -128,7 +175,7 @@ public sealed class TagPicker : Popup
             widest = Math.Max(widest, words.WidthIncludingTrailingWhitespace);
         }
 
-        return Math.Clamp(Math.Ceiling(Edge + EntryLeft + MarkColumn + widest + EntryRight + Edge), NarrowestCard, WidestCard);
+        return widest;
     }
 
     private Button EntryButton(TagPickerEntry? entry)

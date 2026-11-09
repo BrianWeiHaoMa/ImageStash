@@ -115,6 +115,16 @@ public sealed class RecordingFrame(IQuietWindows quietWindows, IScreen screen, A
         return new FrameLayout(window, parts, labelPlace.Translate(origin));
     }
 
+    /// <summary>
+    /// The layout size of a window at <paramref name="place"/>, in physical pixels, at <paramref name="scaling"/>, never
+    /// larger than the place, so a window at a place touching a display's edge never runs past it (G15). Avalonia snaps a
+    /// window's size up to whole pixels, then truncates that size over the scaling times the scaling: the place over the
+    /// scaling lands on it to the pixel, except one pixel short where that product falls a hair below the whole number (at
+    /// 1.75, 230 pixels; no size between 80 and 1,500 at 1, 1.25, 1.5, 2 or 2.25). Asking for more lands a pixel past the
+    /// place on most sizes, which put the bar past the working area's edge.
+    /// </summary>
+    public static Size WindowSize(PixelSize place, double scaling) => new(place.Width / scaling, place.Height / scaling);
+
     public Outcome Show(SelectedRegion region, TimeSpan cap, Action record, Action stop, Action cancel)
     {
         Close();
@@ -246,12 +256,11 @@ public sealed class RecordingFrame(IQuietWindows quietWindows, IScreen screen, A
         Fit(window, place, window.RenderScaling);
     }
 
-    /// <summary>The window at <paramref name="place"/> in physical pixels, a pixel larger rather than one short where its scaling rounds.</summary>
+    /// <summary>The window at <paramref name="place"/> in physical pixels, covering it exactly (<see cref="WindowSize"/>).</summary>
     private static void Fit(Avalonia.Controls.Window window, PixelRect place, double scaling)
     {
         window.Position = place.Position;
-        window.Width = Math.Ceiling(place.Width / scaling) + 1;
-        window.Height = Math.Ceiling(place.Height / scaling) + 1;
+        (window.Width, window.Height) = WindowSize(place.Size, scaling);
     }
 
     private static FormattedText LabelText(string words) =>

@@ -61,4 +61,42 @@ public sealed class RecordingBarTests
         Assert.AreEqual("~614 KB", RecordingBar.Size(629_146));
         Assert.AreEqual("~1.1 MB", RecordingBar.Size(1_153_434));
     }
+
+    /// <summary>
+    /// The bar holds room for its widest readings (G15): every size reading up to a clip of 10,000 MB and every elapsed
+    /// reading up to the cap is no longer than the reading it reserves, and one as long differs from it only in digits,
+    /// which the bar draws all of one width, so no reading runs under Stop. The desktop checks measure the bar itself.
+    /// </summary>
+    [TestMethod]
+    public void TheBarReservesItsWidestReadingsSoEveryLaterOneFitsInTheirRoom()
+    {
+        Assert.AreEqual("~10000.0 MB", RecordingBar.WidestSize);
+        var sizes = Enumerable.Range(0, 2001).Select(step => step * (10_000L * 1024 * 1024 / 2000))
+            .Concat([1, 1023, 1024 * 1024 - 1, 9_999L * 1024 * 1024, 10_485_655_143, 10_485_759_999]);
+        foreach (var bytes in sizes)
+        {
+            AssertFits(RecordingBar.Size(bytes), RecordingBar.WidestSize, $"{bytes} bytes");
+        }
+
+        foreach (var cap in new[] { 10, 15, 30, 60, 90, 600 }.Select(seconds => TimeSpan.FromSeconds(seconds)))
+        {
+            var widest = RecordingBar.WidestElapsed(cap);
+            for (var elapsed = 0L; elapsed <= cap.TotalMilliseconds; elapsed += 100)
+            {
+                AssertFits(RecordingBar.Time(elapsed), widest, $"{elapsed} ms under a cap of {cap}");
+            }
+        }
+
+        Assert.AreEqual("1:00.0", RecordingBar.WidestElapsed(TimeSpan.FromSeconds(60)), "the 60-second cap's own reading, as long as its last tenth's");
+    }
+
+    private static void AssertFits(string reading, string reserved, string what)
+    {
+        Assert.IsLessThanOrEqualTo(reserved.Length, reading.Length, $"{what}: \"{reading}\" longer than \"{reserved}\"");
+        if (reading.Length == reserved.Length)
+        {
+            Assert.IsTrue(reading.Zip(reserved).All(pair => pair.First == pair.Second || (char.IsAsciiDigit(pair.First) && char.IsAsciiDigit(pair.Second))),
+                $"{what}: \"{reading}\" differs from \"{reserved}\" in more than digits");
+        }
+    }
 }

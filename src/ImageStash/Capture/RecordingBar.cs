@@ -50,14 +50,15 @@ public sealed class RecordingBar : Border
     /// <summary>
     /// The bar for a region waiting to be recorded for up to <paramref name="cap"/>, offering Record, which runs
     /// <paramref name="record"/>, and Cancel, which runs <paramref name="cancel"/>; its Stop, from <see cref="Recording"/>
-    /// on, runs <paramref name="stop"/>. Its readings stay at their widest until the first <see cref="Refresh"/>, so a bar
-    /// measured as it starts recording holds every later reading below 10,000 MB, the fourth digit of the size taking the
-    /// gap before Stop; a larger one would run under Stop.
+    /// on, runs <paramref name="stop"/>. Its readings stay at their widest until the first <see cref="Refresh"/>
+    /// (<see cref="WidestElapsed"/>, <see cref="WidestSize"/>), so a bar measured as it starts recording holds every later
+    /// reading whole before Stop, at every scaling.
     /// </summary>
     public RecordingBar(TimeSpan cap, Action record, Action stop, Action cancel)
     {
-        elapsed = new TextBlock { FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Text = Time((long)cap.TotalMilliseconds) };
-        size = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Text = Size(999L * 1024 * 1024) };
+        // Tabular digits: the semibold face's own are of several widths, so "0:59.9" would be wider than the cap's "1:00.0".
+        elapsed = new TextBlock { FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Text = WidestElapsed(cap), FontFeatures = TabularDigits() };
+        size = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Text = WidestSize, FontFeatures = TabularDigits() };
         against = new TextBlock { Text = "/ " + Time((long)cap.TotalMilliseconds, tenths: false), VerticalAlignment = VerticalAlignment.Center };
         upTo = new TextBlock { Text = "Up to " + Time((long)cap.TotalMilliseconds, tenths: false), VerticalAlignment = VerticalAlignment.Center };
         RecordButton = Button(RecordName, record, new SolidColorBrush(RecordingFrame.Red), Labelled(
@@ -115,6 +116,16 @@ public sealed class RecordingBar : Border
 
     /// <summary>The bytes written so far, in the one wording of a byte count, as an estimate of the clip's size.</summary>
     public static string Size(long bytes) => "~" + FileSize.Words(bytes);
+
+    /// <summary>
+    /// The widest size reading the bar holds room for: a clip's of 10,000 MB ("~10000.0 MB"), the bar's envelope, which
+    /// no recording at the caps Settings offers comes near; every reading up to it is no wider, its digits being of one
+    /// width. A larger clip's reading may run under Stop.
+    /// </summary>
+    public static string WidestSize => Size(10_000L * 1024 * 1024);
+
+    /// <summary>The widest elapsed reading the bar holds room for under <paramref name="cap"/>: the cap's own, every earlier time no wider.</summary>
+    public static string WidestElapsed(TimeSpan cap) => Time((long)cap.TotalMilliseconds);
 
     /// <summary>
     /// The recording's look in place of the wait's: the dot, the time against the cap and the size so far, then Stop and
@@ -246,6 +257,8 @@ public sealed class RecordingBar : Border
         button.Click += (_, _) => clicked();
         return button;
     }
+
+    private static FontFeatureCollection TabularDigits() => [FontFeature.Parse("tnum")];
 
     private static TextBlock Glyph(string glyph) =>
         new() { Text = glyph, FontFamily = Icons, FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
