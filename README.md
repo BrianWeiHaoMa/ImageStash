@@ -4,11 +4,15 @@
 [![Latest release](https://img.shields.io/github/v/release/BrianWeiHaoMa/ImageStash)](https://github.com/BrianWeiHaoMa/ImageStash/releases/latest)
 [![License: MIT](https://img.shields.io/github/license/BrianWeiHaoMa/ImageStash)](LICENSE)
 
-ImageStash keeps your reaction pictures and GIFs one shortcut away from any chat on Windows 11. While you type a
-message, press `Ctrl+Alt+Space`, type two letters of a picture's name or tag and press Enter: the picture is in the
-message box you were typing in, and the message is still yours to send. Fill the stash by dropping files on it,
-pasting, screenshotting a region or recording a few seconds of the screen; find pictures again by thumbnail, tag,
-name, favorite or recent use; caption, crop, trim, blur or draw on them while the original stays untouched.
+Discord, Facebook, WeChat, and other social media platforms each keep their own collection of your reaction pictures and GIFs, and none of them carry
+over: the perfect reaction you saved in one is nowhere to be found in the next. ImageStash is one collection for every
+app you chat in. It keeps all your reaction pictures and GIFs in a single stash on your own PC, one shortcut away from
+any chat on Windows 11: while you type a message, press `Ctrl+Alt+Space`, type two letters of a picture's name or tag
+and press Enter, and the picture is in the message box you were typing in, the message still yours to send.
+
+Fill the stash by dropping files or folders on it, pasting, screenshotting a region or recording a few seconds of the
+screen as a GIF; find any picture again by thumbnail, tag, name, favorite or recent use; caption, crop, trim, blur or
+draw on it while the original stays untouched.
 
 <img src="docs/screenshots/paste.png" width="600" alt="A chat window: a friend says the movie starts at 8 and asks where you are; you have answered that you are leaving now, once you find your keys and your other shoe, and the message box holds be right there. Over it, beside the message box's caret, the ImageStash flyout: the search box holds my, the All chip is lit, the one match, a photograph of a snail captioned ON MY WAY, is selected, and the footer reads Enter · Paste into Chat and Ctrl+C · Copy.">
 
@@ -37,6 +41,7 @@ that off.
 | `Ctrl+Alt+Space` | In any app, the stash opens beside the text caret, the search box ready. |
 | Two letters, then `Enter` | The first match is pasted into the app you came from. Nothing is sent. |
 | `Ctrl+PrtScn` | Drag a rectangle: the screenshot is in the stash and on the clipboard. |
+| `Ctrl+Shift+PrtScn` | Drag a rectangle, press Record, then Stop: the clip is a GIF in the stash and on the clipboard. |
 | `Ctrl+E` | Edit the selected picture with Text, Crop, Trim, Hide and Draw. |
 
 Drop files or a folder onto the window to add them, and tag pictures to find them by a word. The tray icon's
