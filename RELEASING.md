@@ -103,9 +103,12 @@ display's size, not for ImageStash, so first choose a scale the display holds it
 `powershell.exe -NoProfile -File tools/display-scale.ps1` lists each display with its current and offered scales, and
 `-Set <percent>` sets the primary display's, unelevated and at once, as Settings > Display > Scale does (set it back
 afterwards). Seen passing on a 2560 x 1440 primary beside a 1920 x 1080 display at 100 %: the desktop checks whole at
-each of 100 %, 125 %, 150 % and 175 % (675 checks, about fourteen minutes at each scale); earlier, at 100 %, on a
-1920 x 1080 primary beside a second display at 150 %. 1920 x 1080 at 125 % is admitted by the condition and has not
-been run. The published check at 150 % on that display: every phase held in one run; in the others every phase held
+each of 100 %, 125 %, 150 % and 175 % (675 checks, about fourteen minutes at each scale); and on a 1920 x 1080
+primary beside the 2560 x 1440 display at 150 %, at each of 100 % and 125 %. One whole run at 175 % failed a single
+timing check, `CaptureCardTests.WhileTheFieldHasFocusTheNoticeOutlivesItsSixSecondsAndItsTimeRunsOnOnceFocusHasGone`
+(the card still up after its time had run on), which passed alone five times there and in the next whole run. The
+published check at 150 % on the
+2560 x 1440 primary, and at 125 % on the 1920 x 1080 one: every phase held in some runs; in the others every phase held
 but the Move phase, whose folder picker sometimes reads an empty address bar after the typed path, at 100 % as well,
 and once the paste-in phase, which found File Explorer focused after the open shortcut, also seen at 100 %.
 

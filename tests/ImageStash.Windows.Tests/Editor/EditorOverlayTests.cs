@@ -126,6 +126,11 @@ public sealed partial class EditorOverlayTests
         CollectionAssert.AreEquivalent(squares, commonest, $"G6: the checkerboard's two colours show through, the most of any: {string.Join(", ", rendered.ColorCounts(picture.X + 1, picture.Y + 1, picture.Width / 2 - 2, picture.Height - 2).OrderByDescending(pair => pair.Value).Take(5).Select(pair => $"{pair.Key:X8} × {pair.Value}"))}");
         // A square's edge falling between two display pixels at a fractional scale blends the two; nothing else shows.
         Assert.IsTrue(left.All(color => RenderedWindow.Between(color, squares[0], squares[1])), $"every other colour a blend of the two: {string.Join(", ", left.Select(color => color.ToString("X8")))}");
+        var (inside, middleX, middleY) = ((int)Math.Ceiling(picture.X) + 1, (int)(picture.X + picture.Width / 4), (int)(picture.Y + picture.Height / 2));
+        var row = Enumerable.Range(inside, (int)(picture.Width / 2) - 2).Select(x => rendered.At(x, middleY)).Where(squares.Contains).ToList();
+        var column = Enumerable.Range((int)Math.Ceiling(picture.Y) + 1, (int)picture.Height - 2).Select(y => rendered.At(middleX, y)).Where(squares.Contains).ToList();
+        Assert.IsGreaterThanOrEqualTo(1, row.Zip(row.Skip(1)).Count(pair => pair.First != pair.Second), "the two alternate along a row: squares, not horizontal stripes");
+        Assert.IsGreaterThanOrEqualTo(1, column.Zip(column.Skip(1)).Count(pair => pair.First != pair.Second), "and down a column: squares, not vertical stripes");
         CollectionAssert.AreEquivalent(new[] { 0xFF00A000u }, right.ToList(), "the opaque half as it is");
     }
 

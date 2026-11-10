@@ -231,12 +231,13 @@ function AskMove([string] $folder) {
     $parent = Split-Path $folder -Parent
     # Only from elsewhere: asked for the folder it is already in, the address bar stays in its edit box and the wait
     # below never ends.
-    if ((& $byId '1001').Current.Name -ne "Address: $parent") {
+    $was = (& $byId '1001').Current.Name
+    if ($was -ne "Address: $parent") {
         $null = [PasteDesk]::Press([uint16[]]@(0x12, 0x44))
         Start-Sleep -Milliseconds 300
         $null = [OpenWithDesk]::Type($parent)
         $null = [PasteDesk]::Press([uint16[]]@(0x0D))
-        Need (WaitFor { (& $byId '1001').Current.Name -eq "Address: $parent" } 5000) "the picker opened $parent from its address bar: $((& $byId '1001').Current.Name)"
+        Need (WaitFor { (& $byId '1001').Current.Name -eq "Address: $parent" } 5000) "the picker opened $parent from its address bar: '$((& $byId '1001').Current.Name)', having read '$was' before the path was typed$(if ((& $byId '1001').Current.Name -ne "Address: $parent") { "; the picker shows $(WordsOf (Picker))" })"
     }
     $box = [IntPtr](& $byId '1152').Current.NativeWindowHandle
     $name = Split-Path $folder -Leaf
