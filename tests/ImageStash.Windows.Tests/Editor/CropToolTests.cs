@@ -49,7 +49,8 @@ public sealed class CropToolTests
 
         TrayDesktop.Run(() => Assert.AreEqual(picture, editor.PictureInRendering(), "the whole original still, where it showed"));
         Assert.AreEqual(0, Differences(framed, cropping, Inside(picture, scale, 80, 64, 160, 64)), "inside the rectangle as it was");
-        AssertDimmed(framed, cropping, Inside(picture, scale, 8, 8, 50, 34), "above and left of it");
+        // Clear of the corner's handle, whose eight units reach seven display pixels round the corner at 175 %.
+        AssertDimmed(framed, cropping, Inside(picture, scale, 8, 8, 40, 28), "above and left of it");
         AssertDimmed(framed, cropping, Inside(picture, scale, 8, 60, 50, 110), "left of it");
         var handle = AppliedLook.SelectionMark(shown);
         foreach (var (x, y) in new[] { (64, 48), (256, 48), (64, 192), (256, 192) })
@@ -60,7 +61,8 @@ public sealed class CropToolTests
         TrayDesktop.Run(() => editor.PressButton("Compare"));
         var comparing = await RenderedWindow.Of(shown);
         TrayDesktop.Run(() => editor.ReleaseButton("Compare"));
-        Assert.AreEqual(0, Differences(framed, comparing, Inside(picture, scale, 8, 8, 240, 140)), "while Compare is held, the original alone, nothing dimmed (G20)");
+        // Clear of the whole picture's frame drawn before the crop: its corners' handles and its size's pill at its foot.
+        Assert.AreEqual(0, Differences(framed, comparing, Inside(picture, scale, 12, 12, 232, 112)), "while Compare is held, the original alone, nothing dimmed (G20)");
         Assert.DoesNotContain(handle, comparing.Colors(picture.X - 6, picture.Y - 6, picture.Width + 12, picture.Height + 12), "and no frame");
 
         TrayDesktop.Run(() => editor.Choose("Hide"));
@@ -97,7 +99,7 @@ public sealed class CropToolTests
         TrayDesktop.Run(() =>
         {
             shown.Window.UpdateLayout();
-            Assert.AreEqual(WindowSize.Minimum, new WindowSize(shown.Window.Bounds.Width, shown.Window.Bounds.Height), "the window at its minimum");
+            WindowMinimum.AssertAt(shown.Window.Bounds.Size, "the window at its minimum");
             var hint = editor.Overlay.GetVisualDescendants().OfType<TextBlock>().Single(text => text.IsEffectivelyVisible && text.Text == "Drag the corners, or the picture");
             foreach (var control in new Control[] { hint, editor.Button("1:1"), editor.Button("Reset"), editor.Button("Cancel"), editor.Button(EditorOverlay.OutputSize), editor.Button("Save") })
             {

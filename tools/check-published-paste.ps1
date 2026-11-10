@@ -65,6 +65,7 @@ public static class PasteDesk
     [DllImport("user32.dll")] private static extern IntPtr MonitorFromWindow(IntPtr window, uint flags);
     [DllImport("user32.dll")] private static extern bool GetMonitorInfoW(IntPtr monitor, ref MonitorInfo info);
     [DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr window);
+    [DllImport("shcore.dll")] private static extern int GetDpiForMonitor(IntPtr monitor, int type, out uint x, out uint y);
     [DllImport("user32.dll")] private static extern uint SendInput(uint count, KeyInput[] inputs, int size);
     [DllImport("user32.dll", EntryPoint = "SendInput")] private static extern uint SendMouse(uint count, MouseInput[] inputs, int size);
     [DllImport("user32.dll")] private static extern uint MapVirtualKeyW(uint code, uint type);
@@ -136,9 +137,15 @@ public static class PasteDesk
         uint process;
         var info = new GuiThreadInfo { Size = Marshal.SizeOf(typeof(GuiThreadInfo)) };
         if (!GetGUIThreadInfo(GetWindowThreadProcessId(window, out process), ref info) || info.Caret == IntPtr.Zero) { return null; }
-        var corner = new Point { X = info.CaretRect.Left, Y = info.CaretRect.Top };
-        ClientToScreen(info.Caret, ref corner);
-        return new[] { corner.X, corner.Y, info.CaretRect.Right - info.CaretRect.Left, info.CaretRect.Bottom - info.CaretRect.Top };
+        // The caret rectangle is in its window's logical client pixels: placed at the client's origin, read in physical
+        // pixels, each coordinate scaled by the display's DPI over the window's own (1.5 for an unaware window at 150 %).
+        uint display, unused;
+        GetDpiForMonitor(MonitorFromWindow(info.Caret, 2), 0, out display, out unused);
+        var ratio = display / (double)GetDpiForWindow(info.Caret);
+        var origin = new Point();
+        ClientToScreen(info.Caret, ref origin);
+        Func<int, int> scaled = logical => (int)Math.Round(logical * ratio);
+        return new[] { origin.X + scaled(info.CaretRect.Left), origin.Y + scaled(info.CaretRect.Top), scaled(info.CaretRect.Right - info.CaretRect.Left), scaled(info.CaretRect.Bottom - info.CaretRect.Top) };
     }
 
     /// <summary>Each key down, then each up in reverse order, in one SendInput: the way a person presses a combination.</summary>

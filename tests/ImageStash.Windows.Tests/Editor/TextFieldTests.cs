@@ -111,7 +111,7 @@ public sealed class TextFieldTests
             ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
         });
         var letters = await RenderedWindow.Of(shown);
-        var place = TrayDesktop.Get(() => Inside(InRendering(shown, editor, ((TextLayer)editor.Session!.Layers.Layers.Single()).Box)));
+        var place = TrayDesktop.Get(() => Inside(shown, InRendering(shown, editor, ((TextLayer)editor.Session!.Layers.Layers.Single()).Box)));
         Assert.AreEqual(0, Coloured(letters, place), "white letters with their outline over grey are greys alone");
 
         TrayDesktop.Run(() =>
@@ -123,7 +123,7 @@ public sealed class TextFieldTests
             ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
         });
         var emoji = await RenderedWindow.Of(shown);
-        place = TrayDesktop.Get(() => Inside(InRendering(shown, editor, ((TextLayer)editor.Session!.Layers.Layers.Single()).Box)));
+        place = TrayDesktop.Get(() => Inside(shown, InRendering(shown, editor, ((TextLayer)editor.Session!.Layers.Layers.Single()).Box)));
         Assert.IsGreaterThan(20, Coloured(emoji, place), "drawn in colour, glyph by glyph from the emoji font, inside the box (G21)");
     }
 
@@ -213,7 +213,8 @@ public sealed class TextFieldTests
             Assert.AreEqual(1, editor.Session.Selected);
             var from = editor.OnCanvas(meme.Box.X + meme.Box.Width / 2f, meme.Box.Y + meme.Box.Height / 2f);
             editor.Drag(from, from + new Vector(0, 30));
-            Assert.AreEqual(meme.Box.Y + (int)Math.Round(editor.OnOriginal(30)), ((TextLayer)editor.Session.Layers.Layers[1]).Box.Y, "moved by the drag's thirty units on the original's grid (G21)");
+            // Within a pixel: the canvas maps each end of the drag onto the original's grid and the layer lands on whole pixels.
+            Assert.AreEqual(meme.Box.Y + editor.OnOriginal(30), ((TextLayer)editor.Session.Layers.Layers[1]).Box.Y, 1, "moved by the drag's thirty units on the original's grid (G21)");
 
             // Focus moving to another of the editor's controls closes the field, what was typed kept.
             editor.DoubleClick(from + new Vector(0, 30));
@@ -554,7 +555,7 @@ public sealed class TextFieldTests
     }
 
     /// <summary>The inside of a box's place, clear of its outline and its corner handles.</summary>
-    private static Rect Inside(Rect place) => place.Deflate(6);
+    private static Rect Inside(ShownWindow shown, Rect place) => place.Deflate(ShownEditor.BeyondHandle * shown.Window.RenderScaling);
 
     /// <summary>How many pixels inside <paramref name="area"/> are coloured rather than grey: their channels apart by more than 40.</summary>
     private static int Coloured(RenderedWindow rendered, Rect area)

@@ -252,7 +252,7 @@ public sealed class TextOptionRowTests
             shown.Window.Height = 1;
         });
         await Task.Delay(200);
-        TrayDesktop.Run(() => Assert.AreEqual(WindowSize.Minimum, new WindowSize(shown.Window.Bounds.Width, shown.Window.Bounds.Height), "the popovers opened at the minimum"));
+        TrayDesktop.Run(() => WindowMinimum.AssertAt(shown.Window.Bounds.Size, "the popovers opened at the minimum"));
         foreach (var opener in new[] { "More colors", "Outline color" })
         {
             TrayDesktop.Run(() =>

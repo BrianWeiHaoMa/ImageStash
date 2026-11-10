@@ -176,7 +176,9 @@ public sealed class LooksTests
                 var size = border.Bounds.Size;
                 var (origin, scale) = (border.PointToScreen(default), TopLevel.GetTopLevel(border)!.RenderScaling);
                 PixelPoint At(double x, double y) => new(origin.X + (int)Math.Floor(x * scale), origin.Y + (int)Math.Floor(y * scale));
-                return (Pixel(At(0.5, size.Height / 2)), Pixel(At(size.Width / 2, 0.5)), Pixel(At(size.Width / 2, size.Height - 1)),
+                // The bottom edge at the border's last row of display pixels, which a unit above the bottom misses at 125 %.
+                var lastRow = new PixelPoint(At(size.Width / 2, 0).X, origin.Y + (int)Math.Round(size.Height * scale) - 1);
+                return (Pixel(At(0.5, size.Height / 2)), Pixel(At(size.Width / 2, 0.5)), Pixel(lastRow),
                     AppliedLook.Of(box, LookKeys.FluentFieldBorder), AppliedLook.Of(box, LookKeys.SelectionRing),
                     AppliedLook.Of(box, focused ? LookKeys.FluentFieldFocusedGround : LookKeys.FluentFieldGround), AppliedLook.Of(shown.Window, LookKeys.FluentWindowGround));
             });

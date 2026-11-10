@@ -269,9 +269,15 @@ public sealed class CaptureDesk : IDisposable
         await ShownWindow.Eventually(() => FrontWindow.GetForegroundWindow() == handle && TrayDesktop.Get(() => window.IsActive));
     }
 
-    /// <summary>The window's whole rectangle on the desktop, frame included, in physical pixels.</summary>
-    public static PixelRect Outer(Avalonia.Controls.Window window) =>
-        new(window.Position, PixelSize.FromSize(window.FrameSize!.Value, window.RenderScaling));
+    /// <summary>
+    /// The window's whole rectangle on the desktop, frame included, in physical pixels: the frame's whole pixels over the
+    /// scaling, rounded back, since <see cref="PixelSize.FromSize"/> rounds up what may land a hair above them (1005 at 175 %).
+    /// </summary>
+    public static PixelRect Outer(Avalonia.Controls.Window window)
+    {
+        var (frame, scaling) = (window.FrameSize!.Value, window.RenderScaling);
+        return new(window.Position, new PixelSize((int)Math.Round(frame.Width * scaling), (int)Math.Round(frame.Height * scaling)));
+    }
 
     /// <summary>The stash window, in front, opens its Import files… picker with a real `Ctrl+O`: the picker's handle once it is in front.</summary>
     public async Task<nint> PickerInFront()

@@ -9,7 +9,8 @@ namespace ImageStash.Windows.Seams;
 /// Answers WM_SIZING, which only a drag of the border sends, with the rectangle held at the client's minimum plus the
 /// frame the window has now. Avalonia 12.1.4 tells Windows a minimum whose frame is the system DPI's, too small on a
 /// display of another scaling, and has its layout grow the window back from its top-left: a dragged left or top edge
-/// past the minimum would walk the window instead of stopping it.
+/// past the minimum would walk the window instead of stopping it. The client is also given a length Avalonia keeps
+/// (<see cref="Kept"/>), so its layout never moves the edge opposite the dragged one.
 /// </summary>
 public sealed class WindowsBorderDrag : IBorderDrag
 {
@@ -35,7 +36,8 @@ public sealed class WindowsBorderDrag : IBorderDrag
             var frame = new PixelSize(outer.Right - outer.Left - client.Right, outer.Bottom - outer.Top - client.Bottom);
             var least = Least(new Size(window.MinWidth, window.MinHeight), window.RenderScaling, frame);
             var asked = Marshal.PtrToStructure<Rectangle>(lParam);
-            Marshal.StructureToPtr(Stopped(asked, (int)wParam, least), lParam, fDeleteOld: false);
+            var edge = (int)wParam;
+            Marshal.StructureToPtr(Kept(Stopped(asked, edge, least), edge, frame, window.RenderScaling), lParam, fDeleteOld: false);
             handled = true;
             return 1;
         });
@@ -74,6 +76,43 @@ public sealed class WindowsBorderDrag : IBorderDrag
 
         return stopped;
     }
+
+    /// <summary>
+    /// <paramref name="rectangle"/> with a client Avalonia 12.1.4 keeps as it is: it lays a client of c pixels out at
+    /// c / scaling units and sizes the window back to (int)(c / scaling × scaling) from its top-left, a pixel short at
+    /// some lengths at 175 %, which would move the edge opposite a dragged left or top one. The dragged side gives the pixel.
+    /// </summary>
+    internal static Rectangle Kept(Rectangle rectangle, int edge, PixelSize frame, double scaling)
+    {
+        var kept = rectangle;
+        while (!Keeps(kept.Right - kept.Left - frame.Width, scaling) && edge is not (EdgeTop or EdgeBottom))
+        {
+            if (edge is EdgeLeft or EdgeTopLeft or EdgeBottomLeft)
+            {
+                kept.Left--;
+            }
+            else
+            {
+                kept.Right++;
+            }
+        }
+
+        while (!Keeps(kept.Bottom - kept.Top - frame.Height, scaling) && edge is not (EdgeLeft or EdgeRight))
+        {
+            if (edge is EdgeTop or EdgeTopLeft or EdgeTopRight)
+            {
+                kept.Top--;
+            }
+            else
+            {
+                kept.Bottom++;
+            }
+        }
+
+        return kept;
+    }
+
+    private static bool Keeps(int client, double scaling) => (int)(client / scaling * scaling) == client;
 
     [StructLayout(LayoutKind.Sequential)]
     internal struct Rectangle

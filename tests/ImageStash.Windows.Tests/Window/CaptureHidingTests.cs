@@ -34,7 +34,8 @@ public sealed class CaptureHidingTests
 
     /// <summary>Where the pinned window goes in these checks: clear of the chat window at (100, 100), larger than the window's minimum with its frame, inside the working area.</summary>
     // Its position in physical pixels, (560, 260) at 100 %; its size in device-independent units, as the settings keep it.
-    private static PixelRect PinnedPlace => new(DisplayPlaces.At(DisplayPlaces.Primary(), 560, 260), new PixelSize(600, 480));
+    // Raised to the window's minimum height with its frame (about 545), the window still ends inside the reference working area.
+    private static PixelRect PinnedPlace => new(DisplayPlaces.At(DisplayPlaces.Primary(), 560, 200), new PixelSize(600, 480));
 
     [TestMethod]
     [DataRow(true, DisplayName = "a drag released")]

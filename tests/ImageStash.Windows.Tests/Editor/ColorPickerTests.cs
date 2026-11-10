@@ -289,7 +289,7 @@ public sealed class ColorPickerTests
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => Picker(editor) is not null));
         TrayDesktop.Run(() =>
         {
-            Assert.AreEqual(WindowSize.Minimum, new WindowSize(shown.Window.Bounds.Width, shown.Window.Bounds.Height), "the window at its minimum");
+            WindowMinimum.AssertAt(shown.Window.Bounds.Size, "the window at its minimum");
             var hex = (TextBox)Named(Picker(editor)!, "Hex")!;
             foreach (var step in Enumerable.Range(1, ColorChoices.RecentCount + 1))
             {

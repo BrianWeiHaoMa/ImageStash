@@ -174,9 +174,13 @@ public sealed class WindowChromeTests
         TrayDesktop.Run(() =>
         {
             var window = shown.Window;
-            AssertAtTheMinimum(window, "the drag stops at the minimum (G20, G21)");
+            WindowMinimum.AssertAt(window.ClientSize, "the drag stops at the minimum (G20, G21)");
             Assert.AreEqual(new PixelPoint(area.X + 100, area.Y + 100), window.Position, "where the drag put it");
-            Assert.AreEqual(new WindowSize(window.FrameSize!.Value.Width, window.FrameSize.Value.Height), shown.Settings.Current.PinnedSize, "remembered at the size it got, frame included, not the size asked (G2)");
+            // Within a display pixel: where the minimum is no whole number of them (458 × 1.75 = 801.5), Windows stops the
+            // drag on the pixel below it, which is remembered, and the layout then lays the window on the pixel above.
+            var (got, remembered, pixel) = (window.FrameSize!.Value, shown.Settings.Current.PinnedSize, 1 / window.RenderScaling + 1e-9);
+            Assert.AreEqual(got.Width, remembered.Width, pixel, "remembered at the width it got, frame included, not the width asked (G2)");
+            Assert.AreEqual(got.Height, remembered.Height, pixel, "and at the height it got");
             Assert.IsTrue(window.CanResize, "still resizable");
         });
     }
@@ -278,7 +282,7 @@ public sealed class WindowChromeTests
         TrayDesktop.Run(() => Assert.IsTrue(SetWindowPos(handle, 0, area.X + DisplayPlaces.Scaled(DisplayPlaces.Primary(), 120), area.Y + DisplayPlaces.Scaled(DisplayPlaces.Primary(), 90), DisplayPlaces.Scaled(DisplayPlaces.Primary(), 300), DisplayPlaces.Scaled(DisplayPlaces.Primary(), 300), NoZOrderNoActivate)));
         await Task.Delay(300);
 
-        TrayDesktop.Run(() => AssertAtTheMinimum(shown.Window, "the move put this display's minimum back in force, so the drag stops at it (G20, G21)"));
+        TrayDesktop.Run(() => WindowMinimum.AssertAt(shown.Window.ClientSize, "the move put this display's minimum back in force, so the drag stops at it (G20, G21)"));
     }
 
     [TestMethod]
@@ -313,7 +317,7 @@ public sealed class WindowChromeTests
         await Task.Delay(300);
         TrayDesktop.Run(() =>
         {
-            AssertAtTheMinimum(shown.Window, "pinned by its button");
+            WindowMinimum.AssertAt(shown.Window.ClientSize, "pinned by its button");
             Assert.AreEqual(new PixelPoint(pinnedAt.X, pinnedAt.Y), shown.Window.Position, "where the user left it (G2)");
             var settings = shown.Settings.Current;
             Assert.AreEqual(flyout, settings.FlyoutSize, "the flyout's size stays as stored: raised for the showing only (G2, G31)");
@@ -322,17 +326,10 @@ public sealed class WindowChromeTests
         });
     }
 
-    /// <summary>The window's client is the minimum, within half a device-independent pixel.</summary>
-    private static void AssertAtTheMinimum(Avalonia.Controls.Window window, string because)
-    {
-        Assert.AreEqual(WindowSize.Minimum.Width, window.ClientSize.Width, 0.5, $"{because}: width");
-        Assert.AreEqual(WindowSize.Minimum.Height, window.ClientSize.Height, 0.5, $"{because}: height");
-    }
-
     /// <summary>The window is at the minimum with its whole rectangle, frame included, inside <paramref name="area"/>.</summary>
     private static void AssertWhollyOnScreenAtTheMinimum(Avalonia.Controls.Window window, PixelRect area, string because)
     {
-        AssertAtTheMinimum(window, because);
+        WindowMinimum.AssertAt(window.ClientSize, because);
         var outer = new PixelRect(window.Position, PixelSize.FromSize(window.FrameSize!.Value, window.RenderScaling));
         Assert.IsTrue(area.Contains(outer), $"{because}: the window at {outer} wholly inside the working area {area}");
     }

@@ -82,10 +82,9 @@ The whole run is a person's, on a Windows 11 x64 PC: from an unelevated PowerShe
 administrator"; a standard account, or an administrator account with User Account Control on, as Windows sets it)
 at the repository root, on the interactive desktop, since some desktop checks confirm they run unelevated as
 ImageStash does and the installer phase installs from that shell to show the MSI needs no administrator rights;
-with a primary display of at least 1280 x 800 at 100 % scale (the desktop checks place their windows from the
-display, so a larger one serves too: at 100 % they pass on 1920 x 1080, beside a second display at 150 %, and on
-2560 x 1440; at 150 % about 30 of them fail, and other scales are untried), left unlocked and awake for
-the whole run (a locked or sleeping desktop takes no input, and the desktop checks then time out); the .NET SDK
+with a primary display whose working area holds 1280 x 752 device-independent pixels at its scale (below), left
+unlocked and awake for the whole run (a locked or sleeping desktop takes no input, and the desktop checks then time
+out); the .NET SDK
 `global.json` pins installed (`dotnet --version` in the repository root prints it), and the internet reachable for
 the first package restore; Microsoft Edge installed (some desktop checks open it); ImageStash not running,
 `%LOCALAPPDATA%\ImageStash` absent (move it aside first) and every window on the primary display minimised:
@@ -93,6 +92,22 @@ the first package restore; Microsoft Edge installed (some desktop checks open it
 ```powershell
 powershell.exe -NoProfile -File tools/check-release.ps1 -Output $env:TEMP\ImageStash-release
 ```
+
+The display condition is the 1280 x 800 display at 100 % the desktop checks are written for, less Windows 11's
+taskbar, 48 device-independent pixels high; the checks place their windows from the primary display's size and scale,
+so a larger working area serves too. In device-independent pixels the working area is the display's size divided by
+its scale, less the taskbar: 1920 x 1080 holds the condition at 100 % and 125 % (1536 x 816), not at 150 %
+(1280 x 672: 672 is short of 752); 2560 x 1440 at 100 % to 175 % (1462 x 774 at 175 %), not at 200 % (1280 x 672) or
+225 % (1137 x 592); 3840 x 2160 at 200 % (1920 x 1032) and 225 % (1706 x 912). Below it the run fails for the
+display's size, not for ImageStash, so first choose a scale the display holds it at:
+`powershell.exe -NoProfile -File tools/display-scale.ps1` lists each display with its current and offered scales, and
+`-Set <percent>` sets the primary display's, unelevated and at once, as Settings > Display > Scale does (set it back
+afterwards). Seen passing on a 2560 x 1440 primary beside a 1920 x 1080 display at 100 %: the desktop checks whole at
+each of 100 %, 125 %, 150 % and 175 % (675 checks, about fourteen minutes at each scale); earlier, at 100 %, on a
+1920 x 1080 primary beside a second display at 150 %. 1920 x 1080 at 125 % is admitted by the condition and has not
+been run. The published check at 150 % on that display: every phase held in one run; in the others every phase held
+but the Move phase, whose folder picker sometimes reads an empty address bar after the typed path, at 100 % as well,
+and once the paste-in phase, which found File Explorer focused after the open shortcut, also seen at 100 %.
 
 It takes about forty minutes and holds the desktop, the clipboard, the Run value `ImageStash`, the Recycle Bin and
 `%LOCALAPPDATA%\ImageStash` meanwhile; it refuses to start while ImageStash runs or that folder exists. `-Output`

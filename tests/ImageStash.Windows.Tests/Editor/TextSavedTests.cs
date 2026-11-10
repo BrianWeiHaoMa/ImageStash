@@ -369,7 +369,8 @@ public sealed class TextSavedTests
             {
                 var i = (y * file.Width + x) * 4;
                 var expected = 0xFF000000u | (uint)file.Pixels[i + 2] << 16 | (uint)file.Pixels[i + 1] << 8 | file.Pixels[i];
-                var shownThere = rendered.At((int)place.X + x, (int)place.Y + y);
+                // The place lies on whole display pixels; its product with a scaling such as 1.75 may fall a hair short of one.
+                var shownThere = rendered.At((int)Math.Round(place.X) + x, (int)Math.Round(place.Y) + y);
                 if (shownThere != expected)
                 {
                     differences.Add($"({x}, {y}) shown {shownThere:X8}, saved {expected:X8}");

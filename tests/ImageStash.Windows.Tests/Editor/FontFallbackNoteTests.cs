@@ -111,7 +111,7 @@ public sealed class FontFallbackNoteTests
         {
             shown.Window.UpdateLayout();
             var window = shown.Window.Bounds;
-            Assert.AreEqual(WindowSize.Minimum, new WindowSize(window.Width, window.Height), "the window asked 1 × 1 at its minimum");
+            WindowMinimum.AssertAt(new Size(window.Width, window.Height), "the window asked 1 × 1 at its minimum");
             var note = Note(editor)!;
             foreach (var control in new Control[] { note, editor.Button("Cancel"), editor.Button(EditorOverlay.OutputSize), editor.Button("Save") })
             {

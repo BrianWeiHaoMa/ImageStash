@@ -13,7 +13,7 @@ namespace ImageStash.Windows.Tests.Seams;
 [TestClass]
 public sealed class WindowsBorderDragTests
 {
-    private const int Left = 1, Right = 2, Top = 3, TopLeft = 4, Bottom = 6, BottomRight = 8;
+    private const int Left = 1, Right = 2, Top = 3, TopLeft = 4, TopRight = 5, Bottom = 6, BottomLeft = 7, BottomRight = 8;
 
     private static WindowsBorderDrag.Rectangle Rectangle(int left, int top, int right, int bottom) => new() { Left = left, Top = top, Right = right, Bottom = bottom };
 
@@ -48,6 +48,44 @@ public sealed class WindowsBorderDragTests
         var asked = Rectangle(100, 100, 656, 639);
 
         Assert.AreEqual(Sides(asked), Sides(WindowsBorderDrag.Stopped(asked, TopLeft, new PixelSize(556, 539))));
+    }
+
+    [TestMethod]
+    [DataRow(1.0)]
+    [DataRow(1.25)]
+    [DataRow(1.5)]
+    [DataRow(1.75)]
+    [DataRow(2.0)]
+    [DataRow(2.25)]
+    public void EveryClientLengthDraggedToIsOneAvaloniaKeepsTheDraggedSideGivingAPixelAndTheOppositeOneStaying(double scaling)
+    {
+        var frame = new PixelSize(24, 64);
+        var given = 0;
+        foreach (var length in Enumerable.Range(400, 1100))
+        {
+            foreach (var edge in new[] { Left, Right, Top, Bottom, TopLeft, TopRight, BottomLeft, BottomRight })
+            {
+                var (leftward, upward) = (edge is Left or TopLeft or BottomLeft, edge is Top or TopLeft or TopRight);
+                var (across, down) = (edge is not (Top or Bottom), edge is not (Left or Right));
+                var asked = Rectangle(100, 100, 100 + frame.Width + (across ? length : 500), 100 + frame.Height + (down ? length : 400));
+
+                var kept = WindowsBorderDrag.Kept(asked, edge, frame, scaling);
+
+                var (width, height) = (kept.Right - kept.Left - frame.Width, kept.Bottom - kept.Top - frame.Height);
+                Assert.AreEqual(width, (int)(width / scaling * scaling), $"a client {width} wide, which Avalonia lays out at {width / scaling} and keeps");
+                Assert.AreEqual(height, (int)(height / scaling * scaling), $"a client {height} high, kept likewise");
+                var grown = kept.Right - asked.Right + asked.Left - kept.Left + kept.Bottom - asked.Bottom + asked.Top - kept.Top;
+                Assert.IsLessThanOrEqualTo(across && down ? 2 : 1, grown, $"a pixel at most on each dragged side, asked {length} at {scaling}");
+                Assert.AreEqual(leftward ? asked.Right : asked.Left, leftward ? kept.Right : kept.Left, $"edge {edge}: the side opposite across stays");
+                Assert.AreEqual(upward ? asked.Bottom : asked.Top, upward ? kept.Bottom : kept.Top, $"edge {edge}: the side opposite down stays");
+                given += grown;
+            }
+        }
+
+        if (scaling == 1.75)
+        {
+            Assert.IsGreaterThan(0, given, "at 175 % the sweep meets lengths Avalonia lays a pixel short (976 among them)");
+        }
     }
 
     [TestMethod]

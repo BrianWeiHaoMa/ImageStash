@@ -549,10 +549,12 @@ public sealed class WindowsTargetTests
         // For a DPI-unaware window on a scaled display, Windows' own caret object places its corner by its rounding of the
         // window's points and keeps the window's own size (1 × 16 at 150 % for a caret 2 × 24 on the screen); the chain
         // asks it only for a thread with no Windows caret, so its place is what is compared here. An aware window's is
-        // compared whole in WindowsCaretScalingTests.
+        // compared whole in WindowsCaretScalingTests. One of the window's own pixels spans the scaling's worth of display
+        // pixels, two at 175 %, and Windows' rounding may land the corner anywhere in it.
         Assert.IsNotNull(accessible, "the accessibility caret object, the chain's second step");
-        Assert.IsTrue(Math.Abs(accessible.Rectangle.X - expected.Value.X) <= 1 && Math.Abs(accessible.Rectangle.Y - expected.Value.Y) <= 1,
-            $"locates the same caret's place on the screen, within the pixel Windows' scaling of the window's points rounds: {accessible.Rectangle} for {expected}");
+        var span = (int)Math.Ceiling(DisplayPlaces.Primary().Scaling);
+        Assert.IsTrue(Math.Abs(accessible.Rectangle.X - expected.Value.X) <= span && Math.Abs(accessible.Rectangle.Y - expected.Value.Y) <= span,
+            $"locates the same caret's place on the screen, within one of the window's pixels as the display scales it: {accessible.Rectangle} for {expected}");
     }
 
     [TestMethod]

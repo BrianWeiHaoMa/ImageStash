@@ -49,7 +49,7 @@ public sealed class TrimToolTests
         TrayDesktop.Run(() =>
         {
             shown.Window.UpdateLayout();
-            Assert.AreEqual(WindowSize.Minimum, new WindowSize(shown.Window.Bounds.Width, shown.Window.Bounds.Height), "the window at its minimum");
+            WindowMinimum.AssertAt(shown.Window.Bounds.Size, "the window at its minimum");
             var words = editor.Overlay.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible).ToList();
             var position = words.Single(text => (text.Text ?? "").EndsWith(" / 0:00.6", StringComparison.Ordinal));
             var kept = words.Single(text => text.Text == "Keeps 0:00.0 – 0:00.6 · 0.6 s of 0.6 s");

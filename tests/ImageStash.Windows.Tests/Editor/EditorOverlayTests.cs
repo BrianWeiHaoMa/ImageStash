@@ -417,7 +417,7 @@ public sealed partial class EditorOverlayTests
             Assert.IsNotNull(shown.Editing.Busy, "the Save still runs");
             shown.Window.UpdateLayout();
             var window = shown.Window.Bounds;
-            Assert.AreEqual(WindowSize.Minimum, new WindowSize(window.Width, window.Height), "the window at its minimum");
+            WindowMinimum.AssertAt(new Size(window.Width, window.Height), "the window at its minimum");
             var words = editor.Overlay.GetVisualDescendants().OfType<TextBlock>().Single(text => text.IsEffectivelyVisible && (text.Text ?? "").StartsWith("Saving “", StringComparison.Ordinal));
             foreach (var control in new Control[] { words, editor.Button("Cancel"), editor.Button(EditorOverlay.OutputSize), editor.Button("Save") })
             {

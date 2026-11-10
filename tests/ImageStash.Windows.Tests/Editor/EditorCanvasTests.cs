@@ -265,8 +265,10 @@ public sealed class EditorCanvasTests
                 editor.Drag((0.25, 0.25), (0.75, 0.75));
                 ShownWindow.Press(editor.Canvas, Key.Escape);
                 // Its own renderer draws at 96 DPI, so canvas units are its pixels: sampled through the canvas's mapping, at
-                // the first of its pixels wholly inside a checker square (a square spans fewer pixels than four at a scale above 1).
-                return (editor.Canvas.DrawOperation()!, editor.Canvas.Bounds.Size, editor.OnCanvas(32, 24), editor.OnCanvas(0, 0), editor.OnCanvas(60, 44));
+                // the first of its pixels wholly inside a checker square (a square spans fewer pixels than four at a scale above 1),
+                // and in the far corner at the pixel holding a square's centre, the square beside the one holding the pixel
+                // that sets each picture apart.
+                return (editor.Canvas.DrawOperation()!, editor.Canvas.Bounds.Size, editor.OnCanvas(32, 24), editor.OnCanvas(0, 0), editor.OnCanvas(58, 42));
             });
 
             await endings[i].End(item);
@@ -277,7 +279,7 @@ public sealed class EditorCanvasTests
             var name = endings[i].Name;
             Assert.AreEqual(0xFF000000u, pixels.At((int)inside.X, (int)inside.Y), $"after {name}: black inside the hide, as it was when taken");
             Assert.AreEqual(Argb(Checker(2, 2)), pixels.At((int)Math.Ceiling(outside.X), (int)Math.Ceiling(outside.Y)), $"after {name}: the picture's own colour outside it");
-            Assert.AreEqual(Argb(Checker(60, 44)), pixels.At((int)Math.Ceiling(corner.X), (int)Math.Ceiling(corner.Y)), $"after {name}: and in its far corner");
+            Assert.AreEqual(Argb(Checker(58, 42)), pixels.At((int)corner.X, (int)corner.Y), $"after {name}: and in its far corner");
             if (TrayDesktop.Get(() => shown.Editing.IsOpen))
             {
                 TrayDesktop.Run(() => editor.Session!.Deselect());
@@ -355,18 +357,22 @@ public sealed class EditorCanvasTests
         using var editor = new ShownEditor(shown);
         var items = await shown.OpenStash(shown.Picture("square.png", 600, 600, (_, _) => TextFieldTests.Grey));
         await EditorOverlayTests.Open(shown, items[0]);
-        var rotate = TrayDesktop.Get(() =>
+        TrayDesktop.Run(() =>
         {
             Assert.IsLessThan(600, editor.Box.Height, "the picture scaled down to the canvas");
             editor.Click(0.5, 0.25);
             ShownWindow.Type(editor.Field!, "hi");
             ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+        });
+        // Read once the frame showing it has rendered: the committed text's box is measured again on the way there.
+        var rendered = await RenderedWindow.Of(shown);
+        var rotate = TrayDesktop.Get(() =>
+        {
             var at = RotateHandle(editor);
             var canvas = editor.Canvas.Bounds;
             Assert.IsTrue(at.X >= 8 && at.Y >= 8 && at.X <= canvas.Width - 8 && at.Y <= canvas.Height - 8, $"a top text's round handle at {at} lies inside the {canvas.Size} canvas, where it can be seen and pressed (G21)");
             return at;
         });
-        var rendered = await RenderedWindow.Of(shown);
         CollectionAssert.AreEquivalent(new[] { White }, rendered.Colors(TrayDesktop.Get(() => editor.InsideRoundHandle(rotate))).ToList(), "drawn there, its white");
         TrayDesktop.Run(() =>
         {
