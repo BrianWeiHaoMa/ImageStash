@@ -193,29 +193,26 @@ public sealed class OpenWithSessionTests
         using var stash = new TestStash { Retry = TimeSpan.FromSeconds(3) };
         var (cat, copy) = await Begun(stash);
         OpenedWith.Rewrite(copy, MediaFixtures.DistinctPng(5, 12, 10));
-        var held = new TaskCompletionSource<Task>(TaskCreationOptions.RunContinuationsAsynchronously);
-        // A scanner takes the freshly written file in .work\ as Media finishes reading it, and lets go two seconds later.
+        var held = new TaskCompletionSource<FileStream>(TaskCreationOptions.RunContinuationsAsynchronously);
+        // A scanner takes the freshly written file in .work\ as Media finishes reading it, and lets go once the store's
+        // answer has been measured. It lets go from this thread, not on a timer: a busy thread pool held a timed
+        // release past the discard's three-second retry on the hosted runner.
         stash.Reader = (path, name, retry) =>
         {
             var read = MediaDecoder.ReadPicture(path, name, retry);
-            var hold = TestStash.Hold(path);
-            held.TrySetResult(Task.Run(async () =>
-            {
-                await Task.Delay(2000);
-                await hold.DisposeAsync();
-            }));
+            held.TrySetResult(TestStash.Hold(path));
             return read;
         };
 
         var classifying = stash.Store!.ClassifyOpenWith(cat.Id);
         // Asked once the read has returned, while the taken file is still held; waited for on this thread, which the
         // store's own answer wakes, so what is measured is the store's thread alone.
-        var released = held.Task.Result;
+        var hold = held.Task.Result;
         Thread.Sleep(300);
         var all = stash.Store.All();
         var answeredInTime = all.Wait(TimeSpan.FromMilliseconds(500));
+        hold.Dispose();
         var classified = await classifying;
-        await released;
 
         Assert.IsTrue(answeredInTime, "within half a second (G1)");
         Assert.IsTrue(all.Result.Succeeded, all.Result.Failure?.ToString());
