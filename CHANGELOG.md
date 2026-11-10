@@ -4,6 +4,8 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-10
+
 ### Added
 
 - A stash of your reaction pictures and GIFs that lives in the Windows 11 tray and starts with Windows.

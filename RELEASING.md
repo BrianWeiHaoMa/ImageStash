@@ -60,12 +60,6 @@ refuses a tag of another form, a tag naming another version, and a version with 
    have passed creates the release with the three assets and the notes, through `gh release create`.
 9. Open the release page and check the three assets are there and that the notes are the changelog section.
 
-### The first release
-
-The first release is 1.0.0: `Directory.Build.props` already says `1.0.0`, so step 1 changes nothing; step 2 turns
-`## [Unreleased]` into `## [1.0.0] - <date>`, and step 7 tags `v1.0.0`. `releases/latest` resolves only once that
-release exists.
-
 ## The suite
 
 `tools/check-release.ps1` is the whole suite a release must pass. Its phases, in order, stopping at the first that
