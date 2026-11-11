@@ -209,6 +209,21 @@ function WordsOf([IntPtr] $window) {
     catch { "(unread: $($_.Exception.Message))" }
 }
 
+# The picker's address bar edit box (41477) while it has the keys, as Alt+D gives them to it; zero while another has them.
+function AddressBox {
+    try {
+        $focused = [Windows.Automation.AutomationElement]::FocusedElement.Current
+        if (($focused.ProcessId -eq $running) -and ($focused.ClassName -eq 'Edit') -and ($focused.AutomationId -eq '41477')) { [IntPtr]$focused.NativeWindowHandle } else { [IntPtr]::Zero }
+    }
+    catch { [IntPtr]::Zero }
+}
+
+# What has the keys, as UI Automation reads it, for a failure's words.
+function FocusedWords {
+    try { $focused = [Windows.Automation.AutomationElement]::FocusedElement.Current; "id '$($focused.AutomationId)', class '$($focused.ClassName)', process $($focused.ProcessId), handle $($focused.NativeWindowHandle)" }
+    catch { "(unread: $($_.Exception.Message))" }
+}
+
 # Move... chosen on the page, and <folder> chosen in the folder picker it opens as a person chooses one: Alt+D, its
 # parent's path typed into the address bar and Enter, then its name typed into the Folder box and Select Folder. Not
 # the path itself: the picker opens in the folder last chosen in it, which an earlier phase may have removed, and takes
@@ -234,8 +249,17 @@ function AskMove([string] $folder) {
     $was = (& $byId '1001').Current.Name
     if ($was -ne "Address: $parent") {
         $null = [PasteDesk]::Press([uint16[]]@(0x12, 0x44))
-        Start-Sleep -Milliseconds 300
-        $null = [OpenWithDesk]::Type($parent)
+        $null = WaitFor { (AddressBox) -ne [IntPtr]::Zero } 3000
+        $addressBox = AddressBox
+        Need ($addressBox -ne [IntPtr]::Zero) "Alt+D gave the keys to the picker's address bar: focused $(FocusedWords)"
+        # Keys typed there can be lost part way, leaving the start of the path and the picker where it was, so the box is
+        # read back before Enter and typed again while it does not read the path whole.
+        for ($typed = 0; ($typed -lt 3) -and ([PasteDesk]::Foreground() -eq (Picker)) -and ([PasteDesk]::ControlText($addressBox) -ne $parent); $typed++) {
+            $null = [PasteDesk]::Press([uint16[]]@(0x11, 0x41))
+            $null = [OpenWithDesk]::Type($parent)
+            $null = WaitFor { [PasteDesk]::ControlText($addressBox) -eq $parent } 1000
+        }
+        Need ([PasteDesk]::ControlText($addressBox) -eq $parent) "the picker's address bar reads $parent before Enter: '$([PasteDesk]::ControlText($addressBox))', focused $(FocusedWords)"
         $null = [PasteDesk]::Press([uint16[]]@(0x0D))
         Need (WaitFor { (& $byId '1001').Current.Name -eq "Address: $parent" } 5000) "the picker opened $parent from its address bar: '$((& $byId '1001').Current.Name)', having read '$was' before the path was typed$(if ((& $byId '1001').Current.Name -ne "Address: $parent") { "; the picker shows $(WordsOf (Picker))" })"
     }
