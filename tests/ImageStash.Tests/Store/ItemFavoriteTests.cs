@@ -78,7 +78,9 @@ public sealed class ItemFavoriteTests
         Assert.AreEqual(0, favoritesAfterRefusal, "no item of the batch was changed by its own transaction");
         Assert.IsTrue(set.All(o => o.Succeeded), TestStash.Failures(set));
         Assert.HasCount(5000, (await store.Favorites()).Value!);
-        Assert.IsLessThan(1000, clock.Elapsed.TotalMilliseconds);
+        // Generous for the hosted runner under the parallel suite (once 1.5 s; tens of ms on a PC): a commit per item
+        // in the store's rollback journal would still take several times longer.
+        Assert.IsLessThan(5000, clock.Elapsed.TotalMilliseconds);
     }
 
     private static List<(long Id, bool Favorite)> Flags(TestStash stash) =>
