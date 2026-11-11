@@ -100,6 +100,19 @@ public sealed class WindowActivation
     public void CaptureStarted() => pasteTarget.Keep();
 
     /// <summary>
+    /// A capture starts: a flyout whose focus the platform says has gone to another app hides now, as it does once the
+    /// window has heard (G2), since the window's own flag waits until the UI thread handles that activation; the capture
+    /// then has nothing of it to put back (G3).
+    /// </summary>
+    public void HideIfFocusAlreadyLeft()
+    {
+        if (window.IsVisible && !targets.Foreground().IsMine && Summon.FlyoutHides(chrome.Pinned, dialogUp(), dragInProgress(), editing.IsOpen))
+        {
+            HideWindow();
+        }
+    }
+
+    /// <summary>
     /// The tray menu that ran Open ImageStash has closed: since the window before the stash window was that menu, there
     /// is no paste target, and the activation it caused is not read (G8, G34).
     /// </summary>

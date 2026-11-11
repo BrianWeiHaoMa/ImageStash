@@ -16,7 +16,7 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 ### Fixed
 
 - A recording of busy content, such as a playing video, keeps about 15 frames a second instead of falling to one or two.
-- A screenshot started right after you click into another app no longer brings the pinned stash window back in front of that app, where it took your typing.
+- A screenshot started right after you click into another app no longer brings the stash window back over that app: a pinned window comes back behind it instead of taking your typing, and a flyout stays hidden.
 
 ## [0.1.0] - 2026-11-10
 

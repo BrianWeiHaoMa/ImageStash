@@ -352,6 +352,24 @@ public sealed class CaptureHidingTests
     }
 
     [TestMethod]
+    public async Task AFlyoutThatLostTheFocusToTheChatJustBeforeThePressStaysHiddenAfterTheCapture()
+    {
+        using var desk = await CaptureDesk.Open(["left for the chat.png"]);
+        var shown = desk.Shown;
+        await desk.FlyoutInFront();
+
+        // Asked before the UI thread has handled the chat's activation, as the screenshot shortcut's press is when it
+        // follows a click into the chat at once: focus has gone to another app, so the flyout hides (G2).
+        var taking = await desk.TakeOnceInFront(desk.Chat.Window, desk.Chat.ClickTitleBar);
+        await desk.OverlayInFront();
+        TestHotKeys.Tap(VkEscape);
+        await taking;
+
+        TrayDesktop.Run(() => Assert.IsFalse(shown.Window.IsVisible, "focus went to another app before the capture, which puts back no flyout (G2, G3)"));
+        desk.ChatKeepsTheKeystrokes("after the capture");
+    }
+
+    [TestMethod]
     public async Task AHoveredNoticeAndAnOpenTagListEndWithTheFlyoutsHideForACapture()
     {
         // G16, F4: the flyout goes for a capture as it goes any other way, so no pointer is over its notices once it has

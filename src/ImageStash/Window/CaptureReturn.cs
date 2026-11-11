@@ -6,12 +6,12 @@ using ImageStash.Seams;
 namespace ImageStash.Window;
 
 /// <summary>
-/// The stash window out of the way for a capture and back as it was afterwards (G3): at the start the flyout hidden, or
-/// the pinned window minimised from hidden, with its place and whether it was active remembered, as the window says and
-/// the platform agrees; at the end shown again
-/// where it was, never through a summon, activated only when it was, as the window's own showing, so the paste target
-/// stands (G8). It owns that memory and the <see cref="CaptureHiding"/> holder the captures call, and follows the user's
-/// own restore of the window, after which a minimise is theirs. UI thread only.
+/// The stash window out of the way for a capture and back as it was afterwards (G3): at the start a flyout whose focus
+/// has already gone to another app hidden for good (G2), else the flyout hidden, or the pinned window minimised from
+/// hidden, with its place and whether it was active remembered, as the window says and the platform agrees; at the end
+/// shown again where it was, never through a summon, activated only when it was, as the window's own showing, so the
+/// paste target stands (G8). It owns that memory and the <see cref="CaptureHiding"/> holder the captures call, and
+/// follows the user's own restore of the window, after which a minimise is theirs. UI thread only.
 /// </summary>
 public sealed class CaptureReturn
 {
@@ -62,6 +62,7 @@ public sealed class CaptureReturn
     {
         // The capture's windows are ImageStash's own: no late report reads the target again across them (G8, G3).
         activation.CaptureStarted();
+        activation.HideIfFocusAlreadyLeft();
         var hide = CaptureHiding.Decide(window.IsVisible, chrome.Pinned, window.WindowState == WindowState.Minimized, dialogUp(), dragInProgress());
         if (hide == CaptureHide.Nothing)
         {

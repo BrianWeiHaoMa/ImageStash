@@ -394,16 +394,19 @@ public sealed class PasteTargetTests
     [TestMethod]
     public async Task AClickIntoTheFlyoutRightAfterACaptureShowedItInactiveTakesTheAppClickedFrom()
     {
-        // G3, G8: a flyout not active when the capture started is shown again where it was without activation, expecting
-        // no activation of its own, so the user's click from another app straight after it sets the target to that app.
-        var target = new PresetTarget();
+        // G3, G8: a flyout not active when the capture started, the focus with a window of ImageStash's own (its Settings
+        // page, or a notification's field), with which the flyout stays (G2), is shown again where it was without
+        // activation, expecting no activation of its own, so the user's click from another app straight after it sets the
+        // target to that app.
+        var target = new PresetTarget { InFront = new ForegroundReading(true, null) };
         using var shown = ShownWindow.Open(target: target);
         await shown.OpenStash(shown.Picture("paste flyout clicked after a capture.png"));
         var place = TrayDesktop.Get(() => shown.Window.Position);
-        Assert.IsFalse(TrayDesktop.Get(() => shown.Window.IsActive), "another app is in front when the capture starts");
+        Assert.IsFalse(TrayDesktop.Get(() => shown.Window.IsActive), "the flyout is not active when the capture starts");
 
         TrayDesktop.Run(() => shown.Window.CaptureHiding.HideForCapture());
         await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.SystemIdle);
+        target.InFront = null;
         target.Before = Relay;
         TrayDesktop.Run(() =>
         {
