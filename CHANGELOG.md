@@ -4,6 +4,8 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-11
+
 ### Added
 
 - Two larger thumbnail sizes: `Ctrl`+wheel and `Ctrl` with `+` or `-` now step the grid through five, and Settings has a Thumbnail size list that the grid follows at once.
