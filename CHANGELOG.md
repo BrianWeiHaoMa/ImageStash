@@ -4,6 +4,15 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 
 ## [Unreleased]
 
+### Changed
+
+- A screenshot's or recording's notification now goes away when you click its Edit, its Trim or the notification itself, so it no longer lies over the editor or the window it opened.
+- The cross that starts a screenshot's or recording's drag is now light with a dark edge, so it shows on bright and dark backgrounds alike.
+
+### Fixed
+
+- A recording of busy content, such as a playing video, keeps about 15 frames a second instead of falling to one or two.
+
 ## [0.1.0] - 2026-11-10
 
 ### Added
