@@ -11,7 +11,8 @@ namespace ImageStash.Media;
 /// into a caller's stream for a clip that is only measured. Each full frame comes with its time on the clip's timeline
 /// and becomes one image of the GIF: the whole frame first, then only the rectangle of the pixels that differ from the
 /// frame before it, or its top-left pixel when none does, so every frame keeps its own delay; each image has its own
-/// palette, its own colours when they fit one and median cut otherwise, without dithering; a pixel at or above half
+/// palette, its own colours when they fit one and Media's <see cref="MedianCut"/> otherwise, without dithering, and
+/// reaches the file in one write; a pixel at or above half
 /// alpha shows its own straight colour, opaque, and one below it is transparent, since GIF has nothing between (G21);
 /// each image is kept under the next,
 /// unless the next turns one of its pixels transparent: GIF clears a pixel only by disposing of the image that painted
@@ -41,11 +42,7 @@ public sealed class GifEncoder : IClipEncoder
     private const uint OpaqueFrom = 128;
 
     // A local palette's entries, GIF's transparent index among them.
-    private const int PaletteSize = 256;
-
-    // The quantizers blend a pixel below full alpha over their back colour before matching it, which would darken a kept
-    // colour; every pixel they see is fully opaque or fully transparent (Settled), so nothing is blended.
-    private static readonly IQuantizer MedianCut = OptimizedPaletteQuantizer.MedianCut(PaletteSize, default(Color32), (byte)OpaqueFrom);
+    private const int PaletteSize = MedianCut.PaletteSize;
 
     private readonly object gate = new();
     private readonly string? path;
@@ -58,8 +55,16 @@ public sealed class GifEncoder : IClipEncoder
     private readonly Stream output;
     private readonly Library library;
 
+    // What the library writes for the clip's file, gathered until the image is whole; null for a caller's stream.
+    private readonly GatheredWrites? gathered;
+
     // The opaque colours the image being written shows, while one palette can hold them.
     private readonly HashSet<uint> colours = [];
+
+    // The median cut's tables, its indices for the largest image, a full frame's, and its entries, kept for the clip (R7).
+    private readonly MedianCut medianCut = new();
+    private readonly uint[] entries = new uint[PaletteSize];
+    private byte[]? indices;
 
     // The two full frames the encoder owns, reused for the whole clip (R7): the frame the pending one is drawn over, and
     // the pending one, copied from the caller's, which is the encoder's only until the call returns.
@@ -72,7 +77,7 @@ public sealed class GifEncoder : IClipEncoder
     private bool finished;
     private long bytesWritten;
 
-    private GifEncoder(string? path, string name, TimeSpan heldFileRetry, int width, int height, Stream output, Library library)
+    private GifEncoder(string? path, string name, TimeSpan heldFileRetry, int width, int height, Stream output, Library library, GatheredWrites? gathered)
     {
         this.path = path;
         this.name = name;
@@ -81,6 +86,7 @@ public sealed class GifEncoder : IClipEncoder
         this.height = height;
         this.output = output;
         this.library = library;
+        this.gathered = gathered;
     }
 
     /// <summary>
@@ -100,8 +106,8 @@ public sealed class GifEncoder : IClipEncoder
             return new Failure(Action, name, TooLarge);
         }
 
-        // Nothing reads the clip before Stop; a scanner may, without blocking the writes. Unbuffered, so every write the
-        // library makes reaches the file at once, where a held file is waited for, and closing writes nothing more.
+        // Nothing reads the clip before Stop; a scanner may, without blocking the writes. Unbuffered, so each image's one
+        // write reaches the file before its call returns, where a held file is waited for, and closing writes nothing more.
         var created = HeldFileRetry.Run(Action, workPath, heldFileRetry, () => new FileStream(workPath, FileMode.CreateNew, FileAccess.Write, FileShare.Read, bufferSize: 0));
         if (!created.Succeeded)
         {
@@ -109,8 +115,9 @@ public sealed class GifEncoder : IClipEncoder
         }
 
         // The library writes nothing before the first image, so an open clip is an empty file.
-        var library = new Library(new HeldWrites(created.Value!, heldFileRetry), new Size(width, height)) { RepeatCount = 0 };
-        return Outcome<GifEncoder>.Of(new GifEncoder(workPath, name, heldFileRetry, width, height, created.Value!, library));
+        var gathered = new GatheredWrites(created.Value!, heldFileRetry);
+        var library = new Library(gathered, new Size(width, height)) { RepeatCount = 0 };
+        return Outcome<GifEncoder>.Of(new GifEncoder(workPath, name, heldFileRetry, width, height, created.Value!, library, gathered));
     }
 
     /// <summary>
@@ -132,7 +139,7 @@ public sealed class GifEncoder : IClipEncoder
         }
 
         var library = new Library(destination, new Size(width, height)) { RepeatCount = 0 };
-        return Outcome<GifEncoder>.Of(new GifEncoder(null, name, TimeSpan.Zero, width, height, destination, library));
+        return Outcome<GifEncoder>.Of(new GifEncoder(null, name, TimeSpan.Zero, width, height, destination, library, null));
     }
 
     /// <summary>The recorder's way to <see cref="Open(string, int, int, string, TimeSpan)"/> a clip, held files retried for <paramref name="heldFileRetry"/>.</summary>
@@ -232,6 +239,7 @@ public sealed class GifEncoder : IClipEncoder
             {
                 WritePending(stopCs, cleared: false);
                 library.FinalizeEncoding(leaveStreamOpen: true);
+                gathered?.WriteGathered();
                 Interlocked.Exchange(ref bytesWritten, output.Position);
                 finished = true;
                 Close();
@@ -295,28 +303,45 @@ public sealed class GifEncoder : IClipEncoder
     /// <summary>
     /// Writes the pending frame's image lasting until <paramref name="untilCs"/>, quantized from that image's pixels alone
     /// and kept under the next; when the next frame <paramref name="cleared"/> a pixel, the whole frame restored to the
-    /// background instead, since that disposal clears only its own image's area.
+    /// background instead, since that disposal clears only its own image's area. The image reaches the clip's file in one
+    /// write, which takes milliseconds where the library's many small writes to the unbuffered file took most of a second.
     /// </summary>
     private void WritePending(long untilCs, bool cleared)
     {
         var area = cleared ? new Rectangle(0, 0, width, height) : pendingImage;
-        using var whole = BitmapDataFactory.CreateBitmapData(pending!, new Size(width, height), width * 4, KnownPixelFormat.Format32bppArgb);
-        using var image = whole.Clone(area, KnownPixelFormat.Format8bppIndexed, QuantizerFor(area), null);
+        using var image = Indexed(area);
         var disposal = cleared ? GifGraphicDisposalMethod.RestoreToBackground : GifGraphicDisposalMethod.DoNotDispose;
         library.AddImage(image, area.Location, (int)(untilCs - Centiseconds(pendingMs)), disposal);
+        gathered?.WriteGathered();
         written++;
         Interlocked.Exchange(ref bytesWritten, output.Position);
     }
 
     /// <summary>
-    /// The quantizer for the pending frame's <paramref name="area"/>: its own colours when one palette holds them all, which
-    /// is where median cut ends when it splits until each box holds one colour, and the library's median cut otherwise. The
-    /// library's median cut alone may merge a colour a few pixels carry, a mark's or a black box's, into another though
-    /// every colour would fit (G21, G23). The frame is <see cref="Settled"/>: each pixel opaque or transparent.
+    /// The pending frame's <paramref name="area"/> as an indexed image: in its own colours when one palette holds them all,
+    /// which is where median cut ends when it cuts until each box holds one colour, and through <see cref="MedianCut"/>
+    /// otherwise, whose indices and entries the library writes as they are. A median cut alone may merge a colour a few
+    /// pixels carry, a mark's or a black box's, into another though every colour would fit (G21, G23). The frame is
+    /// <see cref="Settled"/>: each pixel opaque or transparent, so the library's matching blends nothing.
     /// </summary>
-    private IQuantizer QuantizerFor(Rectangle area)
+    private IReadWriteBitmapData Indexed(Rectangle area)
     {
         var pixels = MemoryMarshal.Cast<byte, uint>(pending!);
+        if (OwnColours(pixels, area) is { } own)
+        {
+            using var whole = BitmapDataFactory.CreateBitmapData(pending!, new Size(width, height), width * 4, KnownPixelFormat.Format32bppArgb);
+            return whole.Clone(area, KnownPixelFormat.Format8bppIndexed, PredefinedColorsQuantizer.FromCustomPalette(own), null);
+        }
+
+        indices ??= new byte[width * height];
+        var count = medianCut.Quantize(pixels, width, area, indices, entries);
+        var palette = new Palette(entries.Take(count).Select(Color32.FromArgb), default, (byte)OpaqueFrom);
+        return BitmapDataFactory.CreateBitmapData(indices, area.Size, area.Width, KnownPixelFormat.Format8bppIndexed, palette);
+    }
+
+    /// <summary>The palette of the <paramref name="area"/>'s own colours, with the transparent entry when a pixel is transparent; null when one palette cannot hold them.</summary>
+    private Palette? OwnColours(ReadOnlySpan<uint> pixels, Rectangle area)
+    {
         var transparent = false;
         colours.Clear();
         for (var y = area.Top; y < area.Bottom; y++)
@@ -327,18 +352,18 @@ public sealed class GifEncoder : IClipEncoder
                 transparent |= alpha < OpaqueFrom;
                 if (alpha >= OpaqueFrom && colours.Add(pixel) && colours.Count > PaletteSize)
                 {
-                    return MedianCut;
+                    return null;
                 }
             }
         }
 
         if (colours.Count + (transparent ? 1 : 0) > PaletteSize)
         {
-            return MedianCut;
+            return null;
         }
 
-        var entries = colours.Select(colour => Color32.FromArgb(colour));
-        return PredefinedColorsQuantizer.FromCustomPalette(new Palette(transparent ? entries.Append(default) : entries, default, (byte)OpaqueFrom));
+        var own = colours.Select(colour => Color32.FromArgb(colour));
+        return new Palette(transparent ? own.Append(default) : own, default, (byte)OpaqueFrom);
     }
 
     private Failure Fail(Exception e)
@@ -357,6 +382,7 @@ public sealed class GifEncoder : IClipEncoder
     {
         previous = null;
         pending = null;
+        indices = null;
         if (path is not null)
         {
             output.Dispose();
@@ -466,11 +492,16 @@ public sealed class GifEncoder : IClipEncoder
     }
 
     /// <summary>
-    /// The clip's file as the library writes to it: each write runs again while another program holds the file, for the
-    /// retry G35 gives a held file, so a brief hold only delays the clip; a write still refused carries its failure out.
+    /// The clip's file as the library writes to it: the library's writes are gathered in memory, in a buffer kept for the
+    /// clip (R7), and <see cref="WriteGathered"/> writes them to the file in one write, run again while another program
+    /// holds the file, for the retry G35 gives a held file, so a brief hold only delays the clip; a write still refused
+    /// carries its failure out. Nothing gathered is left unwritten when a call of the encoder returns, so the file's length
+    /// is the bytes written so far, and a clip finished without Stop has nothing more to write.
     /// </summary>
-    private sealed class HeldWrites(FileStream file, TimeSpan heldFileRetry) : Stream
+    private sealed class GatheredWrites(FileStream file, TimeSpan heldFileRetry) : Stream
     {
+        private readonly MemoryStream gathered = new();
+
         public override bool CanRead => false;
 
         public override bool CanSeek => false;
@@ -481,14 +512,26 @@ public sealed class GifEncoder : IClipEncoder
 
         public override long Position
         {
-            get => file.Position;
+            get => file.Position + gathered.Length;
             set => throw new NotSupportedException();
         }
 
+        public override void Write(byte[] buffer, int offset, int count) => gathered.Write(buffer, offset, count);
+
+        public override void Write(ReadOnlySpan<byte> buffer) => gathered.Write(buffer);
+
+        public override void WriteByte(byte value) => gathered.WriteByte(value);
+
         // A refused write leaves the file as it was (a write refused by a lock, observed), so it is made again at the same place.
-        public override void Write(byte[] buffer, int offset, int count)
+        public void WriteGathered()
         {
-            var written = HeldFileRetry.Run(Action, file.Name, heldFileRetry, () => file.Write(buffer, offset, count));
+            if (gathered.Length == 0)
+            {
+                return;
+            }
+
+            var written = HeldFileRetry.Run(Action, file.Name, heldFileRetry, () => file.Write(gathered.GetBuffer(), 0, (int)gathered.Length));
+            gathered.SetLength(0);
             if (!written.Succeeded)
             {
                 throw new RefusedWrite(written.Failure);

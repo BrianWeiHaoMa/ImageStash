@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media.Imaging;
 using Avalonia.VisualTree;
+using ImageStash.Editor;
 using ImageStash.Files;
 using ImageStash.Seams;
 using ImageStash.Store;
@@ -19,8 +20,9 @@ namespace ImageStash.Windows.Tests.Window;
 /// <summary>
 /// The capture notification's card above the tray as Windows shows it (G16, G24, G17): its picture, small, its words,
 /// the saved file's size and the name; a click on its Undo or × leaving the chat in front with the keystrokes, and Undo
-/// leaving the stash window active when it is in front; a click elsewhere on it opening the window on its item, the card
-/// staying; a real click on the name activating it, the name selected and replaced by real typing, Enter renaming through the store and Esc leaving the
+/// leaving the stash window active when it is in front; a click elsewhere on it opening the window on its item, and the
+/// card going at that click and at its Edit, whether the editor opened, the Edit was refused by name or another edit stayed
+/// as it was left; a real click on the name activating it, the name selected and replaced by real typing, Enter renaming through the store and Esc leaving the
 /// name as recorded, either giving the chat back its keystrokes; the notice held while the field has focus; a rename in
 /// the window shown in the field, the picture bounded and read where its file now is, read again with its size once
 /// another program's rewrite replaced it and once that was undone, and the size shown without the picture while another
@@ -82,11 +84,7 @@ public sealed class CaptureCardTests
         var asked = new List<long>();
         var host = TrayDesktop.Get(() =>
         {
-            capture.ShowRequested += (shownItem, dismiss) =>
-            {
-                asked.Add(shownItem.Id);
-                dismiss();
-            };
+            capture.ShowRequested += shownItem => asked.Add(shownItem.Id);
             capture.Raise(item, CaptureKind.Screenshot, onClipboard: false, lengthMs: null);
             var notice = notifications.Shown.Single();
             var window = new Avalonia.Controls.Window { Width = 460, Height = 220, ShowActivated = false, Position = new PixelPoint(-8000, 300), Content = notice.Card!(notice, notifications) };
@@ -106,7 +104,7 @@ public sealed class CaptureCardTests
                 var card = (CaptureCard)host.Content!;
                 Pressed(card);
                 CollectionAssert.AreEqual(new[] { item.Id }, asked, "on its blank area (G16)");
-                Assert.IsEmpty(notifications.Shown, "and the notification goes once the window says it shows the item (G16)");
+                Assert.IsEmpty(notifications.Shown, "and the card goes at the press (G16)");
                 Pressed(card.GetVisualDescendants().OfType<Image>().Single());
                 Assert.HasCount(2, asked, "on its picture");
                 Pressed(card.GetVisualDescendants().OfType<TextBlock>().First(text => text.Text == CaptureCard.Title));
@@ -153,7 +151,7 @@ public sealed class CaptureCardTests
     }
 
     [TestMethod]
-    public async Task AClickOnTheCardsBlankAreaOrPictureOpensTheFlyoutInFrontOnItsItemWithNoEditorAndTheCardGoesWhileEditKeepsIt()
+    public async Task AClickOnTheCardsBlankAreaOrPictureOpensTheFlyoutInFrontOnItsItemWithNoEditorAndTheCardGoesAsAtItsEdit()
     {
         using var targets = new WindowsTarget();
         using var desk = await CaptureDesk.Open(["stash shown.png", "stash beside.png"], platformTarget: targets);
@@ -185,25 +183,37 @@ public sealed class CaptureCardTests
             });
         }
 
-        var card = await desk.Raise(shown);
+        // Edit from a card over the chat in front, the flyout hidden.
+        TrayDesktop.Run(window.Hide);
+        var card = await desk.Raise(shown, CaptureKind.Screenshot);
         TestMouse.Click(Centre(TrayDesktop.Get(() => NameButton(card))));
         await Eventually(() => TrayDesktop.Get(() => card.Field.IsEditing && NameBox(card).IsFocused));
         TestHotKeys.Tap(Esc);
         await Eventually(() => TrayDesktop.Get(() => !card.Field.IsEditing));
+        desk.Chat.ClickTitleBar();
         TestMouse.Click(Centre(TrayDesktop.Get(() => EditButton(card))));
-        await Eventually(() => TrayDesktop.Get(() => desk.Shown.Editing.Session?.Item.Id == shown.Id));
+        var handle = TrayDesktop.Get(() => window.TryGetPlatformHandle()!.Handle);
+        await Eventually(() => TrayDesktop.Get(() => desk.Shown.Editing.Session?.Item.Id == shown.Id) && FrontWindow.GetForegroundWindow() == handle);
+        Thread.Sleep(500);
+        Assert.AreEqual(handle, FrontWindow.GetForegroundWindow(), "the stash window in front with the editor, not the notification (G16)");
+        Assert.IsEmpty(desk.Cards(), "after Edit the card goes too (G16)");
         TrayDesktop.Run(() =>
         {
-            Assert.AreSame(card, desk.Notification.Shown?.GetVisualDescendants().OfType<CaptureCard>().SingleOrDefault(), "after Edit the card stays, its Undo closing the edit (G16)");
+            Assert.IsEmpty(desk.Notifications.Shown);
             desk.Shown.Editing.Cancel();
+            Assert.IsNull(window.PasteTarget.Current, "the window before it was the notification, so no paste target (G8)");
+            CollectionAssert.AreEqual(new[] { "Enter · Copy" }, desk.Shown.FooterHints(), "Enter copies once the edit is closed");
         });
     }
 
     [TestMethod]
-    public async Task AClickOnTheCardClosesAnOpenPreviewButLeavesAnOpenEditOfAnotherItemAsItWasLeft()
+    public async Task AClickOnTheCardClosesAnOpenPreviewOrLeavesAnOpenEditOfAnotherItemAsItWasLeftAndTheCardGoes()
     {
-        using var desk = await CaptureDesk.Open(["stash asked.png", "stash open.png"]);
-        var (asked, open) = (desk.Items()[0], desk.Items()[1]);
+        using var desk = await CaptureDesk.Open(["stash asked.png"]);
+        var asked = desk.Items().Single();
+        // Large enough for a Hide box dragged across it.
+        var open = await desk.Import(desk.Shown.Picture("stash open.png", 160, 120, (x, y) => new SKColor((byte)x, (byte)y, 90)));
+        using var editor = new ShownEditor(desk.Shown);
         var card = await desk.Raise(asked);
         var window = desk.Shown.Window;
         var handle = TrayDesktop.Get(() => window.TryGetPlatformHandle()!.Handle);
@@ -215,16 +225,25 @@ public sealed class CaptureCardTests
 
         await TrayDesktop.Get(() => desk.Shown.Editing.Open(open, EditOrigin.Grid));
         TrayDesktop.Run(() => desk.Shown.Listing.Focus(open.Id));
+        await Task.Delay(300);
+        var changed = TrayDesktop.Get(() =>
+        {
+            editor.Session!.Tool = editor.Session.Tools.OfType<HideTool>().Single();
+            editor.Drag((0.2, 0.2), (0.7, 0.7));
+            return editor.Session.Layers;
+        });
+        Assert.HasCount(1, changed.Layers, "a change not saved");
         TrayDesktop.Run(() => Assert.IsEmpty(desk.Notifications.Shown, "the first click's card went (G16)"));
         card = await desk.Raise(asked);
         desk.Chat.ClickTitleBar();
         TestMouse.Click(Blank(card));
         await Eventually(() => FrontWindow.GetForegroundWindow() == handle);
         Thread.Sleep(300);
+        Assert.IsEmpty(desk.Cards(), "the card goes, though the window does not show its item (G16)");
         TrayDesktop.Run(() =>
         {
             Assert.AreEqual(open.Id, desk.Shown.Editing.Session?.Item.Id, "the edit stays as it was left");
-            Assert.AreSame(card, desk.Notification.Shown?.GetVisualDescendants().OfType<CaptureCard>().SingleOrDefault(), "and the card with it, since the window does not show its item (G16)");
+            Assert.AreSame(changed, desk.Shown.Editing.Session!.Layers, "its change included (G1)");
             CollectionAssert.AreEqual(new[] { open.Id }, desk.Shown.Listing.Selection.ToList(), "the asked item not selected beneath it");
             desk.Shown.Editing.Cancel();
         });
@@ -458,6 +477,27 @@ public sealed class CaptureCardTests
         {
             Assert.AreEqual("Rename failed: stash deleted, it is no longer in the stash", desk.Notifications.Shown[^1].Text);
             Assert.AreEqual("stash deleted", card.Field.Shown, "the card's name unchanged");
+        });
+        await TrayDesktop.Get(() => desk.Shown.Listing.Store!.UndoDelete([held[0].Value!]));
+    }
+
+    [TestMethod]
+    public async Task EditOnTheCardOfAnItemDeletedMeanwhileIsRefusedByNameAndTheCardGoesAsAtAnEditThatOpens()
+    {
+        using var desk = await CaptureDesk.Open(["stash gone.png"]);
+        var gone = desk.Items().Single();
+        var card = await desk.Raise(gone, CaptureKind.Screenshot);
+        var held = await TrayDesktop.Get(() => desk.Shown.Listing.Store!.Delete([gone.Id]));
+        var refusal = new Failure("Edit", "stash gone", "it is no longer in the stash").Sentence;
+
+        TestMouse.Click(Centre(TrayDesktop.Get(() => EditButton(card))));
+        await Eventually(() => TrayDesktop.Get(() => desk.Shown.Notices.Shown.Any(notice => notice.Text == refusal)));
+
+        Assert.IsEmpty(desk.Cards(), "the card goes at the click, the Edit refused (G16)");
+        TrayDesktop.Run(() =>
+        {
+            Assert.IsFalse(desk.Shown.Editing.IsOpen, "no editor opens (G35)");
+            Assert.IsEmpty(desk.Notifications.Shown);
         });
         await TrayDesktop.Get(() => desk.Shown.Listing.Store!.UndoDelete([held[0].Value!]));
     }

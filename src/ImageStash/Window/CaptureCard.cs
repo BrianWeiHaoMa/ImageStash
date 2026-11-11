@@ -22,9 +22,9 @@ namespace ImageStash.Window;
 /// store and the field shows the item as the store then answers it, Esc leaves the name as recorded, and either, focus
 /// going to another window, or the card leaving, gives the activation back to the window that had it, unless the user
 /// has put another one in front. Edit or Trim asks for the editor on the item, a click elsewhere for the stash window on
-/// it, and the card stays. A refusal is named
-/// above the tray. The item is read again by identity after every change to the stash, so a rename made in the window
-/// shows here too, and a picture changed since, with its size (G6).
+/// it, and the card goes, whatever the ask comes to, so it never lies over the window the click brought forward; other
+/// cards stay. A refusal is named above the tray. The item is read again by identity after every change to the stash,
+/// so a rename made in the window shows here too, and a picture changed since, with its size (G6).
 /// </summary>
 public sealed class CaptureCard : Border
 {
@@ -45,7 +45,7 @@ public sealed class CaptureCard : Border
     private readonly IQuietWindows quietWindows;
     private readonly Action tookFocus;
     private readonly Action<StashItem> edit;
-    private readonly Action<StashItem, Action> show;
+    private readonly Action<StashItem> show;
     private readonly TimeSpan heldFileRetry;
     private readonly Image picture = new() { Width = 112, Height = 84, Stretch = Stretch.Uniform };
     private readonly TextBlock size = new() { Opacity = 0.7, IsVisible = false };
@@ -60,12 +60,9 @@ public sealed class CaptureCard : Border
     /// <param name="tookFocus">Run once the name's click has brought the notification in front: ImageStash gained focus.</param>
     /// <param name="editLabel">The editor's button: Edit, or Trim for a recording.</param>
     /// <param name="edit">Run with the item as the card has it now when that button is clicked, the notification in front.</param>
-    /// <param name="show">
-    /// Run with the item as the card has it now when the card is clicked outside its field and buttons, the notification in
-    /// front, and with what dismisses the card, to be run when the window will show the item (G16).
-    /// </param>
+    /// <param name="show">Run with the item as the card has it now when the card is clicked outside its field and buttons, the notification in front.</param>
     public CaptureCard(Notice notice, Notices notices, StashItem item, string said, Listing listing, Renaming renaming, IQuietWindows quietWindows, TimeSpan heldFileRetry, Action tookFocus,
-        string editLabel, Action<StashItem> edit, Action<StashItem, Action> show)
+        string editLabel, Action<StashItem> edit, Action<StashItem> show)
     {
         this.notice = notice;
         this.notices = notices;
@@ -200,14 +197,7 @@ public sealed class CaptureCard : Border
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed && !(e.Source is Visual source && (ReferenceEquals(source, Field) || Field.IsVisualAncestorOf(source))))
         {
             e.Handled = true;
-            var dismissed = false;
-            AskInFront(asked => show(asked, () => dismissed = true));
-            // The window then shows the item, so the card goes (G16), once the ask has given its hold back; one whose
-            // window keeps an open edit as it was left stays, since the item is not shown.
-            if (dismissed)
-            {
-                notices.Close(notice);
-            }
+            AskInFront(show);
         }
     }
 
@@ -215,15 +205,21 @@ public sealed class CaptureCard : Border
     /// Edit, Trim, or a click elsewhere on the card (G16): the card's other clicks that take the activation, the user's
     /// act, so the stash window asked for comes in front from ImageStash's own notification, which leaves no paste target
     /// (G8). The hold ends once the ask has been handled, with the window then in front, which keeps the activation; an
-    /// activation the platform refuses still asks, since the window's summon brings it forward itself. After Edit or
-    /// Trim the card stays (G16: its Undo closes the edit); after a click elsewhere its caller closes it once the window
-    /// has said it shows the item.
+    /// activation the platform refuses still asks, since the window's summon brings it forward itself. Then the card goes,
+    /// whether the editor opened, the Edit was refused by name, or the window came forward with another edit as it was
+    /// left (G16, G1).
     /// </summary>
     private void AskInFront(Action<StashItem> ask)
     {
         var taken = shownIn is null ? null : quietWindows.TakeActivation(shownIn);
-        using var held = taken is { Succeeded: true } ? taken.Value : null;
-        ask(item);
+        using (taken is { Succeeded: true } ? taken.Value : null)
+        {
+            ask(item);
+        }
+
+        // Only now: were it the last card, the notifications' window closing before the stash window was in front would
+        // hand the foreground to the app beneath, which would then become the paste target, or the flyout would hide (G8, G2).
+        notices.Close(notice);
     }
 
     /// <summary>Focus went to another window: the edit ends as Esc would, with nothing committed.</summary>

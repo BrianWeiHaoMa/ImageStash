@@ -346,6 +346,8 @@ internal static class LookHome
         ("Capture/RegionOverlay.cs", "PillBackground =", "the capture overlay's pills, drawn over the frozen screen"),
         ("Capture/RegionOverlay.cs", "Outline =", "the capture overlay's outline, drawn over the frozen screen"),
         ("Capture/RegionOverlay.cs", "Brushes.White", "the capture overlay's words, white on its dark pills"),
+        ("Capture/RegionCursor.cs", "Light =", "the capture overlay's cross, light over any screen and the same under every take"),
+        ("Capture/RegionCursor.cs", "Dark =", "the capture overlay's cross's dark edge, over any screen and the same under every take"),
         ("Editor/EditorCanvas.cs", "Dimmed =", "the editor canvas's dim outside the crop"),
         ("Editor/EditorCanvas.cs", "FramePen =", "the crop frame's white line"),
         ("Editor/EditorCanvas.cs", "PillBackground =", "the crop size's dark pill over the picture"),

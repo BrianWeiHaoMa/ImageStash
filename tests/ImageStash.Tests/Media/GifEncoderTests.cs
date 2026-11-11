@@ -4,7 +4,6 @@ using ImageStash.Layers;
 using ImageStash.Media;
 using ImageStash.Tests.Support;
 using SkiaSharp;
-using Quantizing = KGySoft.Drawing.Imaging;
 using static ImageStash.Tests.Support.SyntheticFrames;
 
 namespace ImageStash.Tests.Media;
@@ -179,11 +178,8 @@ public sealed class GifEncoderTests
         var flat = Enumerable.Range(0, W * H).Where(i => i % W >= W / 2).Select(i => Pixel(decoded, i % W, i / W)).Distinct().ToList();
         Assert.IsLessThanOrEqualTo(256, all.Count);
         CollectionAssert.AreEqual(new[] { Pixel(source, W - 1, 0) }, flat, "the flat half is one colour, the source's");
-        // The library's own median cut of the same pixels: another quantizer's palette holds other colours.
-        using var wrapped = Quantizing.BitmapDataFactory.CreateBitmapData(source.Pixels, new System.Drawing.Size(W, H), W * 4, Quantizing.KnownPixelFormat.Format32bppArgb);
-        using var medianCut = Quantizing.BitmapDataExtensions.Clone(wrapped, Quantizing.KnownPixelFormat.Format8bppIndexed, Quantizing.OptimizedPaletteQuantizer.MedianCut(), null);
-        var palette = Enumerable.Range(0, medianCut.Palette!.Count).Select(i => medianCut.Palette[i]).Select(c => (uint)(c.B | c.G << 8 | c.R << 16 | c.A << 24)).ToList();
-        CollectionAssert.IsSubsetOf(all, palette, "every decoded colour is one of median cut's");
+        var shownFor = Enumerable.Range(0, W * H).GroupBy(i => Pixel(source, i % W, i / W), i => Pixel(decoded, i % W, i / W));
+        Assert.IsTrue(shownFor.All(colour => colour.Distinct().Count() == 1), "without dithering: every pixel of one colour shows alike");
     }
 
     [TestMethod]
@@ -669,6 +665,46 @@ public sealed class GifEncoderTests
     }
 
     [TestMethod]
+    public void AfterEachCallTheFileHoldsTheBytesWrittenSoFarAndCancelWritesNothingMore()
+    {
+        // G15's size so far is on disk when each call returns, nothing of an image held back; a clip finished without
+        // Stop is left as it was for Store to discard (State: Files).
+        using var scratch = new ScratchFolder();
+        var path = scratch.File("on disk.gif");
+        var encoder = GifEncoder.Open(path, 256, 256, Clip, TestStash.ShortRetry).Value!;
+
+        for (var i = 0; i < 4; i++)
+        {
+            Assert.IsTrue(encoder.Append(i % 2 == 0 ? Noise(seed: i, colours: 4000, side: 256) : SyntheticFrames.Pattern(i, 256, 256), i * 70L).Succeeded);
+            var onDisk = WhileOpen(path);
+            Assert.AreEqual(encoder.BytesWritten, onDisk.LongLength, $"after append {i}");
+            if (i > 0)
+            {
+                // Every image of the frames before this one, whole, and nothing more: the reader fails on a cut image.
+                var blocks = GifImages.Read(onDisk);
+                Assert.HasCount(i, blocks.Images, $"after append {i}, the images written so far");
+                Assert.IsFalse(blocks.Trailer, "no trailer before Stop");
+            }
+        }
+
+        var before = WhileOpen(path);
+        encoder.Cancel();
+
+        Assert.HasCount(3, GifImages.Read(before).Images);
+        CollectionAssert.AreEqual(before, File.ReadAllBytes(path), "Cancel's close writes nothing");
+        Assert.AreEqual(before.LongLength, encoder.BytesWritten);
+
+        // The clip's file as it is on disk while the encoder still holds it open for writing.
+        static byte[] WhileOpen(string path)
+        {
+            using var reading = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            var bytes = new byte[reading.Length];
+            reading.ReadExactly(bytes);
+            return bytes;
+        }
+    }
+
+    [TestMethod]
     public void TheEncoderHoldsAFixedFewFramesHoweverLongTheClip()
     {
         const int Width = 1920, Height = 1080, Count = 150, FrameBytes = Width * Height * 4;
@@ -708,18 +744,18 @@ public sealed class GifEncoderTests
     }
 
     [TestMethod]
-    public void ARecordingsOpaqueFramesAreWrittenToTheSameBytesAsBeforeStraightColoursWereKept()
+    public void ARecordingsOpaqueFramesAreWrittenToThePinnedBytes()
     {
         using var scratch = new ScratchFolder();
         var path = scratch.File("recording.gif");
         // Opaque frames as the recorder hands them over: patterns that one palette holds, noise that needs median cut,
-        // a painted change and a repeat (G15). The hash is of what the encoder wrote for them before it kept straight
-        // colours, which changes only pixels below full alpha.
+        // a painted change and a repeat (G15). The hash is of what the encoder writes for them with Media's own median
+        // cut: a change to it is a change to every recording's file.
         var frames = new[] { Pattern(0), Pattern(1), Noise(7, 400), Paint(Noise(7, 400), 10, 10, 12, 8, Orange), Pattern(1), Noise(8, 300) };
 
         Encode(path, frames, [0, 70, 140, 210, 280, 350], stopMs: 420);
 
-        Assert.AreEqual("D7F22541CC67160F28E8FD1086D014C6716DA9854E8B3FD19E0FDBB0959E672A", Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path))));
+        Assert.AreEqual("25306ECFC6439826D427BE84B0551020DF5B4742AD29050EC4CEFA03E9B918E5", Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path))));
     }
 
     [TestMethod]

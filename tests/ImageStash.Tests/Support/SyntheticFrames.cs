@@ -23,6 +23,17 @@ public static class SyntheticFrames
         return Frame(width, height, (_, _) => palette[random.Next(colours)]);
     }
 
+    /// <summary>
+    /// Thousands of colours at random, the same every call, each channel moved on by 64 a <paramref name="step"/>, so every
+    /// pixel differs from the frame of the step before and after it, as a playing video changes every pixel.
+    /// </summary>
+    public static MediaFrame Busy(int step, int width, int height)
+    {
+        var random = new Random(1);
+        var moved = (byte)(64 * step);
+        return Frame(width, height, (_, _) => ((byte)(random.Next(256) + moved), (byte)(random.Next(256) + moved), (byte)(random.Next(256) + moved)));
+    }
+
     public static MediaFrame Frame(int width, int height, Func<int, int, (byte B, byte G, byte R)> colour)
     {
         var pixels = new byte[width * height * 4];

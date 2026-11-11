@@ -146,6 +146,9 @@ public sealed class CaptureDesk : IDisposable
         return words!;
     }
 
+    /// <summary>The capture cards the notification shows now, oldest first; none once its window has closed.</summary>
+    public List<CaptureCard> Cards() => TrayDesktop.Get(() => Notification.Shown?.GetVisualDescendants().OfType<CaptureCard>().ToList() ?? []);
+
     /// <summary>The card showing <paramref name="name"/>, or the newest, once it is in the notification; then until it is placed.</summary>
     public async Task<CaptureCard> CardShown(string? name = null)
     {

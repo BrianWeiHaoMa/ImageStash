@@ -45,13 +45,9 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 
-// The saved pictures read back by System.Drawing, the clipboard's "PNG" read the same way, a window's title bar, and the
-// window under a point.
+// The saved pictures read back by System.Drawing, the clipboard's "PNG" read the same way, and a window's title bar.
 public static class EditorDesk
 {
-    [StructLayout(LayoutKind.Sequential)] private struct ScreenPoint { public int X, Y; }
-    [DllImport("user32.dll")] private static extern IntPtr WindowFromPoint(ScreenPoint point);
-    [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr window, uint flags);
     [DllImport("user32.dll")] private static extern bool OpenClipboard(IntPtr owner);
     [DllImport("user32.dll")] private static extern bool CloseClipboard();
     [DllImport("user32.dll")] private static extern IntPtr GetClipboardData(uint format);
@@ -63,9 +59,6 @@ public static class EditorDesk
 
     /// <summary>Whether <paramref name="window"/> has a title bar: GWL_STYLE has WS_CAPTION, as the pinned window does.</summary>
     public static bool Captioned(IntPtr window) { return (GetWindowLongW(window, -16) & 0x00C00000) == 0x00C00000; }
-
-    /// <summary>The top-level window a click at (<paramref name="x"/>, <paramref name="y"/>), in physical pixels, would reach.</summary>
-    public static IntPtr Under(int x, int y) { return GetAncestor(WindowFromPoint(new ScreenPoint { X = x, Y = y }), 2); }
 
     // Top-down rows of 32-bit ARGB, read from the bytes so the file is not held open.
     private static int[] Pixels(byte[] file, out int width, out int height)
@@ -287,15 +280,8 @@ try {
     ClickCard "Saved $([char]0x201C)$name$([char]0x201D) to your stash. It is on the clipboard too." 'Edit'
     $root = Editor 'Crop' "the card's Edit"
     Check (-not [EditorDesk]::Captioned((StashWindow))) 'the window is the flyout, without a title bar, as it was not pinned (G16, G1)'
-    # G16: the flyout and the card both stand above the tray; the card stays above the flyout its Edit opened, so its Undo
-    # still takes a click while that edit is open.
-    $cardWindow = [CaptureDesk]::TitledFrom($running, "Saved $([char]0x201C)$name$([char]0x201D) to your stash.")
-    $undo = (One (Elements ([Windows.Automation.AutomationElement]::FromHandle($cardWindow)) 'Undo' $button) "the card's Undo").Current.BoundingRectangle
-    $undoX = [int]($undo.X + $undo.Width / 2); $undoY = [int]($undo.Y + $undo.Height / 2)
-    Check (WaitFor { [EditorDesk]::Under($undoX, $undoY) -eq $cardWindow } 2000) "the card stays above the flyout its Edit opened, its Undo the window under a click at ($undoX, $undoY) (G16): $([EditorDesk]::Under($undoX, $undoY)) there, the card's window $cardWindow, the flyout $(StashWindow)"
-    # Over the flyout's lower rows the card is in the way, as for a person, who dismisses it with its close button.
-    ClickOn (One (Elements ([Windows.Automation.AutomationElement]::FromHandle($cardWindow)) 'Close' $button) "the card's close button")
-    Need (WaitFor { [CaptureDesk]::TitledFrom($running, "Saved $([char]0x201C)$name$([char]0x201D) to your stash.") -eq [IntPtr]::Zero } 3000) "the card's close button dismissed it (G16)"
+    # G16: the card goes at its Edit, so it lies over nothing of the flyout its Edit opened.
+    Check (WaitFor { [CaptureDesk]::TitledFrom($running, "Saved $([char]0x201C)$name$([char]0x201D) to your stash.") -eq [IntPtr]::Zero } 3000) "the card went at its Edit, without the script closing it (G16)"
     $text = One (Elements $root 'Text' $button) "the tool row's Text"
     Check ((Toggled $text) -and ((Elements $root 'Trim' $button).Count -eq 0) -and ((Elements $root $name ([Windows.Automation.ControlType]::Text)).Count -ge 1)) "the editor is on '$name' with Text current and no Trim, a still's (G16, G20)"
 
@@ -352,6 +338,7 @@ try {
     Need ($recorded.Count -ge 4) "the recording holds images enough to trim: $($recorded.Count), delays $($recorded -join ' ')"
     ClickCard "Saved $([char]0x201C)$clipName$([char]0x201D) to your stash. It is on the clipboard too. It is " 'Trim'
     $root = Editor 'Trim' "the card's Trim"
+    Check (WaitFor { [CaptureDesk]::TitledFrom($running, "Saved $([char]0x201C)$clipName$([char]0x201D) to your stash.") -eq [IntPtr]::Zero } 3000) "the card went at its Trim, without the script closing it (G16)"
     $trim = One (Elements $root 'Trim' $button) "the tool row's Trim"
     Check ((Toggled $trim) -and ((Elements $root $clipName ([Windows.Automation.ControlType]::Text)).Count -ge 1)) "the editor is on '$clipName' with the Trim tool selected (G16, G22)"
 

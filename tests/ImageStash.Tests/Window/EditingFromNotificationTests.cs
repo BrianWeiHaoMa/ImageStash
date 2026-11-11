@@ -10,8 +10,8 @@ namespace ImageStash.Tests.Window;
 /// A capture notification's Edit and Trim in the window, headless (G16, G20, G26, G35, G28, State): the editor on the
 /// card's own item over All, Trim's tool selected before the editor first shows where the item lists it, Save leaving
 /// the item selected; another item's edit left as Cancel would; an item gone refused by name; and the card's Undo while
-/// that edit is open closing it without a notice, a Save still rendering abandoned and one already committed finished
-/// before the removal takes both files.
+/// its item's edit, opened from the window, is open closing it without a notice, a Save still rendering abandoned and
+/// one already committed finished before the removal takes both files.
 /// </summary>
 [TestClass]
 public sealed class EditingFromNotificationTests
@@ -127,13 +127,45 @@ public sealed class EditingFromNotificationTests
     }
 
     [TestMethod]
+    public async Task EditWhileAnotherItemsSaveRendersIsRefusedByNameAndThatEditStays()
+    {
+        using var listed = await ListedStash.Open();
+        var (cat, dog) = (await listed.Stash.ImportFixture("cat", "still.png"), await listed.Stash.ImportFixture("dog", "transparent.png"));
+        await listed.Listing.Refresh();
+        using var rendering = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        listed.Renderer = (original, name, layers, format, work, retry) =>
+        {
+            rendering.Set();
+            release.Wait(TimeSpan.FromSeconds(10));
+            return FinishedPicture.Render(original, name, layers, format, work, retry);
+        };
+        await listed.Editing.Open(dog, EditOrigin.Preview);
+        var saved = listed.Editing.Session!;
+        saved.Tool = saved.Hide();
+        saved.DragThrough((1, 1), (4, 3));
+        var saving = listed.Editing.Save();
+        Assert.IsTrue(rendering.Wait(TimeSpan.FromSeconds(10)), "the render started");
+
+        var refused = await listed.Editing.OpenFromNotification(new CaptureEdit(cat, Trim: false));
+
+        Assert.AreEqual(new Failure("Edit", "cat", "“dog” is still being saved"), refused.Failure);
+        Assert.AreEqual(refused.Failure!.Sentence, listed.Notices.Shown.Single().Text, "named in the window (G35)");
+        Assert.AreSame(saved, listed.Editing.Session, "that edit stays, its Save running");
+        release.Set();
+        Assert.IsTrue((await saving).Succeeded);
+    }
+
+    [TestMethod]
     public async Task TheCardsUndoWhileItsEditIsOpenClosesItWithoutANoticeAndRemovesTheItem()
     {
         using var listed = await ListedStash.Open();
         var cat = await listed.Stash.ImportFixture("cat", "still.png");
         var notice = Captured(listed, cat);
         await listed.Handoff.Copy(null!, [cat]);
-        await listed.Editing.OpenFromNotification(new CaptureEdit(cat, Trim: false));
+        // From the window while the card shows: the card's own Edit takes the card down with its Undo (G16).
+        await listed.Listing.Refresh();
+        Assert.IsTrue((await listed.Editing.Open(cat, EditOrigin.Grid)).Succeeded);
         var session = listed.Editing.Session!;
         session.Tool = session.Hide();
         session.DragThrough((1, 1), (4, 3));
@@ -165,7 +197,9 @@ public sealed class EditingFromNotificationTests
             release.Wait(TimeSpan.FromSeconds(10));
             return FinishedPicture.Render(original, name, layers, format, work, retry);
         };
-        await listed.Editing.OpenFromNotification(new CaptureEdit(cat, Trim: false));
+        // From the window while the card shows: the card's own Edit takes the card down with its Undo (G16).
+        await listed.Listing.Refresh();
+        Assert.IsTrue((await listed.Editing.Open(cat, EditOrigin.Grid)).Succeeded);
         var session = listed.Editing.Session!;
         session.Tool = session.Hide();
         session.DragThrough((1, 1), (4, 3));
@@ -197,7 +231,9 @@ public sealed class EditingFromNotificationTests
         await listed.Handoff.Copy(null!, [cat]);
         var holds = new List<FileStream>();
         listed.Renderer = EditedItems.Holding(holds);
-        await listed.Editing.OpenFromNotification(new CaptureEdit(cat, Trim: false));
+        // From the window while the card shows: the card's own Edit takes the card down with its Undo (G16).
+        await listed.Listing.Refresh();
+        Assert.IsTrue((await listed.Editing.Open(cat, EditOrigin.Grid)).Succeeded);
         var session = listed.Editing.Session!;
         session.Tool = session.Hide();
         session.DragThrough((1, 1), (4, 3));

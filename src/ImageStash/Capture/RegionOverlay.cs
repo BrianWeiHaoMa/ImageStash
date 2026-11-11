@@ -15,7 +15,8 @@ namespace ImageStash.Capture;
 /// physical pixels, showing that display's frozen grab dimmed; a drag with the left button selects a rectangle within
 /// the display it started on, shown undimmed with a thin light border and its size above it; Esc, or a click without a
 /// drag, cancels. Each window is shown activated, the last one ending in front, so Esc reaches the overlay from the
-/// moment it shows; every window is closed, and every grab's bitmap let go, before <see cref="Select"/> returns (F4).
+/// moment it shows; the pointer over it is <see cref="RegionCursor"/>'s cross at its display's scaling; every window is
+/// closed, and every grab's bitmap and every cross let go, before <see cref="Select"/> returns (F4).
 /// The record shortcut opens the same overlay (G15); only its hint and its windows' title tell what the release leads to.
 /// </summary>
 public sealed class RegionOverlay : IRegionSelection
@@ -58,6 +59,7 @@ public sealed class RegionOverlay : IRegionSelection
             {
                 window.Close();
                 ((RegionView)window.Content!).Dispose();
+                window.Cursor?.Dispose();
             }
 
             shown.Clear();
@@ -69,9 +71,11 @@ public sealed class RegionOverlay : IRegionSelection
         // The picture first: a window made before it, whose native window Avalonia creates at once, would be left behind
         // unclosed if there were no room for the picture.
         var view = new RegionView(grab, mode, region => answer.TrySetResult(region));
+        Cursor? cross = null;
         Avalonia.Controls.Window window;
         try
         {
+            cross = RegionCursor.For(grab.Display.Scaling);
             window = new Avalonia.Controls.Window
             {
                 Title = mode == CaptureMode.Recording ? RecordingTitle : Title,
@@ -82,7 +86,7 @@ public sealed class RegionOverlay : IRegionSelection
                 CanResize = false,
                 CanMinimize = false,
                 CanMaximize = false,
-                Cursor = new Cursor(StandardCursorType.Cross),
+                Cursor = cross,
                 // Wholly on its display before it goes full screen there: the nearest display to the window is the one taken.
                 Width = 64,
                 Height = 64,
@@ -91,6 +95,7 @@ public sealed class RegionOverlay : IRegionSelection
         catch
         {
             view.Dispose();
+            cross?.Dispose();
             throw;
         }
 

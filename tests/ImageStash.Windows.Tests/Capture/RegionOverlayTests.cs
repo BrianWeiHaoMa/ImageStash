@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Avalonia;
 using ImageStash.Capture;
 using ImageStash.Media;
+using ImageStash.Seams;
 using ImageStash.Windows.Seams;
 using ImageStash.Windows.Tests.Support;
 
@@ -12,8 +13,9 @@ namespace ImageStash.Windows.Tests.Capture;
 /// The region selection on the real desktop (G14, F4): over real grabs, within a second an overlay covers the primary
 /// display, topmost and in front, showing the frozen picture dimmed; a real drag shows the rectangle undimmed with its
 /// size in physical pixels and the release returns it; Esc and a click without a drag cancel; no overlay is left after
-/// any of them. These checks show a pattern window of their own and a window of their own at (100, 400), drag the mouse
-/// over the primary display and read the screen's pixels there.
+/// any of them; the pointer's cross shows over the dimmed white and over the black before any press, crossing where the
+/// pointer is. These checks show a pattern window of their own and a window of their own at (100, 400), drag the mouse
+/// over the primary display, rest the pointer on it, and read the screen's pixels there.
 /// </summary>
 [TestClass]
 public sealed class RegionOverlayTests
@@ -94,6 +96,42 @@ public sealed class RegionOverlayTests
     }
 
     [TestMethod]
+    public async Task ThePointersCrossShowsOverTheDimmedWhiteAndOverTheBlackBeforeAnyPressAndCrossesWhereThePointerIs()
+    {
+        // The intent: the cross that starts the drag visible on bright and dark backgrounds; G14: the drag starts where it crosses.
+        using var desk = await OverlayDesk.Open(frozen: HalfWhiteHalfBlack);
+        var bounds = desk.Primary.Display.Bounds;
+        var reach = (int)Math.Ceiling(40 * desk.Primary.Display.Scaling);
+
+        var selecting = desk.Select();
+        var window = await desk.InFrontWithinASecond();
+        foreach (var (half, x) in new[] { ("dimmed white", bounds.X + bounds.Width / 4), ("black", bounds.X + bounds.Width * 3 / 4) })
+        {
+            var onWhite = half == "dimmed white";
+            TestMouse.MoveTo(new PixelPoint(x, bounds.Y + bounds.Height / 2));
+            var at = TestMouse.Position();
+            var around = new PixelRect(at.X - reach, at.Y - reach, 2 * reach + 1, 2 * reach + 1);
+
+            var (drawn, plain) = await desk.PointerWhen(around, (d, p) => MuchLighter(d, p).Count > 0 && (!onWhite || MuchDarker(d, p).Count > 0));
+
+            var lighter = MuchLighter(drawn, plain);
+            Assert.IsNotEmpty(lighter, $"over the {half}, the cross has pixels much lighter than the ground");
+            if (onWhite)
+            {
+                Assert.IsNotEmpty(MuchDarker(drawn, plain), $"over the {half}, and pixels much darker than it");
+            }
+
+            var crossing = new PixelPoint(around.X + Middle(lighter, p => p.X), around.Y + Middle(lighter, p => p.Y));
+            Assert.IsLessThanOrEqualTo(1, Math.Abs(crossing.X - at.X), $"over the {half}, the vertical arm's middle at the pointer's x: {crossing} for {at}");
+            Assert.IsLessThanOrEqualTo(1, Math.Abs(crossing.Y - at.Y), $"over the {half}, the horizontal arm's middle at the pointer's y: {crossing} for {at}");
+        }
+
+        TestHotKeys.Tap(VkEscape);
+        Assert.IsNull(await selecting.WaitAsync(TimeSpan.FromSeconds(10)));
+        await desk.NoOverlayLeft(window);
+    }
+
+    [TestMethod]
     public async Task AClickWithoutADragCancelsAndLeavesNoOverlay()
     {
         using var desk = await OverlayDesk.Open();
@@ -119,6 +157,40 @@ public sealed class RegionOverlayTests
 
     private static int Sum(MediaFrame frame, PixelPoint at) =>
         frame.Pixels[(at.Y * frame.Width + at.X) * 4] + frame.Pixels[(at.Y * frame.Width + at.X) * 4 + 1] + frame.Pixels[(at.Y * frame.Width + at.X) * 4 + 2];
+
+    /// <summary>A frozen display, its left half white and its right half black.</summary>
+    private static MediaFrame HalfWhiteHalfBlack(Display display)
+    {
+        var (width, height) = (display.Bounds.Width, display.Bounds.Height);
+        var pixels = new byte[4 * width * height];
+        for (var i = 0; i < width * height; i++)
+        {
+            var shade = i % width < width / 2 ? (byte)255 : (byte)0;
+            (pixels[i * 4], pixels[i * 4 + 1], pixels[i * 4 + 2], pixels[i * 4 + 3]) = (shade, shade, shade, 255);
+        }
+
+        return new MediaFrame(width, height, 0, pixels);
+    }
+
+    /// <summary>The pixels of <paramref name="drawn"/> brighter than <paramref name="plain"/>'s, by a third of the scale or more, in the frames' own coordinates.</summary>
+    private static List<PixelPoint> MuchLighter(MediaFrame drawn, MediaFrame plain) =>
+        Pixels(new PixelRect(0, 0, drawn.Width, drawn.Height)).Where(p => Sum(drawn, p) - Sum(plain, p) >= 255).ToList();
+
+    /// <summary>The pixels of <paramref name="drawn"/> darker than <paramref name="plain"/>'s, by a third of the scale or more.</summary>
+    private static List<PixelPoint> MuchDarker(MediaFrame drawn, MediaFrame plain) =>
+        Pixels(new PixelRect(0, 0, drawn.Width, drawn.Height)).Where(p => Sum(plain, p) - Sum(drawn, p) >= 255).ToList();
+
+    /// <summary>
+    /// The middle, along one coordinate, of the arm whose length runs across that coordinate: the lines of light pixels
+    /// at one value of it holding at least half as many as the fullest, which lie along that arm, from first to last.
+    /// </summary>
+    private static int Middle(List<PixelPoint> light, Func<PixelPoint, int> coordinate)
+    {
+        var lines = light.GroupBy(coordinate).ToList();
+        var fullest = lines.Max(line => line.Count());
+        var arm = lines.Where(line => 2 * line.Count() >= fullest).Select(line => line.Key).ToList();
+        return (arm.Min() + arm.Max()) / 2;
+    }
 
     /// <summary>
     /// The pattern over the primary display, a window of the check's own in front, as the shortcut's press or a menu's
@@ -148,7 +220,8 @@ public sealed class RegionOverlayTests
 
         public RegionOverlay Overlay { get; } = new();
 
-        public static async Task<OverlayDesk> Open()
+        /// <param name="frozen">A picture of its own for each display, frozen in place of what the screen shows.</param>
+        public static async Task<OverlayDesk> Open(Func<Display, MediaFrame>? frozen = null)
         {
             TrayDesktop.UseProductTheme();
             var pointer = TestMouse.PutBackAfterwards();
@@ -162,7 +235,7 @@ public sealed class RegionOverlayTests
             {
                 front.ClickToFront();
             }
-            var grabs = await Task.Run(() => screen.Displays().Select(display => new DisplayGrab(display, screen.Grab(display.Bounds, withPointer: false).Value!)).ToList());
+            var grabs = await Task.Run(() => screen.Displays().Select(display => new DisplayGrab(display, frozen?.Invoke(display) ?? screen.Grab(display.Bounds, withPointer: false).Value!)).ToList());
             return new OverlayDesk(pointer, pattern, front, grabs);
         }
 
@@ -222,6 +295,27 @@ public sealed class RegionOverlayTests
                 if (holds(grab.Value!) || DateTime.UtcNow > deadline)
                 {
                     return grab.Value!;
+                }
+
+                await Task.Delay(30);
+            }
+        }
+
+        /// <summary>
+        /// The screen's <paramref name="around"/> with the pointer drawn in and without it, once <paramref name="shows"/> of
+        /// the two, or after a few seconds whatever they are: the pointer takes the overlay's cursor at its next move there.
+        /// </summary>
+        public async Task<(MediaFrame Drawn, MediaFrame Plain)> PointerWhen(PixelRect around, Func<MediaFrame, MediaFrame, bool> shows)
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (true)
+            {
+                var drawn = await Task.Run(() => Screen.Grab(around, withPointer: true));
+                var plain = await Task.Run(() => Screen.Grab(around, withPointer: false));
+                Assert.IsTrue(drawn.Succeeded && plain.Succeeded, drawn.Failure?.Sentence ?? plain.Failure?.Sentence);
+                if (shows(drawn.Value!, plain.Value!) || DateTime.UtcNow > deadline)
+                {
+                    return (drawn.Value!, plain.Value!);
                 }
 
                 await Task.Delay(30);

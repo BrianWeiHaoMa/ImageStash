@@ -25,9 +25,8 @@ public sealed record CaptureEdit(StashItem Item, bool Trim);
 /// it only through the handoff's guarded refresh, as a rename in the window does (G17, G26). It is drawn as the
 /// capture card, with the picture, the file's size and the name as a field, renamed through a rename path of its own
 /// whose refusals are named above the tray, never only in the window, which may be hidden (G35); its Edit, or Trim for
-/// a recording, asks the window that follows it for the editor on its item, and the card stays, so its Undo can still
-/// close that edit; a click elsewhere on it asks for the window on that item, and the card goes when the window then
-/// shows the item.
+/// a recording, asks the window that follows it for the editor on its item, a click elsewhere on it for the window on
+/// that item, and the card goes at either click.
 /// </summary>
 public sealed class CaptureNotification(Notices notifications, Listing listing, Handoff handoff, IQuietWindows quietWindows, TimeSpan heldFileRetry)
 {
@@ -43,11 +42,8 @@ public sealed class CaptureNotification(Notices notifications, Listing listing, 
     /// <summary>A card's Edit or Trim was clicked, the notification brought in front by that click (G16).</summary>
     public event Action<CaptureEdit>? EditRequested;
 
-    /// <summary>
-    /// A card was clicked outside its field and buttons, the notification brought in front by that click (G16); the
-    /// handler runs the action given with the item when the window will show that item, which dismisses the card.
-    /// </summary>
-    public event Action<StashItem, Action>? ShowRequested;
+    /// <summary>A card was clicked outside its field and buttons, the notification brought in front by that click (G16).</summary>
+    public event Action<StashItem>? ShowRequested;
 
     /// <summary>
     /// The card's button for the editor (G16): Trim for a recording, a recording of one image included, since the card
@@ -78,7 +74,7 @@ public sealed class CaptureNotification(Notices notifications, Listing listing, 
         var trim = kind == CaptureKind.Recording;
         notifications.Raise(text, "Undo", () => Undo(item.Id),
             card: (notice, notices) => new CaptureCard(notice, notices, item, string.Join(" ", said), listing, renaming, quietWindows, heldFileRetry,
-                () => FieldTookFocus?.Invoke(), EditLabel(kind), shown => EditRequested?.Invoke(new CaptureEdit(shown, trim)), (shown, dismiss) => ShowRequested?.Invoke(shown, dismiss)));
+                () => FieldTookFocus?.Invoke(), EditLabel(kind), shown => EditRequested?.Invoke(new CaptureEdit(shown, trim)), shown => ShowRequested?.Invoke(shown)));
     }
 
     /// <summary>

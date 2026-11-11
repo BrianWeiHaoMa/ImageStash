@@ -21,8 +21,9 @@ namespace ImageStash.Windows.Tests.Window;
 /// and a click on the chat before ImageStash has handled one leaving the chat in front; the stash flyout kept for focus
 /// on its own notification and hidden when the user leaves for another app (G2); the paste target read at the field's
 /// click (G8); a card's Edit or Trim opening the stash window in front on its item in the editor, as a flyout above the
-/// tray or pinned where it was, the window staying after Save with the item selected, and the card's Undo closing that
-/// edit, the card staying above the flyout that stands where it does (G16, G1, G26). These checks show the notification and a chat window of their own on the primary display, open
+/// tray or pinned where it was, the window staying after Save with the item selected, that card going at the click while
+/// another stays above the flyout that stands where it does, and a card's Undo closing an edit of its item opened from
+/// the window (G16, G1, G26). These checks show the notification and a chat window of their own on the primary display, open
 /// the stash window's Import files… picker, switch windows with Alt+Tab, click them, type into them and move the pointer.
 /// </summary>
 [TestClass]
@@ -337,7 +338,7 @@ public sealed class CaptureNotificationTests
     }
 
     [TestMethod]
-    public async Task EditOnACardOpensTheFlyoutAboveTheTrayInFrontOnItsItemWithNoPasteTargetAndAfterSaveItStaysWithTheItemSelected()
+    public async Task EditOnACardOpensTheFlyoutAboveTheTrayInFrontOnItsItemWithNoPasteTargetTheCardGoneAndAfterSaveItStaysWithTheItemSelected()
     {
         using var targets = new WindowsTarget();
         using var desk = await CaptureDesk.Open(["stash other.png"], platformTarget: targets);
@@ -364,8 +365,8 @@ public sealed class CaptureNotificationTests
             Assert.AreEqual(EditOrigin.Notification, desk.Shown.Editing.Origin);
             Assert.IsNull(flyout.PasteTarget.Current, "the window before it was ImageStash's own notification, so no paste target and Enter copies (G8)");
             Assert.IsTrue(desk.Shown.Focused is Visual focused && focused.GetSelfAndVisualAncestors().Contains(editor.Overlay), "keyboard focus in the editor");
-            Assert.AreSame(card, desk.Notification.Shown?.GetVisualDescendants().OfType<CaptureCard>().SingleOrDefault(), "the card stays, with its Undo");
         });
+        Assert.IsEmpty(desk.Cards(), "the card gone at its Edit, so it lies over nothing (G16)");
         var chatBefore = desk.Chat.Messages().Count;
         TestHotKeys.Tap('K');
         await Eventually(() => TrayDesktop.Get(() => keys) > 0);
@@ -395,35 +396,40 @@ public sealed class CaptureNotificationTests
     }
 
     [TestMethod]
-    public async Task ACardStaysAboveTheFlyoutAboveTheTrayBeforeAndAfterItsEditOpensItAndAfterACaptureSoItsUndoClosesThatEdit()
+    public async Task TwoCardsStayAboveTheFlyoutTheOldersEditTakesItAloneAndAfterACaptureTheNewersUndoRemovesItsOwnItemOnly()
     {
-        // The card above the stand-in icon by the display's middle, under which the flyout, summoned with no tray icon to
-        // stand above, is centred on any display; the working area's corner, where the card stands without an icon, lies
+        // The cards above the stand-in icon by the display's middle, under which the flyout, summoned with no tray icon to
+        // stand above, is centred on any display; the working area's corner, where the cards stand without an icon, lies
         // under a centred flyout only on a small display.
-        using var desk = await CaptureDesk.Open(["stash captured.png"], midScreen: true);
-        var item = desk.Items().Single();
+        using var desk = await CaptureDesk.Open(["stash older.png", "stash newer.png"], midScreen: true);
+        var (older, newer) = (desk.Items().Single(listed => listed.Name == "stash older"), desk.Items().Single(listed => listed.Name == "stash newer"));
         var flyout = desk.Shown.Window;
         var handle = TrayDesktop.Get(() => flyout.TryGetPlatformHandle()!.Handle);
-        var card = await desk.Raise(item, CaptureKind.Screenshot);
+        var olderCard = await desk.Raise(older, CaptureKind.Screenshot);
+        var newerCard = await desk.Raise(newer, CaptureKind.Screenshot);
 
-        // The flyout summoned from the tray over the card's place, coming forward after the card was raised (G1, G16).
+        // The flyout summoned from the tray over the cards' place, coming forward after they were raised (G1, G16).
         TrayDesktop.Run(flyout.SummonFromTray);
         await Eventually(() => FrontWindow.GetForegroundWindow() == handle && TrayDesktop.Get(() => flyout.IsActive));
         Thread.Sleep(500);
-        TrayDesktop.Run(() => Assert.IsTrue(Outer(flyout).Intersects(Outer(desk.Notification.Shown!)), $"both above the tray: the flyout at {Outer(flyout)}, the card's window at {Outer(desk.Notification.Shown!)}"));
-        Assert.AreEqual(desk.NotificationHandle, FrontWindow.Under(Centre(TrayDesktop.Get(() => EditButton(card)))), "the card's Edit above the flyout (G16)");
-        Assert.AreEqual(desk.NotificationHandle, FrontWindow.Under(Centre(TrayDesktop.Get(() => UndoButton(card)))), "and its Undo");
+        TrayDesktop.Run(() => Assert.IsTrue(Outer(flyout).Intersects(Outer(desk.Notification.Shown!)), $"both above the tray: the flyout at {Outer(flyout)}, the cards' window at {Outer(desk.Notification.Shown!)}"));
+        foreach (var (card, which) in new[] { (olderCard, "the older"), (newerCard, "the newer") })
+        {
+            Assert.AreEqual(desk.NotificationHandle, FrontWindow.Under(Centre(TrayDesktop.Get(() => EditButton(card)))), $"{which} card's Edit above the flyout (G16)");
+            Assert.AreEqual(desk.NotificationHandle, FrontWindow.Under(Centre(TrayDesktop.Get(() => UndoButton(card)))), $"and its Undo");
+        }
 
-        // The flyout hidden again, so the card's Edit shows it afresh above the tray, as after a capture.
+        // The flyout hidden again, so the older card's Edit shows it afresh above the tray, as after a capture.
         TrayDesktop.Run(flyout.Hide);
-        TestMouse.Click(Centre(TrayDesktop.Get(() => EditButton(card))));
-        await Eventually(() => TrayDesktop.Get(() => desk.Shown.Editing.Session?.Item.Id == item.Id) && FrontWindow.GetForegroundWindow() == handle);
+        TestMouse.Click(Centre(TrayDesktop.Get(() => EditButton(olderCard))));
+        await Eventually(() => TrayDesktop.Get(() => desk.Shown.Editing.Session?.Item.Id == older.Id) && FrontWindow.GetForegroundWindow() == handle);
         Thread.Sleep(500);
+        CollectionAssert.AreEqual(new[] { newerCard }, desk.Cards(), "the older card gone at its Edit, the newer staying (G16)");
         TrayDesktop.Run(() => Assert.IsTrue(Outer(flyout).Intersects(Outer(desk.Notification.Shown!)), $"both above the tray: the flyout at {Outer(flyout)}, the card's window at {Outer(desk.Notification.Shown!)}"));
-        Assert.AreEqual(desk.NotificationHandle, FrontWindow.Under(Centre(TrayDesktop.Get(() => UndoButton(card)))), "the card's Undo above the flyout its Edit opened (G16)");
+        Assert.AreEqual(desk.NotificationHandle, FrontWindow.Under(Centre(TrayDesktop.Get(() => UndoButton(newerCard)))), "the newer card's Undo above the flyout the older's Edit opened (G16)");
         Assert.AreEqual(handle, FrontWindow.GetForegroundWindow(), "the flyout in front with the edit");
 
-        // A capture started during the edit brings the flyout back activated, the card still up (G3).
+        // A capture started during the edit brings the flyout back activated, the newer card still up (G3).
         var taking = desk.Take();
         await desk.OverlayInFront();
         TrayDesktop.Run(() => Assert.IsFalse(flyout.IsVisible, "hidden while the overlay is up (G3)"));
@@ -431,12 +437,20 @@ public sealed class CaptureNotificationTests
         await taking;
         await Eventually(() => FrontWindow.GetForegroundWindow() == handle && TrayDesktop.Get(() => flyout.IsVisible && flyout.IsActive));
         Thread.Sleep(500);
-        Assert.AreEqual(desk.NotificationHandle, FrontWindow.Under(Centre(TrayDesktop.Get(() => UndoButton(card)))), "the card's Undo above the flyout shown again");
+        Assert.AreEqual(desk.NotificationHandle, FrontWindow.Under(Centre(TrayDesktop.Get(() => UndoButton(newerCard)))), "the newer card's Undo above the flyout shown again");
 
-        TestMouse.Click(Centre(TrayDesktop.Get(() => UndoButton(card))));
-        await Eventually(() => TrayDesktop.Get(() => !desk.Shown.Editing.IsOpen) && desk.Items().All(listed => listed.Id != item.Id));
-        TrayDesktop.Run(() => Assert.IsTrue(flyout.IsVisible, "the edit closed without saving, the item gone, the window up (G16)"));
-        foreach (var entry in RecycleBinEntries.Of(item.FilePath))
+        TestMouse.Click(Centre(TrayDesktop.Get(() => UndoButton(newerCard))));
+        await Eventually(() => desk.Items().All(listed => listed.Id != newer.Id));
+        Thread.Sleep(300);
+        Assert.IsEmpty(desk.Cards(), "the newer card gone with its Undo");
+        Assert.IsTrue(desk.Items().Any(listed => listed.Id == older.Id), "the older item stays");
+        TrayDesktop.Run(() =>
+        {
+            Assert.AreEqual(older.Id, desk.Shown.Editing.Session?.Item.Id, "its Undo closes nothing else: the older item's edit stays (G16)");
+            Assert.IsTrue(flyout.IsVisible, "the window up");
+            desk.Shown.Editing.Cancel();
+        });
+        foreach (var entry in RecycleBinEntries.Of(newer.FilePath))
         {
             File.Delete(entry.Recycled);
             File.Delete(entry.Record);
@@ -444,12 +458,14 @@ public sealed class CaptureNotificationTests
     }
 
     [TestMethod]
-    public async Task TrimBringsThePinnedWindowBackWhereItWasOnTheTrimToolAnotherCardsEditOpensItsOwnItemAndThatCardsUndoClosesTheEdit()
+    public async Task TrimBringsThePinnedWindowBackWhereItWasOnTheTrimToolEachCardGoingAtItsEditAndACardsUndoClosesItsItemsEditOpenedFromTheWindow()
     {
         using var desk = await CaptureDesk.Open(["stash still edited.png"]);
         var shown = desk.Shown;
         var still = desk.Items().Single();
         var clip = await desk.Import(shown.Fixture("animated.gif", "stash clip.gif"));
+        // Large enough for a Hide box dragged across it.
+        var undone = await desk.Import(shown.Picture("stash undone.png", 160, 120, (x, y) => new SkiaSharp.SKColor((byte)x, (byte)y, 90)));
         var clipCard = await desk.Raise(clip, CaptureKind.Recording);
         var stillCard = await desk.Raise(still, CaptureKind.Screenshot);
         using var editor = new ShownEditor(shown);
@@ -473,8 +489,9 @@ public sealed class CaptureNotificationTests
             Assert.IsInstanceOfType<TrimTool>(shown.Editing.Session!.Tool, "with the Trim tool selected (G16)");
             Assert.IsTrue(editor.Button("Trim") is Avalonia.Controls.Primitives.ToggleButton { IsChecked: true }, "shown as the current tool");
         });
+        CollectionAssert.AreEqual(new[] { stillCard }, desk.Cards(), "the clip's card gone at its Trim, the other staying (G16)");
 
-        // The other card's Edit, the first card still showing: the clip's edit left as Cancel would, the still opened (G20).
+        // The other card's Edit while the clip's edit is open: that edit left as Cancel would, the still opened (G20).
         TestMouse.Click(Centre(TrayDesktop.Get(() => EditButton(stillCard))));
         await Eventually(() => TrayDesktop.Get(() => shown.Editing.Session?.Item.Id == still.Id));
         TrayDesktop.Run(() =>
@@ -482,19 +499,31 @@ public sealed class CaptureNotificationTests
             Assert.IsInstanceOfType<TextTool>(shown.Editing.Session!.Tool, "Edit opens on Text");
             CollectionAssert.AreEqual(new[] { "Discarded the edit of “stash clip”." }, shown.Notices.Shown.Select(notice => notice.Text).ToList());
         });
+        Assert.IsEmpty(desk.Cards(), "that card gone too");
 
-        // That card's Undo while its edit is open: the editor closes without saving or a notice, and the item leaves (G16).
-        TestMouse.Click(Centre(TrayDesktop.Get(() => UndoButton(stillCard))));
-        await Eventually(() => TrayDesktop.Get(() => !shown.Editing.IsOpen) && desk.Items().All(item => item.Id != still.Id));
-        Thread.Sleep(300);
+        // A card's Undo while its item's edit, opened from the window and changed, is open: the editor closes without
+        // saving or a notice, the item leaves, and the card with it (G16).
+        var undoneCard = await desk.Raise(undone, CaptureKind.Screenshot);
+        Assert.IsTrue((await TrayDesktop.Get(() => shown.Editing.Open(undone, EditOrigin.Grid))).Succeeded);
+        await Task.Delay(300);
         TrayDesktop.Run(() =>
         {
-            Assert.IsTrue(shown.Window.IsVisible);
-            Assert.IsFalse(shown.Listing.Items.Any(item => item.Id == still.Id), "the grid without it");
-            Assert.HasCount(1, shown.Notices.Shown, "no notice of its own");
+            editor.Session!.Tool = editor.Session.Tools.OfType<HideTool>().Single();
+            editor.Drag((0.2, 0.2), (0.7, 0.7));
+            Assert.HasCount(1, editor.Session.Layers.Layers, "a change not saved");
+        });
+        TestMouse.Click(Centre(TrayDesktop.Get(() => UndoButton(undoneCard))));
+        await Eventually(() => TrayDesktop.Get(() => !shown.Editing.IsOpen) && desk.Items().All(item => item.Id != undone.Id));
+        Thread.Sleep(300);
+        Assert.IsEmpty(desk.Cards(), "the card gone with its Undo");
+        TrayDesktop.Run(() =>
+        {
+            Assert.IsTrue(shown.Window.IsVisible, "the window stays up");
+            Assert.IsFalse(shown.Listing.Items.Any(item => item.Id == undone.Id), "the grid without it");
+            Assert.IsFalse(shown.Notices.Shown.Any(notice => notice.Text.Contains("stash undone", StringComparison.Ordinal)), "no notice of its own");
         });
         Assert.AreEqual(handle, FrontWindow.GetForegroundWindow(), "the window keeps the activation through Undo");
-        var entries = RecycleBinEntries.Of(still.FilePath);
+        var entries = RecycleBinEntries.Of(undone.FilePath);
         Assert.HasCount(1, entries, "its one file in the Recycle Bin (G29)");
         foreach (var entry in entries)
         {

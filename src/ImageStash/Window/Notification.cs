@@ -61,7 +61,7 @@ public sealed class Notification
 
     /// <summary>
     /// Keeps the notifications above <paramref name="other"/>, the stash window, whose topmost flyout stands above the tray
-    /// where they do (G1): each time it shows or comes forward, a card's Edit opening it included, the notifications'
+    /// where they do (G1): each time it shows or comes forward, another card's Edit opening it included, the notifications'
     /// window is put back on top of it, still without the activation, so a card stays in sight and takes its clicks (G16).
     /// </summary>
     public void StayAbove(Avalonia.Controls.Window other)

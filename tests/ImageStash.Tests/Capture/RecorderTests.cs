@@ -1,5 +1,7 @@
+using Avalonia;
 using ImageStash.Capture;
 using ImageStash.Media;
+using ImageStash.Seams;
 using ImageStash.Tests.Support;
 
 namespace ImageStash.Tests.Capture;
@@ -255,6 +257,29 @@ public sealed class RecorderTests
         Assert.IsGreaterThanOrEqualTo(700, clock.ElapsedMilliseconds);
         Assert.IsTrue(ended.Value.FrameCount is >= 5 and <= 10, $"about one sample per 70 ms: {ended.Value.FrameCount}");
         Assert.AreEqual(700, MediaFixtures.Frames(path).Sum(f => f.DurationMs));
+    }
+
+    [TestMethod]
+    public async Task ARegionWhoseEveryPixelChangesAtEveryGrabKeepsTheRateThroughTheRealEncoderToAFile()
+    {
+        // F3's 15 a second, a playing video's thousands of colours changing at every grab; G15 lets samples go only where
+        // this PC cannot sample and encode the region at that rate, which a 640 × 360 region leaves room for.
+        var display = new Display(new PixelRect(0, 0, 640, 360), new PixelRect(0, 0, 640, 360), 1, IsPrimary: true);
+        var busy = Enumerable.Range(0, 4).Select(step => SyntheticFrames.Busy(step, 640, 360)).ToArray();
+        var screen = new RecordingScreen { Shown = [display], EachGrab = grab => Outcome<MediaFrame>.Of(busy[grab % busy.Length]) };
+        using var scratch = new ScratchFolder();
+        var path = scratch.File("busy.gif");
+        var recorder = new Recorder(screen, GifEncoder.Opener(TestStash.ShortRetry), TimeProvider.System);
+
+        Assert.IsTrue(recorder.Start(display.Bounds, withPointer: false, TimeSpan.FromMilliseconds(1500), path, SteppedRecorder.Clip).Succeeded);
+        var ended = await recorder.Ended.WaitAsync(TimeSpan.FromSeconds(20));
+
+        Assert.IsTrue(ended.Succeeded, ended.Failure?.Sentence);
+        Assert.AreEqual(1500, ended.Value!.DurationMs, "the cap ends the clip at the cap");
+        Assert.AreEqual(1500, MediaFixtures.Frames(path).Sum(f => f.DurationMs), "and it plays for the recorded time");
+        // The samples due at 0, 70, … 1470 ms; an encoder taking a quarter of a second an image keeps about one in four.
+        const int Due = 1500 / 70 + 1;
+        Assert.IsGreaterThanOrEqualTo((Due * 3 + 3) / 4, ended.Value.FrameCount, $"at least three in four of the {Due} samples due are frames of the clip");
     }
 
     /// <summary>Adds <paramref name="reading"/> to <paramref name="readings"/>, from any thread; with none, the largest so far.</summary>

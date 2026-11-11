@@ -706,8 +706,8 @@ public sealed class StashWindow : Avalonia.Controls.Window
     /// one takes no focus, and a click into a card's field takes it as the user's act (G2, G8, G16); a card's Edit or
     /// Trim summons the window as the tray does, coming in front from that notification, while the click's activation is
     /// still held, then opens the editor on the card's item (G16, G1); and a click elsewhere on a card summons it the same
-    /// way, then shows the card's item selected, an open preview closed first, and dismisses the card, while an open edit
-    /// stays as it was left, and the card with it (G16: it goes since the window then shows the item).
+    /// way, then shows the card's item selected, an open preview closed first, while an open edit stays as it was left;
+    /// the card goes at each of these clicks (G16).
     /// </summary>
     public void Follow(Notification notification, CaptureNotification captured)
     {
@@ -719,12 +719,11 @@ public sealed class StashWindow : Avalonia.Controls.Window
             SummonFromTray();
             _ = editing.OpenFromNotification(asked);
         };
-        captured.ShowRequested += (item, dismiss) =>
+        captured.ShowRequested += item =>
         {
             SummonFromTray();
             if (!editing.IsOpen)
             {
-                dismiss();
                 _ = captured.ShowOnAll(item, preview.Close);
             }
         };
