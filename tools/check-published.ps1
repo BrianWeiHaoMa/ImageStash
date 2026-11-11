@@ -472,7 +472,8 @@ Write-Host '     and a Quit while minimised, on either display; the pinned windo
 Write-Host '     does not move,'
 Write-Host '     on either display (G2, G4, G5, G7, G17, G20, G21);'
 Write-Host '  9. an animated tile plays while hovered or selected, one at a time, and stops when the pointer leaves; Ctrl+wheel and Ctrl with + or -'
-Write-Host '     step the thumbnails through three sizes, the same size after Quit and a new start (G6);'
+Write-Host '     step the thumbnails through five sizes, the two largest new, the same size after Quit and a new start; with Settings open beside'
+Write-Host '     the pinned window, each Thumbnail size chosen there changes the grid at once, and each size Ctrl+wheel reaches shows in that list (G6, G32);'
 Write-Host ' 10. over 5,000 pictures, typing in the search answers as the keys are pressed (E4): set IMAGESTASH_FIVE_THOUSAND_STASH to an empty'
 Write-Host '     folder, run the focused check FiveThousandPictures, and point settings.json''s stashFolder at that folder;'
 Write-Host ' 11. with a stash folder that cannot be created, the icon''s tooltip reads "Open the stash failed: ..." and Quit still works;'
@@ -558,7 +559,7 @@ Write-Host ' 30. with Paint still open on that picture, Quit ImageStash, save in
 Write-Host '     when the stash shows, with the notification and its Undo; once the item is deleted and its notice has gone, its folder under'
 Write-Host '     %LOCALAPPDATA%\ImageStash\open-with\ is gone too (G27, G28, G18);'
 Write-Host ' 31. the tray menu''s Settings, and the Settings button beside the + button, open "ImageStash settings" centred on the display: Shortcuts with the four fields, After a screenshot or a recording,'
-Write-Host "     Recording, Library with the stash folder, Open folder and Move$([char]0x2026), then Export stash$([char]0x2026) and Import stash$([char]0x2026), General with Start with Windows and Theme; light and dark; made"
+Write-Host "     Recording, Library with the stash folder, Open folder and Move$([char]0x2026), then Export stash$([char]0x2026) and Import stash$([char]0x2026), General with Start with Windows, Theme and Thumbnail size; light and dark; made"
 Write-Host '     as small as it goes, its rows wrap and it scrolls with nothing cut; Esc closes it, and asked again while open, from either, it comes forward (G32, F4, F10, L2);'
 Write-Host " 32. a click on a shortcut field reads ""Press a new shortcut$([char]0x2026)"" with its $([char]0xD7), and the shortcuts do nothing until it ends; a combination another app holds,"
 Write-Host '     Shift+A and Ctrl+V each get an amber line under the row saying why, the field unchanged; with a second keyboard layout on which'

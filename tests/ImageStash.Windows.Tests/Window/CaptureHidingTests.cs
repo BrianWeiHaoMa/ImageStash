@@ -132,23 +132,37 @@ public sealed class CaptureHidingTests
     }
 
     [TestMethod]
-    public async Task APinnedWindowBehindTheChatIsRestoredWithoutTakingTheChatsKeystrokes()
+    [DataRow(false, DisplayName = "the screenshot asked once the window has heard the chat came in front")]
+    [DataRow(true, DisplayName = "the screenshot asked in the turn that sees the chat come in front")]
+    public async Task APinnedWindowBehindTheChatIsRestoredWithoutTakingTheChatsKeystrokes(bool atOnce)
     {
         using var desk = await CaptureDesk.Open(["pinned behind.png"]);
         var shown = desk.Shown;
-        await PinnedInFront(desk);
-        desk.Chat.ClickTitleBar();
-        FrontWindow.WaitUntilInFront(desk.Chat.Window);
+        var stash = await PinnedInFront(desk);
+        Task taking;
+        if (atOnce)
+        {
+            // Before the UI thread has handled the chat's activation, which the window's own flag waits for.
+            taking = await desk.TakeOnceInFront(desk.Chat.Window, desk.Chat.ClickTitleBar);
+        }
+        else
+        {
+            desk.Chat.ClickTitleBar();
+            await Eventually(() => TrayDesktop.Get(() => !shown.Window.IsActive));
+            taking = desk.Take();
+        }
 
-        var taking = desk.Take();
         await desk.OverlayInFront();
         TrayDesktop.Run(() => Assert.AreEqual(WindowState.Minimized, shown.Window.WindowState));
+        using var watch = FrontWindow.Watch(stash);
         TestHotKeys.Tap(VkEscape);
         await taking;
 
         await Eventually(() => TrayDesktop.Get(() => shown.Window.IsVisible && shown.Window.WindowState == WindowState.Normal));
         TrayDesktop.Run(() => Assert.IsFalse(shown.Window.IsActive, "not active, as it was not (G3)"));
         desk.ChatKeepsTheKeystrokes("after the capture");
+        watch.Dispose();
+        Assert.IsFalse(watch.Seen, "from the Esc until the chat took the keystrokes, the stash window was at no moment in front (G3)");
     }
 
     [TestMethod]

@@ -9,7 +9,8 @@ namespace ImageStash.Window;
 /// press-to-record fields (<see cref="ShortcutRecording"/>), one recording at a time, each remap registered and written
 /// by the shortcuts (G33); each other change taking effect at once and written through the one settings keeper (State:
 /// Settings): Also copy, the cap and the pointer, which the next capture reads; Theme and Look, applied to every window
-/// now (F10, G32); Start with Windows, set or cleared through its seam now (F1); Open folder, which asks the platform's file
+/// now (F10, G32); the thumbnail size, which the grid takes at once and whose steps in the grid the page shows while open
+/// (G6, G32); Start with Windows, set or cleared through its seam now (F1); Open folder, which asks the platform's file
 /// browser for the stash folder; and Move…, which carries the stash to a chosen empty folder (G30), the row showing the
 /// Move's busy state and the folder it started from until it has ended, and every other row taking no change meanwhile
 /// (R9); Export stash… and Import stash…, which carry the whole stash and the settings that travel into one file and
@@ -34,6 +35,7 @@ public sealed class SettingsPage
     public const string ImportTitle = "Import a stash";
     public const string StartWithWindowsTitle = "Start with Windows";
     public const string ThemeTitle = "Theme";
+    public const string ThumbnailSizeTitle = "Thumbnail size";
 
     /// <summary>The stash location row's second button, beside Open folder, and its automation name (G32).</summary>
     public const string MoveWords = "Move…";
@@ -59,6 +61,10 @@ public sealed class SettingsPage
     /// <summary>Theme's three choices (G32, F10).</summary>
     public static readonly IReadOnlyList<(Theme Theme, string Words)> Themes = [(Theme.System, "Use system setting"), (Theme.Light, "Light"), (Theme.Dark, "Dark")];
 
+    /// <summary>The grid's five thumbnail sizes, smallest first (G6, G32).</summary>
+    public static readonly IReadOnlyList<(ThumbnailSize Size, string Words)> ThumbnailSizes =
+        [(ThumbnailSize.Small, "Small"), (ThumbnailSize.Medium, "Medium"), (ThumbnailSize.Large, "Large"), (ThumbnailSize.ExtraLarge, "Extra large"), (ThumbnailSize.Huge, "Huge")];
+
     private static readonly IReadOnlyList<SettingRow> OptionRows =
     [
         new("Shortcuts", OpenTitle, "From any app. Opens at your text cursor."),
@@ -73,6 +79,7 @@ public sealed class SettingsPage
         new("Library", ImportTitle, "Replaces your stash and those settings with an export's; what it replaces goes to the Recycle Bin"),
         new("General", StartWithWindowsTitle, "ImageStash lives in the tray; it has no window until you summon it"),
         new("General", ThemeTitle, null),
+        new("General", ThumbnailSizeTitle, "Ctrl and the mouse wheel, or Ctrl with + or -, change it over the pictures too"),
     ];
 
     private readonly SettingsKeeper keeper;
@@ -85,6 +92,7 @@ public sealed class SettingsPage
     private readonly GlobalShortcuts shortcuts;
     private readonly Moving moving;
     private readonly Transferring transferring;
+    private readonly ThumbnailSizing thumbnails;
     private readonly Dictionary<string, Failure> warnings = [];
     private string? moved;
 
@@ -92,13 +100,15 @@ public sealed class SettingsPage
     /// <param name="shortcuts">The global shortcuts, which the shortcut fields remap and whose changes the page follows until <see cref="Close"/>.</param>
     /// <param name="moving">Move…, whose state the page follows until <see cref="Close"/>; a Move goes on when the page closes.</param>
     /// <param name="transferring">Export stash… and Import stash…, whose state the page follows until <see cref="Close"/>; either goes on when the page closes.</param>
+    /// <param name="thumbnails">The grid's thumbnail size, which the page chooses through and follows until <see cref="Close"/>.</param>
     /// <param name="applyTheme">Gives every window the theme at once (F10).</param>
     /// <param name="executablePath">What Start with Windows registers: the running executable (F1).</param>
     public SettingsPage(SettingsKeeper keeper, SettingsLoad load, GlobalShortcuts shortcuts, ILocations locations, IStartWithWindows startWithWindows, IDialogsAndExplorer dialogs,
-        Moving moving, Transferring transferring, Action<Theme> applyTheme, string executablePath)
+        Moving moving, Transferring transferring, ThumbnailSizing thumbnails, Action<Theme> applyTheme, string executablePath)
     {
         this.moving = moving;
         this.transferring = transferring;
+        this.thumbnails = thumbnails;
         this.keeper = keeper;
         this.load = load;
         this.shortcuts = shortcuts;
@@ -117,6 +127,7 @@ public sealed class SettingsPage
         shortcuts.Changed += RaiseChanged;
         moving.Changed += RaiseChanged;
         transferring.Changed += RaiseChanged;
+        thumbnails.Changed += ThumbnailSizeChanged;
     }
 
     /// <summary>Raised after a row's value or warning changed, on the thread that changed it, the UI thread.</summary>
@@ -185,6 +196,8 @@ public sealed class SettingsPage
 
     public Theme Theme => keeper.Current.Theme;
 
+    public ThumbnailSize ThumbnailSize => thumbnails.Current;
+
     /// <summary>A length in the words the list shows it in.</summary>
     public static string LengthWords(int seconds) => seconds == 1 ? "1 second" : $"{seconds} seconds";
 
@@ -207,6 +220,7 @@ public sealed class SettingsPage
         shortcuts.Changed -= RaiseChanged;
         moving.Changed -= RaiseChanged;
         transferring.Changed -= RaiseChanged;
+        thumbnails.Changed -= ThumbnailSizeChanged;
     }
 
     /// <summary>Whether the next screenshot and recording are also put on the clipboard (G14, G15).</summary>
@@ -242,6 +256,9 @@ public sealed class SettingsPage
         Change(s => s with { Theme = theme });
         Changed?.Invoke();
     }
+
+    /// <summary>The grid's thumbnail size, taken by the grid at once, through the one place that changes it (G32, G6).</summary>
+    public void SetThumbnailSize(ThumbnailSize size) => thumbnails.Choose(size);
 
     /// <summary>
     /// Sets or clears the Run entry now (F1) and writes the choice whatever the entry answered: the settings are the
@@ -338,6 +355,13 @@ public sealed class SettingsPage
     }
 
     private void RaiseChanged() => Changed?.Invoke();
+
+    /// <summary>The size changed, here or by a step in the grid: written with every other setting again, so an earlier refused write is no longer the last.</summary>
+    private void ThumbnailSizeChanged()
+    {
+        WriteFailure = null;
+        Changed?.Invoke();
+    }
 
     private void Show(string title, Outcome outcome)
     {

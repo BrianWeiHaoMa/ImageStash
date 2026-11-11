@@ -48,15 +48,18 @@ public sealed class SettingsPageTests
                 ("Library", "Import a stash"),
                 ("General", "Start with Windows"),
                 ("General", "Theme"),
+                ("General", "Thumbnail size"),
             },
             page.Rows.Select(row => (row.Group, row.Title)).ToList(),
-            "G32's rows in its order, the four shortcuts first, Export stash… and Import stash… after the stash location");
+            "G32's rows in its order, the four shortcuts first, Export stash… and Import stash… after the stash location, the thumbnail size after Theme");
         CollectionAssert.AreEqual(new[] { "Ctrl+Alt+Space", "Ctrl+PrtScn", "Ctrl+Shift+PrtScn", "Ctrl+Alt+V" }, page.ShortcutFields.Select(field => field.Text).ToList(), "F5's defaults, each in its field");
         Assert.IsFalse(page.ShortcutFields.Any(field => field.IsRecording), "none recording");
         Assert.AreEqual((true, 30, true, DefaultStash, true, Theme.System), (page.AlsoCopyCapture, page.RecordingMaxSeconds, page.RecordPointer, page.StashFolder, page.StartWithWindows, page.Theme),
             "G32's defaults: on, 30 seconds, on, the default folder (F6), on, the system's theme");
         CollectionAssert.Contains(page.RecordingLengths.ToList(), 30, "30 seconds is on the list (G32)");
         CollectionAssert.AreEqual(new[] { Theme.System, Theme.Light, Theme.Dark }, SettingsPage.Themes.Select(choice => choice.Theme).ToList(), "system, light, dark (G32)");
+        Assert.AreEqual(ThumbnailSize.Medium, page.ThumbnailSize, "the grid's default size");
+        CollectionAssert.AreEqual(Enum.GetValues<ThumbnailSize>(), SettingsPage.ThumbnailSizes.Select(choice => choice.Size).ToList(), "the five sizes, smallest first (G6, G32)");
         Assert.IsNull(page.ReadFailure);
         Assert.IsTrue(page.Rows.All(row => page.WarningOf(row.Title) is null), "no warning before anything was done");
     }
@@ -91,8 +94,9 @@ public sealed class SettingsPageTests
         page.SetRecordPointer(false);
         page.SetTheme(Theme.Light);
         page.SetStartWithWindows(false);
+        page.SetThumbnailSize(ThumbnailSize.Huge);
 
-        var expected = new Settings { AlsoCopyCapture = false, RecordingMaxSeconds = 15, RecordPointer = false, Theme = Theme.Light, StartWithWindows = false };
+        var expected = new Settings { AlsoCopyCapture = false, RecordingMaxSeconds = 15, RecordPointer = false, Theme = Theme.Light, StartWithWindows = false, ThumbnailSize = ThumbnailSize.Huge };
         var waited = Stopwatch.StartNew();
         while (Saved(scratch) != expected)
         {
@@ -333,12 +337,12 @@ public sealed class SettingsPageTests
         first.SetRecordingMaxSeconds(60);
         first.SetTheme(Theme.Light);
 
-        keeper.Change(s => s with { StashFolder = @"E:\Moved stash", AlsoCopyCapture = false });
+        keeper.Change(s => s with { StashFolder = @"E:\Moved stash", AlsoCopyCapture = false, ThumbnailSize = ThumbnailSize.ExtraLarge });
         var later = Page(keeper);
 
         foreach (var page in new[] { first, later })
         {
-            Assert.AreEqual((60, Theme.Light, @"E:\Moved stash", false), (page.RecordingMaxSeconds, page.Theme, page.StashFolder, page.AlsoCopyCapture), "the keeper's values now, not those at construction");
+            Assert.AreEqual((60, Theme.Light, @"E:\Moved stash", false, ThumbnailSize.ExtraLarge), (page.RecordingMaxSeconds, page.Theme, page.StashFolder, page.AlsoCopyCapture, page.ThumbnailSize), "the keeper's values now, not those at construction");
         }
     }
 
@@ -356,8 +360,51 @@ public sealed class SettingsPageTests
         page.SetTheme(Theme.Dark);
         page.SetStartWithWindows(false);
         page.OpenFolder();
+        page.SetThumbnailSize(ThumbnailSize.Large);
 
-        Assert.AreEqual(6, changed);
+        Assert.AreEqual(7, changed);
+    }
+
+    [TestMethod]
+    public void ASizeChosenHereIsTheGridsAtOnceAndWrittenWhileChoosingTheSizeInEffectChangesNothing()
+    {
+        using var scratch = new ScratchFolder();
+        var keeper = Keeper(scratch, TimeSpan.FromSeconds(30));
+        var grid = new ThumbnailSizing(keeper);
+        var page = Page(keeper, thumbnails: grid);
+        var gridTold = new List<ThumbnailSize>();
+        grid.Changed += () => gridTold.Add(grid.Current);
+
+        page.SetThumbnailSize(ThumbnailSize.Huge);
+        page.SetThumbnailSize(ThumbnailSize.Huge);
+
+        CollectionAssert.AreEqual(new[] { ThumbnailSize.Huge }, gridTold, "the grid told once, with the size chosen, and not again for the size in effect (G32: \"which the grid takes at once\")");
+        Assert.AreEqual(ThumbnailSize.Huge, keeper.Current.ThumbnailSize, "remembered (G6)");
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => page.SetThumbnailSize((ThumbnailSize)5));
+        Assert.AreEqual(ThumbnailSize.Huge, page.ThumbnailSize, "a size the grid lacks changes nothing");
+    }
+
+    [TestMethod]
+    public void WhileOpenThePageShowsEachSizeSteppedInTheGridChangingNothingItselfAndOnceClosedHearsNoMore()
+    {
+        using var scratch = new ScratchFolder();
+        var keeper = Keeper(scratch, TimeSpan.FromSeconds(30));
+        var grid = new ThumbnailSizing(keeper);
+        var page = Page(keeper, thumbnails: grid);
+        var shown = new List<ThumbnailSize>();
+        page.Changed += () => shown.Add(page.ThumbnailSize);
+
+        grid.Step(1);
+        grid.Step(1);
+
+        CollectionAssert.AreEqual(new[] { ThumbnailSize.Large, ThumbnailSize.ExtraLarge }, shown, "each size the grid reached, as it was reached (G32: \"the page showing a size stepped in the grid while it is open\")");
+        Assert.AreEqual(ThumbnailSize.ExtraLarge, keeper.Current.ThumbnailSize, "where the grid stepped it: the page wrote nothing back");
+
+        page.Close();
+        grid.Step(-1);
+
+        Assert.HasCount(2, shown, "a closed page is told nothing");
+        Assert.AreEqual(ThumbnailSize.Large, Page(keeper, thumbnails: grid).ThumbnailSize, "a page opened again shows the size in effect");
     }
 
     private SettingsKeeper Keeper(ScratchFolder scratch, TimeSpan quiet) =>
@@ -365,11 +412,11 @@ public sealed class SettingsPageTests
 
     private static Settings Saved(ScratchFolder scratch) => Settings.Load(scratch.Path, ShortRetry).Settings;
 
-    private static SettingsPage Page(SettingsKeeper keeper, SettingsLoad? load = null, RecordingStartWithWindows? run = null, RecordingDialogs? dialogs = null, Action<Theme>? applyTheme = null, Moving? moving = null)
+    private static SettingsPage Page(SettingsKeeper keeper, SettingsLoad? load = null, RecordingStartWithWindows? run = null, RecordingDialogs? dialogs = null, Action<Theme>? applyTheme = null, Moving? moving = null, ThumbnailSizing? thumbnails = null)
     {
         moving ??= MovingStash.NeverOpened(keeper, dialogs ?? new RecordingDialogs());
         return new(keeper, load ?? Read, new GlobalShortcuts(keeper, GlobalShortcuts.Bindings(() => { }, () => { }, () => { }, () => { }), new RecordingShortcuts(), _ => { }, action => action()),
             Locations, run ?? new RecordingStartWithWindows(), dialogs ?? new RecordingDialogs(), moving, MovingStash.NeverOpenedTransfers(keeper, dialogs ?? new RecordingDialogs(), moving),
-            applyTheme ?? (_ => { }), Executable);
+            thumbnails ?? new ThumbnailSizing(keeper), applyTheme ?? (_ => { }), Executable);
     }
 }

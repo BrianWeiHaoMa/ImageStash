@@ -103,7 +103,7 @@ public sealed class StartedShortcuts
     {
         var moving = MovingStash.NeverOpened(Settings, new RecordingDialogs());
         return new(Settings, new SettingsLoad(Settings.Current, null, AsSaved: true), Shortcuts, new TestLocations(@"C:\Users\someone\AppData\Local\ImageStash\stash", @"C:\Users\someone\AppData\Local\ImageStash"),
-            new RecordingStartWithWindows(), new RecordingDialogs(), moving, MovingStash.NeverOpenedTransfers(Settings, new RecordingDialogs(), moving), _ => { }, @"C:\Apps\ImageStash\ImageStash.Windows.exe");
+            new RecordingStartWithWindows(), new RecordingDialogs(), moving, MovingStash.NeverOpenedTransfers(Settings, new RecordingDialogs(), moving), new ThumbnailSizing(Settings), _ => { }, @"C:\Apps\ImageStash\ImageStash.Windows.exe");
     }
 
     /// <summary>Runs what was posted to the UI thread, as the UI thread later would.</summary>

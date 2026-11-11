@@ -77,6 +77,35 @@ public sealed class SettingsTests
     }
 
     [TestMethod]
+    [DataRow("small", ThumbnailSize.Small, 64.0)]
+    [DataRow("medium", ThumbnailSize.Medium, 96.0)]
+    [DataRow("large", ThumbnailSize.Large, 136.0)]
+    public void AnEarlierBuildsFileOpensAtTheSizeItNamesAsLargeAsItWasWithItsOtherValues(string written, ThumbnailSize size, double rowHeight)
+    {
+        using var scratch = new ScratchFolder();
+        File.WriteAllText(scratch.File(Settings.FileName), $$"""{"version":1,"theme":"dark","recordingMaxSeconds":60,"thumbnailSize":"{{written}}","stashFolder":"D:\\Stash"}""");
+
+        var load = Settings.Load(scratch.Path, ShortRetry);
+
+        Assert.IsNull(load.Failure);
+        Assert.AreEqual((size, rowHeight), (load.Settings.ThumbnailSize, ImageStash.Window.JustifiedRows.RowHeight(load.Settings.ThumbnailSize)), "the size it named, its rows as tall as before (G31)");
+        Assert.AreEqual((Theme.Dark, 60, @"D:\Stash"), (load.Settings.Theme, load.Settings.RecordingMaxSeconds, load.Settings.StashFolder), "its other values kept");
+    }
+
+    [TestMethod]
+    [DataRow(ThumbnailSize.ExtraLarge, "extraLarge")]
+    [DataRow(ThumbnailSize.Huge, "huge")]
+    public void TheTwoLargerSizesAreWrittenByNameAndReadBack(ThumbnailSize size, string written)
+    {
+        using var scratch = new ScratchFolder();
+
+        Settings.Write(scratch.Path, new Settings { ThumbnailSize = size }, ShortRetry);
+
+        StringAssert.Contains(File.ReadAllText(scratch.File(Settings.FileName)), $"\"thumbnailSize\": \"{written}\"");
+        Assert.AreEqual(size, Settings.Load(scratch.Path, ShortRetry).Settings.ThumbnailSize);
+    }
+
+    [TestMethod]
     public void AnEarlierFileWithoutTheWindowsValuesReadsTheirDefaults()
     {
         using var scratch = new ScratchFolder();

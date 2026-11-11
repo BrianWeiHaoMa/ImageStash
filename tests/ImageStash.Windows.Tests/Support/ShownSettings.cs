@@ -22,6 +22,7 @@ public static class ShownSettings
         SettingsPage.OpenTitle, SettingsPage.TakeScreenshotTitle, SettingsPage.RecordClipTitle, SettingsPage.StashClipboardImageTitle,
         SettingsPage.AlsoCopyTitle, SettingsPage.MaximumLengthTitle, SettingsPage.ShowPointerTitle, SettingsPage.StashFolderTitle,
         "Open folder", SettingsPage.MoveWords, SettingsPage.ExportWords, SettingsPage.ImportWords, SettingsPage.StartWithWindowsTitle, SettingsPage.ThemeTitle,
+        SettingsPage.ThumbnailSizeTitle,
     ];
 
     /// <summary>The names among <see cref="Titles"/> that the page's controls carry, in the order the page shows them.</summary>
@@ -92,11 +93,12 @@ public static class ShownSettings
 
         /// <param name="moving">Move… as a check's own stash window asks it; by default, over a stash that never opens.</param>
         /// <param name="transferring">Export stash… and Import stash… as a check's own stash window asks them; by default, over a stash that never opens.</param>
-        public SettingsPage Page(Action<Store.Theme>? applyTheme = null, Moving? moving = null, Transferring? transferring = null)
+        /// <param name="thumbnails">The thumbnail size as a check's own stash window holds it; by default, one over this folder's settings.</param>
+        public SettingsPage Page(Action<Store.Theme>? applyTheme = null, Moving? moving = null, Transferring? transferring = null, ThumbnailSizing? thumbnails = null)
         {
             moving ??= NeverOpened();
             return new(Keeper, load, Shortcuts, new WindowsLocationsAt(DefaultStash, folder), Run, Dialogs, moving, transferring ?? NeverOpenedTransfers(moving),
-                applyTheme ?? (_ => { }), Executable);
+                thumbnails ?? new ThumbnailSizing(Keeper), applyTheme ?? (_ => { }), Executable);
         }
 
         /// <summary>Move… over a stash still opening, as the page's other rows are checked: it refuses before anything else.</summary>

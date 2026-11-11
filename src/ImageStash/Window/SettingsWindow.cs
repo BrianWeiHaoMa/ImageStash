@@ -48,6 +48,7 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
     private readonly StackPanel content;
     private readonly ToggleSwitch startWithWindows;
     private readonly ComboBox theme;
+    private readonly ComboBox thumbnailSize;
     private readonly Dictionary<string, (Border Row, TextBlock Words)> warnings = [];
     private readonly Dictionary<string, ShortcutField> shortcutFields = [];
     private readonly Border readFailure;
@@ -83,6 +84,7 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
         AutomationProperties.SetName(folder, SettingsPage.StashFolderTitle);
         startWithWindows = Toggle(SettingsPage.StartWithWindowsTitle, on => page.SetStartWithWindows(on));
         theme = Choices(SettingsPage.ThemeTitle, SettingsPage.Themes.Select(choice => ((object)choice.Theme, choice.Words)), value => page.SetTheme((Theme)value));
+        thumbnailSize = Choices(SettingsPage.ThumbnailSizeTitle, SettingsPage.ThumbnailSizes.Select(choice => ((object)choice.Size, choice.Words)), value => page.SetThumbnailSize((ThumbnailSize)value));
 
         readFailure = TopWarning(readFailureWords);
         writeFailure = TopWarning(writeFailureWords);
@@ -246,6 +248,7 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
             content.IsEnabled = !page.WholeStashActAsked;
             startWithWindows.IsChecked = page.StartWithWindows;
             Select(theme, page.Theme);
+            Select(thumbnailSize, page.ThumbnailSize);
             foreach (var field in shortcutFields.Values)
             {
                 field.Show();
@@ -289,6 +292,7 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
             SettingsPage.ImportTitle => Act(SettingsPage.ImportWords, () => _ = page.Import(this)),
             SettingsPage.StartWithWindowsTitle => startWithWindows,
             SettingsPage.ThemeTitle => (Control)theme,
+            SettingsPage.ThumbnailSizeTitle => thumbnailSize,
             _ when page.ShortcutField(row.Title) is { } recording => shortcutFields[row.Title] = new ShortcutField(recording),
             _ => throw new InvalidOperationException($"No control draws the row “{row.Title}”."),
         };

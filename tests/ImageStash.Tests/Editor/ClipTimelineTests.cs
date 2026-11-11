@@ -110,6 +110,8 @@ public sealed class ClipTimelineTests
         session.Seek(5);
         await Until(() => session.FrameIndex == 2, "a seek beyond them lands on the last one read");
         session.Play();
+        // Once the player waits for the next frame's time, which it arms on another thread.
+        await Until(() => clock.NextDue is not null, "the player never waits for the next frame's time");
         clock.Advance(TimeSpan.FromMilliseconds(100));
         await Until(() => session.FrameIndex == 0, "the play goes round over the frames read");
     }

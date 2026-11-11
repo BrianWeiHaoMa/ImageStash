@@ -32,12 +32,14 @@ public static class JustifiedRows
     {
         ThumbnailSize.Small => 64,
         ThumbnailSize.Large => 136,
+        ThumbnailSize.ExtraLarge => 192,
+        ThumbnailSize.Huge => 256,
         _ => 96,
     };
 
     /// <summary>The size <paramref name="steps"/> steps larger, or smaller when negative, held at the smallest and the largest (G6).</summary>
     public static ThumbnailSize Step(ThumbnailSize size, int steps) =>
-        (ThumbnailSize)Math.Clamp((int)size + steps, (int)ThumbnailSize.Small, (int)ThumbnailSize.Large);
+        (ThumbnailSize)Math.Clamp((int)size + steps, (int)ThumbnailSize.Small, (int)ThumbnailSize.Huge);
 
     /// <summary>The tile's aspect ratio, width over height, for a picture of these facts.</summary>
     public static double Ratio(MediaFacts facts) =>

@@ -484,7 +484,7 @@ public sealed class MovingTests
         await listed.Listing.ShowScope(Scope.All);
         Assert.IsTrue((await listed.OpenWith.Begin(null!, cat, _ => { })).Succeeded);
         await OpenedWith.RewriteWhenFree(listed.Dialogs.OpenedWith.Single(), MediaFixtures.DistinctPng(53, 6, 4));
-        await Handing.Eventually(() => listed.Notifications.Shown.Count == 1);
+        await OpenedWith.Eventually(listed, () => listed.Notifications.Shown.Count == 1);
         Chose(listed);
 
         var moving = listed.Moving.MoveTo(null!);

@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using ImageStash.Files;
@@ -291,7 +293,8 @@ public sealed class FinishedPictureTests
         }, i => 70L * i, stopMs: 70L * Count);
         var layers = List(Box(100, 100, 50, 50));
 
-        var (rendered, renderPeak, renderSamples) = HeapWhile(() => Render(original, layers, ImageFormat.Gif, scratch.File("finished.gif")));
+        var renders = 0;
+        var (rendered, renderPeak, renderSamples) = HeapWhile(() => Render(original, layers, ImageFormat.Gif, scratch.File($"finished {++renders}.gif")));
         // Hashed before the heap is watched: the estimate itself hashes through a fixed buffer.
         var originalSha256 = SHA256.HashData(File.ReadAllBytes(original));
         var (estimate, estimatePeak, estimateSamples) = HeapWhile(() => FinishedPicture.Estimate(original, originalSha256, Item, layers, ImageFormat.Gif, TestStash.ShortRetry));
@@ -659,28 +662,61 @@ public sealed class FinishedPictureTests
     }
 
     /// <summary>
-    /// <paramref name="call"/>'s result, and the most the live heap held above where it started while it ran, measured by
-    /// full collections from another thread, with how many were taken.
+    /// <paramref name="call"/>'s result, and the most the live heap held above where it started at a full collection made
+    /// from another thread while a run of the call was in progress, with how many such collections there were. Late in a
+    /// whole run a collection, waiting for the finalizers then pending, takes as long as the estimate, so collections made
+    /// on a timer may miss a run altogether: one counts only when it was asked for before the run returned and the call's
+    /// own thread saw it happen between the run's start and its return, and the call runs again until four have counted,
+    /// one of them asked for in the later half of a run, where a call that kept every frame it read would hold most of
+    /// them (R7).
     /// </summary>
     private static (T Result, long Peak, int Samples) HeapWhile<T>(Func<T> call)
     {
-        var start = GC.GetTotalMemory(forceFullCollection: true);
-        long peak = 0;
-        var samples = 0;
+        const int Wanted = 4, MostRuns = 1_000;
+        var start = Collected().Live;
+        var collections = new ConcurrentQueue<(long Index, long At, long Live)>();
         using var done = new ManualResetEventSlim();
         var sampler = new Thread(() =>
         {
             while (!done.IsSet)
             {
-                peak = Math.Max(peak, GC.GetTotalMemory(forceFullCollection: true) - start);
-                samples++;
+                collections.Enqueue(Collected());
                 Thread.Sleep(5);
             }
         });
         sampler.Start();
-        var result = call();
-        done.Set();
-        sampler.Join();
-        return (result, peak, samples);
+        var runs = new List<(long Before, long After, long From, long To)>();
+        List<(long Live, bool Late)> inRuns;
+        T result;
+        try
+        {
+            do
+            {
+                Assert.IsLessThan(MostRuns, runs.Count, $"{Wanted} collections, one late in a run, did not land inside {MostRuns} runs");
+                var before = GC.GetGCMemoryInfo(GCKind.Any).Index;
+                var from = Stopwatch.GetTimestamp();
+                result = call();
+                var to = Stopwatch.GetTimestamp();
+                runs.Add((before, GC.GetGCMemoryInfo(GCKind.Any).Index, from, to));
+                inRuns = [.. from c in collections from r in runs where r.Before < c.Index && c.Index <= r.After && c.At < r.To select (c.Live, 2 * (c.At - r.From) >= r.To - r.From)];
+            }
+            while (inRuns.Count < Wanted || !inRuns.Any(c => c.Late));
+        }
+        finally
+        {
+            done.Set();
+            sampler.Join();
+        }
+
+        return (result, inRuns.Max(c => c.Live) - start, inRuns.Count);
+    }
+
+    /// <summary>A full blocking collection made now: its index among the process's collections, when it was asked for, and the live heap it left.</summary>
+    private static (long Index, long At, long Live) Collected()
+    {
+        var at = Stopwatch.GetTimestamp();
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true);
+        var info = GC.GetGCMemoryInfo(GCKind.FullBlocking);
+        return (info.Index, at, info.HeapSizeBytes - info.FragmentedBytes);
     }
 }

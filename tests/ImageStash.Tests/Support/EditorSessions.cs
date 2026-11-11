@@ -206,12 +206,17 @@ internal sealed class AnimationInTheEditor : IDisposable
         return new AnimationInTheEditor(stash, clip, await EditorSessions.Open(stash, clip, startOn: startOn, time: clock), clock);
     }
 
-    /// <summary>Waits until the frame after the one showing has been read and waits for its time, so only the clock can show it.</summary>
-    public Task NextFrameRead() => EditorSessions.Until(() => Session.FullSizeFramesHeld == 2, "the next frame is never read");
+    /// <summary>
+    /// Waits until the frame after the one showing has been read and waits for its time on the clock, so only the clock
+    /// can show it. The player arms that wait on another thread once the frame is read, from the time it read just
+    /// before, so a step of the clock in between would put the frame's time that step later.
+    /// </summary>
+    public Task NextFrameRead() => EditorSessions.Until(() => Session.FullSizeFramesHeld == 2 && Clock.NextDue is not null, "the next frame is never read and waited for");
 
-    /// <summary>Moves the time on by <paramref name="ms"/> and waits until frame <paramref name="index"/> shows.</summary>
+    /// <summary>Moves the time on by <paramref name="ms"/> once the player waits for a frame's time, and waits until frame <paramref name="index"/> shows.</summary>
     public async Task Advance(int ms, int index)
     {
+        await EditorSessions.Until(() => Clock.NextDue is not null, $"the player never waits for frame {index}'s time");
         Clock.Advance(TimeSpan.FromMilliseconds(ms));
         await EditorSessions.Until(() => Session.FrameIndex == index, $"frame {index} never shows; frame {Session.FrameIndex} does");
     }

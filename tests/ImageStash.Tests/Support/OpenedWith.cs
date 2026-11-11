@@ -12,6 +12,13 @@ namespace ImageStash.Tests.Support;
 /// </summary>
 public static class OpenedWith
 {
+    /// <summary>
+    /// How long a wait for what a rewrite brings about allows: its classification and adoption are store calls, which in a
+    /// whole parallel run on the development PC took up to 4.6 s between them in runs that passed, at the five seconds an
+    /// ordinary wait allows.
+    /// </summary>
+    public static readonly TimeSpan RewriteAnswered = TimeSpan.FromSeconds(30);
+
     /// <summary>Begins a session on <paramref name="item"/>, rewrites its copy with <paramref name="rewrite"/> and requires it to await adoption; the copy's path.</summary>
     public static async Task<string> AwaitingRewrite(TestStash stash, StashItem item, byte[] rewrite)
     {
@@ -67,10 +74,33 @@ public static class OpenedWith
         var chosen = await listed.ItemMenu.Act(ItemMenuAction.OpenWith, null!, [item], null, () => Assert.Fail("Open with… hides nothing"), _ => { });
         Assert.IsTrue(chosen.Succeeded, chosen.Failure?.ToString());
         await RewriteWhenFree(listed.Dialogs.OpenedWith.Last(), rewrite);
-        await Handing.Eventually(() => listed.Notifications.Shown.Any(notice => notice.Text.StartsWith("Replaced ")));
-        await Handing.Eventually(() => !listed.OpenWith.Running);
+        await Eventually(listed, () => listed.Notifications.Shown.Any(notice => notice.Text.StartsWith("Replaced ")));
+        await Handing.Eventually(() => !listed.OpenWith.Running, RewriteAnswered);
         return listed.Notifications.Shown.Single(notice => notice.Text.StartsWith("Replaced "));
     }
+
+    /// <summary>
+    /// Waits, as <see cref="Handing.Eventually"/> does but for <see cref="RewriteAnswered"/>, for <paramref name="condition"/>
+    /// after a rewrite of a copy the window watches, moving the window's asking clock on to each once-a-second asking it
+    /// arms meanwhile, as time passing would: a scanner holding the freshly rewritten copy past the store's retry (E3)
+    /// leaves its classification to that asking (State: Open with…), which this clock passes only when told. The clock
+    /// moves only once the window has armed it, so a check that found nothing armed before the rewrite still shows that
+    /// the watcher asked first.
+    /// </summary>
+    public static Task Eventually(ListedStash listed, Func<bool> condition) => Handing.Eventually(() =>
+    {
+        if (condition())
+        {
+            return true;
+        }
+
+        if (listed.OpenWithClock.NextDue is not null)
+        {
+            listed.OpenWithClock.Advance(OpenWith.AskedEvery);
+        }
+
+        return condition();
+    }, RewriteAnswered);
 
     /// <summary>Undoes the adoption <paramref name="revision"/> names and requires the item as the stash lists it then.</summary>
     public static async Task<StashItem> UndoAdoption(TestStash stash, long id, long revision)
@@ -185,7 +215,8 @@ public static class OpenedWith
 
     /// <summary>
     /// <see cref="Rewrite"/> while a window watches the copy: tried again for up to five seconds while the copy is held,
-    /// as it is for a moment each time the window has it read without sharing, as a program saving again would.
+    /// as it is for a moment each time the window has it read without sharing, as a program saving again would. What the
+    /// rewrite brings about is waited for with <see cref="Eventually"/>.
     /// </summary>
     public static async Task RewriteWhenFree(string copy, byte[] bytes)
     {

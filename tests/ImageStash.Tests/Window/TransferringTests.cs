@@ -217,9 +217,12 @@ public sealed class TransferringTests
         var cat = await listed.Stash.Import("cat", MediaFixtures.Bytes("still.png"));
         await listed.Stash.Import("dog");
         var folder = listed.Stash.Folder.Root;
-        var archive = await Archive(listed, s => s with { Shortcuts = Imported, Theme = Theme.Dark, StartWithWindows = false, AlsoCopyCapture = false }, "one", "two", "three");
+        var archive = await Archive(listed, s => s with { Shortcuts = Imported, Theme = Theme.Dark, StartWithWindows = false, AlsoCopyCapture = false, ThumbnailSize = ThumbnailSize.Huge }, "one", "two", "three");
         listed.Dialogs.OpenFileAnswer = () => Task.FromResult<string?>(archive);
+        listed.ThumbnailSizing.Choose(ThumbnailSize.ExtraLarge);
         var page = listed.Page();
+        var sizesTold = 0;
+        listed.ThumbnailSizing.Changed += () => sizesTold++;
         Assert.IsTrue((await page.Import(null!)).Succeeded);
         Assert.IsTrue((await listed.Editing.Open(cat, EditOrigin.Grid)).Succeeded);
         var oldShortcuts = listed.ShortcutsSeam.Registered.Select(shortcut => shortcut.Text).ToList();
@@ -250,6 +253,7 @@ public sealed class TransferringTests
         Assert.IsFalse(oldShortcuts.Intersect(listed.ShortcutsSeam.Registered.Select(shortcut => shortcut.Text)).Any());
         Assert.AreEqual("clear", listed.StartWithWindows.Calls.Last(), "the Run entry cleared per the archive (F1)");
         Assert.AreEqual((Theme.Dark, false, false), (page.Theme, page.StartWithWindows, page.AlsoCopyCapture), "the page's rows read the imported values");
+        Assert.AreEqual((ThumbnailSize.ExtraLarge, 0), (page.ThumbnailSize, sizesTold), "the thumbnail size, not carried, as it was: the grid told nothing and the page's list unchanged (G36)");
         CollectionAssert.AreEqual(new[] { "Ctrl+Alt+F2", "Ctrl+Shift+F6", "Ctrl+Shift+F7", "Ctrl+Alt+F3" }, page.ShortcutFields.Select(field => field.Text).ToList());
         Assert.IsNull(listed.Listing.CannotStartReason, "changes may begin again");
         Assert.HasCount(1, listed.Stash.RecycleBin.Asked, "the replaced folder recycled whole (G29)");

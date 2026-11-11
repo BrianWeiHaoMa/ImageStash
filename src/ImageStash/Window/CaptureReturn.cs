@@ -1,12 +1,14 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
+using ImageStash.Seams;
 
 namespace ImageStash.Window;
 
 /// <summary>
 /// The stash window out of the way for a capture and back as it was afterwards (G3): at the start the flyout hidden, or
-/// the pinned window minimised from hidden, with its place and whether it was active remembered; at the end shown again
+/// the pinned window minimised from hidden, with its place and whether it was active remembered, as the window says and
+/// the platform agrees; at the end shown again
 /// where it was, never through a summon, activated only when it was, as the window's own showing, so the paste target
 /// stands (G8). It owns that memory and the <see cref="CaptureHiding"/> holder the captures call, and follows the user's
 /// own restore of the window, after which a minimise is theirs. UI thread only.
@@ -16,6 +18,7 @@ public sealed class CaptureReturn
     private readonly Avalonia.Controls.Window window;
     private readonly WindowChrome chrome;
     private readonly WindowActivation activation;
+    private readonly ITarget targets;
     private readonly Func<bool> dialogUp;
     private readonly Func<bool> dragInProgress;
     private readonly Action focusContent;
@@ -23,13 +26,15 @@ public sealed class CaptureReturn
 
     /// <summary>
     /// For <paramref name="window"/>, whose dialogs and drags <paramref name="dialogUp"/> and <paramref name="dragInProgress"/>
-    /// report, and whose focus <paramref name="focusContent"/> puts where a summon puts it.
+    /// report, and whose focus <paramref name="focusContent"/> puts where a summon puts it; <paramref name="targets"/> says
+    /// what is in front.
     /// </summary>
-    public CaptureReturn(Avalonia.Controls.Window window, WindowChrome chrome, WindowActivation activation, Func<bool> dialogUp, Func<bool> dragInProgress, Action focusContent)
+    public CaptureReturn(Avalonia.Controls.Window window, WindowChrome chrome, WindowActivation activation, ITarget targets, Func<bool> dialogUp, Func<bool> dragInProgress, Action focusContent)
     {
         this.window = window;
         this.chrome = chrome;
         this.activation = activation;
+        this.targets = targets;
         this.dialogUp = dialogUp;
         this.dragInProgress = dragInProgress;
         this.focusContent = focusContent;
@@ -65,7 +70,10 @@ public sealed class CaptureReturn
 
         var outer = window.FrameSize ?? window.ClientSize;
         var place = new PixelRect(window.Position, new PixelSize((int)Math.Round(outer.Width * window.RenderScaling), (int)Math.Round(outer.Height * window.RenderScaling)));
-        beforeCapture = new BeforeCapture(place, window.IsActive);
+        // Active only while a window of ImageStash's is in front too: the window's own flag lags another app's activation
+        // until the UI thread handles it, so a screenshot asked at once after a click into the chat would read it active
+        // and give the chat's keystrokes to the window at the end (G3).
+        beforeCapture = new BeforeCapture(place, window.IsActive && targets.Foreground().IsMine);
         // A tooltip is a window of its own, which the hide leaves up until Avalonia has handled the pointer leaving, after
         // the grab that follows at once would take it in; closed now, as Avalonia's tooltip service closes one.
         foreach (var tipped in window.GetVisualDescendants().OfType<Control>().Where(ToolTip.GetIsOpen).ToList())

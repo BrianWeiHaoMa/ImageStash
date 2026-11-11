@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -164,13 +165,17 @@ public sealed class PresetTarget : ITarget
 
     public List<PasteTarget> Pasted { get; } = [];
 
-    /// <summary>What is in front, for a check that has the window read it after a late report; unset, nothing reads it.</summary>
+    /// <summary>
+    /// What is in front, for a check that has the window read it after a late report; unset, whether a window of this
+    /// process is in front, as the platform's seam reads it, with no target: a capture's start asks it (G3).
+    /// </summary>
     public ForegroundReading? InFront { get; set; }
 
     /// <summary>A target of the app <paramref name="appName"/>, its handle made from the name so two apps differ.</summary>
     public static PasteTarget App(string appName) => new(appName.GetHashCode(), appName);
 
-    public ForegroundReading Foreground() => InFront ?? throw new NotSupportedException("The checks hand the window the press's reading themselves.");
+    public ForegroundReading Foreground() =>
+        InFront ?? new ForegroundReading(GetWindowThreadProcessId(FrontWindow.GetForegroundWindow(), out var process) != 0 && process == Environment.ProcessId, null);
 
     public PasteTarget? LastBeforeMine() => Before;
 
@@ -189,6 +194,9 @@ public sealed class PresetTarget : ITarget
     }
 
     public Task<PixelRect?> CaretOf(PasteTarget target, TimeSpan bound) => throw new NotSupportedException("The checks hand the window the press's anchor themselves.");
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    private static extern uint GetWindowThreadProcessId(nint window, out uint processId);
 }
 
 /// <summary>

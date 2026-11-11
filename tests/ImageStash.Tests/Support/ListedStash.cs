@@ -46,6 +46,7 @@ public sealed class ListedStash : IDisposable
         StashClipboardImage = new StashClipboardImage(Listing, Notifications, CaptureNotification, Clipboard, stash.Clock, TestStash.ShortRetry, TestStash.ShortRetry);
         Capture = new CaptureSession(Screen, Selection, Frame, opener ?? GifEncoder.Opener(TestStash.ShortRetry), captureClock, failure => Notifications.Raise(failure));
         Settings = MovingStash.Keeper(stash, Failures);
+        ThumbnailSizing = new ThumbnailSizing(Settings);
         Hiding = new CaptureHiding(
             () =>
             {
@@ -99,7 +100,7 @@ public sealed class ListedStash : IDisposable
     /// <summary>The Settings page over this window's settings, shortcuts, dialogs, Move… and transfers.</summary>
     public SettingsPage Page() =>
         new(Settings, new SettingsLoad(Settings.Current, null, AsSaved: true), Shortcuts, new TestLocations(Stash.Folder.Root, Stash.Outside("settings")),
-            StartWithWindows, Dialogs, Moving, Transferring, Themes.Add, Executable);
+            StartWithWindows, Dialogs, Moving, Transferring, ThumbnailSizing, Themes.Add, Executable);
 
     /// <summary>The Settings page with <paramref name="archive"/> chosen for Import stash… and offered for confirmation.</summary>
     public async Task<SettingsPage> Offered(string archive)
@@ -186,6 +187,9 @@ public sealed class ListedStash : IDisposable
 
     /// <summary>The settings in effect, over a settings file beside the stash (<see cref="MovingStash.Keeper"/>).</summary>
     public SettingsKeeper Settings { get; }
+
+    /// <summary>The grid's thumbnail size over <see cref="Settings"/>, as the stash window holds it.</summary>
+    public ThumbnailSizing ThumbnailSizing { get; }
 
     /// <summary>What the window's hide answers it did: the flyout hidden, unless a check says otherwise.</summary>
     public CaptureHide HidesAs { get; set; } = CaptureHide.Flyout;

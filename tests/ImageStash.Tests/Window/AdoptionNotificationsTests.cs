@@ -172,6 +172,42 @@ public sealed class AdoptionNotificationsTests
     }
 
     [TestMethod]
+    public async Task ARewriteAScannerHeldPastTheStoresRetryIsSaidOnceTheScannerLetsGo()
+    {
+        using var listed = await ListedStash.Open();
+        var cat = await listed.Stash.ImportPicture("cat", "cat.png", MediaFixtures.Bytes("still.png"));
+        await listed.Listing.Refresh();
+        var rewrite = MediaFixtures.DistinctPng(95, 7, 5);
+        FileStream? held = null;
+        listed.Dialogs.OpenWithAnswer = () =>
+        {
+            // Held as a scanner holds a file it reads, sharing reads and writes (E3): the rewrite lands, every open without sharing fails.
+            held = new FileStream(listed.Dialogs.OpenedWith.Last(), FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            return Task.FromResult(Outcome.Done);
+        };
+        // Let go only once the rewrite has landed and the once-a-second asking, which a held copy leaves its classification
+        // to, has come: a wait that never moves the asking's clock never gets that far (State: Open with…).
+        var clock = listed.OpenWithClock;
+        var lettingGo = Task.Run(async () =>
+        {
+            await Handing.Eventually(() => Volatile.Read(ref held) is { } copy && OpenedWith.Holds(copy.Name, rewrite) && clock.Elapsed > TimeSpan.Zero, OpenedWith.RewriteAnswered);
+            held!.Dispose();
+        });
+        try
+        {
+            var replaced = await OpenedWith.ReplacedThroughTheMenu(listed, cat, rewrite);
+            await lettingGo;
+
+            Assert.AreEqual("Replaced “cat” with the picture another program saved.", replaced.Text, "said once let go (G27, G16)");
+            Assert.AreEqual(EditedItems.Hash(rewrite), OpenedWith.OriginalHash(listed.Stash, cat.Id), "the rewrite adopted");
+        }
+        finally
+        {
+            held?.Dispose();
+        }
+    }
+
+    [TestMethod]
     public async Task AnUndoAskedWhileTheItemsEditSavesAsANewItemActsOnceThatHasAndRestoresTheItem()
     {
         using var listed = await ListedStash.Open();

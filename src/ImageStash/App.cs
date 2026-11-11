@@ -380,14 +380,14 @@ public sealed class App : Application
     /// </summary>
     private void OpenSettings()
     {
-        if (keeper is not { } settings || settingsLoad is not { } load || shortcuts is not { } bound || moving is not { } move || transferring is not { } transfer)
+        if (keeper is not { } settings || settingsLoad is not { } load || shortcuts is not { } bound || moving is not { } move || transferring is not { } transfer || window is not { } stash)
         {
             return;
         }
 
         var open = settingsWindow;
         settingsWindow = SettingsWindow.Open(open, () => new SettingsPage(settings, load, bound, seams.Locations, seams.StartWithWindows, seams.DialogsAndExplorer,
-            move, transfer, ApplyTheme, Environment.ProcessPath!),
+            move, transfer, stash.ThumbnailSizing, ApplyTheme, Environment.ProcessPath!),
             bound.FirstUnavailable);
         if (!ReferenceEquals(open, settingsWindow))
         {

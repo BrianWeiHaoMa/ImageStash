@@ -117,6 +117,12 @@ public sealed class FrontWindow : IDisposable
         return elsewhere;
     }
 
+    /// <summary>
+    /// Watches the window in front without pause from now until the watch is disposed: whether <paramref name="window"/>
+    /// was in front at any moment meanwhile, so an activation that lasts a moment is caught.
+    /// </summary>
+    public static FrontWatch Watch(nint window) => new(window);
+
     /// <summary>The native control with the keyboard focus in the thread in front.</summary>
     public static nint FocusedHandle()
     {
@@ -178,4 +184,42 @@ public sealed class FrontWindow : IDisposable
 
     [DllImport("user32.dll", ExactSpelling = true, CharSet = CharSet.Unicode)]
     private static extern int GetWindowTextW(nint window, StringBuilder text, int capacity);
+}
+
+/// <summary>A watch of the window in front from its start until disposed (<see cref="FrontWindow.Watch"/>).</summary>
+public sealed class FrontWatch : IDisposable
+{
+    private readonly Thread watcher;
+    private volatile bool watching = true;
+    private volatile bool seen;
+
+    internal FrontWatch(nint window)
+    {
+        using var polled = new ManualResetEventSlim();
+        watcher = new Thread(() =>
+        {
+            while (watching)
+            {
+                if (FrontWindow.GetForegroundWindow() == window)
+                {
+                    seen = true;
+                }
+
+                polled.Set();
+                Thread.Yield();
+            }
+        }) { IsBackground = true };
+        watcher.Start();
+        // Watching before the act the check takes next, so its first moment is seen too.
+        Assert.IsTrue(polled.Wait(TimeSpan.FromSeconds(10)), "the watch has begun");
+    }
+
+    /// <summary>Whether the window was in front at any moment of the watch.</summary>
+    public bool Seen => seen;
+
+    public void Dispose()
+    {
+        watching = false;
+        watcher.Join();
+    }
 }

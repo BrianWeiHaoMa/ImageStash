@@ -5,7 +5,10 @@ namespace ImageStash.Tests.Support;
 /// check's own calls fall between its steps. <see cref="Advance"/> fires every timer due on the way, in order of their
 /// due moments, each with the time at its moment, on the check's thread; after one fires, the next step waits until its
 /// owner has armed it again or let it go, so the owner's work for that moment is done before time moves on.
-/// <see cref="Pass"/> moves the time without firing anything, as work that takes time does. One-shot timers only.
+/// <see cref="Pass"/> moves the time without firing anything, as work that takes time does. One-shot timers only. A
+/// timer arms from the moment of its arming, and an owner on another thread reads the time before it arms one: a check
+/// steps only once <see cref="NextDue"/> shows the timer armed, or the step lands in between and the timer waits a step
+/// later than its owner meant.
 /// </summary>
 public sealed class SteppedClock : TimeProvider
 {

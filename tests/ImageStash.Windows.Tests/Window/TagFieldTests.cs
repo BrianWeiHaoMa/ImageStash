@@ -860,7 +860,7 @@ public sealed class TagFieldTests
                     var previous = settings;
                     settings = SettingsWindow.Open(previous, () => new SettingsPage(shown.Settings,
                         new SettingsLoad(shown.Settings.Current, null, true), shortcuts, new Locations(stash, settingsFolder),
-                        new PresetStartWithWindows(), dialogs, shown.Moving, transferring, _ => { }, "ImageStash.Windows.exe"));
+                        new PresetStartWithWindows(), dialogs, shown.Moving, transferring, shown.Window.ThumbnailSizing, _ => { }, "ImageStash.Windows.exe"));
                     if (!ReferenceEquals(previous, settings)) shown.Window.Follow(settings);
                 };
                 shown.Window.Hide();

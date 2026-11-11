@@ -177,12 +177,18 @@ public enum Theme
     Dark,
 }
 
-/// <summary>The grid's three thumbnail sizes (G6); the row height of each is the grid's (L2).</summary>
+/// <summary>
+/// The grid's five thumbnail sizes, smallest first (G6); the row height of each is the grid's (L2). The three an earlier
+/// build wrote keep their names in the settings file, so a file it wrote opens at the size it names (G31); the two larger
+/// follow them.
+/// </summary>
 public enum ThumbnailSize
 {
     Small,
     Medium,
     Large,
+    ExtraLarge,
+    Huge,
 }
 
 /// <summary>A window's size in device-independent units.</summary>

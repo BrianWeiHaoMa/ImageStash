@@ -12,7 +12,8 @@ is the paste keystroke the handoff sends"), the field still reading Ctrl+PrtScn,
 neither Shift+A nor Ctrl+V left registered, and the real Ctrl+PrtScn still showing the screenshot's overlay after the
 first refusal and after the third. With the holder gone the real Ctrl+Shift+F8 is recorded: the field
 and settings.json hold it. Start with Windows switched off removes the Run value and writes false, on writes the Run
-value naming the copy's executable and true; Theme set to Dark and back to Use system setting is written each time; Open
+value naming the copy's executable and true; Theme set to Dark and back to Use system setting, and Thumbnail size to Huge
+and back to Medium, are written each time; Open
 folder opens a File Explorer window on the stash folder, which the phase closes. Another PowerShell takes Ctrl+Alt+V
 while the Stash clipboard image field records, so registering it again at the recording's end is refused and its row
 says why; the tray menu then shows Ctrl+Shift+F8 beside Take a screenshot, and its Settings opens the page on that
@@ -42,7 +43,8 @@ $settingsFile = Join-Path $env:LOCALAPPDATA 'ImageStash\settings.json'
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 # The rows' controls as G32 orders them, each named by its row's title, the stash location's with its Open folder, the
 # export's and the import's by their buttons' words.
-$rows = "Open ImageStash | Take a screenshot | Record a clip | Stash clipboard image | Also copy it to the clipboard | Maximum length | Show the mouse pointer | Where your stash is stored | Open folder | Export stash$([char]0x2026) | Import stash$([char]0x2026) | Start with Windows | Theme"
+$rows = "Open ImageStash | Take a screenshot | Record a clip | Stash clipboard image | Also copy it to the clipboard | Maximum length | Show the mouse pointer | " +
+    "Where your stash is stored | Open folder | Export stash$([char]0x2026) | Import stash$([char]0x2026) | Start with Windows | Theme | Thumbnail size"
 $held = 'Register the screenshot shortcut failed: Ctrl+Shift+F8, another program holds it'
 $typesACharacter = 'Register the screenshot shortcut failed: Shift+A, it would type a character'
 $pasteKeystroke = 'Register the screenshot shortcut failed: Ctrl+V, it is the paste keystroke the handoff sends'
@@ -337,6 +339,13 @@ try {
     Check (WaitFor { (Settings).theme -eq 'dark' } 1500) "Theme set to Dark: the list reads $($theme.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value) and settings.json holds theme dark (F10, G32)"
     $theme = Pick 'Theme' 'Use system setting'
     Check (WaitFor { (Settings).theme -eq 'system' } 1500) 'set back to Use system setting, settings.json holds theme system (F10, G32)'
+
+    # G32, G6: the thumbnail size written at once; the grid taking it is the person's.
+    $size = Pick 'Thumbnail size' 'Huge'
+    $reads = $size.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value
+    Check (WaitFor { (Settings).thumbnailSize -eq 'huge' } 1500) "Thumbnail size set to Huge: the list reads $reads and settings.json holds thumbnailSize huge (G32)"
+    $size = Pick 'Thumbnail size' 'Medium'
+    Check (WaitFor { (Settings).thumbnailSize -eq 'medium' } 1500) 'set back to Medium, settings.json holds thumbnailSize medium (G32)'
 
     # G32: Open folder opens the stash folder in File Explorer.
     Choose (One (Elements (PageElement) 'Open folder' $button) 'Open folder')

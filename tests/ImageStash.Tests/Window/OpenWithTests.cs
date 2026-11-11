@@ -49,10 +49,13 @@ public sealed class OpenWithTests
         CollectionAssert.AreEqual(new[] { cat.Id }, listed.OpenWith.Watching.ToList());
 
         var rewrite = MediaFixtures.DistinctPng(7, 10, 8);
+        Assert.IsNull(listed.OpenWithClock.NextDue, "nothing waits on the asking's clock before the rewrite");
         await OpenedWith.RewriteWhenFree(copy, rewrite);
-        var revisionWhenSaid = await listedWhenSaid.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await OpenedWith.Eventually(listed, () => listedWhenSaid.Task.IsCompleted);
+        var revisionWhenSaid = await listedWhenSaid.Task;
 
-        // The dialog is still up and the asking's clock has not moved: only the watcher can have asked.
+        // The dialog is still up and nothing waited on the asking's clock before the rewrite: only the watcher can have
+        // asked first.
         Assert.IsFalse(opening.IsCompleted);
         var adopted = listed.Listing.Items.Single(item => item.Id == cat.Id);
         Assert.AreEqual(Replaced("cat"), Said(listed).Single());
@@ -145,9 +148,9 @@ public sealed class OpenWithTests
         var (catRewrite, dogRewrite) = (MediaFixtures.DistinctPng(10, 4, 4), MediaFixtures.DistinctPng(11, 4, 4));
 
         await OpenedWith.RewriteWhenFree(catCopy, catRewrite);
-        await Handing.Eventually(() => Said(listed).Count == 1);
+        await OpenedWith.Eventually(listed, () => Said(listed).Count == 1);
         await OpenedWith.RewriteWhenFree(dogCopy, dogRewrite);
-        await Handing.Eventually(() => Said(listed).Count == 2);
+        await OpenedWith.Eventually(listed, () => Said(listed).Count == 2);
 
         CollectionAssert.AreEqual(new[] { Replaced("cat"), Replaced("dog") }, Said(listed), "one per item, both up (G27)");
         await listed.Notifications.Undo(listed.Notifications.Shown.Single(notice => notice.Text == Replaced("cat")));
@@ -173,7 +176,7 @@ public sealed class OpenWithTests
         var files = ItemFiles(listed.Stash);
 
         await OpenedWith.RewriteWhenFree(copy, OpenedWith.Garbage());
-        await Handing.Eventually(() => Said(listed).Count == 1);
+        await OpenedWith.Eventually(listed, () => Said(listed).Count == 1);
         await Task.Delay(300);
 
         Assert.AreEqual(new Failure(OpenWithCopies.ClassifyAction, "cat.png", MediaDecoder.UnreadableReason).Sentence, Said(listed).Single(), "named with the copy's name, once (G35)");
@@ -184,7 +187,7 @@ public sealed class OpenWithTests
 
         var rewrite = MediaFixtures.DistinctPng(12, 6, 4);
         await OpenedWith.RewriteWhenFree(copy, rewrite);
-        await Handing.Eventually(() => Said(listed).Count == 2);
+        await OpenedWith.Eventually(listed, () => Said(listed).Count == 2);
 
         Assert.AreEqual(Replaced("cat"), Said(listed)[1]);
         Assert.AreEqual(EditedItems.Hash(rewrite), OpenedWith.OriginalHash(listed.Stash, cat.Id));
@@ -200,7 +203,7 @@ public sealed class OpenWithTests
         listed.Stash.Reader = (_, _, _) => refusal;
 
         await OpenedWith.RewriteWhenFree(listed.Dialogs.OpenedWith.Single(), MediaFixtures.DistinctPng(24, 6, 6));
-        await Handing.Eventually(() => Said(listed).Count == 1);
+        await OpenedWith.Eventually(listed, () => Said(listed).Count == 1);
         var reads = listed.Stash.ReadCalls.Count;
         await listed.Listing.Refresh();
         await Handing.Eventually(() => listed.Stash.ReadCalls.Count > reads);
@@ -229,7 +232,7 @@ public sealed class OpenWithTests
 
         var rewrite = MediaFixtures.DistinctPng(13, 7, 5);
         await OpenedWith.RewriteWhenFree(copy, rewrite);
-        await Handing.Eventually(() => OpenedWith.Record(listed.Stash, cat.Id)?.Awaiting == true);
+        await OpenedWith.Eventually(listed, () => OpenedWith.Record(listed.Stash, cat.Id)?.Awaiting == true);
         await Task.Delay(300);
         Assert.IsEmpty(Said(listed), "not adopted while the item's edit is open (State)");
 
@@ -259,7 +262,7 @@ public sealed class OpenWithTests
         Assert.IsTrue((await listed.Editing.Open(dog, EditOrigin.Grid)).Succeeded);
 
         await OpenedWith.RewriteWhenFree(listed.Dialogs.OpenedWith.Single(), MediaFixtures.DistinctPng(14, 4, 4));
-        await Handing.Eventually(() => Said(listed).Count == 1);
+        await OpenedWith.Eventually(listed, () => Said(listed).Count == 1);
 
         Assert.AreEqual(Replaced("cat"), Said(listed).Single());
         Assert.AreEqual(dog.Id, listed.Editing.Session?.Item.Id, "dog's edit open throughout");
@@ -281,7 +284,7 @@ public sealed class OpenWithTests
             opening = listed.Editing.Open(cat, EditOrigin.Grid);
             Assert.IsTrue(listed.Editing.Occupies(cat.Id) && !listed.Editing.IsOpen, "the open is reading the original");
             await OpenedWith.RewriteWhenFree(copy, rewrite);
-            await Handing.Eventually(() => OpenedWith.Record(listed.Stash, cat.Id)?.Awaiting == true);
+            await OpenedWith.Eventually(listed, () => OpenedWith.Record(listed.Stash, cat.Id)?.Awaiting == true);
             await Task.Delay(300);
             Assert.IsFalse(opening.IsCompleted, "still reading");
             Assert.IsEmpty(Said(listed), "not adopted while Edit's open reads the original (G20)");
@@ -309,7 +312,7 @@ public sealed class OpenWithTests
         await Chosen(listed, saved.Value);
         var rewrite = MediaFixtures.DistinctPng(16, 9, 9);
         await OpenedWith.RewriteWhenFree(listed.Dialogs.OpenedWith.Single(), rewrite);
-        await Handing.Eventually(() => Said(listed).Count == 1);
+        await OpenedWith.Eventually(listed, () => Said(listed).Count == 1);
 
         await listed.Notifications.Undo(listed.Notifications.Shown.Single());
 
@@ -334,7 +337,7 @@ public sealed class OpenWithTests
         await Chosen(listed, cat);
         var rewrite = MediaFixtures.DistinctPng(17, 3, 5);
         await OpenedWith.RewriteWhenFree(listed.Dialogs.OpenedWith.Single(), rewrite);
-        await Handing.Eventually(() => Said(listed).Count == 1);
+        await OpenedWith.Eventually(listed, () => Said(listed).Count == 1);
         var notice = listed.Notifications.Shown.Single();
 
         if (byTime)
@@ -364,12 +367,12 @@ public sealed class OpenWithTests
         var copy = listed.Dialogs.OpenedWith.Single();
         var (first, second) = (MediaFixtures.DistinctPng(18, 4, 6), MediaFixtures.DistinctPng(19, 6, 4));
         await OpenedWith.RewriteWhenFree(copy, first);
-        await Handing.Eventually(() => Said(listed).Count == 1);
+        await OpenedWith.Eventually(listed, () => Said(listed).Count == 1);
         var firstNotice = listed.Notifications.Shown.Single();
         var firstRevision = listed.Listing.Items.Single().RenderedRevision;
 
         await OpenedWith.RewriteWhenFree(copy, second);
-        await Handing.Eventually(() => listed.Listing.Items.Single().RenderedRevision != firstRevision && Said(listed).Count == 1 && !listed.Notifications.Shown.Contains(firstNotice));
+        await OpenedWith.Eventually(listed, () => listed.Listing.Items.Single().RenderedRevision != firstRevision && Said(listed).Count == 1 && !listed.Notifications.Shown.Contains(firstNotice));
 
         var secondNotice = listed.Notifications.Shown.Single();
         Assert.AreEqual(Replaced("cat"), secondNotice.Text);
@@ -398,7 +401,7 @@ public sealed class OpenWithTests
         CollectionAssert.AreEqual(new[] { cat.Id }, listed.OpenWith.Watching.ToList());
 
         await OpenedWith.RewriteWhenFree(fresh, MediaFixtures.DistinctPng(20, 5, 5));
-        await Handing.Eventually(() => Said(listed).Count == 1);
+        await OpenedWith.Eventually(listed, () => Said(listed).Count == 1);
         Assert.AreEqual(Replaced("cat"), Said(listed).Single(), "the fresh copy is the one watched");
     }
 
@@ -411,7 +414,7 @@ public sealed class OpenWithTests
         Assert.IsTrue((await listed.Editing.Open(cat, EditOrigin.Grid)).Succeeded);
         var copy = listed.Dialogs.OpenedWith.Single();
         await OpenedWith.RewriteWhenFree(copy, MediaFixtures.DistinctPng(21, 5, 3));
-        await Handing.Eventually(() => OpenedWith.Record(listed.Stash, cat.Id)?.Awaiting == true);
+        await OpenedWith.Eventually(listed, () => OpenedWith.Record(listed.Stash, cat.Id)?.Awaiting == true);
 
         await Chosen(listed, cat);
         Assert.AreEqual(copy, listed.Dialogs.OpenedWith[1], "the rewrite awaiting is kept (G27)");
@@ -459,7 +462,7 @@ public sealed class OpenWithTests
         CollectionAssert.AreEqual(new[] { true, false, true, false }, up, "the flag let go each time (G2)");
 
         await OpenedWith.RewriteWhenFree(listed.Dialogs.OpenedWith.Last(), MediaFixtures.DistinctPng(22, 4, 4));
-        await Handing.Eventually(() => Said(listed).Count == 1);
+        await OpenedWith.Eventually(listed, () => Said(listed).Count == 1);
         Assert.AreEqual(Replaced("cat"), Said(listed).Single(), "the copy watched all the same");
     }
 
@@ -476,7 +479,7 @@ public sealed class OpenWithTests
             listed.Stash.Reader = OpenedWith.Holding(holds);
 
             await OpenedWith.RewriteWhenFree(listed.Dialogs.OpenedWith.Single(), MediaFixtures.DistinctPng(23, 4, 4));
-            await Handing.Eventually(() => Said(listed).Count == 1);
+            await OpenedWith.Eventually(listed, () => Said(listed).Count == 1);
             await Task.Delay(300);
 
             Assert.AreEqual(new Failure(OpenWithCopies.ClassifyAction, "cat", HeldFileRetry.HeldReason).Sentence, Said(listed).Single(), "named, and nothing says it was replaced (G35, R9)");
@@ -499,7 +502,7 @@ public sealed class OpenWithTests
 
         // Rewritten while ImageStash is not running: the start adopts it before anything reads the stash.
         using var restarted = await listed.Restart(_ => OpenedWith.Rewrite(copy, rewrite));
-        await Handing.Eventually(() => Said(restarted).Count == 1);
+        await OpenedWith.Eventually(restarted, () => Said(restarted).Count == 1);
 
         Assert.AreEqual(Replaced("cat"), Said(restarted).Single(), "the start's adoption said (G27, R9)");
         CollectionAssert.AreEqual(new[] { cat.Id }, restarted.OpenWith.Watching.ToList(), "its session watched again (State)");
@@ -512,10 +515,11 @@ public sealed class OpenWithTests
         Assert.IsEmpty(Said(restarted));
 
         var again = MediaFixtures.DistinctPng(31, 5, 6);
+        Assert.IsNull(restarted.OpenWithClock.NextDue, "nothing waits on the asking's clock before the rewrite");
         await OpenedWith.RewriteWhenFree(copy, again);
-        await Handing.Eventually(() => Said(restarted).Count == 1);
+        await OpenedWith.Eventually(restarted, () => Said(restarted).Count == 1);
         Assert.AreEqual(EditedItems.Hash(again), OpenedWith.OriginalHash(restarted.Stash, cat.Id), "a rewrite after the start adopted");
-        Assert.IsNull(restarted.OpenWithClock.NextDue, "seen by the watcher: the asking's clock never moved and nothing waits on it");
+        Assert.IsNull(restarted.OpenWithClock.NextDue, "seen by the watcher first: nothing waits on the asking's clock");
         Assert.AreEqual(0L, restarted.Uses());
     }
 
@@ -609,17 +613,7 @@ public sealed class OpenWithTests
             Assert.IsNull(clock.NextDue);
 
             await OpenedWith.RewriteWhenFree(owlCopy, MediaFixtures.DistinctPng(43, 4, 4));
-            // The watcher may see the rewrite while its writer still holds the copy: the copy is then asked about once a
-            // second, which this clock passes only when told.
-            await Handing.Eventually(() =>
-            {
-                if (clock.NextDue is not null)
-                {
-                    clock.Advance(OpenWith.AskedEvery);
-                }
-
-                return Said(restarted).Count == 3;
-            });
+            await OpenedWith.Eventually(restarted, () => Said(restarted).Count == 3);
             Assert.AreEqual(Replaced("owl"), Said(restarted)[2], "the unchanged one, watched again, adopted once rewritten");
         }
         finally

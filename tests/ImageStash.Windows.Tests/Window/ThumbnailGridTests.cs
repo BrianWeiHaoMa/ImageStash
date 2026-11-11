@@ -95,7 +95,7 @@ public sealed class ThumbnailGridTests
         using var pointer = TestMouse.PutBackAfterwards();
         TestMouse.MoveTo(TestMouse.Away);
         using var shown = ShownWindow.Open();
-        // Upright, so the three keep one row at the largest size in the flyout; each its own size, so none is a duplicate (G12).
+        // Upright, so the three keep one row up to Large in the flyout; each its own size, so none is a duplicate (G12).
         await shown.OpenStash(shown.Picture("one.png", 40, 50, (_, _) => First), shown.Picture("two.png", 40, 51, (_, _) => First), shown.Picture("three.png", 40, 52, (_, _) => First));
         await Eventually(() => TrayDesktop.Get(() => shown.Grid.Rows is [{ Tiles.Count: 3 }, ..]));
         var middle = TrayDesktop.Get(() => shown.Grid.Rows[0].Tiles.OrderBy(tile => tile.X).ElementAt(1).Id);
@@ -110,13 +110,22 @@ public sealed class ThumbnailGridTests
             }
         });
 
-        foreach (var size in new[] { ThumbnailSize.Small, ThumbnailSize.Medium, ThumbnailSize.Large })
+        // Every size, the two after Large splitting the three over rows (G6).
+        foreach (var size in Enum.GetValues<ThumbnailSize>())
         {
-            await Eventually(() => TrayDesktop.Get(() => shown.Settings.Current.ThumbnailSize == size && shown.Listing.Selection.SequenceEqual([middle]) && shown.Grid.Rows[0].Tiles.Count == 3));
+            await Eventually(() => TrayDesktop.Get(() => shown.Settings.Current.ThumbnailSize == size && shown.Listing.Selection.SequenceEqual([middle])
+                && shown.Grid.Rows.Any(row => row.Tiles.Any(tile => tile.Id == middle) && row.Height <= JustifiedRows.RowHeight(size))));
             await RingedEventually(shown, middle, focused: false, $"{size}, the search box focused");
             TrayDesktop.Run(() => Press(shown.Search, Key.OemPlus, KeyModifiers.Control));
         }
 
+        // Back to Large, where the three share a row again.
+        TrayDesktop.Run(() =>
+        {
+            Press(shown.Search, Key.OemMinus, KeyModifiers.Control);
+            Press(shown.Search, Key.OemMinus, KeyModifiers.Control);
+        });
+        await Eventually(() => TrayDesktop.Get(() => shown.Settings.Current.ThumbnailSize == ThumbnailSize.Large && shown.Grid.Rows is [{ Tiles.Count: 3 }, ..]));
         TrayDesktop.Run(() => shown.Grid.Focus());
         await RingedEventually(shown, middle, focused: true, "the grid focused");
 

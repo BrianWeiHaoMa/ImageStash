@@ -80,10 +80,10 @@ public sealed class Handing : IDisposable
         return Stash.SqlQuery("SELECT item_id, used_at FROM uses ORDER BY rowid", row => (row.GetInt64(0), row.GetInt64(1)));
     }
 
-    /// <summary>Waits up to five seconds for <paramref name="condition"/>, failing the check if it never comes true.</summary>
-    public static async Task Eventually(Func<bool> condition)
+    /// <summary>Waits up to five seconds, or <paramref name="within"/>, for <paramref name="condition"/>, failing the check if it never comes true.</summary>
+    public static async Task Eventually(Func<bool> condition, TimeSpan? within = null)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(5);
+        var deadline = DateTime.UtcNow + (within ?? TimeSpan.FromSeconds(5));
         while (!condition())
         {
             Assert.IsLessThan(deadline, DateTime.UtcNow, "the condition did not come true");

@@ -163,6 +163,26 @@ public sealed class CaptureDesk : IDisposable
     /// <summary>Starts the act on the UI thread, as each way in runs it; the task ends when the act has.</summary>
     public Task Take() => TrayDesktop.Get(Screenshot.Take);
 
+    /// <summary>
+    /// A screenshot taken in the turn of the UI thread that sees <paramref name="window"/> come in front by
+    /// <paramref name="bringToFront"/>, before that thread has handled what the activation tells the stash window: as the
+    /// screenshot shortcut's press is handled when it follows a click into another app at once.
+    /// </summary>
+    public async Task<Task> TakeOnceInFront(nint window, Action bringToFront)
+    {
+        using var waiting = new ManualResetEventSlim();
+        // Not Task.Run, which would unwrap the screenshot's own task and wait for the whole capture.
+        var turn = Task.Factory.StartNew(() => TrayDesktop.Get(() =>
+        {
+            waiting.Set();
+            FrontWindow.WaitUntilInFront(window);
+            return Screenshot.Take();
+        }), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        Assert.IsTrue(waiting.Wait(TimeSpan.FromSeconds(10)), "the UI thread waits for the window to come in front");
+        bringToFront();
+        return await turn;
+    }
+
     /// <summary>Presses Record a clip on the UI thread, as each way in runs it; the task ends when the act has.</summary>
     public Task Record() => TrayDesktop.Get(RecordClip.StartOrStop);
 

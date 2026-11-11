@@ -110,7 +110,14 @@ public sealed class StashWindow : Avalonia.Controls.Window
             action => Dispatcher.UIThread.Post(action),
             bitmap => bitmap.Dispose(),
             failure => notices.Raise(failure));
-        grid = new ThumbnailGrid(listing, thumbnails, () => settings.Current.ThumbnailSize) { Margin = new Thickness(10, 4, 10, 10) };
+        ThumbnailSizing = new ThumbnailSizing(settings);
+        grid = new ThumbnailGrid(listing, thumbnails, () => ThumbnailSizing.Current) { Margin = new Thickness(10, 4, 10, 10) };
+        // A size stepped here or chosen on the Settings page: the grid lays its rows out again at it (G6, G32).
+        ThumbnailSizing.Changed += () =>
+        {
+            grid.InvalidateMeasure();
+            grid.InvalidateVisual();
+        };
         // The grid lays out its rows in a layout pass after the listing changes: an arrow moves among the rows of what is listed now.
         keys = new PendingQueryKeys(listing, () =>
         {
@@ -132,7 +139,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
 
         // Before Wire: its handlers of the window's activation, deactivation and Close come first.
         activation = new WindowActivation(this, chrome, editing, notices, pasteTarget, seams.Target, pasteKey, () => DialogUp, () => DragInProgress);
-        CaptureHiding = new CaptureReturn(this, chrome, activation, () => DialogUp, () => DragInProgress, FocusContent).Hiding;
+        CaptureHiding = new CaptureReturn(this, chrome, activation, seams.Target, () => DialogUp, () => DragInProgress, FocusContent).Hiding;
         chrome.Apply(pinnedNow: false);
         Wire();
         WireEditor(Cover);
@@ -165,6 +172,9 @@ public sealed class StashWindow : Avalonia.Controls.Window
 
     /// <summary>The window out of the way while a capture is in progress and back as it was afterwards (G3).</summary>
     public CaptureHiding CaptureHiding { get; }
+
+    /// <summary>The grid's thumbnail size, which its keys and wheel step and the Settings page chooses (G6, G32).</summary>
+    public ThumbnailSizing ThumbnailSizing { get; }
 
     /// <summary>Take a screenshot chosen from the <c>+</c> menu, raised once the menu has closed; the act is the shortcut's (G14).</summary>
     public event Action? ScreenshotRequested;
@@ -439,7 +449,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
             // Ctrl+wheel steps the thumbnail size instead of scrolling; the wheel alone scrolls (G6).
             if (e.KeyModifiers == KeyModifiers.Control)
             {
-                StepThumbnails(sizeWheel.Turn(e.Delta.Y));
+                ThumbnailSizing.Step(sizeWheel.Turn(e.Delta.Y));
                 e.Handled = true;
             }
         }, RoutingStrategies.Tunnel);
@@ -539,7 +549,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
                 keys.Then(Rename);
                 break;
             case KeyAction.LargerThumbnails or KeyAction.SmallerThumbnails:
-                StepThumbnails(action == KeyAction.LargerThumbnails ? 1 : -1);
+                ThumbnailSizing.Step(action == KeyAction.LargerThumbnails ? 1 : -1);
                 break;
             case KeyAction.Escape:
                 // After a Space still waiting behind an arrow, so it closes the preview that Space opens (G2).
@@ -734,19 +744,6 @@ public sealed class StashWindow : Avalonia.Controls.Window
     /// notification's field, and judges again where focus went when the page loses it (G2).
     /// </summary>
     public void Follow(SettingsWindow page) => activation.SettingsPageOpened(page);
-
-    /// <summary>G6's three sizes: the grid lays its rows out again at the new size, which settings remember.</summary>
-    private void StepThumbnails(int steps)
-    {
-        var now = settings.Current.ThumbnailSize;
-        var next = JustifiedRows.Step(now, steps);
-        if (next != now)
-        {
-            settings.Change(s => s with { ThumbnailSize = next });
-            grid.InvalidateMeasure();
-            grid.InvalidateVisual();
-        }
-    }
 
     private void ShowBusy() => status.ShowBusy([paste.Busy, import.Busy, handoff.Busy, deletion.Busy, renaming.Busy, editing.Busy, moving.Busy]);
 

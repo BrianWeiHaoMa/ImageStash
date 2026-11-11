@@ -103,13 +103,28 @@ public sealed class JustifiedRowsTests
     }
 
     [TestMethod]
-    public void TheThreeSizesHaveThreeRowHeights()
+    public void TheFiveSizesHaveFiveRowHeightsTheThreeOfEarlierBuildsAsTheyWere()
     {
         var heights = Enum.GetValues<ThumbnailSize>().Select(JustifiedRows.RowHeight).ToList();
 
-        Assert.HasCount(3, heights.Distinct());
+        Assert.HasCount(5, heights.Distinct());
         CollectionAssert.AreEqual(heights.Order().ToList(), heights);
-        Assert.AreEqual(ThumbnailSize.Medium, new Settings().ThumbnailSize, "the middle size is the default");
+        CollectionAssert.AreEqual(new[] { 64.0, 96.0, 136.0 }, heights.Take(3).ToList(), "Small, Medium and Large as before; the two after them larger (G6, G31)");
+        Assert.AreEqual(ThumbnailSize.Medium, new Settings().ThumbnailSize, "Medium is the default");
+    }
+
+    [TestMethod]
+    public void TheWidestPictureAloneInARowAtTheLargestSizeIsNoWiderThanAGridAsNarrowAsTheFlyoutsOrTheWindowsSmallest()
+    {
+        // The grid's margins take 10 on each side of the window's width.
+        foreach (var width in new[] { WindowSize.FlyoutDefault.Width - 20, WindowSize.Minimum.Width - 20 })
+        {
+            var rows = JustifiedRows.Layout([TestItems.Sized(1, 2100, 1000)], width, JustifiedRows.RowHeight(ThumbnailSize.Huge));
+
+            var tile = rows.Single().Tiles.Single();
+            Assert.IsLessThanOrEqualTo(width + 1e-9, tile.X + tile.Width, $"a {JustifiedRows.WidestRatio} picture at the largest size in a grid {width} wide (G6: justified rows)");
+            Assert.AreEqual(JustifiedRows.WidestRatio, tile.Width / tile.Height, 1e-9, "at its ratio");
+        }
     }
 
     [TestMethod]
@@ -121,25 +136,24 @@ public sealed class JustifiedRowsTests
         var items = TestItems.Many(30);
         void Step(int steps) => keeper.Change(s => s with { ThumbnailSize = JustifiedRows.Step(s.ThumbnailSize, steps) });
 
+        Step(3);
+        var huge = keeper.Current.ThumbnailSize;
         Step(1);
-        var large = keeper.Current.ThumbnailSize;
-        Step(1);
-        var stillLarge = keeper.Current.ThumbnailSize;
-        Step(-1);
-        Step(-1);
+        var stillHuge = keeper.Current.ThumbnailSize;
+        Step(-4);
         var small = keeper.Current.ThumbnailSize;
         Step(-1);
         await keeper.Flush();
 
-        Assert.AreEqual((ThumbnailSize.Large, ThumbnailSize.Large, ThumbnailSize.Small), (large, stillLarge, small), "three sizes, held at the ends");
+        Assert.AreEqual((ThumbnailSize.Huge, ThumbnailSize.Huge, ThumbnailSize.Small), (huge, stillHuge, small), "five sizes, held at the ends");
         Assert.AreEqual(ThumbnailSize.Small, keeper.Current.ThumbnailSize);
         Assert.AreEqual(ThumbnailSize.Small, Settings.Load(scratch.Path, TestStash.ShortRetry).Settings.ThumbnailSize, "a restart opens at the last size");
         Assert.IsEmpty(failures);
         var heights = Enum.GetValues<ThumbnailSize>().Select(size => JustifiedRows.Layout(items, 440, JustifiedRows.RowHeight(size)).Max(row => row.Height)).ToList();
         CollectionAssert.AreEqual(heights.Order().ToList(), heights, "the rows are laid out taller at each larger size");
-        Assert.HasCount(3, heights.Distinct());
+        Assert.HasCount(5, heights.Distinct());
         var bounds = Enum.GetValues<ThumbnailSize>().Select(size => Thumbnails<object>.Bound(items[0].Facts, JustifiedRows.RowHeight(size), 1.5)).ToList();
         CollectionAssert.AreEqual(bounds.Order().ToList(), bounds);
-        Assert.HasCount(3, bounds.Distinct(), "each size asks for its thumbnails at its own bound");
+        Assert.HasCount(5, bounds.Distinct(), "each size asks for its thumbnails at its own bound");
     }
 }

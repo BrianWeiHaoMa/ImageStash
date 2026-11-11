@@ -4,6 +4,10 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+
+- Two larger thumbnail sizes: `Ctrl`+wheel and `Ctrl` with `+` or `-` now step the grid through five, and Settings has a Thumbnail size list that the grid follows at once.
+
 ### Changed
 
 - A screenshot's or recording's notification now goes away when you click its Edit, its Trim or the notification itself, so it no longer lies over the editor or the window it opened.
@@ -12,6 +16,7 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 ### Fixed
 
 - A recording of busy content, such as a playing video, keeps about 15 frames a second instead of falling to one or two.
+- A screenshot started right after you click into another app no longer brings the pinned stash window back in front of that app, where it took your typing.
 
 ## [0.1.0] - 2026-11-10
 
