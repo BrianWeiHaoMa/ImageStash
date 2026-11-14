@@ -4,6 +4,8 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-14
+
 ### Fixed
 
 - A pinned stash window that was behind another app when a screenshot or recording started now goes back behind that app when it ends, instead of coming up in front of it unfocused, where clicking the app did not bring the app back in front.
