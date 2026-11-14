@@ -8,10 +8,11 @@ namespace ImageStash.Window;
 /// <summary>
 /// The stash window out of the way for a capture and back as it was afterwards (G3): at the start a flyout whose focus
 /// has already gone to another app hidden for good (G2), else the flyout hidden, or the pinned window minimised from
-/// hidden, with its place and whether it was active remembered, as the window says and the platform agrees; at the end
-/// shown again where it was, never through a summon, activated only when it was, as the window's own showing, so the
-/// paste target stands (G8). It owns that memory and the <see cref="CaptureHiding"/> holder the captures call, and
-/// follows the user's own restore of the window, after which a minimise is theirs. UI thread only.
+/// hidden, with its place and whether it was active remembered, as the window says and the platform agrees, and, when
+/// it was not, the window that stood in front of it; at the end shown again where it was, never through a summon,
+/// activated only when it was, else put back behind that window, as the window's own showing, so the paste target
+/// stands (G8). It owns that memory and the <see cref="CaptureHiding"/> holder the captures call, and follows the
+/// user's own restore of the window, after which a minimise is theirs. UI thread only.
 /// </summary>
 public sealed class CaptureReturn
 {
@@ -19,6 +20,7 @@ public sealed class CaptureReturn
     private readonly WindowChrome chrome;
     private readonly WindowActivation activation;
     private readonly ITarget targets;
+    private readonly IWindowOrder order;
     private readonly Func<bool> dialogUp;
     private readonly Func<bool> dragInProgress;
     private readonly Action focusContent;
@@ -27,14 +29,15 @@ public sealed class CaptureReturn
     /// <summary>
     /// For <paramref name="window"/>, whose dialogs and drags <paramref name="dialogUp"/> and <paramref name="dragInProgress"/>
     /// report, and whose focus <paramref name="focusContent"/> puts where a summon puts it; <paramref name="targets"/> says
-    /// what is in front.
+    /// what is in front, and <paramref name="order"/> which window stands in front of the pinned one.
     /// </summary>
-    public CaptureReturn(Avalonia.Controls.Window window, WindowChrome chrome, WindowActivation activation, ITarget targets, Func<bool> dialogUp, Func<bool> dragInProgress, Action focusContent)
+    public CaptureReturn(Avalonia.Controls.Window window, WindowChrome chrome, WindowActivation activation, ITarget targets, IWindowOrder order, Func<bool> dialogUp, Func<bool> dragInProgress, Action focusContent)
     {
         this.window = window;
         this.chrome = chrome;
         this.activation = activation;
         this.targets = targets;
+        this.order = order;
         this.dialogUp = dialogUp;
         this.dragInProgress = dragInProgress;
         this.focusContent = focusContent;
@@ -74,7 +77,8 @@ public sealed class CaptureReturn
         // Active only while a window of ImageStash's is in front too: the window's own flag lags another app's activation
         // until the UI thread handles it, so a screenshot asked at once after a click into the chat would read it active
         // and give the chat's keystrokes to the window at the end (G3).
-        beforeCapture = new BeforeCapture(place, window.IsActive && targets.Foreground().IsMine);
+        var active = window.IsActive && targets.Foreground().IsMine;
+        beforeCapture = new BeforeCapture(place, active, hide == CaptureHide.Pinned && !active ? order.InFrontOf(window) : null);
         // A tooltip is a window of its own, which the hide leaves up until Avalonia has handled the pointer leaving, after
         // the grab that follows at once would take it in; closed now, as Avalonia's tooltip service closes one.
         foreach (var tipped in window.GetVisualDescendants().OfType<Control>().Where(ToolTip.GetIsOpen).ToList())
@@ -128,6 +132,13 @@ public sealed class CaptureReturn
             window.Hide();
             window.WindowState = WindowState.Normal;
             ShowActivatedOrNot(false, window.Show);
+            // Shown afresh, it stands in front of every other window, unfocused, where a click on the app in front does not
+            // bring that app back in front of it; put back behind the window that stood in front of it, as it was (G3). With
+            // none, it stood in front of them all and stays so, even when the overlay's closing hands another app the focus.
+            if (before.InFront is { } inFront)
+            {
+                order.PutBack(window, inFront);
+            }
         }
 
         if (before.Active)
@@ -156,6 +167,9 @@ public sealed class CaptureReturn
         }
     }
 
-    /// <summary>The stash window as a capture's start found it: its whole rectangle in physical pixels, and whether it was active.</summary>
-    private sealed record BeforeCapture(PixelRect Place, bool Active);
+    /// <summary>
+    /// The stash window as a capture's start found it: its whole rectangle in physical pixels, whether it was active, and,
+    /// for the pinned window not active, the window that stood in front of it, as <see cref="IWindowOrder.InFrontOf"/> says.
+    /// </summary>
+    private sealed record BeforeCapture(PixelRect Place, bool Active, nint? InFront);
 }

@@ -14,4 +14,5 @@ public sealed record PlatformSeams(
     ITarget Target,
     IScreen Screen,
     IFonts Fonts,
-    IBorderDrag BorderDrag);
+    IBorderDrag BorderDrag,
+    IWindowOrder WindowOrder);

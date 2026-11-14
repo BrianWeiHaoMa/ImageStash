@@ -150,12 +150,30 @@ public sealed class FrontWindow : IDisposable
     /// <summary>The top-level window a click at <paramref name="point"/>, in physical pixels on the desktop, would reach.</summary>
     public static nint Under(PixelPoint point) => GetAncestor(WindowFromPoint(new ScreenPoint { X = point.X, Y = point.Y }), GaRoot);
 
+    /// <summary>Whether <paramref name="front"/> stands anywhere in front of <paramref name="behind"/> in Windows' order of top-level windows.</summary>
+    public static bool StandsInFrontOf(nint front, nint behind)
+    {
+        for (var below = GetWindow(front, GwHwndNext); below != 0; below = GetWindow(below, GwHwndNext))
+        {
+            if (below == behind)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public void Dispose() => TrayDesktop.Run(Window.Close);
 
     [DllImport("user32.dll", ExactSpelling = true)]
     public static extern nint GetForegroundWindow();
 
     private const uint GaRoot = 2;
+    private const uint GwHwndNext = 2;
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    private static extern nint GetWindow(nint window, uint command);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct ScreenPoint { public int X, Y; }

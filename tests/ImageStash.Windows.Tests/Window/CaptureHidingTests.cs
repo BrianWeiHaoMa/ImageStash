@@ -17,7 +17,7 @@ namespace ImageStash.Windows.Tests.Window;
 /// up, its frozen grab holding what lies beneath it, and back afterwards where it was, at its size, active, with its
 /// query, selection, open preview and paste target as they were (G8); a pinned window minimised meanwhile, its picker
 /// up or not, its frozen grab holding what lies beneath it, and restored, active only when it was, so a chat in front
-/// keeps its keystrokes; a window already hidden left hidden; a summon during the capture showing the window as a summon
+/// keeps its keystrokes and stays in front of it, after a screenshot or a recording; a window already hidden left hidden; a summon during the capture showing the window as a summon
 /// does, a minimised pinned one restored (G1), and the capture's end then showing nothing again; a pinned window closed
 /// during the capture left closed, the next summon bringing it forward (G2); Take a screenshot chosen from the flyout's
 /// own menu hiding it like any other start, the menu closed before the grab and its closing not taken for focus lost
@@ -160,9 +160,36 @@ public sealed class CaptureHidingTests
 
         await Eventually(() => TrayDesktop.Get(() => shown.Window.IsVisible && shown.Window.WindowState == WindowState.Normal));
         TrayDesktop.Run(() => Assert.IsFalse(shown.Window.IsActive, "not active, as it was not (G3)"));
+        Assert.IsTrue(FrontWindow.StandsInFrontOf(desk.Chat.Window, stash), "behind the chat, as it was, not in front of it unfocused, where a click on the chat would not bring the chat back in front (G3)");
         desk.ChatKeepsTheKeystrokes("after the capture");
         watch.Dispose();
         Assert.IsFalse(watch.Seen, "from the Esc until the chat took the keystrokes, the stash window was at no moment in front (G3)");
+    }
+
+    [TestMethod]
+    public async Task APinnedWindowBehindTheChatIsRestoredBehindItAfterARecording()
+    {
+        using var desk = await CaptureDesk.Open(["pinned behind recorded.png"]);
+        var window = desk.Shown.Window;
+        var stash = await PinnedInFront(desk);
+        desk.Chat.ClickTitleBar();
+        await Eventually(() => TrayDesktop.Get(() => !window.IsActive));
+
+        var recording = desk.Record();
+        await desk.OverlayInFront();
+        await CaptureDesk.Drag(DisplayPlaces.At(DisplayPlaces.Primary(), 150, 160), DisplayPlaces.At(DisplayPlaces.Primary(), 400, 320));
+        await desk.WhileWaiting();
+        desk.ClickRecord();
+        await desk.WhileRecording();
+        await Task.Delay(500);
+        await desk.Record();
+        await recording.WaitAsync(TimeSpan.FromSeconds(30));
+        await desk.CardShown();
+
+        await Eventually(() => TrayDesktop.Get(() => window.IsVisible && window.WindowState == WindowState.Normal));
+        TrayDesktop.Run(() => Assert.IsFalse(window.IsActive, "not active, as it was not (G3)"));
+        Assert.IsTrue(FrontWindow.StandsInFrontOf(desk.Chat.Window, stash), "behind the chat, as it was (G3)");
+        desk.ChatKeepsTheKeystrokes("after the recording");
     }
 
     [TestMethod]

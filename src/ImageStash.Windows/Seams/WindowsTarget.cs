@@ -249,21 +249,25 @@ public sealed class WindowsTarget : ITarget, IDisposable
             return new ForegroundReading(true, null);
         }
 
-        GetWindowThreadProcessId(GetShellWindow(), out var shell);
-        if (process == shell && ClassName(window) is var name)
+        if (DesktopOrTaskbar(window))
         {
-            if (DesktopAndTaskbar.Contains(name))
-            {
-                return new ForegroundReading(false, null);
-            }
+            return new ForegroundReading(false, null);
+        }
 
-            if (TaskSwitcher.Contains(name))
-            {
-                return null;
-            }
+        GetWindowThreadProcessId(GetShellWindow(), out var shell);
+        if (process == shell && TaskSwitcher.Contains(ClassName(window)))
+        {
+            return null;
         }
 
         return new ForegroundReading(false, new PasteTarget(window, AppNameOf(window)));
+    }
+
+    /// <summary>Whether <paramref name="window"/> is the shell's desktop or one of its taskbars (<see cref="DesktopAndTaskbar"/>).</summary>
+    internal static bool DesktopOrTaskbar(nint window)
+    {
+        GetWindowThreadProcessId(GetShellWindow(), out var shell);
+        return GetWindowThreadProcessId(window, out var process) != 0 && process == shell && DesktopAndTaskbar.Contains(ClassName(window));
     }
 
     // The index of the latest report up to at that is not of the shell's task switcher, or -1; called under the lock.

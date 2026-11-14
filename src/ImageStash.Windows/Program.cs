@@ -29,7 +29,7 @@ public static class Program
             using var shortcuts = new WindowsShortcuts();
             using var target = new WindowsTarget();
             var seams = new PlatformSeams(tray, new WindowsRecycleBin(), new WindowsStartWithWindows(WindowsStartWithWindows.ProductValueName), new WindowsLocations(), instance,
-                new WindowsQuietWindows(tray), new WindowsClipboardAndDrops(), new WindowsDialogsAndExplorer(), shortcuts, target, new WindowsScreen(), new WindowsFonts(), new WindowsBorderDrag());
+                new WindowsQuietWindows(tray), new WindowsClipboardAndDrops(), new WindowsDialogsAndExplorer(), shortcuts, target, new WindowsScreen(), new WindowsFonts(), new WindowsBorderDrag(), new WindowsWindowOrder());
             return StartAvalonia(seams, args);
         }
         finally
