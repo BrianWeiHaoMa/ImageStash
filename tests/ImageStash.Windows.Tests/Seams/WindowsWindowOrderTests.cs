@@ -28,8 +28,7 @@ public sealed class WindowsWindowOrderTests
         var owned = TrayDesktop.Get(() => Shown(ours));
         try
         {
-            ToFront(Handle(ours));
-            ToFront(other.Window);
+            Behind(Handle(ours), other.Window);
             Assert.IsTrue(FrontWindow.StandsInFrontOf(Handle(owned), Handle(ours)) && FrontWindow.StandsInFrontOf(other.Window, Handle(owned)), "the window it owns between it and the other app's");
 
             Assert.AreEqual(other.Window, TrayDesktop.Get(() => new WindowsWindowOrder().InFrontOf(ours)), "the other app's window, not the one it owns");
@@ -46,8 +45,7 @@ public sealed class WindowsWindowOrderTests
         var (ours, page) = TrayDesktop.Get(() => (Shown(), Shown()));
         try
         {
-            ToFront(Handle(ours));
-            ToFront(Handle(page));
+            Behind(Handle(ours), Handle(page));
 
             Assert.AreEqual(Handle(page), TrayDesktop.Get(() => new WindowsWindowOrder().InFrontOf(ours)), "as the Settings page, which it does not own");
         }
@@ -64,8 +62,8 @@ public sealed class WindowsWindowOrderTests
         var ours = TrayDesktop.Get(() => Shown());
         try
         {
-            ToFront(other.Window);
-            ToFront(Handle(ours));
+            // Shown last, it stands in front of every window that is not topmost.
+            Behind(other.Window, Handle(ours));
 
             Assert.IsNull(TrayDesktop.Get(() => new WindowsWindowOrder().InFrontOf(ours)), "only topmost windows stand in front of it");
         }
@@ -82,8 +80,7 @@ public sealed class WindowsWindowOrderTests
         var ours = TrayDesktop.Get(() => Shown());
         try
         {
-            ToFront(Handle(ours));
-            ToFront(other.Window);
+            Behind(Handle(ours), other.Window);
             var order = new WindowsWindowOrder();
             var inFront = TrayDesktop.Get(() => order.InFrontOf(ours));
             Assert.AreEqual(other.Window, inFront);
@@ -109,8 +106,7 @@ public sealed class WindowsWindowOrderTests
         var ours = TrayDesktop.Get(() => Shown());
         try
         {
-            ToFront(Handle(ours));
-            ToFront(gone.Window);
+            Behind(Handle(ours), gone.Window);
             var order = new WindowsWindowOrder();
             var inFront = TrayDesktop.Get(() => order.InFrontOf(ours));
             Assert.AreEqual(gone.Window, inFront);
@@ -133,7 +129,8 @@ public sealed class WindowsWindowOrderTests
     /// <summary>A window of the check's own, as ImageStash's would be, shown off every display without activation, owned by <paramref name="owner"/> when given.</summary>
     private static Avalonia.Controls.Window Shown(Avalonia.Controls.Window? owner = null)
     {
-        var window = new Avalonia.Controls.Window { Width = 300, Height = 200, ShowActivated = false, Position = new PixelPoint(-8000, 100) };
+        var place = new PixelPoint(-8000, 100);
+        var window = new Avalonia.Controls.Window { Width = 300, Height = 200, ShowActivated = false, Position = place };
         if (owner is null)
         {
             window.Show();
@@ -143,6 +140,10 @@ public sealed class WindowsWindowOrderTests
             window.Show(owner);
         }
 
+        // Avalonia's showing moves a window placed off every display onto one, seen at (0, 100) over the chat's title bar,
+        // where the click meant for the chat reached it instead; once shown, it stays where it is moved.
+        window.Position = place;
+        Assert.AreEqual(nint.Zero, MonitorFromWindow(Handle(window), MonitorDefaultToNull), $"off every display, at {window.Position}");
         return window;
     }
 
@@ -165,10 +166,17 @@ public sealed class WindowsWindowOrderTests
 
     private static nint Handle(Avalonia.Controls.Window window) => TrayDesktop.Get(() => window.TryGetPlatformHandle()!.Handle);
 
-    /// <summary>Puts <paramref name="window"/> in front of every window that is not topmost, activating nothing.</summary>
-    private static void ToFront(nint window) => Assert.IsTrue(SetWindowPos(window, 0, 0, 0, 0, 0, SwpNoSize | SwpNoMove | SwpNoActivate));
+    /// <summary>Puts <paramref name="window"/> directly behind <paramref name="inFront"/>, activating nothing.</summary>
+    // Not another program's window raised to the front instead: while the desktop was the window in front, SetWindowPos
+    // answered true to that and left the window where it stood. A window put behind another goes there, as PutBack's does.
+    private static void Behind(nint window, nint inFront) => Assert.IsTrue(SetWindowPos(window, inFront, 0, 0, 0, 0, SwpNoSize | SwpNoMove | SwpNoActivate));
 
     [DllImport("user32.dll", ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetWindowPos(nint window, nint insertAfter, int x, int y, int width, int height, uint flags);
+
+    private const uint MonitorDefaultToNull = 0;
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    private static extern nint MonitorFromWindow(nint window, uint flags);
 }

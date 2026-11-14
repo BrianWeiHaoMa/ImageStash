@@ -7,8 +7,8 @@ using Avalonia;
 namespace ImageStash.Windows.Tests.Support;
 
 /// <summary>
-/// Another program's window to paste into: a PowerShell, so a process other than the check's with the file description
-/// "Windows PowerShell", showing a window with an edit box that has focus, or with none when asked, so it shows no
+/// Another program's window to paste into: a PowerShell, so a process other than the check's, named by its
+/// executable's file description (<see cref="AppName"/>), showing a window with an edit box that has focus, or with none when asked, so it shows no
 /// caret. It reports every key message, character,
 /// paste and left-button press and release its window and edit box receive, and on request the edit box's text. It is placed on the primary display,
 /// where a click reaches it, until disposed. Its window is per-monitor aware, so it lands where it is asked in physical
@@ -108,15 +108,22 @@ public sealed class TargetApp : IDisposable
     private readonly Process process;
     private readonly ConcurrentQueue<string> said;
 
-    private TargetApp(Process process, ConcurrentQueue<string> said, nint window)
+    private TargetApp(Process process, ConcurrentQueue<string> said, nint window, string appName)
     {
         this.process = process;
         this.said = said;
         Window = window;
+        AppName = appName;
     }
 
     /// <summary>Its window's handle.</summary>
     public nint Window { get; }
+
+    /// <summary>
+    /// Its app's name as a paste target names it (G8): the file description of the powershell.exe it runs, which is not
+    /// the same on every Windows build ("Windows PowerShell 5.1" on 10.0.26200), never its window's title.
+    /// </summary>
+    public string AppName { get; }
 
     /// <summary>Its window's whole rectangle on the desktop, in physical pixels.</summary>
     public PixelRect Bounds => GetWindowRect(Window, out var rectangle) ? new PixelRect(rectangle.Left, rectangle.Top, rectangle.Right - rectangle.Left, rectangle.Bottom - rectangle.Top) : default;
@@ -171,7 +178,10 @@ public sealed class TargetApp : IDisposable
         }
 
         Assert.IsNotNull(ready, "the target window did not start");
-        return new TargetApp(process, said, nint.Parse(ready["ready ".Length..]));
+        // Read while it runs: a check may close it before it asks for the name.
+        var appName = FileVersionInfo.GetVersionInfo(process.MainModule!.FileName).FileDescription?.Trim();
+        Assert.IsFalse(string.IsNullOrEmpty(appName), "powershell.exe has a file description");
+        return new TargetApp(process, said, nint.Parse(ready["ready ".Length..]), appName);
     }
 
     /// <summary>The edit box's text.</summary>

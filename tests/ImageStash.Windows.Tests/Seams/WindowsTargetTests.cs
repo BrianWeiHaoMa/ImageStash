@@ -45,7 +45,7 @@ public sealed class WindowsTargetTests
         var mineInFront = seam.Foreground();
         var beforeMine = seam.LastBeforeMine();
 
-        var expected = new PasteTarget(other.Window, "Windows PowerShell");
+        var expected = new PasteTarget(other.Window, other.AppName);
         Assert.AreEqual(new ForegroundReading(false, expected), inFront, "named by its executable's file description, not its title (G8)");
         Assert.AreEqual(expected, beforeWhileOtherInFront);
         Assert.AreEqual(new ForegroundReading(true, null), mineInFront, "ImageStash's own process is never a target (G8)");
@@ -70,7 +70,7 @@ public sealed class WindowsTargetTests
         Thread.Sleep(200);
         var fromTheDialog = seam.LastBeforeMine();
 
-        Assert.AreEqual(new PasteTarget(other.Window, "Windows PowerShell"), fromTheApp, "the window that had focus just before (G8)");
+        Assert.AreEqual(new PasteTarget(other.Window, other.AppName), fromTheApp, "the window that had focus just before (G8)");
         Assert.IsNull(fromTheDialog, "none when that window was ImageStash itself, as a dialog of its own is (G8)");
     }
 
@@ -80,13 +80,13 @@ public sealed class WindowsTargetTests
         using var pointer = TestMouse.PutBackAfterwards();
         using var other = TargetApp.Start("ImageStash check elevated stand-in", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
         other.ClickTitleBar();
-        var target = new PasteTarget(other.Window, "Windows PowerShell");
+        var target = new PasteTarget(other.Window, other.AppName);
         var own = WindowsTarget.IntegrityOf((uint)Environment.ProcessId);
         using var elevated = new WindowsTarget(process => process == other.ProcessId ? 0x3000 : own);
         using var unreadable = new WindowsTarget(process => process == other.ProcessId ? null : own);
 
-        Assert.AreEqual($"Paste failed: Windows PowerShell, {PasteTargetReasons.HigherRights}", elevated.Confirm(target).Failure?.Sentence, "an elevated app (E6, S6)");
-        Assert.AreEqual($"Paste failed: Windows PowerShell, {PasteTargetReasons.RightsUnreadable}", unreadable.Confirm(target).Failure?.Sentence, "a level it cannot read counts as above (S6)");
+        Assert.AreEqual($"Paste failed: {other.AppName}, {PasteTargetReasons.HigherRights}", elevated.Confirm(target).Failure?.Sentence, "an elevated app (E6, S6)");
+        Assert.AreEqual($"Paste failed: {other.AppName}, {PasteTargetReasons.RightsUnreadable}", unreadable.Confirm(target).Failure?.Sentence, "a level it cannot read counts as above (S6)");
     }
 
     [TestMethod]
@@ -140,7 +140,7 @@ public sealed class WindowsTargetTests
             held = await seam.ActivateAndPaste(target, TimeSpan.FromMilliseconds(500));
         }
 
-        Assert.AreEqual($"Paste failed: Windows PowerShell, {PasteTargetReasons.KeyHeld}", held.Failure?.Sentence);
+        Assert.AreEqual($"Paste failed: {other.AppName}, {PasteTargetReasons.KeyHeld}", held.Failure?.Sentence);
         Assert.IsEmpty(SentKeys(other, before), "nothing was sent while Alt was held (R6)");
 
         bystander.ClickTitleBar();
@@ -180,8 +180,8 @@ public sealed class WindowsTargetTests
         var pasted = await seam.ActivateAndPaste(target, Short);
         var took = clock.ElapsedMilliseconds;
 
-        Assert.AreEqual("Paste failed: Windows PowerShell, the window is gone", confirmed.Failure?.Sentence);
-        Assert.AreEqual($"Paste failed: Windows PowerShell, {PasteTargetReasons.NotBroughtToFront}", pasted.Failure?.Sentence);
+        Assert.AreEqual($"Paste failed: {other.AppName}, the window is gone", confirmed.Failure?.Sentence);
+        Assert.AreEqual($"Paste failed: {other.AppName}, {PasteTargetReasons.NotBroughtToFront}", pasted.Failure?.Sentence);
         Assert.IsGreaterThanOrEqualTo(300, took, "it waited the bound");
         Assert.IsLessThan(1300, took, "and no longer than the bound and a margin");
         Assert.IsEmpty(own.Keys(), "no keystroke went to the window in front (N3)");
@@ -244,7 +244,7 @@ public sealed class WindowsTargetTests
         using var seam = new WindowsTarget();
         using var other = TargetApp.Start("ImageStash check before a switch", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
         using var own = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 600, 100));
-        var expected = new PasteTarget(other.Window, "Windows PowerShell");
+        var expected = new PasteTarget(other.Window, other.AppName);
         other.ClickTitleBar();
 
         // Released at once, and held until the switcher shows, the window in front then read as a press reads it.
@@ -440,7 +440,7 @@ public sealed class WindowsTargetTests
         Thread.Sleep(500);
 
         Assert.IsTrue(inTime, "the paste answered within the bound and a margin, not once the busy thread answered");
-        Assert.AreEqual($"Paste failed: Windows PowerShell, {PasteTargetReasons.NotBroughtToFront}", pasted.Failure?.Sentence);
+        Assert.AreEqual($"Paste failed: {busy.AppName}, {PasteTargetReasons.NotBroughtToFront}", pasted.Failure?.Sentence);
         Assert.IsEmpty(SentKeys(busy, before), "no keystroke reached the target once its thread answered again (N3)");
 
         own.ClickToFront();
