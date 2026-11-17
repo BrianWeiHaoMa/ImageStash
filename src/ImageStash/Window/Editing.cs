@@ -377,8 +377,10 @@ public sealed class Editing
     /// <summary>
     /// Revert to original from a menu (G26): every layer of <paramref name="item"/> removed at once, nothing opened, then,
     /// once the store has published the change, a notice whose Undo saves the removed layers again, rendered, and the
-    /// clipboard's copy of the item replaced (R9). A refusal or a failure after the commit is named, with no notice to
-    /// undo it (G35).
+    /// clipboard's copy of the item replaced (R9). The layers removed are those its picture on disk shows, so a Revert a
+    /// live failure left waiting is run again, finishing it, and its Undo brings them back; when a change left waiting
+    /// that it finished first made another file the original, the notice offers no Undo. A refusal or a failure after
+    /// the commit is named, with no notice to undo it (G35).
     /// </summary>
     public async Task<Outcome> RevertToOriginal(StashItem item)
     {
@@ -392,13 +394,14 @@ public sealed class Editing
         StashItem reverted;
         LayerList removed;
         byte[] under;
+        bool undoable;
         var words = Acting($"Reverting “{Name(item)}” to its original…");
         var change = ChangeBegun(item.Id);
         try
         {
             var read = await Read(store, item, RevertAction);
             // Reverted meanwhile, by another click: nothing to remove, nothing to undo.
-            if (read is { Succeeded: true, Value.Layers.IsEmpty: true })
+            if (read is { Succeeded: true, Value.RenderedLayers.IsEmpty: true })
             {
                 return Outcome.Done;
             }
@@ -410,7 +413,11 @@ public sealed class Editing
                 return Named(saved.Failure);
             }
 
-            (reverted, removed, under) = (saved.Value!, read.Value!.Layers, read.Value.OriginalSha256);
+            (reverted, removed, under) = (saved.Value!, read.Value!.RenderedLayers, read.Value.OriginalSha256);
+            // A change left waiting that the Revert finished first may have made another file the original (an Open with…
+            // adoption, G27): the layers went with the picture they were made over, and an Undo could only be refused.
+            var after = await Read(store, reverted, RevertAction);
+            undoable = after.Succeeded && after.Value!.OriginalSha256.AsSpan().SequenceEqual(under);
         }
         finally
         {
@@ -418,16 +425,24 @@ public sealed class Editing
             ChangeEnded(item.Id, change);
         }
 
-        notices.Raise($"Reverted “{Name(reverted)}” to its original.", "Undo", () => UndoRevert(reverted, removed, under));
+        var text = $"Reverted “{Name(reverted)}” to its original.";
+        if (undoable)
+        {
+            notices.Raise(text, "Undo", () => UndoRevert(reverted, removed, under));
+        }
+        else
+        {
+            notices.Raise(text);
+        }
         await handoff.RefreshAfterSave(reverted);
         return Outcome.Done;
     }
 
     /// <summary>
-    /// Save as new item from a menu (G26): a second item of <paramref name="item"/> carrying its layers as the store
-    /// records them, rendered, with its tags, not favorite, named with a counter; then the editor opened on it, started
-    /// from <paramref name="from"/>, a preview beneath moving to it. A refusal, or a failure once the new item is
-    /// inserted, is named and nothing opens (G35).
+    /// Save as new item from a menu (G26): a second item of <paramref name="item"/> carrying the layers the store records
+    /// its picture on disk was rendered from, rendered, with its tags, not favorite, named with a counter; then the editor
+    /// opened on it, started from <paramref name="from"/>, a preview beneath moving to it. A refusal, or a failure once
+    /// the new item is inserted, is named and nothing opens (G35).
     /// </summary>
     public async Task<Outcome> SaveAsNewItem(StashItem item, EditOrigin from)
     {
@@ -443,7 +458,7 @@ public sealed class Editing
         try
         {
             var read = await Read(store, item, SaveAsNewItemAction);
-            made = read.Succeeded ? await SavedEdit.SaveAsNew(store, read.Value!.Item, read.Value, read.Value.Layers, renderer, heldFileRetry) : read.Failure;
+            made = read.Succeeded ? await SavedEdit.SaveAsNew(store, read.Value!.Item, read.Value, read.Value.RenderedLayers, renderer, heldFileRetry) : read.Failure;
             await listing.Refresh();
         }
         finally

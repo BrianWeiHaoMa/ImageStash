@@ -442,6 +442,7 @@ public sealed class ItemSaveTests
         Assert.AreEqual(new Failure("Revert to original", "cat", HeldFileRetry.HeldReason), reverted.Failure);
         var listed = await Listed(store, cat.Id);
         Assert.AreEqual((saved.FilePath, saved.Facts, 1L), (listed.FilePath, listed.Facts, listed.RenderedRevision), "the render is the picture on disk");
+        Assert.IsTrue(listed.Edited, "edited as the picture on disk is (G19, State: A live failure)");
         Assert.AreEqual(BlackBoxAndBox, (await ForEdit(store, cat.Id)).RenderedLayers);
         Assert.AreEqual(stash.Folder.InOriginals("cat.png"), (await ForEdit(store, cat.Id)).OriginalPath);
     }

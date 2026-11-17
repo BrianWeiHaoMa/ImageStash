@@ -8,8 +8,10 @@ namespace ImageStash.Store;
 /// An item as the store records it: its identity, which the store assigns once and never reuses; its name, tags and
 /// favorite flag (F9); when it was added; its finished picture's file in the stash folder and that picture's facts,
 /// which are the original's until the item is edited; the layer revision its finished picture was rendered for,
-/// which changes whenever the picture does; and whether it is edited, its committed list of layers not empty, which the
-/// menus' Revert to original and Save as new item and the preview's "Edited here" follow (G19).
+/// which changes whenever the picture does; and whether it is edited, the list its picture on disk was rendered from not
+/// empty, which the menus' Revert to original and Save as new item and the preview's "Edited here" follow (G19, G20):
+/// the committed list, except while a change a live failure stopped still shows the picture before it (State: A live
+/// failure), so a Revert left waiting on a held file is offered again, and running it finishes the one waiting.
 /// </summary>
 public sealed record StashItem(
     long Id,
@@ -48,14 +50,15 @@ public sealed record StashItem(
 
     /// <summary>
     /// The columns <see cref="ListedFromRow"/> reads, in its order, for a query over <c>items</c> as <c>i</c>. Whether the
-    /// item is edited is the committed list compared as text with the empty list's, so no listing parses a list: the store
-    /// writes the empty list as <c>[]</c> alone, the column's default (<see cref="LayerList.ToJson"/>).
+    /// item is edited is the committed list, or the previous one, compared as text with the empty list's, so no listing
+    /// parses a list: the store writes the empty list as <c>[]</c> alone, the column's default (<see cref="LayerList.ToJson"/>).
     /// </summary>
     internal const string Columns =
         "i.id, i.name, i.favorite, i.added_at, i.finished_file, i.format, i.width, i.height, i.animated, i.frame_count, i.duration_ms, i.rendered_revision, i.pending_steps, " +
-        "i.finished_format, i.finished_width, i.finished_height, i.finished_animated, i.finished_frame_count, i.finished_duration_ms, i.layer_revision, i.layers <> '[]'";
+        "i.finished_format, i.finished_width, i.finished_height, i.finished_animated, i.finished_frame_count, i.finished_duration_ms, i.layer_revision, i.layers <> '[]', " +
+        "COALESCE(i.previous_layers, '[]') <> '[]'";
 
-    internal const int ColumnCount = 21;
+    internal const int ColumnCount = 22;
 
     private const int OriginalFactsColumn = 5;
 
@@ -64,6 +67,8 @@ public sealed record StashItem(
     private const int LayerRevisionColumn = 19;
 
     private const int EditedColumn = 20;
+
+    private const int PreviousEditedColumn = 21;
 
     /// <summary>The rows a query may return; which of them are in the stash is <see cref="IsListed"/>'s.</summary>
     internal const string NotDeleted = "i.deleted = 0";
@@ -102,6 +107,7 @@ public sealed record StashItem(
         // once the change's own picture is there, the render, the adopted file or the restored one its step describes, or
         // the original back; before, the picture it had.
         var changed = StoredFiles.ShowsChangedPicture(folder, steps);
+        var renderedRevision = changed is true ? row.GetInt64(LayerRevisionColumn) : row.GetInt64(11);
         return new(
             row.GetInt64(0),
             row.GetString(1),
@@ -114,9 +120,15 @@ public sealed record StashItem(
                 ? steps.FirstOrDefault(step => step.Step is PendingStep.PlaceRender or PendingStep.PlaceAdopted or PendingStep.RestoreHeld)?.Facts ?? OriginalFacts(row)
                 // The facts of the file handed over (G6, G8, G19): the render's once the item is edited, else its one file's.
                 : row.IsDBNull(FinishedFactsColumn) ? OriginalFacts(row) : FactsFrom(row, FinishedFactsColumn),
-            changed is true ? row.GetInt64(LayerRevisionColumn) : row.GetInt64(11),
-            row.GetBoolean(EditedColumn));
+            renderedRevision,
+            row.GetBoolean(RenderedFromPreviousList(renderedRevision, row.GetInt64(LayerRevisionColumn)) ? PreviousEditedColumn : EditedColumn));
     }
+
+    /// <summary>
+    /// Whether the picture on disk is the one the previous list rendered, as it is until the rendered revision catches up
+    /// with the committed list's (State: A live failure); otherwise the committed list rendered it.
+    /// </summary>
+    internal static bool RenderedFromPreviousList(long renderedRevision, long layerRevision) => renderedRevision < layerRevision;
 
     /// <summary>
     /// The original's record in a row selected with <see cref="Columns"/>: what Media read from the file as it came in,

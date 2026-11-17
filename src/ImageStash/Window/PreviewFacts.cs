@@ -38,10 +38,10 @@ public static class PreviewFacts
     }
 
     /// <summary>
-    /// The layers "Edited here" names: the committed list, the item's layers as the store records them and the list the
-    /// next start renders, even while a live failure leaves the picture on disk rendered from another (State: Save, A
-    /// live failure); read only for an edited item, so an unedited one costs no read. A list the store cannot read is
-    /// the failure that names it (G35).
+    /// The layers "Edited here" names: the list the picture shown was rendered from, which Edit opens on, the committed
+    /// list except while a live failure leaves the picture on disk rendered from the one before (State: Save, A live
+    /// failure); read only for an edited item, so an unedited one costs no read. A list the store cannot read is the
+    /// failure that names it (G35).
     /// </summary>
     public static async Task<Outcome<LayerList>> EditedLayers(StashStore store, StashItem item)
     {
@@ -51,7 +51,7 @@ public static class PreviewFacts
         }
 
         var read = await store.ForEdit(item.Id);
-        return !read.Succeeded ? read.Failure : Outcome<LayerList>.Of(read.Value?.Layers ?? LayerList.Empty);
+        return !read.Succeeded ? read.Failure : Outcome<LayerList>.Of(read.Value?.RenderedLayers ?? LayerList.Empty);
     }
 
     /// <summary>"Edited here:", the list's kinds once each in list order by F7's names, and that the original is kept.</summary>

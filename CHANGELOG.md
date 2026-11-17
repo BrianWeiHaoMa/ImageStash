@@ -8,6 +8,7 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 
 - In the editor's Trim tool, Reset and the hint beside it now stay where they are while the clip plays and while you drag the handles, instead of shifting a little as the time and the kept range change.
 - Revert to original, and saving an edit again, on an animated GIF or WebP that is playing in the grid or the preview now works, instead of failing after a few seconds with "another program is holding it open" when ImageStash itself was the one holding it.
+- When a Revert to original does fail because another program holds the picture, the item now still shows as edited, with Revert to original offered again, until the picture really goes back; before, the menus dropped Revert while the edited picture stayed.
 
 ## [0.2.1] - 2026-11-14
 

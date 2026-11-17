@@ -7,8 +7,8 @@ namespace ImageStash.Tests.Store;
 
 /// <summary>
 /// What a listed item says of the file handed over (G6, G8, G19): an edited item's facts are its render's, an unedited
-/// item's its one file's; and whether it is edited, which the menus and the preview follow (G19), read from the committed
-/// list without parsing it.
+/// item's its one file's; and whether it is edited, which the menus and the preview follow (G19), read from the list its
+/// picture on disk was rendered from without parsing it.
 /// </summary>
 [TestClass]
 public sealed class StashItemTests
@@ -72,16 +72,24 @@ public sealed class StashItemTests
     }
 
     [TestMethod]
-    public async Task AFirstSaveWaitingOnALiveFailureIsEditedThoughItsPictureIsStillTheOriginal()
+    [DataRow("first Save", false, DisplayName = "a first Save waiting, its picture still the original")]
+    [DataRow("Revert", true, DisplayName = "a Revert waiting, its picture still the render")]
+    [DataRow("Revert moved", false, DisplayName = "a Revert waiting on the render's delete, its original back")]
+    public async Task AChangeWaitingOnALiveFailureIsEditedAsItsPictureOnDiskIs(string change, bool edited)
     {
         using var stash = new TestStash();
         await stash.OpenCleanly();
-        var cat = await EditedItems.FirstSaveCommitted(stash);
+        var cat = change switch
+        {
+            "first Save" => await EditedItems.FirstSaveCommitted(stash),
+            "Revert" => await EditedItems.RevertCommitted(stash, "still.png"),
+            _ => await EditedItems.RevertMoved(stash),
+        };
 
         var listed = (await stash.All()).Single();
 
-        Assert.AreEqual(0, listed.RenderedRevision, "the grid shows the picture on disk, the original (State: A live failure)");
-        Assert.IsTrue(listed.Edited, "while its committed list has the layers the next start renders");
         Assert.AreEqual(cat.Id, listed.Id);
+        Assert.AreEqual(edited, listed.Edited, "the grid shows the picture on disk, and the menus follow it (G19, State: A live failure)");
+        Assert.AreEqual(edited ? EditedItems.BlackBoxAndBox : LayerList.Empty, (await EditedItems.ForEdit(stash.Store!, cat.Id)).RenderedLayers, "as the list Edit opens on does");
     }
 }

@@ -201,6 +201,75 @@ public sealed class EditingFromMenusTests
     }
 
     [TestMethod]
+    public async Task ARevertLeftWaitingOnAHeldRenderStillShowsTheItemEditedAndRevertAgainFinishesIt()
+    {
+        using var listed = await ListedStash.Open();
+        var cat = (await listed.Stash.SaveEdit(await listed.Stash.ImportFixture("cat", "still.png"), EditedItems.BlackBoxAndBox)).Value!;
+        await listed.Listing.Refresh();
+        using (TestStash.Hold(cat.FilePath))
+        {
+            Assert.IsFalse((await listed.Editing.RevertToOriginal(cat)).Succeeded);
+        }
+
+        var waiting = listed.Listing.Items.Single();
+        Assert.AreEqual(cat.FilePath, waiting.FilePath, "listed on the render, the picture on disk (State: A live failure)");
+        Assert.IsTrue(waiting.Edited, "edited as its picture is, so the menus offer Revert to original again (G19)");
+        Assert.AreEqual(EditedItems.BlackBoxAndBox, (await PreviewFacts.EditedLayers(listed.Stash.Store!, waiting)).Value, "Edited here names the layers its picture shows");
+        listed.Notices.Close(listed.Notices.Shown.Single());
+
+        var reverted = await listed.Editing.RevertToOriginal(waiting);
+
+        Assert.IsTrue(reverted.Succeeded, reverted.Failure?.Sentence);
+        Assert.AreEqual("Reverted “cat” to its original.", listed.Notices.Shown.Single().Text);
+        Assert.IsEmpty(EditedItems.Row(listed.Stash, cat.Id).Steps, "the waiting steps finished");
+        Assert.IsFalse(listed.Listing.Items.Single().Edited);
+        await listed.Notices.Undo(listed.Notices.Shown.Single());
+        Assert.AreEqual(EditedItems.BlackBoxAndBox, (await EditedItems.ForEdit(listed.Stash.Store!, cat.Id)).Layers, "its Undo brings back the layers the picture showed");
+    }
+
+    [TestMethod]
+    public async Task ARevertThatFinishesAnAdoptionLeftWaitingOffersNoUndoItCouldNotKeep()
+    {
+        using var listed = await ListedStash.Open();
+        var cat = (await listed.Stash.SaveEdit(await listed.Stash.ImportFixture("cat", "still.png"), EditedItems.BlackBoxAndBox)).Value!;
+        var copy = await OpenedWith.AwaitingRewrite(listed.Stash, cat, MediaFixtures.DistinctPng(5, 12, 10));
+        using (TestStash.Hold(cat.FilePath))
+        {
+            Assert.IsNotNull((await listed.Stash.Store!.AdoptRewrite(cat.Id)).Failure, "committed with its step refused");
+        }
+
+        await listed.Listing.Refresh();
+        var waiting = listed.Listing.Items.Single();
+        Assert.IsTrue(waiting.Edited, "edited as its picture on disk, the render, is");
+
+        var reverted = await listed.Editing.RevertToOriginal(waiting);
+
+        Assert.IsTrue(reverted.Succeeded, reverted.Failure?.Sentence);
+        CollectionAssert.AreEqual(File.ReadAllBytes(copy), File.ReadAllBytes(listed.Listing.Items.Single().FilePath), "the adoption finished first, its file the original (G27)");
+        var notice = listed.Notices.Shown.Single();
+        Assert.AreEqual("Reverted “cat” to its original.", notice.Text);
+        Assert.IsNull(notice.UndoLabel, "the layers went with the original they were made over: no Undo that could only fail (G26, G35)");
+    }
+
+    [TestMethod]
+    public async Task SaveAsNewItemOfARevertLeftWaitingCopiesTheLayersItsPictureShows()
+    {
+        using var listed = await ListedStash.Open();
+        var cat = (await listed.Stash.SaveEdit(await listed.Stash.ImportFixture("cat", "still.png"), EditedItems.BlackBoxAndBox)).Value!;
+        await listed.Listing.Refresh();
+        using (TestStash.Hold(cat.FilePath))
+        {
+            Assert.IsFalse((await listed.Editing.RevertToOriginal(cat)).Succeeded);
+        }
+
+        var made = await listed.Editing.SaveAsNewItem(listed.Listing.Items.Single(), EditOrigin.Grid);
+
+        Assert.IsTrue(made.Succeeded, made.Failure?.Sentence);
+        var copy = (await listed.Stash.All()).Single(item => item.Name == "cat 2");
+        Assert.AreEqual(EditedItems.BlackBoxAndBox, (await EditedItems.ForEdit(listed.Stash.Store!, copy.Id)).Layers, "the layers the picture on disk was rendered from (G26)");
+    }
+
+    [TestMethod]
     public async Task SaveAsNewItemFromAMenuMakesASecondItemOfTheRecordedLayersAndOpensTheEditorOnIt()
     {
         using var listed = await ListedStash.Open();

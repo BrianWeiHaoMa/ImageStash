@@ -10,8 +10,8 @@ namespace ImageStash.Tests.Window;
 /// <summary>
 /// The preview's facts (G19): the type, dimensions, the file's size on disk and, for an animation only, its duration;
 /// when the item was added and how often and how recently it was used, never used saying so; on an edited item, its
-/// layer kinds and that the original is kept, from the list the store records; every time the store's UTC shown in
-/// local time (What crosses every boundary).
+/// layer kinds and that the original is kept, from the list the store records its picture on disk was rendered from;
+/// every time the store's UTC shown in local time (What crosses every boundary).
 /// </summary>
 [TestClass]
 public sealed class PreviewFactsTests
@@ -160,18 +160,18 @@ public sealed class PreviewFactsTests
     }
 
     [TestMethod]
-    public async Task TheLayersNamedAreTheCommittedListEvenWhileALiveFailureShowsThePictureOnDisk()
+    public async Task TheLayersNamedAreThoseThePictureOnDiskWasRenderedFromWhileALiveFailureLeavesAChangeWaiting()
     {
         using var stash = new TestStash();
         await stash.OpenCleanly();
-        var cat = await EditedItems.FirstSaveCommitted(stash);
+        var cat = await EditedItems.RevertCommitted(stash, "still.png");
         var plain = await stash.ImportFixture("plain", "transparent.png");
         var listed = (await stash.All()).ToDictionary(item => item.Id);
 
         var edited = await PreviewFacts.EditedLayers(stash.Store!, listed[cat.Id]);
         var unedited = await PreviewFacts.EditedLayers(stash.Store!, listed[plain.Id]);
 
-        Assert.AreEqual(EditedItems.BlackBoxAndBox, edited.Value, "the list the store records and the next start renders, though Edit opens on the original's (State: A live failure)");
+        Assert.AreEqual(EditedItems.BlackBoxAndBox, edited.Value, "the list its render, still the picture on disk, was made from and Edit opens on, though the Revert's empty list is committed (State: A live failure)");
         Assert.AreEqual(LayerList.Empty, unedited.Value);
         stash.SqlWhileOpen("UPDATE items SET layers = '{' WHERE id = $id", ("$id", cat.Id));
         Assert.StartsWith("Read the item's layers failed: cat, ", (await PreviewFacts.EditedLayers(stash.Store!, listed[cat.Id])).Failure!.Sentence, "a list the store cannot read is named (G35)");

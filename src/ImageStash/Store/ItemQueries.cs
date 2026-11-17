@@ -116,8 +116,7 @@ internal static class ItemQueries
             return layers.Failure;
         }
 
-        // Until the rendered revision catches up, the picture on disk is the one the previous list rendered.
-        var rendered = row.Item.RenderedRevision < row.LayerRevision ? LayerList.FromJson(row.PreviousLayers, subject) : layers;
+        var rendered = StashItem.RenderedFromPreviousList(row.Item.RenderedRevision, row.LayerRevision) ? LayerList.FromJson(row.PreviousLayers, subject) : layers;
         if (!rendered.Succeeded)
         {
             return rendered.Failure;

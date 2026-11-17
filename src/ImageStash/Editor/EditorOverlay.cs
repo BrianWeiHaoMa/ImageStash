@@ -295,9 +295,12 @@ public sealed class EditorOverlay : Border
         }
     }
 
-    /// <summary>The ⋯ menu's entries for the session: Revert to original only on an item the store holds layers for (G20).</summary>
+    /// <summary>
+    /// The ⋯ menu's entries for the session: Revert to original only on an edited item, one whose picture on disk the
+    /// store records as rendered from layers (G20, <see cref="Store.StashItem.Edited"/>).
+    /// </summary>
     private IReadOnlyList<string> MenuEntries() =>
-        session is { Edit.Layers.IsEmpty: false } ? [SaveAsNewItem, RevertToOriginal, DiscardChanges] : [SaveAsNewItem, DiscardChanges];
+        session is { Edit.RenderedLayers.IsEmpty: false } ? [SaveAsNewItem, RevertToOriginal, DiscardChanges] : [SaveAsNewItem, DiscardChanges];
 
     private void ShowMenu()
     {
