@@ -57,8 +57,8 @@ public sealed class RecordingBar : Border
     public RecordingBar(TimeSpan cap, Action record, Action stop, Action cancel)
     {
         // Tabular digits: the semibold face's own are of several widths, so "0:59.9" would be wider than the cap's "1:00.0".
-        elapsed = new TextBlock { FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Text = WidestElapsed(cap), FontFeatures = TabularDigits() };
-        size = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Text = WidestSize, FontFeatures = TabularDigits() };
+        elapsed = new TextBlock { FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Text = WidestElapsed(cap), FontFeatures = SteadyReadout.TabularDigits() };
+        size = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Text = WidestSize, FontFeatures = SteadyReadout.TabularDigits() };
         against = new TextBlock { Text = "/ " + Time((long)cap.TotalMilliseconds, tenths: false), VerticalAlignment = VerticalAlignment.Center };
         upTo = new TextBlock { Text = "Up to " + Time((long)cap.TotalMilliseconds, tenths: false), VerticalAlignment = VerticalAlignment.Center };
         RecordButton = Button(RecordName, record, new SolidColorBrush(RecordingFrame.Red), Labelled(
@@ -257,8 +257,6 @@ public sealed class RecordingBar : Border
         button.Click += (_, _) => clicked();
         return button;
     }
-
-    private static FontFeatureCollection TabularDigits() => [FontFeature.Parse("tnum")];
 
     private static TextBlock Glyph(string glyph) =>
         new() { Text = glyph, FontFamily = Icons, FontSize = 12, VerticalAlignment = VerticalAlignment.Center };

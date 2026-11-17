@@ -16,7 +16,8 @@ namespace ImageStash.Windows.Tests.Editor;
 /// Trim and the time ranges as the window draws and drives them (G20, G21, G22, G24, G25, F3): Trim
 /// third on the tool row of an animation; at the window's minimum its row, wrapped, with play and pause, the position,
 /// the kept range, Reset, Cancel, the size and Save inside the window; a drag of the left handle on the filmstrip changing
-/// the trim, the row's words and the size chip, the frame cut away dimmed and the handles drawn under Trim alone; the
+/// the trim, the row's words and the size chip, the frame cut away dimmed and the handles drawn under Trim alone; Reset
+/// and the hint standing still as the position moves on and the kept range changes; the
 /// selected label's bar over the filmstrip under Text, its start dragged; Space, Right and Del under Trim; the saved GIF
 /// holding the kept frames at their own timing with the label in its frame only.
 /// </summary>
@@ -86,6 +87,50 @@ public sealed class TrimToolTests
         var moved = TrayDesktop.Get(editor.FilmstripInRendering).Y - strip.Y;
         Assert.DoesNotContain(handle, underText.Colors(strip.X + second * s - 4, middle + moved - 4, 8, 8), "the handles are Trim's");
         Assert.AreEqual(after.At(inFirst, middle), underText.At(inFirst, (int)(middle + moved)), "the frame cut away stays dimmed under every tool");
+    }
+
+    [TestMethod]
+    public async Task ResetAndTheHintStayPutWhileThePositionMovesOnAndADragChangesTheKeptRange()
+    {
+        using var shown = ShownWindow.Open();
+        using var editor = new ShownEditor(shown);
+        var item = (await shown.OpenStash(Clip(shown, "steady", (_, _, frame) => ((byte)(frame * 100), 0, 0)))).Single();
+        // Wide enough for the whole row on one line, so Reset and the hint stand after the readings.
+        TrayDesktop.Run(() => shown.Window.Width = 1000);
+        await EditorOverlayTests.Open(shown, item);
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => editor.Session!.TimelineComplete && editor.Filmstrip.Cells.Count == 3));
+        TrayDesktop.Run(() =>
+        {
+            editor.Choose("Trim");
+            if (editor.Session!.Playing)
+            {
+                editor.Session.TogglePlaying();
+            }
+        });
+        var places = new List<(Point Reset, Point Hint)>();
+        // The frames start at 0:00.0, 0:00.1 and 0:00.3: digits a face may draw at several widths.
+        foreach (var (frame, at) in new[] { (0, "0:00.0"), (1, "0:00.1"), (2, "0:00.3") })
+        {
+            TrayDesktop.Run(() => editor.Session!.Seek(frame));
+            await ShownWindow.Eventually(() => TrayDesktop.Get(() => editor.Texts().Contains($"{at} / 0:00.6")));
+            places.Add(TrayDesktop.Get(() => RowPlaces(shown, editor)));
+        }
+
+        TrayDesktop.Run(() => editor.DragOnStrip(editor.Edge(0), editor.Edge(1)));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => editor.Texts().Contains("Keeps 0:00.1 – 0:00.6 · 0.5 s of 0.6 s")));
+        places.Add(TrayDesktop.Get(() => RowPlaces(shown, editor)));
+
+        TrayDesktop.Run(() =>
+        {
+            var kept = editor.Overlay.GetVisualDescendants().OfType<TextBlock>().Single(text => text.IsEffectivelyVisible && (text.Text ?? "").StartsWith("Keeps ", StringComparison.Ordinal));
+            var reset = editor.Button("Reset").TranslatePoint(default, kept)!.Value;
+            Assert.IsGreaterThanOrEqualTo(kept.Bounds.Width, reset.X, "Reset after the kept range");
+            Assert.IsLessThan(kept.Bounds.Height, reset.Y, "on its line, so a wider reading would move it");
+        });
+        for (var i = 1; i < places.Count; i++)
+        {
+            Assert.AreEqual(places[0], places[i], $"Reset and the hint where they came in, reading {i} (G22)");
+        }
     }
 
     [TestMethod]
@@ -176,6 +221,14 @@ public sealed class TrimToolTests
 
         Assert.IsTrue(encoder.Stop(600).Succeeded);
         return path;
+    }
+
+    /// <summary>Where Reset and the hint after it stand in the editor, laid out afresh.</summary>
+    private static (Point Reset, Point Hint) RowPlaces(ShownWindow shown, ShownEditor editor)
+    {
+        shown.Window.UpdateLayout();
+        var hint = editor.Overlay.GetVisualDescendants().OfType<TextBlock>().Single(text => text.IsEffectivelyVisible && text.Text == "Drag the handles under the picture");
+        return (editor.Button("Reset").TranslatePoint(default, editor.Overlay)!.Value, hint.TranslatePoint(default, editor.Overlay)!.Value);
     }
 
     /// <summary>The pixels of <paramref name="frame"/> that are white, as the label's letters are.</summary>

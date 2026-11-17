@@ -38,7 +38,13 @@ public sealed class TrimTool : EditorTool
     /// durations, whatever the trim; null until every frame of the original has been timed, so never while the frames are
     /// read, nor once a frame could not be read (G35).
     /// </summary>
-    public string? Position => Timeline() is { } times ? $"{ClipLength.Clock(times[Math.Clamp(Session.FrameIndex, 0, times.Count - 1)].StartMs)} / {ClipLength.Clock(End(times[^1]))}" : null;
+    public string? Position => Timeline() is { } times ? PositionWords(times[Math.Clamp(Session.FrameIndex, 0, times.Count - 1)].StartMs, End(times[^1])) : null;
+
+    /// <summary>
+    /// The widest <see cref="Position"/> the clip can show, at its end: no moment before it has more digits, so none
+    /// reads wider in digits of one width; null as <see cref="Position"/> is.
+    /// </summary>
+    public string? WidestPosition => Timeline() is { } times ? PositionWords(End(times[^1]), End(times[^1])) : null;
 
     /// <summary>
     /// What the handles keep and for how long, "Keeps 0:00.4 – 0:02.1 · 1.7 s of 2.4 s", from the kept frames' own
@@ -56,9 +62,16 @@ public sealed class TrimTool : EditorTool
 
             var kept = Kept;
             var (start, end) = (times[Math.Min(kept.First, times.Count - 1)].StartMs, End(times[Math.Min(kept.Last, times.Count - 1)]));
-            return $"Keeps {ClipLength.Clock(start)} – {ClipLength.Clock(end)} · {ClipLength.Words(end - start)} of {ClipLength.Words(End(times[^1]))}";
+            return KeptWordsOf(start, end, End(times[^1]));
         }
     }
+
+    /// <summary>
+    /// The widest <see cref="KeptWords"/> the clip can show, every moment and length in it the clip's own: no kept range
+    /// has more digits, so none reads wider in digits of one width; null as <see cref="KeptWords"/> is.
+    /// </summary>
+    public string? WidestKeptWords =>
+        Timeline() is { } times && End(times[^1]) is var length ? KeptPhrase(ClipLength.Clock(length), ClipLength.Clock(length), ClipLength.Words(length), ClipLength.Words(length)) : null;
 
     /// <summary>
     /// A press on the left or right handle: its drag moves that end of the kept frames, never past the other (G22), which
@@ -109,6 +122,13 @@ public sealed class TrimTool : EditorTool
     public override bool Owns(Layer layer) => false;
 
     private static long End(FrameTime time) => time.StartMs + time.DurationMs;
+
+    private static string PositionWords(long at, long length) => $"{ClipLength.Clock(at)} / {ClipLength.Clock(length)}";
+
+    private static string KeptWordsOf(long start, long end, long length) =>
+        KeptPhrase(ClipLength.Clock(start), ClipLength.Clock(end), ClipLength.Words(end - start), ClipLength.Words(length));
+
+    private static string KeptPhrase(string start, string end, string kept, string length) => $"Keeps {start} – {end} · {kept} of {length}";
 
     /// <summary>
     /// <paramref name="layers"/> with <paramref name="kept"/> as their trim, in the trim's place in the list or after the

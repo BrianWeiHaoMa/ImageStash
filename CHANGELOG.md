@@ -4,6 +4,10 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 
 ## [Unreleased]
 
+### Fixed
+
+- In the editor's Trim tool, Reset and the hint beside it now stay where they are while the clip plays and while you drag the handles, instead of shifting a little as the time and the kept range change.
+
 ## [0.2.1] - 2026-11-14
 
 ### Fixed

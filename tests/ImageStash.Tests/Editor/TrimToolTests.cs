@@ -11,9 +11,10 @@ namespace ImageStash.Tests.Editor;
 /// Trim and the time ranges (G20, G22, G24, G25, F3, N7, G29; What crosses every boundary): Trim third on the tool row of
 /// an animation only; its handles setting the kept frames on the original's timeline, never crossing, each drag one step,
 /// a trim keeping the whole clip never stored and Reset removing one; the row's position and kept range from the frames'
-/// own durations, stated only once every one is known; the selected text, hide or draw layer's range as a bar whose ends
-/// drag, the whole clip while it has none, kept as written when the trim moves; a trimmed, ranged clip saved as exactly
-/// its kept frames at their own timing, an animated WebP as a GIF, the original untouched.
+/// own durations, stated only once every one is known, with the widest of each the clip can show; the selected text,
+/// hide or draw layer's range as a bar whose ends drag, the whole clip while it has none, kept as written when the trim
+/// moves; a trimmed, ranged clip saved as exactly its kept frames at their own timing, an animated WebP as a GIF, the
+/// original untouched.
 /// </summary>
 [TestClass]
 public sealed class TrimToolTests
@@ -331,6 +332,27 @@ public sealed class TrimToolTests
     }
 
     [TestMethod]
+    public async Task TheWidestReadingsAreTheClipsLengthEverywhereAndHoldEveryPositionAndKeptRange()
+    {
+        // Twenty seconds, so a kept range under ten seconds reads a digit shorter than the whole.
+        using var clip = await AnimationInTheEditor.Open(SyntheticClips.Long(1000, 200, 150));
+        var session = clip.Session;
+        var trim = session.Trim();
+        Assert.IsNull(trim.WidestPosition, "no room stated as a measurement before the durations are known (G35)");
+        Assert.IsNull(trim.WidestKeptWords);
+
+        await Until(() => session.TimelineComplete, "the frames are never all read");
+        Assert.AreEqual("0:20.0 / 0:20.0", trim.WidestPosition);
+        Assert.AreEqual("Keeps 0:20.0 – 0:20.0 · 20.0 s of 20.0 s", trim.WidestKeptWords);
+        AssertNoWider(trim.WidestPosition, trim.Position, "the position at the start");
+        AssertNoWider(trim.WidestKeptWords, trim.KeptWords, "the whole clip kept");
+        session.Tool = trim;
+        trim.DragHandle(RangeEnd.Last, 20);
+        Assert.AreEqual("Keeps 0:00.0 – 0:00.4 · 0.4 s of 20.0 s", trim.KeptWords);
+        AssertNoWider(trim.WidestKeptWords, trim.KeptWords, "a kept range under ten seconds");
+    }
+
+    [TestMethod]
     public async Task TheTimesAreTheFramesOwnDurationsWhereAQuickFrameShowsLonger()
     {
         // long.gif: sixty frames of 10, 20, 30, 40 and 50 ms in turn, the 10 ms ones shown for 100 ms as a browser shows them.
@@ -392,6 +414,19 @@ public sealed class TrimToolTests
         var oneFrame = FinishedPicture.Estimate(edit.OriginalPath, edit.OriginalSha256, "clip", List(new TrimLayer(new FrameRange(0, 0))), ImageFormat.Gif, TestStash.ShortRetry);
         Assert.AreEqual(oneFrame.Value, session.EstimatedBytes, "the size of the one frame kept (G24)");
         Assert.IsLessThan(whole!.Value, session.EstimatedBytes!.Value);
+    }
+
+    /// <summary>
+    /// <paramref name="reading"/> no wider than <paramref name="widest"/> in digits of one width: the same words and
+    /// marks, in order, around as many digits or fewer.
+    /// </summary>
+    private static void AssertNoWider(string? widest, string? reading, string message)
+    {
+        static string Words(string text) => new([.. text.Where(c => !char.IsAsciiDigit(c))]);
+        Assert.IsNotNull(widest, message);
+        Assert.IsNotNull(reading, message);
+        Assert.AreEqual(Words(widest), Words(reading), message);
+        Assert.IsLessThanOrEqualTo(widest.Length, reading.Length, message);
     }
 
     private static IEnumerable<Rgba> Pixels(MediaFrame frame) =>
