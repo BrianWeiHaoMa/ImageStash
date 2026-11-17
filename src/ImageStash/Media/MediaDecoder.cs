@@ -11,9 +11,12 @@ namespace ImageStash.Media;
 /// included, comes back as unreadable naming the file, except a JPEG whose scan data stops at a marker, which the codec
 /// completes and reports as a success, so it is read (G35, S11); a file still held after the retries is a failure that
 /// says so; neither throws across the boundary (G35). Every open is read-only and shares read, write and delete, so a
-/// decode in progress never blocks the store's renames and recycling, and a scanner reading the file never blocks the
-/// decode (R3). A JPEG's or WebP's encoded origin is applied as each frame is handed over, so its size and every frame
-/// are upright, while the frames are composed in the codec's own grid and the file's bytes stay as they came (F3).
+/// decode in progress never blocks the store's renames and recycling of the file, and a scanner reading the file never
+/// blocks the decode (R3). Windows still refuses to rename another file over one anything holds open, whatever it
+/// shares, so a play, which lasts as long as a window shows it, reads its file whole and holds none
+/// (<see cref="OpenToPlay"/>). A JPEG's or WebP's encoded origin is applied as each frame is handed over, so its size
+/// and every frame are upright, while the frames are composed in the codec's own grid and the file's bytes stay as they
+/// came (F3).
 /// </summary>
 public sealed class MediaDecoder : IDisposable
 {
@@ -118,7 +121,7 @@ public sealed class MediaDecoder : IDisposable
     /// </summary>
     private static Outcome<MediaFacts> Read(string path, string name, TimeSpan heldFileRetry, out byte[]? sha256)
     {
-        var opened = Open(path, name, heldFileRetry, hash: true, out sha256);
+        var opened = Open(path, name, heldFileRetry, hash: true, inMemory: false, out sha256);
         if (!opened.Succeeded)
         {
             return opened.Failure;
@@ -144,6 +147,14 @@ public sealed class MediaDecoder : IDisposable
     public static Outcome<MediaDecoder> Open(string path, string name, TimeSpan heldFileRetry) => Open(path, name, heldFileRetry, hash: false);
 
     /// <summary>
+    /// Opens the file at <paramref name="path"/> for a play, its bytes read whole under one open that is closed before
+    /// this returns, so the play holds no file open: a Save's or a Revert's rename over the picture playing goes through
+    /// rather than waiting on it as on a held file (G6, G26, G35). Failures name <paramref name="name"/>.
+    /// </summary>
+    public static Outcome<MediaDecoder> OpenToPlay(string path, string name, TimeSpan heldFileRetry) =>
+        Open(path, name, heldFileRetry, hash: false, inMemory: true, out _);
+
+    /// <summary>
     /// Opens an item's original at <paramref name="path"/> for its frames, hashing, only when its bytes are those whose
     /// SHA-256 the store recorded, <paramref name="originalSha256"/>: renames that put another file at the path while the
     /// open waited on a held file, or after the path was read, fail it with <see cref="ChangedReason"/>, never decoded.
@@ -165,13 +176,16 @@ public sealed class MediaDecoder : IDisposable
     /// <paramref name="hash"/> asks: every frame is then decoded from the bytes hashed, and a frame that could only be
     /// read from another file fails with <see cref="ChangedReason"/>. Failures name <paramref name="name"/>.
     /// </summary>
-    public static Outcome<MediaDecoder> Open(string path, string name, TimeSpan heldFileRetry, bool hash) => Open(path, name, heldFileRetry, hash, out _);
+    public static Outcome<MediaDecoder> Open(string path, string name, TimeSpan heldFileRetry, bool hash) => Open(path, name, heldFileRetry, hash, inMemory: false, out _);
 
-    /// <summary>As the public open, answering in <paramref name="hashed"/> the hash of the bytes read, decodable or not, or null when the file could not be read.</summary>
-    private static Outcome<MediaDecoder> Open(string path, string name, TimeSpan heldFileRetry, bool hash, out byte[]? hashed)
+    /// <summary>
+    /// As the public opens, the bytes read into memory when <paramref name="inMemory"/> asks, answering in
+    /// <paramref name="hashed"/> the hash of the bytes read, decodable or not, or null when the file could not be read.
+    /// </summary>
+    private static Outcome<MediaDecoder> Open(string path, string name, TimeSpan heldFileRetry, bool hash, bool inMemory, out byte[]? hashed)
     {
         byte[]? sha256 = null;
-        var opened = HeldFileRetry.Run(Action, path, heldFileRetry, () => Source.Open(path, hash, out sha256));
+        var opened = HeldFileRetry.Run(Action, path, heldFileRetry, () => Source.Open(path, hash, out sha256, inMemory));
         hashed = opened.Succeeded ? sha256 : null;
         if (!opened.Succeeded)
         {
@@ -522,10 +536,11 @@ public sealed class MediaDecoder : IDisposable
         /// <summary>
         /// Opens the file, hashes it into <paramref name="sha256"/> when asked, whether or not it then reads, and checks
         /// it is a whole file of one of F3's formats that the codec reads as that format; null when it is not. The hash is
-        /// read through the handle the codec then reads, so both are of one file whatever is renamed meanwhile. A file
-        /// error throws, for the held-file policy to judge.
+        /// read through the handle the codec then reads, so both are of one file whatever is renamed meanwhile. Asked
+        /// <paramref name="inMemory"/>, the codec reads the bytes read whole through that handle, which is closed before
+        /// this returns. A file error throws, for the held-file policy to judge.
         /// </summary>
-        public static Source? Open(string path, bool hash, out byte[]? sha256)
+        public static Source? Open(string path, bool hash, out byte[]? sha256, bool inMemory = false)
         {
             var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 64 * 1024);
             try
@@ -539,7 +554,7 @@ public sealed class MediaDecoder : IDisposable
                 }
 
                 file.Position = 0;
-                var guarded = new CodecStream(file);
+                var guarded = new CodecStream(inMemory ? ReadWhole(file) : file);
                 SKCodec? codec = null;
                 try
                 {
@@ -569,6 +584,42 @@ public sealed class MediaDecoder : IDisposable
         }
 
         public void Dispose() => Codec.Dispose();
+
+        /// <summary>
+        /// The rest of <paramref name="file"/> read into memory, the file closed. A file longer than an array can hold,
+        /// or than this PC can find the memory for, stays the stream read, so it still plays, holding its file open as
+        /// any decode does: a Save or a Revert over it while it plays waits on it as on a held file.
+        /// </summary>
+        private static Stream ReadWhole(FileStream file)
+        {
+            if (MemoryFor(file.Length - file.Position) is not { } bytes)
+            {
+                return file;
+            }
+
+            file.CopyTo(bytes);
+            file.Dispose();
+            bytes.Position = 0;
+            return bytes;
+        }
+
+        private static MemoryStream? MemoryFor(long length)
+        {
+            if (length > Array.MaxLength)
+            {
+                return null;
+            }
+
+            try
+            {
+                return new MemoryStream((int)length);
+            }
+            catch (OutOfMemoryException)
+            {
+                // The one allocation of the whole file failing is a play from the file, never an escaping exception (G35).
+                return null;
+            }
+        }
 
         /// <summary>Which of F3's formats the codec read the file as, or null for any other.</summary>
         internal static ImageFormat? FormatOf(SKEncodedImageFormat format) => format switch

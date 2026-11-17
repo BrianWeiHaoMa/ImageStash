@@ -1,3 +1,4 @@
+using ImageStash.Layers;
 using ImageStash.Media;
 using ImageStash.Store;
 using ImageStash.Tests.Support;
@@ -7,8 +8,9 @@ namespace ImageStash.Tests.Window;
 
 /// <summary>
 /// The grid's one playing animation through Media's real decoder (G6, R7): frames one at a time at the thumbnail's
-/// bound, paced by their durations and looping, the file held open while it plays and closed before the next play
-/// opens one; a still never plays; a picture that cannot be read stops its play, is marked, and is named only when the
+/// bound, paced by their durations and looping, the file read whole so none is held open while it plays, and a Save or
+/// a Revert replacing the picture playing goes through (G26, G35); the next play shows in place of the one before; a
+/// still never plays; a picture that cannot be read stops its play, is marked, and is named only when the
 /// reason is other than its being unreadable (G35); an item an Undo or a Delete recycles while it plays goes to the
 /// Recycle Bin, and nothing is named (G29), and a deleted item brought back by Undo plays again from its file (G6); a
 /// paused play keeps its frame, hands over nothing more, holds back a frame already on its way, and resumes from the
@@ -175,7 +177,7 @@ public sealed class PlaybackTests
     }
 
     [TestMethod]
-    public async Task ThePlayingFileStaysOpenAndClosesBeforeTheNextPlayOpensItsOwn()
+    public async Task APlayHoldsNoFileOpenWhileItLoopsAndTheNextPlayShowsInItsPlace()
     {
         using var scratch = new ScratchFolder();
         var first = Copy(scratch, "animated.gif", "first.gif");
@@ -184,19 +186,41 @@ public sealed class PlaybackTests
         var playback = NewPlayback(thumbnails);
         var firstRequest = Request("first", first);
 
-        await Until(1, () => playback.Play(firstRequest));
-        Assert.IsFalse(OpensAlone(first), "the play holds its file open between frames and loops");
+        await Until(4, () => playback.Play(firstRequest));
+        Assert.IsTrue(OpensAlone(first), "the play read its file whole and holds it open no longer, though it plays on and loops");
 
         var secondRequest = Request("second", second);
         playback.Play(secondRequest);
         await Shown(playback, secondRequest.Key);
-        Assert.IsTrue(OpensAlone(first), "the first play closed its file");
-        Assert.IsFalse(OpensAlone(second));
+        Assert.IsTrue(OpensAlone(second));
         Assert.IsNull(playback.Frame(firstRequest.Key), "the first item shows its thumbnail again");
 
         playback.Play(null);
         await playback.Idle();
-        Assert.IsTrue(OpensAlone(second));
+    }
+
+    [TestMethod]
+    [DataRow("Revert", DisplayName = "a Revert over the render playing, of its own name")]
+    [DataRow("second Save", DisplayName = "a second Save over the earlier render playing")]
+    public async Task AChangeReplacingThePicturePlayingGoesThroughAndThePlayGoesOn(string change)
+    {
+        using var stash = new TestStash();
+        var store = await stash.OpenCleanly();
+        var cat = await stash.ImportFixture("cat", "animated.gif");
+        var saved = (await stash.SaveEdit(cat, EditedItems.BlackBoxAndBox)).Value!;
+        var layers = change == "Revert" ? LayerList.Empty : EditedItems.Arrow;
+        var render = change == "Revert" ? null : await stash.Render(saved, layers);
+        var playback = NewPlayback(NewThumbnails());
+
+        await Until(2, () => playback.Play(Request(saved.Name, saved.FilePath)));
+        var changed = await store.Save(saved, layers, render);
+        await Until(Handed().Count + 2, () => { });
+        playback.Play(null);
+        await playback.Idle();
+
+        Assert.IsTrue(changed.Succeeded, changed.Failure?.ToString());
+        Assert.AreEqual((change != "Revert", saved.FilePath), (changed.Value!.Edited, changed.Value.FilePath), "the new picture under the name the play was showing");
+        Assert.IsEmpty(named, "the play went on from the bytes it read");
     }
 
     [TestMethod]

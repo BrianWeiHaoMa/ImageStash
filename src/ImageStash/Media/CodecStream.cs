@@ -3,11 +3,11 @@ using System.Runtime.ExceptionServices;
 namespace ImageStash.Media;
 
 /// <summary>
-/// What the codec reads through. A read the file refuses part way (a byte-range lock, a failing disk) is kept and
-/// reads as the end, because an exception thrown inside the codec's read unwinds through the native decoder, which
-/// is not written to be unwound; it is thrown again once the codec has returned.
+/// What the codec reads through: the file, or its bytes read into memory for a play. A read the file refuses part way
+/// (a byte-range lock, a failing disk) is kept and reads as the end, because an exception thrown inside the codec's read
+/// unwinds through the native decoder, which is not written to be unwound; it is thrown again once the codec has returned.
 /// </summary>
-internal sealed class CodecStream(FileStream file) : Stream
+internal sealed class CodecStream(Stream file) : Stream
 {
     public Exception? Failure { get; private set; }
 

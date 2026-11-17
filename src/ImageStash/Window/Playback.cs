@@ -5,9 +5,10 @@ namespace ImageStash.Window;
 /// <summary>
 /// The grid's one playing animation (G6, R7): the frames of one item's finished picture, decoded one at a time on a
 /// pool thread at its thumbnail's bound, each handed to the UI thread when its time comes by the durations the file
-/// gives, and the file, opened once per play, rewound to loop. Asking for another item, or for none, stops the one
-/// playing first: its file is closed before the next is opened, so two never play at once. A still never plays. A
-/// picture that cannot be read stops its play and is handed to <paramref name="couldNotRead"/>, which marks the tile
+/// gives, and the file read whole into memory once per play, so no file is held open while it plays, and rewound to
+/// loop. Asking for another item, or for none, stops the one playing first: its bytes are let go before the next file is
+/// opened, so two never play at once. A still never plays. A picture that cannot be read stops its play and is handed
+/// to <paramref name="couldNotRead"/>, which marks the tile
 /// and names a failure other than its being unreadable (G35); nothing throws. A play can be paused on the frame
 /// showing and resumed from it (G19).
 /// </summary>
@@ -91,7 +92,7 @@ public sealed class Playback<TImage>(
             {
                 var stop = stopping = new CancellationTokenSource();
                 var previous = running;
-                // After the previous play has closed its file, so never two decoders are open for the grid.
+                // After the previous play has ended, so never two decoders are open for the grid.
                 running = Task.Run(async () =>
                 {
                     await previous.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
@@ -163,7 +164,7 @@ public sealed class Playback<TImage>(
         Changed?.Invoke();
     }
 
-    /// <summary>Completes once no play is running: after <c>Play(null)</c>, once the last file is closed.</summary>
+    /// <summary>Completes once no play is running: after <c>Play(null)</c>, once the last play has ended.</summary>
     public Task Idle()
     {
         lock (gate)
@@ -179,7 +180,8 @@ public sealed class Playback<TImage>(
             return;
         }
 
-        var opened = MediaDecoder.Open(request.Path, request.Name, heldFileRetry);
+        // Read whole, so a Save or a Revert replacing the picture playing is never refused as held by the play (G26, G35).
+        var opened = MediaDecoder.OpenToPlay(request.Path, request.Name, heldFileRetry);
         if (!opened.Succeeded)
         {
             Fail(request, current, opened.Failure);
