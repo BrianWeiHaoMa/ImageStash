@@ -199,6 +199,8 @@ public sealed class HandoffConfirmationTests
     {
         using var handing = await Handing.Open("still.png", "photo.jpg", "animated.gif", "transparent.png");
         var all = handing.Listing.Items;
+        // Each paste hides the flyout, whose start on Recent cannot read the held store either.
+        handing.LoadsMayFail = true;
         TimeSpan one, four;
         Outcome pastedOne, pastedFour;
         using (handing.Stash.HoldStore())
@@ -222,6 +224,8 @@ public sealed class HandoffConfirmationTests
         Assert.IsTrue(pastedOne.Succeeded && pastedFour.Succeeded, "nothing committed since they were read, so both go (G10)");
         Assert.HasCount(4, handing.Clipboard.Written[1].Content.FilePaths);
         Assert.HasCount(2, handing.Notices.Shown.Where(notice => notice.Text.StartsWith("Record a use failed: ")).ToList());
+        Assert.IsNotEmpty(handing.LoadFailures);
+        Assert.IsTrue(handing.LoadFailures.All(failure => failure.Reason.Contains(HeldFileRetry.HeldReason)), "the listing names the held store (G35): " + string.Join("; ", handing.LoadFailures));
     }
 
     /// <summary>A handoff refused, naming <paramref name="subject"/>, while another program holds the store.</summary>

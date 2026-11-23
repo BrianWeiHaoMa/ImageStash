@@ -37,7 +37,7 @@ public sealed class ListedStash : IDisposable
         Deletion = new Deletion(Listing, Notices);
         Organising = new Organising(Listing, Notices);
         Notifications = new Notices(stash.Clock);
-        Handoff = new Handoff(Listing, Notices, Notifications, Clipboard, new RecordingTarget(), stash.Clock, TestStash.ShortRetry, TestStash.ShortRetry);
+        Handoff = new Handoff(Listing, Notices, Notifications, Clipboard, Target, stash.Clock, TestStash.ShortRetry, TestStash.ShortRetry);
         Renaming = new Renaming(Listing, Notices, Handoff);
         Editing = new Editing(Listing, Notices, Handoff, (original, name, layers, format, work, retry) => Renderer(original, name, layers, format, work, retry), new ColorChoices(), editRetry ?? TestStash.ShortRetry);
         OpenWith = new OpenWith(Listing, Notifications, Editing, Dialogs, OpenWithClock, action => action());
@@ -174,6 +174,18 @@ public sealed class ListedStash : IDisposable
 
     /// <summary>The window's handoff, whose copies a capture's copy waits behind.</summary>
     public Handoff Handoff { get; }
+
+    /// <summary>The paste target's seam the handoff confirms, activates and pastes into.</summary>
+    public RecordingTarget Target { get; } = new();
+
+    /// <summary>Whether the paste's hide leaves the flyout hidden, as the window answers it: so, unless a check says the window stayed (pinned, or a dialog or a drag of its own up, G2).</summary>
+    public bool PasteHidesFlyout { get; set; } = true;
+
+    /// <summary>Enter with a paste target, as the window hands over: <paramref name="items"/> pasted into <see cref="RecordingTarget.Relay"/>.</summary>
+    public Task<Outcome> PasteIntoTarget(IReadOnlyList<StashItem> items) => Handoff.Paste(null!, items, RecordingTarget.Relay, () => PasteHidesFlyout);
+
+    /// <summary>A summon as the window makes it, the hidden flyout shown afresh, or with <paramref name="pinned"/> the pinned window brought forward (G1).</summary>
+    public Task Summon(bool pinned = false) => Listing.Summoned(flyout: !pinned);
 
     public RecordingScreen Screen { get; } = new();
 

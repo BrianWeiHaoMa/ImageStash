@@ -16,8 +16,9 @@ namespace ImageStash.Windows.Tests.Window;
 /// The preview inside the stash window laid out by the real desktop platform (G19, F4): opened by Space in the grid, a
 /// <c>Ctrl</c>+double-click and the item menu's Preview, closed by Space, Esc and its back arrow, by pointer and by Tab;
 /// the box, the chips and the footer's hints out of sight and reach, and no window of its own; the facts; Enter, <c>Ctrl+C</c>, Del and <c>Ctrl+D</c> on its item whatever the grid selects (G8, G9, G17, G18);
-/// Esc's first step (G2); a summon leaving it open; an import's end and its item's going closing it; only its latest
-/// read applied; the paste path through it with the keyboard alone and with the pointer alone (G7).
+/// Esc's first step (G2); a paste's hide closing it, so the next summon types into the box and pastes what that selects
+/// (G1); an import's end and its item's going closing it; only its latest read applied; the paste path through it with
+/// the keyboard alone and with the pointer alone (G7).
 /// </summary>
 [TestClass]
 public sealed class PreviewTests
@@ -175,39 +176,47 @@ public sealed class PreviewTests
     }
 
     [TestMethod]
-    public async Task WithATargetEnterPastesThePreviewsItemTheFlyoutHidesWithThePreviewOpenAndATraySummonFindsItThere()
+    public async Task WithATargetEnterPastesThePreviewsItemTheFlyoutHidesClosingThePreviewAndTheNextSummonTypesIntoTheBoxAndPastesWhatThatSelects()
     {
         var target = new PresetTarget { Before = null };
         using var shown = ShownWindow.Open(target: target);
         var items = await shown.OpenStash(shown.Picture("preview paste one.png"), shown.Picture("preview paste two.png"));
+        var (one, two) = (items.Single(item => item.Name == "preview paste one"), items.Single(item => item.Name == "preview paste two"));
         TrayDesktop.Run(() =>
         {
             shown.Window.Hide();
             shown.Window.SummonFromShortcut(new ForegroundReading(false, Relay), new SummonAnchor(null));
         });
         await TrayDesktop.Get(() => shown.Listing.Settle());
-        TrayDesktop.Run(() => shown.OpenPreview(items[1]));
+        TrayDesktop.Run(() => shown.OpenPreview(two));
 
         TrayDesktop.Run(() => ShownWindow.Press(shown.PreviewPicture, Key.Enter));
         await ShownWindow.Eventually(() => target.Pasted.Count == 1);
         TrayDesktop.Run(() =>
         {
             Assert.IsFalse(shown.Window.IsVisible, "the flyout hid for the paste (G2, G8)");
-            Assert.AreEqual(items[1].Id, shown.Preview.Item?.Id, "with the preview still open on its item");
+            Assert.IsFalse(shown.Preview.IsOpen, "its preview closed first (G1)");
         });
-        CollectionAssert.AreEqual(new[] { items[1].FilePath }, TestClipboard.Read().Files.ToList());
+        CollectionAssert.AreEqual(new[] { two.FilePath }, TestClipboard.Read().Files.ToList());
 
-        TrayDesktop.Run(shown.Window.SummonFromTray);
+        TrayDesktop.Run(() => shown.Window.SummonFromShortcut(new ForegroundReading(false, Relay), new SummonAnchor(null)));
         await TrayDesktop.Get(() => shown.Listing.Settle());
         TrayDesktop.Run(() =>
         {
             Assert.IsTrue(shown.Window.IsVisible);
-            Assert.AreEqual(items[1].Id, shown.Preview.Item?.Id, "summoned again, the preview is open on the same item");
-            Assert.AreSame(shown.PreviewPicture, shown.Focused, "focus inside it, not in the box it covers");
-            ShownWindow.Press(shown.PreviewPicture, Key.C, KeyModifiers.Control);
+            Assert.IsFalse(shown.Preview.IsOpen, "no preview in the way");
+            Assert.IsTrue(shown.Search.IsFocused, "the summon lands in the search box (G1)");
+            CollectionAssert.AreEqual(new[] { two.Id }, shown.Listing.Selection.ToList(), "the item just pasted selected alone");
+            ShownWindow.Type(shown.Search, "on");
         });
-        await ShownWindow.Eventually(() => shown.Uses() == 2);
-        Assert.AreEqual(2, (await shown.Listing.Store!.UseHistory(items[1].Id)).Value!.Count, "the keys act on it");
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == "on" && shown.Listing.Items.Count == 1));
+        TrayDesktop.Run(() =>
+        {
+            CollectionAssert.AreEqual(new[] { one.Id }, shown.Listing.Selection.ToList(), "two letters search and select as usual (G5)");
+            ShownWindow.Press(shown.Search, Key.Enter);
+        });
+        await ShownWindow.Eventually(() => target.Pasted.Count == 2);
+        CollectionAssert.AreEqual(new[] { one.FilePath }, TestClipboard.Read().Files.ToList(), "Enter hands over what the grid selects, not the item previewed before");
     }
 
     [TestMethod]
@@ -455,7 +464,7 @@ public sealed class PreviewTests
         var items = await shown.OpenStash(shown.Picture("pointer one.png"), shown.Picture("pointer two.png"));
         TrayDesktop.Run(() =>
         {
-            // One selected, not the import's two, which a summon keeps (G1), so the menu offers Preview.
+            // One selected, as the person left it, so the menu offers Preview.
             shown.Listing.Focus(items[0].Id);
             shown.Window.Hide();
             shown.Window.SummonFromTray();

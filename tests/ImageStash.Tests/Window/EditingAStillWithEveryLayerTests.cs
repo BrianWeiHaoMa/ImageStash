@@ -168,7 +168,7 @@ public sealed class EditingAStillWithEveryLayerTests
         var firstEntry = ItemMenu.Entries([item], null)[0];
         Assert.AreEqual((ItemMenuAction.Copy, new KeyGesture(Key.Enter)), (firstEntry.Action, firstEntry.Gesture));
         // HandOver is Enter's path; no target means Copy, with only the recording seam receiving it.
-        Require(await listed.Handoff.HandOver(null!, [item], null, () => Assert.Fail("Copy must leave the flyout open")));
+        Require(await listed.Handoff.HandOver(null!, [item], null, () => throw new AssertFailedException("Copy must leave the flyout open")));
         var content = listed.Clipboard.Written.Single().Content;
         CollectionAssert.AreEqual(new[] { item.FilePath }, content.FilePaths.ToArray(), "handoff uses the root render");
         CollectionAssert.AreEqual(new[] { item.Id }, content.Items.ToArray());
@@ -223,7 +223,7 @@ public sealed class EditingAStillWithEveryLayerTests
         var before = EditedItems.Row(listed.Stash, first.Id);
         var entry = ItemMenu.Entries([first], null).Single(e => e.Action == ItemMenuAction.SaveAsNewItem);
         Assert.AreEqual("Save as new item", entry.Label);
-        Require(await menu.Act(entry.Action, null!, [first], null, () => Assert.Fail("no handoff"), _ => Assert.Fail("no dialog")));
+        Require(await menu.Act(entry.Action, null!, [first], null, () => throw new AssertFailedException("no handoff"), _ => Assert.Fail("no dialog")));
         Assert.HasCount(2, listed.Listing.Items);
         var second = listed.Listing.Items.Single(item => item.Id != first.Id);
         Assert.AreEqual(first.Name + " 2", second.Name);
@@ -252,7 +252,7 @@ public sealed class EditingAStillWithEveryLayerTests
     {
         var entry = ItemMenu.Entries([first], null).Single(e => e.Action == ItemMenuAction.RevertToOriginal);
         Assert.AreEqual("Revert to original", entry.Label);
-        Require(await menu.Act(entry.Action, null!, [first], null, () => Assert.Fail("no handoff"), _ => Assert.Fail("no dialog")));
+        Require(await menu.Act(entry.Action, null!, [first], null, () => throw new AssertFailedException("no handoff"), _ => Assert.Fail("no dialog")));
         Assert.IsFalse(listed.Editing.IsOpen, "a menu Revert acts immediately, opening no edit");
         var reverted = listed.Listing.Items.Single(item => item.Id == first.Id);
         Assert.IsFalse(reverted.Edited);

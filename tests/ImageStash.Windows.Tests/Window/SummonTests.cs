@@ -9,18 +9,19 @@ namespace ImageStash.Windows.Tests.Window;
 
 /// <summary>
 /// The summon through the real stash window with the preview open (G1): from the tray and from the shortcut the flyout
-/// is placed by the summon's origin and shows its content as it was left, the query, the selection and the preview on
-/// its item kept and focus inside the preview, never in the box it covers; a pinned window, minimised, comes forward
-/// where it is the same way, its animation held while minimised; with the preview closed the summon keeps the scope, the
-/// search and the selection too, focus in the box with its text selected, so typing replaces it, and a first summon
-/// finds Recent or All; the preview's facts state the times as they are at the summon, not as they were when it was left (G19).
+/// is placed by the summon's origin; a flyout that hid, by focus lost to another app or by the shortcut, closed its
+/// preview first, so the summon shows the query and the selection as they were left, focus in the box with its text
+/// selected, so typing replaces it; a pinned window, minimised, comes forward where it is with its preview open on its
+/// item and focus inside it, its animation held while minimised; the summon keeps the scope, the search and the
+/// selection, and a first summon finds Recent or All; the pinned preview's facts state the times as they are at the
+/// summon, not as they were when it was left (G19).
 /// These summons show the window on the primary display for a moment.
 /// </summary>
 [TestClass]
 public sealed class SummonTests
 {
     [TestMethod]
-    public async Task ATraySummonWithThePreviewOpenShowsItAsItWasLeftAboveTheTrayAndWithItClosedTheBoxTakesFocusAsItWasLeft()
+    public async Task FocusLostWithThePreviewOpenClosesItSoATraySummonAboveTheTrayFocusesTheBoxOnTheSearchAndSelectionAsTheyWereLeft()
     {
         using var shown = ShownWindow.Open();
         var items = await shown.OpenStash(shown.Picture("summon one.png"), shown.Picture("summon two.png"), shown.Picture("other three.png"));
@@ -32,6 +33,7 @@ public sealed class SummonTests
 
         TrayDesktop.Run(shown.Deactivate);
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => !shown.Window.IsVisible));
+        TrayDesktop.Run(() => Assert.IsFalse(shown.Preview.IsOpen, "the flyout that hid closed its preview first (G1)"));
         TrayDesktop.Run(shown.Window.SummonFromTray);
         await TrayDesktop.Get(() => shown.Listing.Settle());
 
@@ -40,25 +42,12 @@ public sealed class SummonTests
             var expected = Summon.AboveTrayIcon(null, Summon.DisplaysOf(shown.Window.Screens), WindowSize.FlyoutDefault);
             Assert.IsTrue(shown.Window.IsVisible);
             Assert.AreEqual(expected.Position, shown.Window.Position, "placed by the tray's summon, here with no icon to stand above (G1)");
-            Assert.AreEqual(left.Id, shown.Preview.Item?.Id, "the preview open on the same item");
-            Assert.AreSame(shown.PreviewPicture, shown.Focused, "focus inside it");
-            Assert.IsFalse(shown.Search.IsFocused, "not in the box it covers");
+            Assert.IsFalse(shown.Preview.IsOpen, "no preview in the way");
+            Assert.IsTrue(shown.Search.IsFocused, "the box focused");
             Assert.AreEqual("summon", shown.Search.Text, "the query as it was left");
-            Assert.AreEqual("summon", shown.Listing.Query);
-            CollectionAssert.AreEqual(new[] { left.Id }, shown.Listing.Selection.ToList(), "and the selection");
-        });
-
-        TrayDesktop.Run(() => ShownWindow.Press(shown.PreviewPicture, Avalonia.Input.Key.Escape));
-        TrayDesktop.Run(shown.Window.Hide);
-        TrayDesktop.Run(shown.Window.SummonFromTray);
-        await TrayDesktop.Get(() => shown.Listing.Settle());
-
-        TrayDesktop.Run(() =>
-        {
-            Assert.IsTrue(shown.Search.IsFocused, "with the preview closed, the box focused");
-            Assert.AreEqual("summon", shown.Listing.Query, "the search kept (G1)");
             Assert.AreEqual("summon", shown.Search.SelectedText, "and selected, so that typing replaces it (G1)");
-            CollectionAssert.AreEqual(new[] { left.Id }, shown.Listing.Selection.ToList(), "the selection kept");
+            Assert.AreEqual("summon", shown.Listing.Query, "the search kept (G1)");
+            CollectionAssert.AreEqual(new[] { left.Id }, shown.Listing.Selection.ToList(), "and the selection");
             Assert.HasCount(2, shown.Listing.Items, "the matches");
         });
     }
@@ -147,7 +136,7 @@ public sealed class SummonTests
     }
 
     [TestMethod]
-    public async Task TheShortcutHidesTheFlyoutWithThePreviewOpenAndAgainShowsItAtThePointerAsItWasLeft()
+    public async Task TheShortcutHidesTheFlyoutClosingItsPreviewAndAgainShowsItAtThePointerWithTheBoxFocusedOnTheSelectionLeft()
     {
         using var shown = ShownWindow.Open();
         var items = await shown.OpenStash(shown.Picture("shortcut kept one.png"), shown.Picture("shortcut kept two.png"));
@@ -157,7 +146,11 @@ public sealed class SummonTests
         var pointer = new PixelPoint(area.X + 40, area.Y + 40);
 
         TrayDesktop.Run(() => shown.Window.SummonFromShortcut(new ForegroundReading(true, null), new SummonAnchor(pointer)));
-        TrayDesktop.Run(() => Assert.IsFalse(shown.Window.IsVisible, "the shortcut hides the showing flyout, the preview open in it (G2)"));
+        TrayDesktop.Run(() =>
+        {
+            Assert.IsFalse(shown.Window.IsVisible, "the shortcut hides the showing flyout (G2)");
+            Assert.IsFalse(shown.Preview.IsOpen, "its preview closed first (G1)");
+        });
 
         TrayDesktop.Run(() => shown.Window.SummonFromShortcut(new ForegroundReading(false, null), new SummonAnchor(pointer)));
         await TrayDesktop.Get(() => shown.Listing.Settle());
@@ -166,14 +159,14 @@ public sealed class SummonTests
         {
             Assert.IsTrue(shown.Window.IsVisible);
             Assert.AreEqual(pointer, shown.Window.Position, "placed by the shortcut's summon, at the pointer (G1)");
-            Assert.AreEqual(left.Id, shown.Preview.Item?.Id, "the preview open on the same item");
-            Assert.AreSame(shown.PreviewPicture, shown.Focused, "focus inside it, not in the box");
+            Assert.IsFalse(shown.Preview.IsOpen);
+            Assert.IsTrue(shown.Search.IsFocused, "focus in the box (G1)");
             CollectionAssert.AreEqual(new[] { left.Id }, shown.Listing.Selection.ToList(), "the selection as it was left, not the first item");
         });
     }
 
     [TestMethod]
-    public async Task AFlyoutHiddenByAnotherAppWithThePreviewOpenComesBackFromTheShortcutBesideTheCaretAsItWasLeft()
+    public async Task AFlyoutHiddenByAnotherAppWithThePreviewOpenComesBackFromTheShortcutBesideTheCaretWithTheBoxFocused()
     {
         using var shown = ShownWindow.Open();
         await shown.OpenStash(shown.Picture("caret kept one.png"), shown.Picture("caret kept two.png"));
@@ -195,8 +188,9 @@ public sealed class SummonTests
             Assert.IsTrue(window.IsVisible);
             Assert.AreEqual(caret.X - (int)Math.Round(Summon.CaretInset * scaling), outer.X, "beside the caret, not at the pointer (G1)");
             Assert.IsLessThanOrEqualTo(2, Math.Abs(caret.Y - (int)Math.Round(Summon.CaretGap * scaling) - outer.Bottom), $"its bottom {outer.Bottom} just above the caret's line at {caret.Y}");
-            Assert.AreEqual(left.Id, shown.Preview.Item?.Id, "the preview open on the same item");
-            Assert.AreSame(shown.PreviewPicture, shown.Focused, "focus inside it, the box not focused again");
+            Assert.IsFalse(shown.Preview.IsOpen, "the hide closed the preview (G1)");
+            Assert.IsTrue(shown.Search.IsFocused, "focus in the box");
+            CollectionAssert.AreEqual(new[] { left.Id }, shown.Listing.Selection.ToList(), "the selection as it was left");
         });
     }
 
@@ -238,17 +232,58 @@ public sealed class SummonTests
     {
         using var shown = ShownWindow.Open();
         var item = (await shown.OpenStash(shown.Picture("used then.png"))).Single();
+        // Pinned, whose preview a summon brings forward as it was left (G1).
+        TrayDesktop.Run(shown.Window.SummonPinned);
+        await TrayDesktop.Get(() => shown.Listing.Settle());
         TrayDesktop.Run(() => shown.OpenPreview(item));
         TrayDesktop.Run(() => ShownWindow.Press(shown.PreviewPicture, Avalonia.Input.Key.C, Avalonia.Input.KeyModifiers.Control));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Preview.Facts.Count == 2 && shown.Preview.Facts[1].EndsWith("Used once, just now")));
 
-        TrayDesktop.Run(shown.Deactivate);
-        await ShownWindow.Eventually(() => TrayDesktop.Get(() => !shown.Window.IsVisible));
+        TrayDesktop.Run(() => shown.Window.WindowState = WindowState.Minimized);
         ((StoppedClock)shown.Notices.Clock).Advance(TimeSpan.FromMinutes(150));
         TrayDesktop.Run(shown.Window.SummonFromTray);
 
         // Brought forward as it was left, the preview on its item, saying what is true at this summon (G1, G19).
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Preview.Facts.Count == 2 && shown.Preview.Facts[1].EndsWith("Used once, 2 hr ago")));
         TrayDesktop.Run(() => Assert.AreEqual(item.Id, shown.Preview.Item?.Id));
+    }
+
+    [TestMethod]
+    public async Task AfterASearchedPasteTheNextSummonShowsRecentWithAnEmptyFocusedBoxAndThePastedItemFirstAndAloneSelected()
+    {
+        var relay = PresetTarget.App("Relay");
+        var target = new PresetTarget { Before = null };
+        using var shown = ShownWindow.Open(target: target);
+        var items = await shown.OpenStash(shown.Picture("my cat.png"), shown.Picture("my dog.png"), shown.Picture("bore.png"));
+        var cat = items.Single(item => item.Name == "my cat");
+        TrayDesktop.Run(() =>
+        {
+            shown.Window.Hide();
+            shown.Window.SummonFromShortcut(new ForegroundReading(false, relay), new SummonAnchor(null));
+        });
+        await TrayDesktop.Get(() => shown.Listing.Settle());
+        TrayDesktop.Run(() => ShownWindow.Type(shown.Search, "my"));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == "my" && shown.Listing.Items.Count == 2));
+
+        TrayDesktop.Run(() =>
+        {
+            shown.Listing.Focus(cat.Id);
+            ShownWindow.Press(shown.Search, Avalonia.Input.Key.Enter);
+        });
+        await ShownWindow.Eventually(() => target.Pasted.Count == 1 && shown.Uses() == 1);
+        TrayDesktop.Run(() => Assert.IsFalse(shown.Window.IsVisible, "the paste hid the flyout (G2)"));
+        TrayDesktop.Run(() => shown.Window.SummonFromShortcut(new ForegroundReading(false, relay), new SummonAnchor(null)));
+        await TrayDesktop.Get(() => shown.Listing.Settle());
+
+        TrayDesktop.Run(() =>
+        {
+            Assert.IsTrue(shown.Window.IsVisible);
+            Assert.AreEqual(Scope.Recent, shown.Listing.LitChip, "Recent after a paste (G1)");
+            Assert.AreEqual("", shown.Listing.Query, "with no search");
+            Assert.AreEqual("", shown.Search.Text ?? "", "the box empty");
+            Assert.IsTrue(shown.Search.IsFocused, "and focused");
+            Assert.AreEqual(cat.Id, shown.Listing.Items[0].Id, "the item just pasted first");
+            CollectionAssert.AreEqual(new[] { cat.Id }, shown.Listing.Selection.ToList(), "and selected alone");
+        });
     }
 }

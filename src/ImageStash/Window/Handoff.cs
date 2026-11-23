@@ -202,21 +202,22 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
     /// <summary>
     /// Enter, a double-click and the item menu's first entry: with a paste target, the paste into it; with none, the copy (G8).
     /// </summary>
-    public Task<Outcome> HandOver(TopLevel owner, IReadOnlyList<StashItem> items, PasteTarget? target, Action hideFlyout) =>
+    public Task<Outcome> HandOver(TopLevel owner, IReadOnlyList<StashItem> items, PasteTarget? target, Func<bool> hideFlyout) =>
         target is null ? Copy(owner, items) : Paste(owner, items, target, hideFlyout);
 
     /// <summary>
     /// The paste into <paramref name="target"/>, in How G8 holds's order: the items onto the clipboard and their uses
     /// recorded, exactly as <see cref="Copy"/>; then the seam confirms the window still exists and may be sent input;
-    /// then <paramref name="hideFlyout"/>; then the target is brought to the front and sent one paste keystroke. A write
-    /// that fails is named and nothing else happens. A window that is gone or cannot be sent input gets the copy that is
-    /// already made, the flyout hidden as a paste hides it, so the app the user came from is in front for its
-    /// <c>Ctrl+V</c>, and then the notification "Copied · press Ctrl+V", never a second write or a second use. The
-    /// one-at-a-time gate is held from the write through the keystroke, so nothing else ImageStash
-    /// writes lands on the clipboard before the target pastes it, and so are the items' file names, so no other item
-    /// comes under them before then.
+    /// then <paramref name="hideFlyout"/>, which answers whether the flyout is hidden after it; then the target is brought
+    /// to the front and sent one paste keystroke. A write that fails is named and nothing else happens. A window that is
+    /// gone or cannot be sent input gets the copy that is already made, the flyout hidden as a paste hides it, so the app
+    /// the user came from is in front for its <c>Ctrl+V</c>, and then the notification "Copied · press Ctrl+V", never a
+    /// second write or a second use. A paste that leaves the flyout hidden, either way, starts the next summon on Recent
+    /// (<see cref="StartNextSummonOnRecent"/>). The one-at-a-time gate is held from the write through the keystroke, so
+    /// nothing else ImageStash writes lands on the clipboard before the target pastes it, and so are the items' file names,
+    /// so no other item comes under them before then.
     /// </summary>
-    public async Task<Outcome> Paste(TopLevel owner, IReadOnlyList<StashItem> items, PasteTarget target, Action hideFlyout)
+    public async Task<Outcome> Paste(TopLevel owner, IReadOnlyList<StashItem> items, PasteTarget target, Func<bool> hideFlyout)
     {
         if (items.Count == 0)
         {
@@ -243,14 +244,14 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
 
             await Record(items);
             var reachable = targets.Confirm(target);
+            var started = StartNextSummonOnRecent(hideFlyout());
             if (!reachable.Succeeded)
             {
-                hideFlyout();
                 notifications.Raise(CopiedNotification);
+                await started;
                 return reachable;
             }
 
-            hideFlyout();
             SetBusy($"Bringing {target.AppName} to the front…");
             var pasted = await targets.ActivateAndPaste(target, PasteBound);
             if (!pasted.Succeeded)
@@ -258,6 +259,7 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
                 notifications.Raise(CopiedNotification);
             }
 
+            await started;
             return pasted;
         }
         finally
@@ -418,6 +420,13 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
 
         await listing.Refresh();
     }
+
+    /// <summary>
+    /// After a paste whose flyout is <paramref name="hidden"/>, its uses recorded: Recent with no search, its first item,
+    /// the one just handed over, selected alone, for the next summon (G1); the pinned window, or a flyout a dialog or drag
+    /// of its own kept up, as it was. Started before the keystroke, which does not wait for it.
+    /// </summary>
+    private Task StartNextSummonOnRecent(bool hidden) => hidden ? listing.ShowScope(Scope.Recent) : Task.CompletedTask;
 
     /// <summary>The items as a failure names them: one by its name, or its file's name when it has none; several by count.</summary>
     private static string Subject(IReadOnlyList<StashItem> items) => items switch

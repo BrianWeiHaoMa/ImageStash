@@ -11,7 +11,15 @@ public sealed class Handing : IDisposable
     {
         Stash = stash;
         Notices = new Notices(stash.Clock);
-        Listing = new Listing(failure => Assert.Fail(failure.Sentence));
+        Listing = new Listing(failure =>
+        {
+            if (!LoadsMayFail)
+            {
+                Assert.Fail(failure.Sentence);
+            }
+
+            LoadFailures.Add(failure);
+        });
         Import = new Import(Listing, Notices, TestStash.ShortRetry);
         Clipboard = new RecordingClipboard(stash.Clock);
         Notifications = new Notices(stash.Clock);
@@ -24,6 +32,12 @@ public sealed class Handing : IDisposable
     public Notices Notices { get; }
 
     public Listing Listing { get; }
+
+    /// <summary>Set by a check that holds the store through a paste, whose start on Recent then cannot read it: the listing's failures are kept rather than failing the check.</summary>
+    public bool LoadsMayFail { get; set; }
+
+    /// <summary>What the listing named while <see cref="LoadsMayFail"/> was set.</summary>
+    public List<Failure> LoadFailures { get; } = [];
 
     public Import Import { get; }
 
@@ -67,8 +81,15 @@ public sealed class Handing : IDisposable
     /// <summary>The window passes itself as the clipboard's owner; the recording seam has no use for one.</summary>
     public Task<Outcome> Copy(IReadOnlyList<StashItem> items) => Handoff.Copy(null!, items);
 
+    /// <summary>Whether the paste's hide leaves the flyout hidden, as the window answers it: so, unless a check says the window stayed (pinned, or a dialog or a drag of its own up, G2).</summary>
+    public bool PasteHidesFlyout { get; set; } = true;
+
     /// <summary>The paste as the window makes it, its hide recorded as a step.</summary>
-    public Task<Outcome> Paste(IReadOnlyList<StashItem> items, PasteTarget target) => Handoff.Paste(null!, items, target, () => Steps.Add("hide"));
+    public Task<Outcome> Paste(IReadOnlyList<StashItem> items, PasteTarget target) => Handoff.Paste(null!, items, target, () =>
+    {
+        Steps.Add("hide");
+        return PasteHidesFlyout;
+    });
 
     /// <summary>The seam's drag as the window starts it; the recording seam has no use for the window or the press.</summary>
     public Task<Outcome<bool>> Drag(IReadOnlyList<string> paths) => Clipboard.StartDrag(null!, null!, paths);

@@ -17,9 +17,10 @@ public enum CaptureHide
 /// forgets the slot, so the capture's end shows nothing again, and so does the user's own restore of the minimised
 /// window: a minimise they make after it is theirs, not the capture's. The window does the hiding and the showing through
 /// <paramref name="hide"/>, which judges by <see cref="Decide"/> and answers what it did, and <paramref name="restore"/>,
-/// which brings that back. UI thread only.
+/// which brings that back; <paramref name="forgotten"/>, when given, is told what a summon or the user's restore left
+/// unrestored. UI thread only.
 /// </summary>
-public sealed class CaptureHiding(Func<CaptureHide> hide, Action<CaptureHide> restore)
+public sealed class CaptureHiding(Func<CaptureHide> hide, Action<CaptureHide> restore, Action<CaptureHide>? forgotten = null)
 {
     private CaptureHide slot = CaptureHide.Nothing;
 
@@ -52,5 +53,13 @@ public sealed class CaptureHiding(Func<CaptureHide> hide, Action<CaptureHide> re
     }
 
     /// <summary>A summon, or the user's own restore, showed the window: nothing is to be brought back.</summary>
-    public void Forget() => slot = CaptureHide.Nothing;
+    public void Forget()
+    {
+        var hidden = slot;
+        slot = CaptureHide.Nothing;
+        if (hidden != CaptureHide.Nothing)
+        {
+            forgotten?.Invoke(hidden);
+        }
+    }
 }

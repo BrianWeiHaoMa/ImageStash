@@ -1,6 +1,8 @@
 using ImageStash.Seams;
+using ImageStash.Store;
 using ImageStash.Tests.Support;
 using ImageStash.Window;
+using Microsoft.Data.Sqlite;
 
 namespace ImageStash.Tests.Window;
 
@@ -51,10 +53,14 @@ public sealed class HandoffPasteTests
             handing.Steps.Add("write");
             return Task.CompletedTask;
         };
-        handing.Target.AtConfirm = () => handing.Steps.Add($"uses {handing.Uses().Count}");
+        handing.Target.AtConfirm = () => handing.Steps.Add($"uses {handing.Stash.Store!.Recent().Result.Value!.Count}");
         handing.Target.Confirms = new Failure(PasteTargetReasons.Action, "Relay", reason);
 
-        var pasted = await handing.Handoff.Paste(null!, handing.Items, RecordingTarget.Relay, () => handing.Steps.Add($"hide with {handing.Notifications.Shown.Count} notifications"));
+        var pasted = await handing.Handoff.Paste(null!, handing.Items, RecordingTarget.Relay, () =>
+        {
+            handing.Steps.Add($"hide with {handing.Notifications.Shown.Count} notifications");
+            return true;
+        });
 
         Assert.AreEqual($"Paste failed: Relay, {reason}", pasted.Failure?.Sentence, "named in the outcome (G35)");
         CollectionAssert.AreEqual(new[] { "write", "confirm Relay", "uses 1", "hide with 0 notifications" }, handing.Steps,
@@ -126,7 +132,11 @@ public sealed class HandoffPasteTests
     {
         using var handing = await Handing.Open("photo.jpg");
 
-        var handed = await handing.Handoff.HandOver(null!, handing.Items, null, () => handing.Steps.Add("hide"));
+        var handed = await handing.Handoff.HandOver(null!, handing.Items, null, () =>
+        {
+            handing.Steps.Add("hide");
+            return true;
+        });
 
         Assert.IsTrue(handed.Succeeded);
         Assert.IsEmpty(handing.Steps, "Enter copies and the window stays (G8, In use)");
@@ -140,8 +150,145 @@ public sealed class HandoffPasteTests
     {
         using var handing = await Handing.Open("photo.jpg");
 
-        await handing.Handoff.HandOver(null!, handing.Items, RecordingTarget.Relay, () => handing.Steps.Add("hide"));
+        await handing.Handoff.HandOver(null!, handing.Items, RecordingTarget.Relay, () =>
+        {
+            handing.Steps.Add("hide");
+            return true;
+        });
 
         Assert.AreEqual(RecordingTarget.Relay, handing.Target.Pasted.Single().Target);
+    }
+
+    [TestMethod]
+    public async Task APasteThatLeavesTheFlyoutHiddenLeavesRecentWithNoSearchAndThePastedItemFirstAndSelectedAlone()
+    {
+        using var handing = await Handing.Open();
+        var (myCat, _, bore) = await Searched(handing);
+        var cleared = 0;
+        handing.Listing.QueryCleared += () => cleared++;
+
+        var pasted = await handing.Paste([myCat], RecordingTarget.Relay);
+
+        Assert.IsTrue(pasted.Succeeded, pasted.Failure?.Sentence);
+        Assert.AreEqual(Scope.Recent, handing.Listing.Scope, "G1: Recent after a paste");
+        Assert.AreEqual(Scope.Recent, handing.Listing.LitChip);
+        Assert.AreEqual("", handing.Listing.Query, "no search");
+        Assert.AreEqual(1, cleared, "the search box emptied with it");
+        CollectionAssert.AreEqual(new[] { myCat.Id, bore.Id }, handing.Listing.Items.Select(item => item.Id).ToList(),
+            "the item just handed over first, its use recorded before Recent was read (G4, G10)");
+        CollectionAssert.AreEqual(new[] { myCat.Id }, handing.Listing.Selection.ToList(), "it alone selected");
+        Assert.AreEqual(myCat.Id, handing.Listing.Focused);
+    }
+
+    [TestMethod]
+    public async Task ThreeItemsPastedTogetherLeaveOneOfThemSelectedRecentsFirst()
+    {
+        using var handing = await Handing.Open();
+        var (myCat, myDog, bore) = await Searched(handing);
+        await handing.Listing.ShowScope(Scope.All);
+        handing.Listing.SelectAll();
+        var three = handing.Listing.SelectedItems;
+        Assert.HasCount(3, three);
+
+        await handing.Paste(three, RecordingTarget.Relay);
+
+        Assert.AreEqual(Scope.Recent, handing.Listing.Scope);
+        var selected = handing.Listing.Selection.Single();
+        Assert.AreEqual(handing.Listing.Items[0].Id, selected, "Recent's first item, alone (G1)");
+        CollectionAssert.Contains(new[] { myCat.Id, myDog.Id, bore.Id }, selected, "one of the three handed over");
+    }
+
+    [TestMethod]
+    public async Task APasteWhoseTargetCannotTakeItLeavesTheHiddenFlyoutOnRecentToo()
+    {
+        using var handing = await Handing.Open();
+        var (myCat, _, _) = await Searched(handing);
+        handing.Target.Confirms = new Failure(PasteTargetReasons.Action, "Relay", PasteTargetReasons.Gone);
+
+        await handing.Paste([myCat], RecordingTarget.Relay);
+
+        Assert.AreEqual(Handoff.CopiedNotification, handing.Notifications.Shown.Single().Text);
+        Assert.AreEqual(Scope.Recent, handing.Listing.Scope, "the Copied · press Ctrl+V path hides the flyout as a paste does (G8, G1)");
+        Assert.AreEqual("", handing.Listing.Query);
+        CollectionAssert.AreEqual(new[] { myCat.Id }, handing.Listing.Selection.ToList());
+    }
+
+    [TestMethod]
+    public async Task AUseTheStoreRefusesLeavesTheHandoffStandingAndTheHiddenFlyoutOnRecent()
+    {
+        using var handing = await Handing.Open();
+        var (myCat, _, bore) = await Searched(handing);
+
+        Outcome pasted;
+        // Its writes refused while it is still read, as while another program holds a write lock on it (E3).
+        using (var holder = new SqliteConnection($"Data Source={handing.Stash.Folder.StoreFile};Pooling=False"))
+        {
+            holder.Open();
+            using var begin = holder.CreateCommand();
+            begin.CommandText = "BEGIN IMMEDIATE";
+            begin.ExecuteNonQuery();
+            pasted = await handing.Paste([myCat], RecordingTarget.Relay);
+        }
+
+        Assert.IsTrue(pasted.Succeeded, "the handoff stands (G10)");
+        Assert.AreEqual(RecordingTarget.Relay, handing.Target.Pasted.Single().Target);
+        Assert.HasCount(1, handing.Notices.Shown, "the use's failure named (G35)");
+        Assert.AreEqual(Scope.Recent, handing.Listing.Scope, "Recent all the same");
+        Assert.AreEqual("", handing.Listing.Query);
+        CollectionAssert.AreEqual(new[] { bore.Id }, handing.Listing.Items.Select(item => item.Id).ToList(), "Recent lists only what it has recorded");
+        CollectionAssert.AreEqual(new[] { bore.Id }, handing.Listing.Selection.ToList(), "its first item selected alone, as after any paste");
+    }
+
+    [TestMethod]
+    [DataRow("copy without a target")]
+    [DataRow("Ctrl+C")]
+    [DataRow("a paste the window stayed up through")]
+    [DataRow("a clipboard that cannot be written")]
+    public async Task OnlyAPasteThatLeavesTheFlyoutHiddenStartsTheNextSummonOnRecent(string act)
+    {
+        using var handing = await Handing.Open();
+        var (myCat, myDog, _) = await Searched(handing);
+        handing.Listing.Toggle(myDog.Id);
+        CollectionAssert.AreEquivalent(new[] { myCat.Id, myDog.Id }, handing.Listing.Selection.ToList());
+
+        switch (act)
+        {
+            case "copy without a target":
+                await handing.Handoff.HandOver(null!, [myCat], null, () => throw new AssertFailedException("a copy hides nothing (G8)"));
+                break;
+            case "Ctrl+C":
+                await handing.Copy([myCat]);
+                break;
+            case "a paste the window stayed up through":
+                // Pinned, or with a dialog or a drag of its own up: the paste hides nothing (G2).
+                handing.PasteHidesFlyout = false;
+                await handing.Paste([myCat], RecordingTarget.Relay);
+                Assert.AreEqual(RecordingTarget.Relay, handing.Target.Pasted.Single().Target);
+                break;
+            case "a clipboard that cannot be written":
+                handing.Clipboard.FailNext = RecordingClipboard.Held;
+                await handing.Paste([myCat], RecordingTarget.Relay);
+                break;
+        }
+
+        Assert.AreEqual("my", handing.Listing.Query, "the search as it was left (G1)");
+        Assert.AreEqual(Scope.All, handing.Listing.LitChip);
+        CollectionAssert.AreEquivalent(new[] { myCat.Id, myDog.Id }, handing.Listing.Selection.ToList(), "and the selection");
+    }
+
+    /// <summary>
+    /// "my cat" and "my dog" never used, and "bore" used a day ago, searched for <c>my</c>, with "my cat", the second
+    /// match, selected; the listing reads the stash afresh first, the three having been added beside it.
+    /// </summary>
+    private static async Task<(StashItem MyCat, StashItem MyDog, StashItem Bore)> Searched(Handing handing)
+    {
+        var bore = await handing.Stash.ImportFixture("bore", "still.png");
+        var myCat = await handing.Stash.ImportFixture("my cat", "photo.jpg");
+        var myDog = await handing.Stash.ImportFixture("my dog", "transparent.png");
+        Assert.IsTrue((await handing.Stash.Store!.RecordUses([bore], handing.Stash.Clock.Now.AddDays(-1))).Succeeded);
+        await handing.Listing.SetQuery("my");
+        CollectionAssert.AreEqual(new[] { myDog.Id, myCat.Id }, handing.Listing.Items.Select(item => item.Id).ToList());
+        handing.Listing.Focus(myCat.Id);
+        return (myCat, myDog, bore);
     }
 }

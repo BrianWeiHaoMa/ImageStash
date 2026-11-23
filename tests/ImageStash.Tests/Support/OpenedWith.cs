@@ -71,7 +71,7 @@ public static class OpenedWith
     /// </summary>
     public static async Task<Notice> ReplacedThroughTheMenu(ListedStash listed, StashItem item, byte[] rewrite)
     {
-        var chosen = await listed.ItemMenu.Act(ItemMenuAction.OpenWith, null!, [item], null, () => Assert.Fail("Open with… hides nothing"), _ => { });
+        var chosen = await listed.ItemMenu.Act(ItemMenuAction.OpenWith, null!, [item], null, () => throw new AssertFailedException("Open with… hides nothing"), _ => { });
         Assert.IsTrue(chosen.Succeeded, chosen.Failure?.ToString());
         await RewriteWhenFree(listed.Dialogs.OpenedWith.Last(), rewrite);
         await Eventually(listed, () => listed.Notifications.Shown.Any(notice => notice.Text.StartsWith("Replaced ")));

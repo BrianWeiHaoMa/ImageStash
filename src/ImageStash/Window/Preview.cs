@@ -270,6 +270,12 @@ public sealed class Preview : Border
     public bool EditingName => name.IsEditing;
 
     /// <summary>
+    /// Whether its name field holds a name typed and not yet committed, or its tag field words not yet added, which a hide
+    /// keeps rather than throws away (G1, G19).
+    /// </summary>
+    public bool HoldsTypedText => (name.IsEditing && name.Text != name.Shown) || !string.IsNullOrWhiteSpace(tags.Field.Text);
+
+    /// <summary>
     /// Focus as it was left, as a summon gives it back (G1): in the name while it is being edited, else in the tag field
     /// when focus was last there, else on <see cref="FocusTarget"/>.
     /// </summary>
@@ -380,8 +386,11 @@ public sealed class Preview : Border
         Changed?.Invoke();
     }
 
-    /// <summary>Enter: the handoff on the item, into <paramref name="target"/> or onto the clipboard (G8); the preview stays open, in the hidden flyout after a paste.</summary>
-    public Task<Outcome> HandOver(TopLevel owner, PasteTarget? target, Action hideFlyout) =>
+    /// <summary>
+    /// Enter: the handoff on the item, into <paramref name="target"/> or onto the clipboard (G8); a paste's hide closes the
+    /// preview with the flyout, unless it holds typed text or the window stays (G1).
+    /// </summary>
+    public Task<Outcome> HandOver(TopLevel owner, PasteTarget? target, Func<bool> hideFlyout) =>
         Act(item => handoff.HandOver(owner, [item], target, hideFlyout));
 
     /// <summary><c>Ctrl+C</c>: the item onto the clipboard, the window staying (G9).</summary>

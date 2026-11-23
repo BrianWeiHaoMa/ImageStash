@@ -141,7 +141,7 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
     /// items, <paramref name="preview"/> the preview on the one item, <paramref name="rename"/> the preview on it with
     /// its name in edit, and <paramref name="edit"/> the editor on it.
     /// </summary>
-    public void Show(Control target, Rect anchor, TopLevel owner, PasteTarget? pasteTarget, Action hideFlyout, Action<bool> dialogUp, Action<IReadOnlyList<StashItem>> typeATag,
+    public void Show(Control target, Rect anchor, TopLevel owner, PasteTarget? pasteTarget, Func<bool> hideFlyout, Action<bool> dialogUp, Action<IReadOnlyList<StashItem>> typeATag,
         Action<StashItem> preview, Action<StashItem> rename, Action<StashItem> edit)
     {
         var items = listing.SelectedItems;
@@ -197,7 +197,7 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
     }
 
     /// <summary>What an entry does, on the items the menu was opened on, pasting into the target it named.</summary>
-    public Task<Outcome> Act(ItemMenuAction action, TopLevel owner, IReadOnlyList<StashItem> items, PasteTarget? pasteTarget, Action hideFlyout, Action<bool> dialogUp) => action switch
+    public Task<Outcome> Act(ItemMenuAction action, TopLevel owner, IReadOnlyList<StashItem> items, PasteTarget? pasteTarget, Func<bool> hideFlyout, Action<bool> dialogUp) => action switch
     {
         ItemMenuAction.Paste => handoff.HandOver(owner, items, pasteTarget, hideFlyout),
         ItemMenuAction.Copy => handoff.Copy(owner, items),

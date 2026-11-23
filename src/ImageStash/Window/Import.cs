@@ -283,7 +283,7 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
             await listing.ShowScope(Scope.All);
             if (added.Count > 0)
             {
-                listing.Select(added, null);
+                listing.SelectAdded(added);
             }
 
             var text = also is null ? NoticeText(results) : NoticeText(results) + " " + also;

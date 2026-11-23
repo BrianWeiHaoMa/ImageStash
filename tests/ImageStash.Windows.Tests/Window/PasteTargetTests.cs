@@ -621,12 +621,13 @@ public sealed class PasteTargetTests
         TrayDesktop.Run(() =>
         {
             Assert.IsFalse(shown.Window.IsVisible, "a click pastes as Enter does, the flyout hidden first (G8, G2)");
-            Assert.AreEqual(previewed.Id, shown.Preview.Item?.Id, "with the preview still open on its item");
+            Assert.IsFalse(shown.Preview.IsOpen, "its preview closed with it (G1)");
         });
         CollectionAssert.AreEqual(new[] { previewed.FilePath }, TestClipboard.Read().Files.ToList(), "the previewed item, not the two the grid selects");
         Assert.AreEqual(1, (await shown.Listing.Store!.UseHistory(previewed.Id)).Value!.Count, "one use on its item (G10)");
 
         TrayDesktop.Run(shown.Window.Show);
+        TrayDesktop.Run(() => shown.OpenPreview(previewed));
         TrayDesktop.Run(() => shown.PreviewPicture.Focus(NavigationMethod.Tab));
         TrayDesktop.Run(() => ShownWindow.Press((Control)shown.Focused!, Key.Tab));
         TrayDesktop.Run(() => ShownWindow.Press((Control)shown.Focused!, Key.Tab));
@@ -646,6 +647,7 @@ public sealed class PasteTargetTests
         TrayDesktop.Run(() => Assert.IsFalse(shown.Window.IsVisible, "Enter there is the handoff, as everywhere outside a field (G7, G8)"));
 
         TrayDesktop.Run(shown.Window.Show);
+        TrayDesktop.Run(() => shown.OpenPreview(previewed));
         TrayDesktop.Run(() => shown.Window.PasteTarget.FromActivation(new PresetTarget { Before = null }));
         TrayDesktop.Run(() =>
         {

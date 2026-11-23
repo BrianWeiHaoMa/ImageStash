@@ -45,6 +45,9 @@ public sealed class Listing
     private StashStore? store;
     private HashSet<long> selection = [];
 
+    /// <summary>The selection is the one an import's end made (G12), not since changed by the person or a load.</summary>
+    private bool selectionByImport;
+
     /// <summary>Every tag the stash's items carry, as the latest load read it; never kept across a change (G17).</summary>
     private IReadOnlyList<TagCount> tags = [];
     private Dictionary<long, int> indexOf = [];
@@ -191,6 +194,7 @@ public sealed class Listing
                 Items = [];
                 indexOf = [];
                 selection = [];
+                selectionByImport = false;
                 Focused = null;
             }
         }
@@ -246,6 +250,7 @@ public sealed class Listing
             Items = [];
             indexOf = [];
             selection = [];
+            selectionByImport = false;
             Focused = null;
             tags = [];
             Chips = [];
@@ -274,10 +279,33 @@ public sealed class Listing
     public Task Refresh() => Load(keepSelection: true);
 
     /// <summary>
-    /// A summon shows what the listing holds, which every change has kept current, and reloads nothing, so it moves no
-    /// selection (G1); only a load the store refused, while another program held it (E3), is asked for again.
+    /// A summon shows what the listing holds, which every change has kept current, and reloads nothing (G1): the scope,
+    /// the search and the selection as they were left, a paste's start on Recent included (<see cref="Handoff"/>); only a
+    /// load the store refused, while another program held it (E3), is asked for again. A summon of the hidden
+    /// <paramref name="flyout"/> keeps, of several items an import selected, the first alone (G1, G12), whether the import
+    /// ended before the hide or while the flyout was hidden; the pinned window brought forward keeps them all.
     /// </summary>
-    public Task RetryFailedLoad() => loadFailed ? Refresh() : Task.CompletedTask;
+    public Task Summoned(bool flyout)
+    {
+        bool collapsed;
+        lock (gate)
+        {
+            collapsed = flyout && selectionByImport && selection.Count > 1;
+            if (collapsed)
+            {
+                Focused = FirstSelected();
+                selection = [Focused!.Value];
+                selectionByImport = false;
+            }
+        }
+
+        if (collapsed)
+        {
+            Raise();
+        }
+
+        return loadFailed ? Refresh() : Task.CompletedTask;
+    }
 
     /// <summary>
     /// Completes once the latest load started has been applied or has failed, however many start meanwhile, so a key
@@ -310,11 +338,17 @@ public sealed class Listing
     public void Focus(long id) => Select([id], id);
 
     /// <summary>Replaces the selection; the focus goes to <paramref name="focus"/>, or to the first selected item in order.</summary>
-    public void Select(IEnumerable<long> ids, long? focus)
+    public void Select(IEnumerable<long> ids, long? focus) => Select(ids, focus, byImport: false);
+
+    /// <summary>An import's end: its added items selected (G12), the first of them focused, as an import's selection (<see cref="Summoned"/>).</summary>
+    public void SelectAdded(IEnumerable<long> ids) => Select(ids, null, byImport: true);
+
+    private void Select(IEnumerable<long> ids, long? focus, bool byImport)
     {
         lock (gate)
         {
             selection = ids.Where(indexOf.ContainsKey).ToHashSet();
+            selectionByImport = byImport;
             Focused = focus is { } f && selection.Contains(f) ? f : FirstSelected();
         }
 
@@ -331,6 +365,7 @@ public sealed class Listing
                 return;
             }
 
+            selectionByImport = false;
             if (selection.Add(id))
             {
                 Focused = id;
@@ -364,6 +399,7 @@ public sealed class Listing
             }
 
             selection = Items.Skip(Math.Min(from, to)).Take(Math.Abs(to - from) + 1).Select(item => item.Id).ToHashSet();
+            selectionByImport = false;
         }
 
         Raise();
@@ -375,6 +411,7 @@ public sealed class Listing
         lock (gate)
         {
             selection = Items.Select(item => item.Id).ToHashSet();
+            selectionByImport = false;
             Focused = Focused is { } f && selection.Contains(f) ? f : FirstSelected();
         }
 
@@ -556,6 +593,7 @@ public sealed class Listing
         else
         {
             selection = items.Count > 0 ? [items[0].Id] : [];
+            selectionByImport = false;
             Focused = items.Count > 0 ? items[0].Id : null;
         }
     }

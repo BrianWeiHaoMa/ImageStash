@@ -7,6 +7,9 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 ### Changed
 
 - Search now lists first the pictures where every word you typed starts a word of the name or of a tag, then the rest, and within each, the ones you used most recently first, then those never used, newest first. So typing `re` and Enter pastes the "really" reaction you post every day, not the newest screenshot, whose name holds those letters only inside a word. Everything search found before it still finds; Recent, Favorites and All list as before.
+- After a paste hides the stash window, the next shortcut opens it on Recent with an empty search box, the picture you just pasted first and selected on its own, so "shortcut, Enter" pastes it again and two typed letters start a fresh search. Hiding it any other way (clicking back into the chat, the shortcut, Esc) still leaves your search and selection as they were. The pinned window is left as it is.
+- A preview open in the stash window now closes when the window hides, so the next shortcut lands in the search box and typed letters search, instead of finding the old preview, where Enter would paste that picture again. The pinned window keeps its preview; so does a preview whose name or tag you were still typing, and one a screenshot or recording hid for a moment and put back.
+- After importing several pictures, they are no longer all still selected the next time you open the window, where Enter would paste them all: the first of them alone is. Several pictures you selected yourself stay selected.
 
 ## [0.2.2] - 2026-11-16
 

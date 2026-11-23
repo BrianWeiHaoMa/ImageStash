@@ -18,7 +18,7 @@ namespace ImageStash.Windows.Tests.Window;
 /// query, selection, open preview and paste target as they were (G8); a pinned window minimised meanwhile, its picker
 /// up or not, its frozen grab holding what lies beneath it, and restored, active only when it was, so a chat in front
 /// keeps its keystrokes and stays in front of it, after a screenshot or a recording; a window already hidden left hidden; a summon during the capture showing the window as a summon
-/// does, a minimised pinned one restored (G1), and the capture's end then showing nothing again; a pinned window closed
+/// does, the flyout's preview closed and the box focused as after any hide, a minimised pinned one restored (G1), and the capture's end then showing nothing again; a pinned window closed
 /// during the capture left closed, the next summon bringing it forward (G2); Take a screenshot chosen from the flyout's
 /// own menu hiding it like any other start, the menu closed before the grab and its closing not taken for focus lost
 /// to another app (G3, G2); a tooltip of the window, or its menu, open at the press gone before the grab (G3, G14); a
@@ -425,16 +425,25 @@ public sealed class CaptureHidingTests
     }
 
     [TestMethod]
-    public async Task ASummonDuringTheCaptureShowsTheFlyoutAndTheEndShowsNothingAgain()
+    public async Task ASummonDuringTheCaptureShowsTheFlyoutWithItsPreviewClosedAndTheEndShowsNothingAgain()
     {
         using var desk = await CaptureDesk.Open(["summoned during.png"]);
-        var window = desk.Shown.Window;
+        var shown = desk.Shown;
+        var window = shown.Window;
         await desk.FlyoutInFront();
+        var item = TrayDesktop.Get(() => shown.Listing.Items[0]);
+        TrayDesktop.Run(() => shown.OpenPreview(item));
 
         var taking = desk.Take();
         await desk.OverlayInFront();
+        TrayDesktop.Run(() => Assert.AreEqual(item.Id, shown.Preview.Item?.Id, "the capture's hide keeps the preview, for its end to put back (G3)"));
         TrayDesktop.Run(window.SummonFromTray);
-        TrayDesktop.Run(() => Assert.IsTrue(window.IsVisible, "the summon shows it as a summon does (G1)"));
+        TrayDesktop.Run(() =>
+        {
+            Assert.IsTrue(window.IsVisible, "the summon shows it as a summon does (G1)");
+            Assert.IsFalse(shown.Preview.IsOpen, "summoned instead of put back, it lands in the search box as after any hide (G1)");
+            Assert.IsTrue(shown.Search.IsFocused);
+        });
         // The user puts it away again before the capture ends.
         TrayDesktop.Run(window.Hide);
         TestMouse.Click(DisplayPlaces.At(DisplayPlaces.Primary(), 300, 600));

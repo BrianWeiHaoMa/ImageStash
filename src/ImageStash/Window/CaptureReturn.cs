@@ -41,7 +41,14 @@ public sealed class CaptureReturn
         this.dialogUp = dialogUp;
         this.dragInProgress = dragInProgress;
         this.focusContent = focusContent;
-        Hiding = new CaptureHiding(HideForCapture, ShowAfterCapture);
+        // A flyout summoned while a capture runs lands in the search box as after any hide; only the put-back keeps its preview (G1, G3).
+        Hiding = new CaptureHiding(HideForCapture, ShowAfterCapture, hidden =>
+        {
+            if (hidden == CaptureHide.Flyout)
+            {
+                activation.CaptureHideForgotten();
+            }
+        });
         // Restored by the user meanwhile (its taskbar button, Alt+Tab), the pinned window is theirs again: a minimise they
         // make afterwards is not the capture's, which then leaves it (G3). The capture's own restore empties the slot first.
         window.PropertyChanged += (_, e) =>
@@ -59,7 +66,7 @@ public sealed class CaptureReturn
     /// <summary>
     /// A capture's start, as <see cref="CaptureHiding.Decide"/> judges the window now (G3): the flyout hidden, or the
     /// pinned window minimised, with its place and whether it was active remembered; its content, an open preview
-    /// included, stays as it was.
+    /// included, stays as it was, for the capture's end to put back (G1).
     /// </summary>
     private CaptureHide HideForCapture()
     {
@@ -86,7 +93,7 @@ public sealed class CaptureReturn
             ToolTip.SetIsOpen(tipped, false);
         }
 
-        activation.HideWindow();
+        activation.HideWindow(forCapture: true);
         if (hide == CaptureHide.Pinned)
         {
             // Minimised from hidden, since Windows animates a showing window's minimise for half a second, which the grab

@@ -171,6 +171,15 @@ public static class Summon
     /// </summary>
     public static bool FlyoutHides(bool pinned, bool dialogUp, bool dragInProgress, bool editOpen) => !pinned && !dialogUp && !dragInProgress && !editOpen;
 
+    /// <summary>
+    /// Whether a hide closes the open preview first, so the next summon lands in the search box (G1): every hide of the
+    /// flyout does, Close on the pinned window, which unpins it, included; not while the window stays pinned
+    /// (<paramref name="pinnedAfter"/>), not the hide a capture makes and puts back (G3), not a preview an open edit covers,
+    /// which Save returns to (G26), and not one whose name or tag field holds text not yet committed (G19).
+    /// </summary>
+    public static bool HideClosesPreview(bool pinnedAfter, bool capturePutsBack, bool editOpen, bool fieldHoldsTypedText) =>
+        !pinnedAfter && !capturePutsBack && !editOpen && !fieldHoldsTypedText;
+
     /// <summary>Esc closes an open tag list and nothing else, else the preview, else clears the search, else hides the flyout; pinned, it goes no further (G2).</summary>
     public static EscapeAction OnEscape(string searchText, bool pinned, bool previewOpen, bool pickerOpen = false) =>
         pickerOpen ? EscapeAction.ClosePicker

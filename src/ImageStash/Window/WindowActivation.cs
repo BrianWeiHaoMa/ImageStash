@@ -9,14 +9,16 @@ namespace ImageStash.Window;
 /// (G2, G8): ImageStash gaining focus from another app sets the target to the window that had focus just before, while
 /// the window's own showings (a summon, the pin, the unpin, the return after a capture) are absorbed; the flyout hides
 /// once focus has gone to another app, unless a dialog, a drag or an edit of its own keeps it, or focus went to
-/// ImageStash's own notification or Settings page; Close unpins and hides. It owns the window's activation state, which
-/// the window changes only through the transitions named for each event, and the hide itself. UI thread only.
+/// ImageStash's own notification or Settings page; Close unpins and hides; and a hide closes an open preview first, as
+/// G1 says. It owns the window's activation state, which the window changes only through the transitions named for each
+/// event, and the hide itself. UI thread only.
 /// </summary>
 public sealed class WindowActivation
 {
     private readonly Avalonia.Controls.Window window;
     private readonly WindowChrome chrome;
     private readonly Editing editing;
+    private readonly Preview preview;
     private readonly Notices notices;
     private readonly PasteTargetHolder pasteTarget;
     private readonly ITarget targets;
@@ -35,13 +37,15 @@ public sealed class WindowActivation
 
     /// <summary>
     /// Follows <paramref name="window"/>'s activation, deactivation and Close from now on; <paramref name="dialogUp"/> and
-    /// <paramref name="dragInProgress"/> say whether a dialog the window opened is up and a drag it started is in progress.
+    /// <paramref name="dragInProgress"/> say whether a dialog the window opened is up and a drag it started is in progress;
+    /// <paramref name="preview"/> is the preview a hide closes (G1).
     /// </summary>
-    public WindowActivation(Avalonia.Controls.Window window, WindowChrome chrome, Editing editing, Notices notices, PasteTargetHolder pasteTarget, ITarget targets, PressOnce pasteKey, Func<bool> dialogUp, Func<bool> dragInProgress)
+    public WindowActivation(Avalonia.Controls.Window window, WindowChrome chrome, Editing editing, Preview preview, Notices notices, PasteTargetHolder pasteTarget, ITarget targets, PressOnce pasteKey, Func<bool> dialogUp, Func<bool> dragInProgress)
     {
         this.window = window;
         this.chrome = chrome;
         this.editing = editing;
+        this.preview = preview;
         this.notices = notices;
         this.pasteTarget = pasteTarget;
         this.targets = targets;
@@ -85,7 +89,8 @@ public sealed class WindowActivation
             if (e.CloseReason == WindowCloseReason.WindowClosing)
             {
                 e.Cancel = true;
-                HideWindow();
+                // Unpinned by it, the window's next summon is a flyout's: its preview closes as at a flyout's hide (G1).
+                Hide(pinnedAfter: false, forCapture: false);
                 chrome.Apply(pinnedNow: false);
                 // A window closed while minimised would show minimised at the next summon; hidden, this changes nothing on screen.
                 window.WindowState = WindowState.Normal;
@@ -166,14 +171,18 @@ public sealed class WindowActivation
 
     /// <summary>
     /// Enter's paste hides the flyout before the target is brought to the front; a pinned window stays, and so does a
-    /// flyout whose dialog was opened, or whose drag was started, while the paste's write was retried (G2).
+    /// flyout whose dialog was opened, or whose drag was started, while the paste's write was retried (G2). A flyout a
+    /// capture hid meanwhile is left to the capture, which puts back what it hid (G3). Answers whether the flyout is hidden
+    /// once the paste has hidden it, which starts the next summon on Recent (G1).
     /// </summary>
-    public void HideForPaste()
+    public bool HideForPaste()
     {
-        if (Summon.FlyoutHides(chrome.Pinned, dialogUp(), dragInProgress(), editing.IsOpen))
+        if (window.IsVisible && Summon.FlyoutHides(chrome.Pinned, dialogUp(), dragInProgress(), editing.IsOpen))
         {
             HideWindow();
         }
+
+        return !chrome.Pinned && !window.IsVisible;
     }
 
     /// <summary>
@@ -239,9 +248,22 @@ public sealed class WindowActivation
         }
     }
 
-    /// <summary>The window's one hide, whatever asks for it: no notice stays hovered and no tag list stays up (G16, F4).</summary>
-    public void HideWindow()
+    /// <summary>
+    /// The window's one hide, whatever asks for it: no notice stays hovered and no tag list stays up (G16, F4), and an open
+    /// preview closed first, as <see cref="Summon.HideClosesPreview"/> says, so the next summon lands in the search box
+    /// (G1); <paramref name="forCapture"/> for a capture's hide, which keeps it for the capture to put back (G3).
+    /// </summary>
+    public void HideWindow(bool forCapture = false) => Hide(chrome.Pinned, forCapture);
+
+    /// <summary>
+    /// A capture's hide that nothing will put back, since a summon showed the window meanwhile: the preview it kept closes
+    /// as at any other hide, so that summon lands in the search box (G1, G3).
+    /// </summary>
+    public void CaptureHideForgotten() => ClosePreviewAtHide(chrome.Pinned, forCapture: false);
+
+    private void Hide(bool pinnedAfter, bool forCapture)
     {
+        ClosePreviewAtHide(pinnedAfter, forCapture);
         notices.EndHovers();
         // A window that hides while not the active one keeps its popups: no list is left behind (F4).
         foreach (var open in window.OpenedPopups.OfType<TagPicker>().ToList())
@@ -250,5 +272,14 @@ public sealed class WindowActivation
         }
 
         window.Hide();
+    }
+
+    private void ClosePreviewAtHide(bool pinnedAfter, bool forCapture)
+    {
+        // At once, not after a rename in flight as Esc waits: the summon may come first (G1). The rename still lands.
+        if (preview.IsOpen && Summon.HideClosesPreview(pinnedAfter, forCapture, editing.IsOpen, preview.HoldsTypedText))
+        {
+            preview.Close();
+        }
     }
 }

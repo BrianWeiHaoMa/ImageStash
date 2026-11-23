@@ -8,7 +8,7 @@ namespace ImageStash.Tests.Window;
 /// <summary>
 /// G1's placement from the tray and from the shortcut, in physical pixels on displays of any scaling (E1): above the
 /// icon, or beside the caret, else at the pointer, wholly on its display, the remembered size kept; the pinned window where it was left; G2's
-/// hide rules for focus loss, the paste and Esc; G16's notification above the tray on the primary display; the window
+/// hide rules for focus loss, the paste and Esc, and what a hide does to an open preview (G1); G16's notification above the tray on the primary display; the window
 /// never placed below its minimum size, which yields only to a display too small for it (G20, G21).
 /// </summary>
 [TestClass]
@@ -376,6 +376,30 @@ public sealed class SummonTests
         Assert.IsFalse(Summon.FlyoutHides(pinned: false, dialogUp: false, dragInProgress: true, editOpen: false));
         Assert.IsFalse(Summon.FlyoutHides(pinned: true, dialogUp: false, dragInProgress: true, editOpen: false));
         Assert.IsFalse(Summon.FlyoutHides(pinned: false, dialogUp: false, dragInProgress: false, editOpen: true), "G2: the flyout stays while an edit is open");
+    }
+
+    [TestMethod]
+    public void AFlyoutThatHidesClosesItsPreviewSoTheNextSummonLandsInTheSearchBox() =>
+        Assert.IsTrue(Summon.HideClosesPreview(pinnedAfter: false, capturePutsBack: false, editOpen: false, fieldHoldsTypedText: false),
+            "focus lost to another app, the open shortcut, a paste and Close on the pinned window, which unpins it, each close the preview (G1)");
+
+    [TestMethod]
+    public void OnlyThePinnedWindowsPreviewOutlastsItsHides() =>
+        Assert.IsFalse(Summon.HideClosesPreview(pinnedAfter: true, capturePutsBack: false, editOpen: false, fieldHoldsTypedText: false),
+            "while pinned, the preview is brought forward as it was left (G1)");
+
+    [TestMethod]
+    public void APreviewWhoseNameOrTagFieldHoldsTypedTextOutlastsEveryHideWithThatText()
+    {
+        Assert.IsFalse(Summon.HideClosesPreview(pinnedAfter: false, capturePutsBack: false, editOpen: false, fieldHoldsTypedText: true), "text not yet committed is not thrown away (G1, G19)");
+        Assert.IsFalse(Summon.HideClosesPreview(pinnedAfter: true, capturePutsBack: false, editOpen: false, fieldHoldsTypedText: true));
+    }
+
+    [TestMethod]
+    public void TheHideACaptureMakesAndPutsBackKeepsThePreviewAndAPreviewUnderAnOpenEditStaysForItsReturn()
+    {
+        Assert.IsFalse(Summon.HideClosesPreview(pinnedAfter: false, capturePutsBack: true, editOpen: false, fieldHoldsTypedText: false), "a capture puts back only what it hid (G3)");
+        Assert.IsFalse(Summon.HideClosesPreview(pinnedAfter: false, capturePutsBack: false, editOpen: true, fieldHoldsTypedText: false), "Save returns to the preview Edit was started from (G26)");
     }
 
     [TestMethod]

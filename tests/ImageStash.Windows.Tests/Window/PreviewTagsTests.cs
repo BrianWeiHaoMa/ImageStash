@@ -489,7 +489,11 @@ public sealed class PreviewTagsTests
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => !shown.Window.IsVisible));
         TrayDesktop.Run(shown.Window.SummonFromTray);
         await TrayDesktop.Get(() => shown.Listing.Settle());
-        TrayDesktop.Run(() => Assert.AreSame(shown.PreviewPicture, shown.Focused, "left on the picture, the summon brings focus back there"));
+        TrayDesktop.Run(() =>
+        {
+            Assert.IsFalse(shown.Preview.IsOpen, "with nothing typed left in it, the hide closed the preview (G1)");
+            Assert.IsTrue(shown.Search.IsFocused, "and the summon lands in the box");
+        });
     }
 
     [TestMethod]

@@ -72,20 +72,31 @@ public sealed class ListingTests
         var changes = 0;
         listing.Changed += () => changes++;
 
-        var summon = listing.RetryFailedLoad();
+        // The flyout hidden by focus loss, the shortcut or Esc, and summoned again.
+        var summon = listing.Summoned(flyout: true);
 
         Assert.IsTrue(summon.IsCompleted, "no load started");
         Assert.AreEqual(0, changes);
         Assert.AreEqual(Scope.Favorites, listing.Scope, "G1: the scope it was left with");
         CollectionAssert.AreEqual(new[] { cat.Id }, listing.Selection.ToList(), "the second tile, not moved back to the first");
 
+        listing.Toggle(cap.Id);
+        await listing.Summoned(flyout: true);
+
+        CollectionAssert.AreEquivalent(new[] { cat.Id, cap.Id }, listing.Selection.ToList(), "a Ctrl-click selection as it was left");
+
         await listing.SetQuery("ca");
         listing.Focus(cat.Id);
-        await listing.RetryFailedLoad();
+        await listing.Summoned(flyout: true);
 
         Assert.AreEqual("ca", listing.Query, "the search it was left with");
         Assert.AreEqual(Scope.All, listing.LitChip);
         CollectionAssert.AreEqual(new[] { cat.Id }, listing.Selection.ToList());
+
+        listing.SelectAll();
+        await listing.Summoned(flyout: true);
+
+        CollectionAssert.AreEquivalent(new[] { cat.Id, cap.Id }, listing.Selection.ToList(), "and a Ctrl+A selection");
 
         await listing.SetQuery("");
 
@@ -110,11 +121,11 @@ public sealed class ListingTests
         Assert.AreEqual(cat.Id, listing.Focused, "the previous items stay showing (G35)");
         Assert.IsNotEmpty(failures);
 
-        await listing.RetryFailedLoad();
+        await listing.Summoned(flyout: true);
 
         CollectionAssert.AreEqual(new[] { dog.Id }, listing.Items.Select(item => item.Id).ToList(), "the store answers again: the query's matches");
         CollectionAssert.AreEqual(new[] { dog.Id }, listing.Selection.ToList(), "and the first match selected, the refused load's move not lost (G5)");
-        Assert.IsTrue(listing.RetryFailedLoad().IsCompleted, "answered once, nothing is owed");
+        Assert.IsTrue(listing.Summoned(flyout: true).IsCompleted, "answered once, nothing is owed");
     }
 
     [TestMethod]
@@ -129,7 +140,7 @@ public sealed class ListingTests
             await listing.StashOpened(stash.Store!);
         }
 
-        await listing.RetryFailedLoad();
+        await listing.Summoned(flyout: true);
 
         Assert.AreEqual(Scope.All, listing.Scope, "G1: Recent is empty");
         CollectionAssert.AreEqual(new[] { cat.Id }, listing.Selection.ToList());

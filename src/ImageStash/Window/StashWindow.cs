@@ -138,7 +138,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
         preview.Changed += Cover;
 
         // Before Wire: its handlers of the window's activation, deactivation and Close come first.
-        activation = new WindowActivation(this, chrome, editing, notices, pasteTarget, seams.Target, pasteKey, () => DialogUp, () => DragInProgress);
+        activation = new WindowActivation(this, chrome, editing, preview, notices, pasteTarget, seams.Target, pasteKey, () => DialogUp, () => DragInProgress);
         CaptureHiding = new CaptureReturn(this, chrome, activation, seams.Target, seams.WindowOrder, () => DialogUp, () => DragInProgress, FocusContent).Hiding;
         chrome.Apply(pinnedNow: false);
         Wire();
@@ -187,9 +187,9 @@ public sealed class StashWindow : Avalonia.Controls.Window
 
     /// <summary>
     /// The summon from the tray, Open ImageStash and a second launch (G1, G3, G34): the paste target read as the window
-    /// that had focus just before, which after a click on the tray icon is the taskbar, so none (G8); the content as it
-    /// was left, the search box focused with its text selected; the flyout above the tray icon, or the pinned window
-    /// brought forward where it is.
+    /// that had focus just before, which after a click on the tray icon is the taskbar, so none (G8); the content as the
+    /// last hide left it, the search box focused with its text selected; the flyout above the tray icon, or the pinned
+    /// window brought forward where it is.
     /// </summary>
     public void SummonFromTray()
     {
@@ -260,19 +260,21 @@ public sealed class StashWindow : Avalonia.Controls.Window
     {
         CaptureHiding.Forget();
         activation.ReadTargetAtSummon();
-        ReadForSummon();
+        ReadForSummon(flyout: false);
         thumbnails.RetryFailed();
         chrome.Apply(pinnedNow: true);
         ShowAt(chrome.PinnedPlace());
     }
 
     /// <summary>
-    /// Every summon's one path (G1): the content as it was left, the search box focused with its text selected; the
-    /// pinned window brought forward where it is, else the flyout shown at <paramref name="flyoutPlace"/>.
+    /// Every summon's one path (G1): the content as the last hide left it, the search box focused with its text selected
+    /// unless an open edit, or a preview the hide kept, takes the focus; the pinned window brought forward where it is,
+    /// else the flyout shown at <paramref name="flyoutPlace"/>.
     /// </summary>
     private void SummonFlyoutAt(Func<PixelRect> flyoutPlace)
     {
-        ReadForSummon();
+        // Only a flyout shown again after a hide; one still showing, or the pinned window, keeps its selection whole (G1).
+        ReadForSummon(flyout: !IsVisible);
         thumbnails.RetryFailed();
         if (chrome.Pinned && IsVisible)
         {
@@ -291,12 +293,13 @@ public sealed class StashWindow : Avalonia.Controls.Window
     }
 
     /// <summary>
-    /// What a summon reads again, the content being kept as it was left (G1): a load the store refused, and an open
-    /// preview's item, so what it says is true now, however long ago it was left (G19).
+    /// What a summon reads again, the content being kept as the last hide left it (G1): a load the store refused, and an
+    /// open preview's item, so what it says is true now, however long ago it was left (G19); the hidden
+    /// <paramref name="flyout"/>'s summon also keeps only the first of several items an import selected (G1, G12).
     /// </summary>
-    private void ReadForSummon()
+    private void ReadForSummon(bool flyout)
     {
-        _ = listing.RetryFailedLoad();
+        _ = listing.Summoned(flyout);
         if (preview.IsOpen)
         {
             _ = preview.Refresh();

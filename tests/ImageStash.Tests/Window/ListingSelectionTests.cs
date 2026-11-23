@@ -143,6 +143,77 @@ public sealed class ListingSelectionTests
     }
 
     [TestMethod]
+    public async Task SeveralItemsAnImportSelectedKeepOnlyTheFirstAtTheNextSummonOfTheFlyout()
+    {
+        using var listed = await ListedStash.Open();
+
+        var added = await ImportThree(listed);
+
+        Assert.AreEqual(Scope.All, listed.Listing.Scope, "G12: the import's end shows All while the window is up");
+        Assert.AreEqual("", listed.Listing.Query);
+        CollectionAssert.AreEquivalent(added.ToList(), listed.Listing.Selection.ToList(), "with every new item selected");
+        CollectionAssert.AreEquivalent(added.ToList(), listed.Listing.Items.Take(3).Select(item => item.Id).ToList(), "first");
+
+        // Whether the batch ended before the flyout hid or while it was hidden, the summon after is what keeps only the first.
+        await listed.Summon();
+
+        var first = listed.Listing.Items[0].Id;
+        CollectionAssert.AreEqual(new[] { first }, listed.Listing.Selection.ToList(), "G1: the first new item alone");
+        CollectionAssert.Contains(added.ToList(), first);
+        Assert.AreEqual(first, listed.Listing.Focused);
+        Assert.AreEqual(Scope.All, listed.Listing.Scope, "the scope as the import left it");
+    }
+
+    [TestMethod]
+    public async Task ASelectionThePersonMadeOfAnImportsItemsOutlastsTheSummonAndThePinnedWindowKeepsTheImportsWhole()
+    {
+        using var listed = await ListedStash.Open();
+        var added = await ImportThree(listed);
+
+        await listed.Summon(pinned: true);
+
+        CollectionAssert.AreEquivalent(added.ToList(), listed.Listing.Selection.ToList(), "the pinned window is left as it is (G1)");
+
+        listed.Listing.Toggle(listed.Listing.Items[0].Id);
+        var left = listed.Listing.Selection.ToList();
+        Assert.HasCount(2, left);
+        await listed.Summon();
+
+        CollectionAssert.AreEquivalent(left, listed.Listing.Selection.ToList(), "the two the person left selected stay (G1, G17)");
+    }
+
+    [TestMethod]
+    public async Task OfAPastesStartOnRecentAndAnImportsEndBeforeOneSummonTheLaterDecides()
+    {
+        using var listed = await ListedStash.Open();
+        var cat = await listed.Stash.ImportFixture("cat", "transparent.png");
+        await listed.Listing.Refresh();
+
+        await listed.PasteIntoTarget([cat]);
+        Assert.AreEqual(Scope.Recent, listed.Listing.Scope);
+        var added = await ImportThree(listed);
+        await listed.Summon();
+
+        Assert.AreEqual(Scope.All, listed.Listing.Scope, "the import ended later");
+        CollectionAssert.AreEqual(new[] { listed.Listing.Items[0].Id }, listed.Listing.Selection.ToList());
+        CollectionAssert.Contains(added.ToList(), listed.Listing.Items[0].Id);
+
+        await listed.PasteIntoTarget([cat]);
+        await listed.Summon();
+
+        Assert.AreEqual(Scope.Recent, listed.Listing.Scope, "the paste came later");
+        CollectionAssert.AreEqual(new[] { cat.Id }, listed.Listing.Selection.ToList());
+    }
+
+    /// <summary>Three new pictures dropped in one batch; answers their identities.</summary>
+    private static async Task<IReadOnlyCollection<long>> ImportThree(ListedStash listed)
+    {
+        var results = await listed.Import.Drop(Contents([MediaFixtures.Path("still.png"), MediaFixtures.Path("photo.jpg"), MediaFixtures.Path("animated.gif")]));
+        Assert.IsTrue(results.All(file => file.Result == ImportResultKind.Added), Import.NoticeText(results));
+        return results.Select(file => file.Item!.Id).ToList();
+    }
+
+    [TestMethod]
     public async Task ARefreshStartedWhileATypedQueryLoadsStillMovesTheSelectionToTheFirstMatch()
     {
         using var stash = new TestStash();
