@@ -16,6 +16,7 @@ public sealed class UndoStashKeysTests
     [DataRow(KeyPlace.PreviewButton, KeyAction.UndoNotice)]
     [DataRow(KeyPlace.SearchBox, KeyAction.None)]
     [DataRow(KeyPlace.Field, KeyAction.None)]
+    [DataRow(KeyPlace.PreviewName, KeyAction.None)]
     [DataRow(KeyPlace.Editor, KeyAction.None)]
     public void CtrlZRunsTheNewestUndoFromTheGridAndThePreviewAndIsTheOwnKeyElsewhere(KeyPlace place, KeyAction expected)
     {
