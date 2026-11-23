@@ -17,7 +17,8 @@ namespace ImageStash.Window;
 /// The preview (G19, F4): a layer inside the stash window over the whole of its content, never a window of its own,
 /// showing one item at its own size with its animation playing (<see cref="PreviewPicture"/>) and the facts about it
 /// (<see cref="PreviewFacts"/>), with a back arrow, the pointer's way out (G7), its name edited in place
-/// (<see cref="NameField"/>) by a click on it, F2 or the menus' Rename, its tags with their × and the tag field
+/// (<see cref="NameField"/>) by a click on it, F2 or the menus' Rename, its star (<see cref="PreviewStar"/>),
+/// its tags with their × and the tag field
 /// (<see cref="PreviewTags"/>), the handoff button named as the footer names Enter's handoff, Copy beside it while there
 /// is a target to paste into, Edit, and a ⋯ menu of the item menu's entries for its item, Revert to original and Save as
 /// new item among them on an edited item (G19, G17, G20, G26). While an edit
@@ -47,6 +48,7 @@ public sealed class Preview : Border
     private readonly Action<bool> dialogUp;
     private readonly IInputElement returnFocusTo;
     private readonly NameField name;
+    private readonly PreviewStar star;
     private readonly Button handOff;
     private readonly Button copy;
     private readonly Button edit;
@@ -57,6 +59,7 @@ public sealed class Preview : Border
     private readonly TextBlock editFacts;
     private readonly PreviewTags tags;
     private readonly DispatcherTimer restating;
+    private StashItem? itemShown;
     private int reads;
     private int openings;
 
@@ -124,11 +127,14 @@ public sealed class Preview : Border
                 ItemMenu.ShowBelow(more, ItemMenu.PreviewEntries(shown), action => _ = FromMenu(action));
             }
         };
-        var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(10, 10, 10, 8) };
+        star = new PreviewStar(() => _ = ToggleFavorite());
+        var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"), Margin = new Thickness(10, 10, 10, 8) };
         Grid.SetColumn(name, 1);
-        Grid.SetColumn(more, 2);
+        Grid.SetColumn(star.Button, 2);
+        Grid.SetColumn(more, 3);
         head.Children.Add(back);
         head.Children.Add(name);
+        head.Children.Add(star.Button);
         head.Children.Add(more);
 
         picture = new PreviewPicture(failure => notices.Raise(failure)) { Margin = new Thickness(10, 0) };
@@ -230,8 +236,16 @@ public sealed class Preview : Border
         set => picture.Covered = value;
     }
 
-    /// <summary>The item as the preview last read it; null while closed.</summary>
-    public StashItem? Item { get; private set; }
+    /// <summary>The item as the preview last read it, or opened with it; null while closed. Its star shows this item's flag (G19).</summary>
+    public StashItem? Item
+    {
+        get => itemShown;
+        private set
+        {
+            itemShown = value;
+            star.Show(value);
+        }
+    }
 
     /// <summary>The facts it states, as last read; none until the first read after opening has arrived.</summary>
     public IReadOnlyList<string> Facts { get; private set; } = [];
@@ -431,7 +445,7 @@ public sealed class Preview : Border
     /// <summary>Del: the item deleted through the window's one Delete, with its notice and Undo; the preview closes once it is gone (G18).</summary>
     public Task<Outcome> Delete() => Act(item => deletion.Delete([item]));
 
-    /// <summary><c>Ctrl+D</c>: the item's favorite flag toggled through the window's one organising entry (G17).</summary>
+    /// <summary><c>Ctrl+D</c> and its star: the item's favorite flag toggled through the window's one organising entry (G17).</summary>
     public Task<Outcome> ToggleFavorite() => Act(item => organising.ToggleFavorite([item]));
 
     /// <summary>

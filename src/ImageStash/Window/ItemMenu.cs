@@ -99,8 +99,8 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
     private static readonly ItemMenuEntry DeleteEntry = new(ItemMenuAction.Delete, "Delete", new KeyGesture(Key.Delete), "", AfterSeparator: true);
     private static readonly ItemMenuEntry OpenWithEntry = new(ItemMenuAction.OpenWith, "Open with…", null, "");
     private static readonly ItemMenuEntry Reveal = new(ItemMenuAction.Reveal, "Reveal in File Explorer", null, "");
-    private static readonly ItemMenuEntry AddToFavorites = new(ItemMenuAction.AddToFavorites, "Add to Favorites", new KeyGesture(Key.D, KeyModifiers.Control), "", AfterSeparator: true);
-    private static readonly ItemMenuEntry RemoveFromFavorites = new(ItemMenuAction.RemoveFromFavorites, "Remove from Favorites", new KeyGesture(Key.D, KeyModifiers.Control), "", AfterSeparator: true);
+    private static readonly ItemMenuEntry AddToFavorites = new(ItemMenuAction.AddToFavorites, "Add to Favorites", new KeyGesture(Key.D, KeyModifiers.Control), FavoriteStar.Outlined, AfterSeparator: true);
+    private static readonly ItemMenuEntry RemoveFromFavorites = new(ItemMenuAction.RemoveFromFavorites, "Remove from Favorites", new KeyGesture(Key.D, KeyModifiers.Control), FavoriteStar.Filled, AfterSeparator: true);
 
     private static readonly ItemMenuEntry AddTagMenu = new(ItemMenuAction.AddTag, "Add tag", null, "");
     private static readonly ItemMenuEntry RemoveTagMenu = new(ItemMenuAction.RemoveTag, "Remove tag", null, "");

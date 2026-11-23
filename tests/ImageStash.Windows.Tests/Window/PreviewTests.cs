@@ -55,7 +55,7 @@ public sealed class PreviewTests
 
         // With no target the handoff button is the copy, and Copy beside it is not shown (G19).
         var round = new List<object?>();
-        for (var press = 0; press < 6; press++)
+        for (var press = 0; press < 7; press++)
         {
             TrayDesktop.Run(() =>
             {
@@ -64,8 +64,8 @@ public sealed class PreviewTests
             });
         }
 
-        TrayDesktop.Run(() => CollectionAssert.AreEqual(new object?[] { shown.PreviewTagBox, shown.HandoffButton, shown.EditButton, shown.BackArrow, shown.MoreButton, shown.PreviewPicture }, round,
-            "Tab goes round the preview's own controls, its tag field, handoff button, Edit, back arrow and ⋯ button, never to the search box or the grid"));
+        TrayDesktop.Run(() => CollectionAssert.AreEqual(new object?[] { shown.PreviewTagBox, shown.HandoffButton, shown.EditButton, shown.BackArrow, PreviewStarTests.StarButton(shown), shown.MoreButton, shown.PreviewPicture }, round,
+            "Tab goes round the preview's own controls, its tag field, handoff button, Edit, back arrow, star and ⋯ button, never to the search box or the grid"));
 
         TrayDesktop.Run(() => ShownWindow.Press(shown.PreviewPicture, Key.Space));
         TrayDesktop.Run(() =>

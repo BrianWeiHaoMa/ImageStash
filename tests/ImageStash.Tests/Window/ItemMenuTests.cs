@@ -151,6 +151,8 @@ public sealed class ItemMenuTests
         Assert.AreEqual("Add to Favorites", Label(favorite, plain), "a mixed selection becomes all favorites (G17)");
         Assert.AreEqual("Remove from Favorites", Label(favorite, favorite with { Id = 3 }));
         Assert.AreEqual(ItemMenuAction.RemoveFromFavorites, ItemMenu.Entries([favorite], null)[3].Action);
+        Assert.AreEqual(FavoriteStar.Filled, ItemMenu.Entries([favorite], null)[3].Glyph, "Remove from Favorites shows the filled star the preview's star shows");
+        Assert.AreEqual(FavoriteStar.Outlined, ItemMenu.Entries([plain], null)[3].Glyph, "and Add to Favorites the outlined one");
     }
 
     [TestMethod]

@@ -5,6 +5,7 @@ using Avalonia.VisualTree;
 using ImageStash.Seams;
 using ImageStash.Window;
 using ImageStash.Windows.Tests.Support;
+using SkiaSharp;
 using static ImageStash.Windows.Tests.Support.ShownWindow;
 
 namespace ImageStash.Windows.Tests.Window;
@@ -85,6 +86,58 @@ public sealed class StashWindowPathTests
 
         await Eventually(() => shown.TagsOf(chosen.Id).Contains("cat"));
         TrayDesktop.Run(() => Assert.IsFalse(shown.TagField.IsVisible));
+    }
+
+    [TestMethod]
+    public async Task CtrlDInAllStarsOnlyTheMiddleTileAndClickThenSpaceShowsItsFilledPreviewStar()
+    {
+        using var pointer = TestMouse.PutBackAfterwards();
+        using var shown = ShownWindow.Open();
+        await shown.OpenStash(
+            shown.Picture("path red.png", 32, 32, (_, _) => SKColors.Maroon),
+            shown.Picture("path green.png", 32, 32, (_, _) => SKColors.Green),
+            shown.Picture("path blue.png", 32, 32, (_, _) => SKColors.Navy));
+        TransferredStash.CloseNotices(shown);
+        await TrayDesktop.Get(() => shown.Listing.ShowScope(Scope.All));
+        await TransferredStash.EveryTileShows(shown, new()
+        {
+            ["path red"] = (uint)SKColors.Maroon,
+            ["path green"] = (uint)SKColors.Green,
+            ["path blue"] = (uint)SKColors.Navy,
+        }, "the three pictures in All");
+        var tiles = TrayDesktop.Get(() => shown.Grid.Rows.Single().Tiles.ToArray());
+        Assert.HasCount(3, tiles);
+        var middle = tiles[1].Id;
+
+        TrayDesktop.Run(() =>
+        {
+            Assert.AreEqual(Scope.All, shown.Listing.LitChip);
+            shown.Listing.Focus(middle);
+            shown.Grid.Focus();
+            Assert.AreSame(shown.Grid, shown.Focused);
+            Tap(shown.Grid, Key.D, KeyModifiers.Control);
+        });
+        await Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Items.Any(item => item.Id == middle && item.Favorite)));
+        var rendered = await RenderedWindow.Of(shown.Window);
+        TrayDesktop.Run(() =>
+        {
+            Assert.IsGreaterThan(0, TileStarTests.StarInk(rendered, TileStarTests.TileBox(shown, middle)), "the middle tile shows the star (G6)");
+            foreach (var tile in new[] { tiles[0], tiles[2] })
+            {
+                Assert.AreEqual(0, TileStarTests.StarInk(rendered, TileStarTests.TileBox(shown, tile.Id)), $"tile {tile.Id} shows no star (G6)");
+            }
+
+            shown.Search.Focus();
+        });
+
+        TestMouse.Click(TrayDesktop.Get(() => shown.TileOnScreen(middle)));
+        await Eventually(() => TrayDesktop.Get(() => shown.Grid.IsFocused && shown.Listing.Selection.SequenceEqual([middle])));
+        TrayDesktop.Run(() =>
+        {
+            Tap(shown.Grid, Key.Space);
+            Assert.AreEqual(middle, shown.Preview.Item?.Id);
+            Assert.AreEqual(FavoriteStar.Filled, ((TextBlock)PreviewStarTests.StarButton(shown).Content!).Text, "the preview opens with the same favorite flag (G19)");
+        });
     }
 
     private static bool CardSays(ShownWindow shown, string text) =>

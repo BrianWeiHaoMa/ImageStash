@@ -30,7 +30,8 @@ public static class TileBadge
 
 /// <summary>
 /// The grid (G6): the listing's items in justified rows, drawn for the rows in view only, each tile its thumbnail over
-/// the neutral tile, so transparency shows on it, with its badge, the selection and, while the grid has focus, the
+/// the neutral tile, so transparency shows on it, with its badge, a favorite's star (<see cref="TileStar"/>), the
+/// selection and, while the grid has focus, the
 /// focused item's ring. Thumbnails are asked for the rows in view and a margin around them, never for the rest, so
 /// 5,000 items show as fast as ten (G1, E4). One animated item plays, the one <see cref="Listing.PlayingItem"/> names
 /// among the hovered and the focused tiles in view, and only while the window shows and nothing covers the grid (G6).
@@ -252,6 +253,8 @@ public sealed class ThumbnailGrid : Control
                     context.DrawRectangle(BadgeBack, null, new RoundedRect(back, badgeCorner));
                     context.DrawText(label, back.TopLeft + new Point(5, 1));
                 }
+
+                TileStar.Draw(context, item, box, BadgeBack, Brushes.White);
 
                 if (listing.Selection.Contains(item.Id))
                 {

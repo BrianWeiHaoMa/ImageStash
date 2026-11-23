@@ -218,8 +218,8 @@ public sealed class ListedStash : IDisposable
 
     /// <summary>
     /// A key pressed at <paramref name="place"/> as the window takes it: routed by <see cref="StashKeys.Route"/>, held to
-    /// one act per press by <see cref="Keys"/>, and its action's act run as the window's case runs it (Del as it runs
-    /// with no preview open); the action is returned. Let go with <see cref="PressOnce.Released"/> on <see cref="Keys"/>.
+    /// one act per press by <see cref="Keys"/>, and its action's act run as the window's case runs it (Del and
+    /// <c>Ctrl+D</c> as they run with no preview open); the action is returned. Let go with <see cref="PressOnce.Released"/> on <see cref="Keys"/>.
     /// </summary>
     public async Task<KeyAction> Press(Key key, KeyModifiers modifiers, KeyPlace place)
     {
@@ -231,6 +231,9 @@ public sealed class ListedStash : IDisposable
                 break;
             case KeyAction.Delete when !PreviewOpen:
                 await Deletion.DeleteSelection();
+                break;
+            case KeyAction.ToggleFavorite when !PreviewOpen:
+                await Organising.ToggleFavoriteOfSelection();
                 break;
             case KeyAction.AddTags:
                 TagKey.Press();

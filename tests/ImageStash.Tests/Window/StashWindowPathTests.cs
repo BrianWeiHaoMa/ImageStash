@@ -1,4 +1,5 @@
 using Avalonia.Input;
+using ImageStash.Store;
 using ImageStash.Tests.Support;
 using ImageStash.Window;
 
@@ -75,6 +76,40 @@ public sealed class StashWindowPathTests
 
         CollectionAssert.AreEqual(new[] { "cat" }, (await listed.Stash.All()).Single(item => item.Id == chosen.Id).Tags.ToList(), "it carries cat (G17)");
         Assert.IsTrue((await listed.Stash.All()).Where(item => item.Id != chosen.Id).All(item => item.Tags.Count == 0), "and nothing else does");
+    }
+
+    /// <summary>
+    /// The tidying path through the window's parts over a real store, each key through the window's routing to the act
+    /// its case calls: three pictures listed in All, the middle one selected; <c>Ctrl+D</c> from the grid makes it a
+    /// favorite, its tile alone carries the star and the preview's star reads filled for it (G17, G6, G19). A tile's pixels
+    /// and the preview's control are beyond these parts: the walk reads the rules they draw from.
+    /// </summary>
+    [TestMethod]
+    public async Task CtrlDOnTheMiddleOfThreePicturesStarsItsTileAloneAndThePreviewsStarReadsFilled()
+    {
+        using var listed = await ListedStash.Open();
+        foreach (var fixture in new[] { "photo.jpg", "transparent.png", "still.webp" })
+        {
+            await listed.Stash.ImportFixture(Path.GetFileNameWithoutExtension(fixture), fixture);
+        }
+
+        // (1) The middle of the three selected; Ctrl+D from the grid.
+        await listed.Listing.ShowScope(Scope.All);
+        Assert.HasCount(3, listed.Listing.Items);
+        var middle = listed.Listing.Items[1];
+        listed.Listing.Focus(middle.Id);
+        Assert.AreEqual(KeyAction.ToggleFavorite, await listed.Press(Key.D, KeyModifiers.Control, KeyPlace.Grid));
+        listed.Keys.Released(Key.D);
+
+        var listedNow = listed.Listing.Items.Single(item => item.Id == middle.Id);
+        Assert.IsTrue(listedNow.Favorite, "its listed item is a favorite (G17)");
+        CollectionAssert.AreEqual(new[] { middle.Id }, listed.Listing.Items.Where(TileStar.Of).Select(item => item.Id).ToList(), "its tile alone carries the star (G6)");
+        ControlThread.Run(() =>
+        {
+            var star = new PreviewStar(() => { });
+            star.Show(listedNow);
+            Assert.IsTrue(star.Filled, "the preview opened on it reads its star filled (G19)");
+        });
     }
 
     /// <summary><c>Ctrl+Z</c> pressed in the grid and let go, as the window takes it.</summary>

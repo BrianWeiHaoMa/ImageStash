@@ -1,4 +1,9 @@
 using System.Diagnostics;
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+using ImageStash.Look;
 using ImageStash.Store;
 using ImageStash.Tests.Support;
 using ImageStash.Window;
@@ -9,7 +14,8 @@ namespace ImageStash.Tests.Window;
 /// Tags and the favorite flag through the window's one organising entry over a real stash (G17): <c>Ctrl+D</c>'s toggle,
 /// a mixed selection becoming all favorites; the listing refreshed with the selection kept; nothing said on success and
 /// no use recorded (G10); every refusal named by item, the rest changed (G35); nothing asked of the store before it has
-/// opened.
+/// opened. The preview's star (G19): what it reads and says for the item it is handed, and that it shows the store's
+/// answer to the preview's toggle, never its own guess (R9, G28).
 /// </summary>
 [TestClass]
 public sealed class OrganisingTests
@@ -218,6 +224,100 @@ public sealed class OrganisingTests
         Assert.IsEmpty(listed.Notices.Shown, "nothing said: the toggle shows no busy state, and raises a notice only to name a failure (G35)");
         Assert.IsEmpty(listed.Failures);
     }
+
+    [TestMethod]
+    public void ThePreviewsStarReadsTheFlagOfTheItemItIsHandedWithANameSayingItAndATipNamingTheActAndItsKey()
+    {
+        var favorite = TestItems.Sized(1, 10, 10) with { Favorite = true };
+        var plain = TestItems.Sized(2, 10, 10);
+        ControlThread.Run(() =>
+        {
+            var star = new PreviewStar(() => { });
+            var accent = new SolidColorBrush(Colors.Teal);
+            _ = new Border { Resources = { [LookKeys.FavoriteStar] = accent }, Child = star.Button };
+            var glyph = (TextBlock)star.Button.Content!;
+
+            star.Show(favorite);
+            Assert.AreEqual((true, FavoriteStar.Filled, "In Favorites", "Remove from Favorites (Ctrl+D)"), Face(star), "filled while a favorite");
+            Assert.AreSame(accent, glyph.Foreground, "in the accent (G19)");
+
+            star.Show(plain);
+            Assert.AreEqual((false, FavoriteStar.Outlined, "Not in Favorites", "Add to Favorites (Ctrl+D)"), Face(star), "moved to another item, that item's at once");
+            Assert.AreNotSame(accent, glyph.Foreground, "outlined, in the button's own words");
+
+            star.Show(null);
+            Assert.IsFalse(star.Filled, "closed: outlined");
+        });
+    }
+
+    [TestMethod]
+    public void AClickOnThePreviewsStarAsksForTheToggleAndLeavesItAsItWasUntilAReadIsShown()
+    {
+        var plain = TestItems.Sized(1, 10, 10);
+        ControlThread.Run(() =>
+        {
+            var asked = 0;
+            var star = new PreviewStar(() => asked++);
+            star.Show(plain);
+
+            star.Button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            Assert.AreEqual(1, asked, "a click asks for the preview's toggle, as Ctrl+D there does");
+            Assert.AreEqual((false, FavoriteStar.Outlined, "Not in Favorites", "Add to Favorites (Ctrl+D)"), Face(star), "nothing shows before the store's answer is read (R9, G28)");
+        });
+    }
+
+    [TestMethod]
+    public async Task InFavoritesThePreviewsToggleTakesItsItemOutOfTheListAndTheReadItemsStarIsOutlined()
+    {
+        using var listed = await ListedStash.Open();
+        var item = await listed.Stash.Import("leaving");
+        await listed.Stash.Store!.SetFavorite([item], true);
+        await listed.Listing.ShowScope(Scope.Favorites);
+        var shown = listed.Listing.Items.Single();
+
+        Assert.IsTrue((await listed.Organising.ToggleFavorite([shown])).Succeeded);
+        var read = (await listed.Stash.Store!.Item(item.Id)).Value!;
+
+        Assert.IsEmpty(listed.Listing.Items, "it leaves Favorites (G4)");
+        ControlThread.Run(() =>
+        {
+            var star = new PreviewStar(() => { });
+            star.Show(shown);
+            Assert.IsTrue(star.Filled);
+            star.Show(read);
+            Assert.IsFalse(star.Filled, "the preview, which stays open on it, reads it outlined");
+        });
+    }
+
+    [TestMethod]
+    public async Task APreviewToggleTheStoreRefusesLeavesTheStarAndTheTileAsTheyWereAndNamesTheFailure()
+    {
+        using var listed = await ListedStash.Open();
+        var item = await listed.Stash.Import("refused");
+        await listed.Listing.ShowScope(Scope.All);
+
+        Outcome toggled;
+        using (listed.Stash.HoldStore())
+        {
+            toggled = await listed.Organising.ToggleFavorite([item]);
+        }
+
+        Assert.AreEqual("Add to Favorites", toggled.Failure?.Action, "the failure is the act's");
+        CollectionAssert.Contains(listed.Notices.Shown.Select(notice => notice.Text).ToList(), toggled.Failure!.Sentence, "and named (G35)");
+        var read = (await listed.Stash.Store!.Item(item.Id)).Value!;
+        await listed.Listing.Refresh();
+        Assert.IsFalse(TileStar.Of(listed.Listing.Items.Single()), "the tile carries no star");
+        ControlThread.Run(() =>
+        {
+            var star = new PreviewStar(() => { });
+            star.Show(read);
+            Assert.IsFalse(star.Filled, "the star reads the flag as it was");
+        });
+    }
+
+    private static (bool Filled, string? Glyph, string? Name, object? Tip) Face(PreviewStar star) =>
+        (star.Filled, ((TextBlock)star.Button.Content!).Text, AutomationProperties.GetName(star.Button), ToolTip.GetTip(star.Button));
 
     private static async Task<List<long>> FavoriteIds(ListedStash listed) => (await listed.Stash.Store!.Favorites()).Value!.Select(item => item.Id).ToList();
 

@@ -94,6 +94,9 @@ public static class LookKeys
     /// <summary>The selection's mark: the selected tiles' ring, the editor's handles and outline, a layer's range, the text's caret.</summary>
     public const string SelectionRing = Prefix + "SelectionRing";
 
+    /// <summary>The preview's star while its item is a favorite (G19).</summary>
+    public const string FavoriteStar = Prefix + "FavoriteStar";
+
     /// <summary>The space between a selected tile's edge and its ring, the window's ground showing through it, the focus ring filling it while the grid has keyboard focus (G6, G7); its left value.</summary>
     public const string SelectionRingGap = Prefix + "SelectionRingGap";
 
@@ -228,6 +231,7 @@ public static class LookKeys
         (KeyCapWords, LookKind.Brush),
         (AccentRing, LookKind.Brush),
         (SelectionRing, LookKind.Brush),
+        (FavoriteStar, LookKind.Brush),
         (SelectionRingGap, LookKind.Thickness),
         (NoteGround, LookKind.Brush),
         (TileGround, LookKind.Brush),

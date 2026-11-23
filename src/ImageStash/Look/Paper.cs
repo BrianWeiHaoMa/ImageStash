@@ -74,6 +74,7 @@ public sealed class Paper : Take
 
         into[LookKeys.AccentRing] = Solid(dark ? lit : accent);
         into[LookKeys.SelectionRing] = Solid(dark ? lit : accent);
+        into[LookKeys.FavoriteStar] = Solid(dark ? lit : accent);
         // Off the tile, so the ring reads larger than the tile; with the ring's width it stays inside the space
         // between tiles, so it never lies over a neighbour.
         into[LookKeys.SelectionRingGap] = new Avalonia.Thickness(1.5);

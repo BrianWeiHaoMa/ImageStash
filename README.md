@@ -45,8 +45,10 @@ that off.
 | `Ctrl+E` | Edit the selected picture with Text, Crop, Trim, Hide and Draw. |
 | `Ctrl+T` | Tag the selected pictures: type a word and press Enter. In a picture's preview, it goes to the preview's tag box. |
 
-Drop files or a folder onto the window to add them, and tag pictures to find them by a word. The tray icon's
-right-click menu holds the captures, Settings (where each shortcut can be changed) and Quit.
+Drop files or a folder onto the window to add them, and tag pictures to find them by a word. `Ctrl+D` makes the
+selected pictures favorites, or takes them off: a favorite's tile carries a small star, and so does its preview, where a
+click on the star does the same. The tray icon's right-click menu holds the captures, Settings (where each shortcut
+can be changed) and Quit.
 
 | The grid, with tags as chips | A picture's preview | The editor, edits kept as layers |
 |---|---|---|
