@@ -254,14 +254,11 @@ public sealed class ClipboardPasteTests
         using var shown = Open();
         await shown.OpenStash();
 
-        var lines = TrayDesktop.Get(() =>
-        {
-            var heading = shown.Window.GetVisualDescendants().OfType<TextBlock>().Single(text => text.IsEffectivelyVisible && text.Text == "Your stash is empty");
-            return ((Panel)heading.Parent!).Children.OfType<TextBlock>().Select(text => text.Text ?? "").ToList();
-        });
+        var (lines, ways, stashShortcut) = TrayDesktop.Get(() => (ShownEmptyStash.Lines(shown), ShownEmptyStash.Ways(shown), shown.Settings.Current.Shortcuts.StashClipboardImage));
 
-        CollectionAssert.AreEqual(new[] { "Your stash is empty", "Drop images and GIFs here, from a browser, a chat or File Explorer", "Paste a copied image    Ctrl+V", "Take a screenshot    Ctrl+PrtScn", "Record a clip    Ctrl+Shift+PrtScn", "Stash the clipboard image    Ctrl+Alt+V", "Import files    Ctrl+O" }, lines,
-            $"every way in, with its shortcut, and nothing else (G2, R10): {string.Join(" | ", lines)}");
+        CollectionAssert.AreEqual(new[] { "Paste a copied image · Ctrl+V", "Take a screenshot · Ctrl+PrtScn", "Record a clip · Ctrl+Shift+PrtScn", $"Stash the clipboard image · {stashShortcut}", "Import files · Ctrl+O" }, ways,
+            $"every way in as a row, the paste first, each with its shortcut, and nothing else (G2, R10): {string.Join(" | ", ways)}");
+        CollectionAssert.AreEqual(new[] { "Your stash is empty", "Drop images and GIFs here, from a browser, a chat or File Explorer" }, lines.Take(2).ToList(), $"the drop line stays words (G2): {string.Join(" | ", lines)}");
     }
 
     [TestMethod]

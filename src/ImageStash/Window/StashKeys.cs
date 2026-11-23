@@ -120,6 +120,12 @@ public enum KeyPlace
 /// </summary>
 public static class StashKeys
 {
+    /// <summary><c>Ctrl+V</c>, the window's paste, as the <c>+</c> menu and the empty stash name it; <see cref="Route"/> routes it.</summary>
+    public static readonly KeyGesture PasteKey = new(Key.V, KeyModifiers.Control);
+
+    /// <summary><c>Ctrl+O</c>, the window's Import files…, as the <c>+</c> menu and the empty stash name it; <see cref="Route"/> routes it.</summary>
+    public static readonly KeyGesture ImportFilesKey = new(Key.O, KeyModifiers.Control);
+
     /// <param name="boxTextSelected">The search box has text the person selected (<see cref="SummonSelection.PersonSelected"/>), as it can only while it has focus: it clears its selection on losing focus.</param>
     public static KeyAction Route(Key key, KeyModifiers modifiers, KeyPlace place, bool boxTextSelected = false) => place switch
     {

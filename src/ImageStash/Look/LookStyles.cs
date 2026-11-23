@@ -31,6 +31,9 @@ public sealed class LookStyles : Styles
     /// <summary>A button of an icon alone, without a ground until hovered: the head's gear, + and pin, the editor's icons.</summary>
     public const string IconButton = "iconButton";
 
+    /// <summary>A row of words a click runs, the empty stash's ways in: without a ground or an edge until hovered, its words the look's own.</summary>
+    public const string FlatRow = "flatRow";
+
     /// <summary>A round glyph button laid over a picture, the preview's ‹ and ›: on the dark pill the play mark sits on, faint while unavailable.</summary>
     public const string PictureButton = "pictureButton";
 
@@ -81,6 +84,13 @@ public sealed class LookStyles : Styles
         Add(Rule(x => x.Is<Button>().Class(IconButton).Class(":pressed").Template().OfType<ContentPresenter>().Name(Presenter),
             (ContentPresenter.BackgroundProperty, LookKeys.IconButtonPressedGround),
             (ContentPresenter.ForegroundProperty, LookKeys.IconButtonHoverWords)));
+        var flat = Rule(x => x.Is<Button>().Class(FlatRow), (TemplatedControl.BackgroundProperty, LookKeys.IconButtonGround));
+        flat.Setters.Add(new Setter(TemplatedControl.BorderThicknessProperty, default(Thickness)));
+        Add(flat);
+        Add(Rule(x => x.Is<Button>().Class(FlatRow).Class(":pointerover").Template().OfType<ContentPresenter>().Name(Presenter),
+            (ContentPresenter.BackgroundProperty, LookKeys.IconButtonHoverGround)));
+        Add(Rule(x => x.Is<Button>().Class(FlatRow).Class(":pressed").Template().OfType<ContentPresenter>().Name(Presenter),
+            (ContentPresenter.BackgroundProperty, LookKeys.IconButtonPressedGround)));
         PictureButtons();
         ThinScrollBar(":vertical", vertical: true);
         ThinScrollBar(":horizontal", vertical: false);

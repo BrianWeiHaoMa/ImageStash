@@ -160,6 +160,46 @@ public sealed class StashWindowPathTests
         Assert.AreEqual("SO TRUE", ((TextLayer)session.SelectedLayer!).Text);
     }
 
+    /// <summary>
+    /// A first run through the window's parts over a real, empty store with default settings, the empty stash read from
+    /// its view as the window draws it: (1) the listing is the empty stash, whose view lists the ways in, in order, each
+    /// with its shortcut as the settings read it, then the line naming the open shortcut, the tray and that closing the
+    /// window keeps ImageStash running, and nothing has read the clipboard (G2, G3, N9); (4) with a picture on the
+    /// clipboard, a click on the Paste row adds one item, and the grid takes the empty stash's place (G13, G2). The
+    /// paste stays the walk's last act.
+    /// </summary>
+    [TestMethod]
+    public async Task AFirstRunsEmptyStashNamesTheOpenShortcutAndItsPasteRowAddsTheClipboardsPicture()
+    {
+        using var listed = await ListedStash.Open();
+        var shown = EmptyStashShown.Over(listed);
+        var shortcuts = listed.Settings.Current.Shortcuts;
+
+        // (1) The first run's empty stash.
+        Assert.IsTrue(listed.Listing.IsEmptyStash, "a first run lists the empty stash");
+        Assert.IsTrue(shown.Showing, "and the window shows it in the grid's place (G2)");
+        var rows = shown.ReadRows();
+        CollectionAssert.AreEqual(new[] { "Paste a copied image", "Take a screenshot", "Record a clip", "Stash the clipboard image", "Import files" }, rows.Select(way => way.Words).ToList(), "every way in, in order");
+        CollectionAssert.AreEqual(new[] { "Ctrl+V", shortcuts.Screenshot, shortcuts.Record, shortcuts.StashClipboardImage, "Ctrl+O" }, rows.Select(way => string.Join("+", way.Caps)).ToList(),
+            "each with its shortcut as the settings read it, in key caps");
+        var line = shown.ReadLines()[^1];
+        StringAssert.Contains(line, $"from any app with {shortcuts.Open}", "the line names the open shortcut (G1)");
+        StringAssert.Contains(line, "from its icon in the tray", "and the tray (G34)");
+        StringAssert.Contains(line, "Closing this window keeps it running", "and that closing keeps ImageStash running (G3)");
+        Assert.AreEqual((0, 0), (listed.Clipboard.Reads, listed.Clipboard.ImageReads), "nothing has read the clipboard (N9)");
+
+        // (4) A picture on the clipboard; a click on the Paste row.
+        listed.Clipboard.Reading = Outcome<ClipboardReading>.Of(new ClipboardReading([], MediaFixtures.Bytes("transparent.png"), null, false));
+        shown.Click("Paste a copied image");
+        await listed.WayInRunning;
+
+        Assert.AreEqual(1, listed.Clipboard.Reads, "the row's act read the clipboard once (G13, N9)");
+        Assert.HasCount(1, await listed.Stash.All(), "one item added");
+        Assert.IsFalse(listed.Listing.IsEmptyStash, "the listing is no longer the empty stash");
+        shown.ShowListing();
+        Assert.IsFalse(shown.Showing, "the grid takes the empty stash's place (G2)");
+    }
+
     /// <summary>An arrow pressed in the preview as the window takes it; then the item shown, and the grid's one selected item, read.</summary>
     private static async Task PressInThePreview(ListedStash listed, Key key, StashItem expected)
     {

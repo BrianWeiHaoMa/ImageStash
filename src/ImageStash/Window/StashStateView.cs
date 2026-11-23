@@ -1,15 +1,17 @@
+using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
-using ImageStash.Seams;
+using ImageStash.Look;
 using ImageStash.Store;
 
 namespace ImageStash.Window;
 
 /// <summary>
 /// What replaces the stash window's grid, and the footer's count (G2, G5, G35): the opening, a stash that did not
-/// open, the empty stash listing every way in, no match with Clear, no favorites and an empty Recent, each distinct from
-/// the others and keyed, so the window builds a view again only when the state it shows changes.
+/// open, the empty stash listing every way in as rows a click runs, no match with Clear, no favorites and an empty Recent,
+/// each distinct from the others and keyed, so the window builds a view again only when the state it shows changes.
 /// </summary>
 public static class StashStateView
 {
@@ -36,8 +38,11 @@ public static class StashStateView
         _ => null,
     };
 
-    /// <summary>The view of the state <see cref="Key"/> names; <paramref name="clearSearch"/> is no match's Clear.</summary>
-    public static Control For(Listing listing, SettingsKeeper settings, Action clearSearch)
+    /// <summary>
+    /// The view of the state <see cref="Key"/> names; <paramref name="clearSearch"/> is no match's Clear, and
+    /// <paramref name="waysIn"/> the acts the empty stash's rows run.
+    /// </summary>
+    public static Control For(Listing listing, SettingsKeeper settings, Action clearSearch, WaysInActs waysIn)
     {
         var view = new StackPanel { Spacing = 8, MaxWidth = 340 };
         if (listing.State == StashState.Opening)
@@ -58,14 +63,14 @@ public static class StashStateView
         }
         else if (listing.IsEmptyStash)
         {
-            // G2: every way in, each with its shortcut.
-            view.Children.Add(Line("Your stash is empty", 20, FontWeight.SemiBold));
-            view.Children.Add(Line("Drop images and GIFs here, from a browser, a chat or File Explorer", 13));
-            view.Children.Add(Line("Paste a copied image    Ctrl+V", 13));
-            view.Children.Add(Line($"Take a screenshot    {ShortcutOrTray(settings.Current.Shortcuts.Screenshot)}", 13));
-            view.Children.Add(Line($"Record a clip    {ShortcutOrTray(settings.Current.Shortcuts.Record)}", 13));
-            view.Children.Add(Line($"Stash the clipboard image    {ShortcutOrTray(settings.Current.Shortcuts.StashClipboardImage)}", 13));
-            view.Children.Add(Line("Import files    Ctrl+O", 13));
+            // G2: every way in, each with its shortcut, as rows a click runs; then how ImageStash opens again (G3).
+            var shortcuts = settings.Current.Shortcuts;
+            view.Children.Add(Line(EmptyStashWaysIn.Heading, 20, FontWeight.SemiBold));
+            view.Children.Add(Line(EmptyStashWaysIn.DropLine, 13));
+            var rows = new StackPanel();
+            rows.Children.AddRange(EmptyStashWaysIn.Of(shortcuts, waysIn).Select(Row));
+            view.Children.Add(rows);
+            view.Children.Add(Line(EmptyStashWaysIn.OpenLine(shortcuts), 12.5));
         }
         else if (listing.NoMatch)
         {
@@ -90,8 +95,31 @@ public static class StashStateView
         return view;
     }
 
-    /// <summary>A global shortcut as the settings read it, as the tray menu shows it; the tray's entry while that is not a shortcut.</summary>
-    private static string ShortcutOrTray(string setting) => Shortcut.Parse(setting).Value?.Text ?? "from the tray menu";
+    /// <summary>
+    /// A way in as a row: its words left, its shortcut's key caps right, or the tray menu's words while its setting is no
+    /// shortcut. A click runs its act; unfocusable, as the <c>+</c> button is, so the keyboard's focus stays where it was (G7).
+    /// </summary>
+    private static Button Row(WayIn way)
+    {
+        Control keys = way.Shortcut is { } text
+            ? KeyCaps.Of(text)
+            : new TextBlock { Text = EmptyStashWaysIn.FromTrayMenu, FontSize = 13, VerticalAlignment = VerticalAlignment.Center, Opacity = 0.7 };
+        keys.Margin = new Thickness(12, 0, 0, 0);
+        Grid.SetColumn(keys, 1);
+        var words = new TextBlock { Text = way.Words, FontSize = 13, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+        var row = new Button
+        {
+            Content = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = { words, keys } },
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Padding = new Thickness(10, 3),
+            Focusable = false,
+        };
+        row.Classes.Add(LookStyles.FlatRow);
+        AutomationProperties.SetName(row, way.Words);
+        row.Click += (_, _) => way.Act();
+        return row;
+    }
 
     private static TextBlock Line(string text, double size, FontWeight weight = FontWeight.Normal) =>
         new() { Text = text, FontSize = size, FontWeight = weight, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center };

@@ -150,6 +150,7 @@ public sealed class App : Application
         recordClip = new RecordClip(listing, notifications, captured, handoff, capture, keeper, window.CaptureHiding, window, trayMenu.SetRecording, HeldFileRetry.Duration);
         window.RecordRequested += RecordClip;
         window.SettingsRequested += OpenSettings;
+        window.StashClipboardImageRequested += StashFromTray;
         moving.WaitForTray(screenshot, recordClip, stashClipboardImage, captured, openWith, notifications);
         return listing;
     }
@@ -395,7 +396,7 @@ public sealed class App : Application
         }
     }
 
-    /// <summary>The tray menu's Stash clipboard image: the act, which names its own failures and opens no window (G13, G34).</summary>
+    /// <summary>The tray menu's Stash clipboard image, and the empty stash's: the act, which names its own failures and opens no window (G13, G34).</summary>
     private void StashFromTray() => _ = stashClipboardImage?.Stash();
 
     /// <summary>A press of Stash clipboard image's shortcut, on the UI thread: the same act (F5, G13).</summary>

@@ -21,6 +21,7 @@ public sealed class WindowStatus
     private readonly ScrollViewer scroller;
     private readonly Func<bool> covered;
     private readonly Action clearSearch;
+    private readonly WaysInActs waysIn;
     private readonly ContentControl stashState;
     private readonly StackPanel noticeStack;
     private readonly Dictionary<Notice, Control> noticeCards = [];
@@ -33,9 +34,10 @@ public sealed class WindowStatus
 
     /// <summary>
     /// For the window listing <paramref name="listing"/> in <paramref name="scroller"/>, which <paramref name="covered"/>
-    /// says the preview or the editor covers, and whose search <paramref name="clearSearch"/> clears.
+    /// says the preview or the editor covers, whose search <paramref name="clearSearch"/> clears, and whose empty stash's
+    /// rows run <paramref name="waysIn"/>.
     /// </summary>
-    public WindowStatus(Listing listing, Notices notices, SettingsKeeper settings, FooterHints footerHints, ScrollViewer scroller, Func<bool> covered, Action clearSearch)
+    public WindowStatus(Listing listing, Notices notices, SettingsKeeper settings, FooterHints footerHints, ScrollViewer scroller, Func<bool> covered, Action clearSearch, WaysInActs waysIn)
     {
         this.listing = listing;
         this.notices = notices;
@@ -44,6 +46,7 @@ public sealed class WindowStatus
         this.scroller = scroller;
         this.covered = covered;
         this.clearSearch = clearSearch;
+        this.waysIn = waysIn;
         stashState = new ContentControl { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(20) };
         noticeStack = new StackPanel { Spacing = 6 };
         NoticeArea = WindowLayout.NoticeArea(noticeStack);
@@ -66,7 +69,7 @@ public sealed class WindowStatus
     /// <summary>The footer: the hints, the busy state and the count.</summary>
     public Border Footer { get; }
 
-    /// <summary>A shortcut remapped in Settings: the empty stash lists it from now on (G2).</summary>
+    /// <summary>A shortcut remapped in Settings: the empty stash's rows and its line name it from now on (G2).</summary>
     public void ShortcutsChanged()
     {
         shownState = null;
@@ -79,7 +82,7 @@ public sealed class WindowStatus
         if (state != shownState)
         {
             shownState = state;
-            stashState.Content = state is null ? null : StashStateView.For(listing, settings, clearSearch);
+            stashState.Content = state is null ? null : StashStateView.For(listing, settings, clearSearch, waysIn);
         }
 
         stashState.IsVisible = state is not null;

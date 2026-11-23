@@ -139,7 +139,9 @@ public sealed class StashWindow : Avalonia.Controls.Window
         previewSteps = new PreviewStepping(listing, () => preview.Item, item => preview.Open(item));
         editor = new EditorOverlay(failure => notices.Raise(failure), seams.Fonts);
         footerHints = new FooterHints(listing, pasteTarget, handoff, notices.Clock);
-        status = new WindowStatus(listing, notices, settings, footerHints, scroller, () => preview.IsOpen || editing.IsOpen, () => search.Text = "");
+        // The empty stash's rows run the acts its keys, the + menu and the tray menu run (G2, G12 to G15).
+        var waysIn = new WaysInActs(() => _ = paste.Paste(), () => ScreenshotRequested?.Invoke(), () => RecordRequested?.Invoke(), () => StashClipboardImageRequested?.Invoke(), ImportFiles);
+        status = new WindowStatus(listing, notices, settings, footerHints, scroller, () => preview.IsOpen || editing.IsOpen, () => search.Text = "", waysIn);
         var body = new Panel { Children = { scroller, status.StateView } };
         // Above the preview too, so a failure is still named and a drop still taken while it is open (G35, G11); the drop
         // card above the notices, so an earlier batch's notices never hide what the next drop will add.
@@ -192,11 +194,14 @@ public sealed class StashWindow : Avalonia.Controls.Window
     /// <summary>The grid's thumbnail size, which its keys and wheel step and the Settings page chooses (G6, G32).</summary>
     public ThumbnailSizing ThumbnailSizing { get; }
 
-    /// <summary>Take a screenshot chosen from the <c>+</c> menu, raised once the menu has closed; the act is the shortcut's (G14).</summary>
+    /// <summary>Take a screenshot chosen from the <c>+</c> menu, raised once the menu has closed, or from the empty stash; the act is the shortcut's (G14).</summary>
     public event Action? ScreenshotRequested;
 
-    /// <summary>Record a clip chosen from the <c>+</c> menu, raised once the menu has closed; the act is the shortcut's (G15).</summary>
+    /// <summary>Record a clip chosen from the <c>+</c> menu, raised once the menu has closed, or from the empty stash; the act is the shortcut's (G15).</summary>
     public event Action? RecordRequested;
+
+    /// <summary>Stash the clipboard image chosen from the empty stash; the act is the tray menu's and the shortcut's (G13).</summary>
+    public event Action? StashClipboardImageRequested;
 
     /// <summary>The Settings button clicked; the page is the app's, one whichever way it is asked for (F4, G32).</summary>
     public event Action? SettingsRequested;

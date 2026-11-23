@@ -30,7 +30,7 @@ public sealed class ShortcutField : Button
     public const string RecordingWords = "Press a new shortcut…";
 
     private readonly ShortcutRecording recording;
-    private readonly StackPanel keys = new() { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
+    private readonly StackPanel keys = KeyCaps.Row();
     private readonly TextBlock prompt = new() { Text = RecordingWords, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock edit = IconGlyph.Of("", 12);
     private readonly Button stop;
@@ -110,11 +110,7 @@ public sealed class ShortcutField : Button
         var recordingNow = recording.IsRecording;
         keys.IsVisible = edit.IsVisible = !recordingNow;
         prompt.IsVisible = stop.IsVisible = recordingNow;
-        keys.Children.Clear();
-        foreach (var key in recording.Text.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            keys.Children.Add(KeyCap(key));
-        }
+        KeyCaps.Show(keys, recording.Text);
 
         if (recordingNow && ring is null)
         {
@@ -240,24 +236,5 @@ public sealed class ShortcutField : Button
         {
             states.Add(state);
         }
-    }
-
-    /// <summary>One key of the shortcut, drawn as a key cap.</summary>
-    private static Border KeyCap(string name)
-    {
-        var cap = new Border
-        {
-            Child = new TextBlock { Text = name, FontSize = 12, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center },
-            MinWidth = 30,
-            Height = 24,
-            Padding = new Thickness(8, 0),
-            BorderThickness = new Thickness(1),
-        };
-        ((TextBlock)cap.Child).HorizontalAlignment = HorizontalAlignment.Center;
-        cap.Bind(Border.BackgroundProperty, cap.GetResourceObservable(LookKeys.KeyCapGround));
-        cap.Bind(Border.BorderBrushProperty, cap.GetResourceObservable(LookKeys.KeyCapBorder));
-        cap.Bind(Border.CornerRadiusProperty, cap.GetResourceObservable(LookKeys.ControlRadius));
-        cap.Child.Bind(TextBlock.ForegroundProperty, cap.GetResourceObservable(LookKeys.KeyCapWords));
-        return cap;
     }
 }

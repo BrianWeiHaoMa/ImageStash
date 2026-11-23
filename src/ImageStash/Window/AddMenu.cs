@@ -1,6 +1,5 @@
 using Avalonia.Automation;
 using Avalonia.Controls;
-using Avalonia.Input;
 using Avalonia.Threading;
 using ImageStash.Look;
 using ImageStash.Seams;
@@ -21,10 +20,10 @@ public static class AddMenu
     /// </summary>
     public static Button Button(SettingsKeeper settings, ClipboardPaste paste, Action pickFiles, Action screenshotRequested, Action recordRequested)
     {
-        var importFiles = new MenuItem { Header = "Import files…", InputGesture = new KeyGesture(Key.O, KeyModifiers.Control) };
+        var importFiles = new MenuItem { Header = "Import files…", InputGesture = StashKeys.ImportFilesKey };
         importFiles.Click += (_, _) => pickFiles();
         // Neither enabled nor worded by what the clipboard holds: only the paste reads it (N9).
-        var pasteImage = new MenuItem { Header = "Paste image", InputGesture = new KeyGesture(Key.V, KeyModifiers.Control) };
+        var pasteImage = new MenuItem { Header = "Paste image", InputGesture = StashKeys.PasteKey };
         pasteImage.Click += (_, _) => _ = paste.Paste();
         var takeScreenshot = new MenuItem { Header = Screenshot.Action };
         // Once the menu has closed, so the screen the capture freezes holds nothing of it (G14).

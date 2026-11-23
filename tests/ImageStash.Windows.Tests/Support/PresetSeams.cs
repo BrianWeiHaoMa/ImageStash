@@ -104,9 +104,20 @@ public sealed class PresetDrags : IClipboardAndDrops
 
     public Task<Outcome<bool>> WriteAgain(long savedItem, ClipboardContent content, TimeSpan heldClipboardRetry) => real.WriteAgain(savedItem, content, heldClipboardRetry);
 
-    public Task<Outcome<ClipboardReading>> Read(TimeSpan heldClipboardRetry) => real.Read(heldClipboardRetry);
+    /// <summary>How many reads of the clipboard's data have been asked for, image-only reads included (N9).</summary>
+    public int Reads { get; private set; }
 
-    public Task<Outcome<ClipboardImage?>> ReadImage(TimeSpan heldClipboardRetry) => real.ReadImage(heldClipboardRetry);
+    public Task<Outcome<ClipboardReading>> Read(TimeSpan heldClipboardRetry)
+    {
+        Reads++;
+        return real.Read(heldClipboardRetry);
+    }
+
+    public Task<Outcome<ClipboardImage?>> ReadImage(TimeSpan heldClipboardRetry)
+    {
+        Reads++;
+        return real.ReadImage(heldClipboardRetry);
+    }
 
     public Task<Outcome<bool>> StartDrag(TopLevel owner, PointerPressedEventArgs press, IReadOnlyList<string> filePaths)
     {

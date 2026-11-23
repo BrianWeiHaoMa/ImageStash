@@ -87,7 +87,19 @@ public sealed class ListedStash : IDisposable
         Shortcuts = new GlobalShortcuts(Settings, GlobalShortcuts.Bindings(() => { }, () => { }, () => { }, () => { }), ShortcutsSeam, Unavailable.Add, action => action());
         Shortcuts.Start();
         Transferring = new Transferring(Listing, Notices, Settings, Dialogs, stash.RecycleBin, Handoff, OpenWith, Moving, ApplyTravelling, stash.Clock, TestStash.ShortRetry);
+        WaysIn = new WaysInActs(
+            () => WayInRunning = Paste.Paste(),
+            () => WayInRunning = Screenshot.Take(),
+            () => WayInRunning = RecordClip.StartOrStop(),
+            () => WayInRunning = StashClipboardImage.Stash(),
+            () => WayInRunning = Import.Pick(() => Dialogs.OpenFiles(null!, "Import files", Import.PickerFilters), _ => { }));
     }
+
+    /// <summary>The acts the empty stash's rows run, as the window and the app hand them: the paste, the captures, Stash clipboard image, the picker.</summary>
+    public WaysInActs WaysIn { get; }
+
+    /// <summary>The act the last click on one of the empty stash's rows started, for a check to await.</summary>
+    public Task WayInRunning { get; private set; } = Task.CompletedTask;
 
     /// <summary>Export stash… and Import stash… over the same seams as Move…, the imported settings put in effect as the app puts them.</summary>
     public Transferring Transferring { get; }

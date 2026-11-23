@@ -16,7 +16,8 @@ namespace ImageStash.Windows.Tests.Window;
 /// hid leaves its notice for the summon, counting what was added and naming the file that was not; Del then <c>Ctrl+Z</c>
 /// brings the item back; <c>Ctrl+T</c>, a tag typed and a real click on the grid tag the item. It shows the stash window,
 /// clicks its grid with the real pointer and deletes a picture of its own into the Recycle Bin, whose entry the Undo
-/// removes.
+/// removes. The first run's pinned empty stash gives way to the grid once a real click on its Paste row adds the picture
+/// on the clipboard (G2, G13).
 /// </summary>
 [TestClass]
 public sealed class StashWindowPathTests
@@ -220,6 +221,49 @@ public sealed class StashWindowPathTests
             Assert.AreEqual("SO TRUE", editor.Field?.Text);
             Assert.AreEqual("SO TRUE", ((TextLayer)editor.Session!.Layers.Layers.Single()).Text);
             Assert.AreEqual("Paste failed: the clipboard, it holds no text to paste", shown.Said());
+        });
+    }
+
+    /// <summary>
+    /// The first run's window, pinned over an empty stash (G2): its rows and its line show, and neither showing them nor
+    /// the pointer resting on the Paste row reads the clipboard (N9); with a picture on the clipboard, a real click on
+    /// the Paste row reads it once and adds it, the grid takes the empty stash's place, and the focus stays in the search
+    /// box (G13, G7).
+    /// </summary>
+    [TestMethod]
+    public async Task TheFirstRunsPinnedEmptyStashThenARealClickOnItsPasteRowShowsTheGrid()
+    {
+        var clipboard = new PresetDrags();
+        using var shown = ShownWindow.Open(drags: clipboard);
+        using var pointer = TestMouse.PutBackAfterwards();
+        await shown.OpenStash();
+        TrayDesktop.Run(shown.Window.SummonPinned);
+        await Eventually(() => TrayDesktop.Get(() => shown.Window.IsActive && shown.Search.IsFocused && ShownEmptyStash.View(shown) is not null));
+        await Task.Delay(200);
+        TrayDesktop.Run(() =>
+        {
+            Assert.HasCount(5, ShownEmptyStash.Rows(shown), "every way in as a row");
+            StringAssert.Contains(ShownEmptyStash.Lines(shown)[^1], "Closing this window keeps it running");
+        });
+
+        TestClipboard.Put((TestClipboard.Png, File.ReadAllBytes(shown.Picture("path first run.png"))));
+        var row = TrayDesktop.Get(() => ShownEmptyStash.Row(shown, "Paste a copied image"));
+        var paste = TestMouse.Centre(row);
+        TestMouse.MoveTo(paste);
+        await Eventually(() => TrayDesktop.Get(() => row.IsPointerOver));
+        await TrayDesktop.Get(() => shown.Listing.Settle());
+        Assert.AreEqual(0, clipboard.Reads, "showing the empty stash, and the pointer resting on a row, read nothing of the clipboard (N9)");
+
+        TestMouse.Click(paste);
+
+        await Eventually(() => TrayDesktop.Get(() => shown.Listing.Items.Count == 1));
+        Assert.AreEqual(1, clipboard.Reads, "the click read it once (G13)");
+        await TrayDesktop.Get(() => shown.Listing.Settle());
+        TrayDesktop.Run(() =>
+        {
+            Assert.IsNull(ShownEmptyStash.View(shown), "the empty stash gives way (G2)");
+            Assert.IsTrue(shown.Grid.IsEffectivelyVisible, "to the grid with the pasted picture");
+            Assert.IsTrue(shown.Search.IsFocused, "the focus where it was (G7)");
         });
     }
 
