@@ -147,9 +147,9 @@ public sealed class ItemMenuTests
         var opened = menu.Items.Take(2).ToList();
         menu.Listing.Select([menu.Items[2].Id], null);
 
-        var added = await menu.ItemMenu.Act(ItemMenuAction.AddToFavorites, null!, opened, null, () => false, menu.DialogUp);
+        var added = await menu.ItemMenu.Act(ItemMenuAction.AddToFavorites, null!, opened, null, new PasteHide(() => false), menu.DialogUp);
         var favorites = (await menu.Stash.Store!.Favorites()).Value!.Select(item => item.Id).ToList();
-        var removed = await menu.ItemMenu.Act(ItemMenuAction.RemoveFromFavorites, null!, [opened[0]], null, () => false, menu.DialogUp);
+        var removed = await menu.ItemMenu.Act(ItemMenuAction.RemoveFromFavorites, null!, [opened[0]], null, new PasteHide(() => false), menu.DialogUp);
         var after = (await menu.Stash.Store!.Favorites()).Value!.Select(item => item.Id).ToList();
 
         Assert.IsTrue(added.Succeeded);
@@ -168,8 +168,8 @@ public sealed class ItemMenuTests
         var relay = RecordingTarget.App("Relay");
         var hides = 0;
 
-        var pasted = await menu.ItemMenu.Act(ItemMenuAction.Paste, null!, menu.Items, relay, () => ++hides > 0, menu.DialogUp);
-        var copied = await menu.ItemMenu.Act(ItemMenuAction.Copy, null!, menu.Items, relay, () => ++hides > 0, menu.DialogUp);
+        var pasted = await menu.ItemMenu.Act(ItemMenuAction.Paste, null!, menu.Items, relay, new PasteHide(() => ++hides > 0), menu.DialogUp);
+        var copied = await menu.ItemMenu.Act(ItemMenuAction.Copy, null!, menu.Items, relay, new PasteHide(() => ++hides > 0), menu.DialogUp);
 
         Assert.IsTrue(pasted.Succeeded, pasted.Failure?.Sentence);
         Assert.IsTrue(copied.Succeeded, copied.Failure?.Sentence);
@@ -186,7 +186,7 @@ public sealed class ItemMenuTests
         var openedOn = menu.Items.Take(2).ToList();
         menu.Listing.Select([menu.Items[2].Id], menu.Items[2].Id);
 
-        var deleted = await menu.ItemMenu.Act(ItemMenuAction.Delete, null!, openedOn, null, () => throw new AssertFailedException("a delete hides nothing (G2)"), menu.DialogUp);
+        var deleted = await menu.ItemMenu.Act(ItemMenuAction.Delete, null!, openedOn, null, new PasteHide(() => throw new AssertFailedException("a delete hides nothing (G2)")), menu.DialogUp);
 
         Assert.IsTrue(deleted.Succeeded, deleted.Failure?.Sentence);
         CollectionAssert.AreEqual(new[] { menu.Items[2].Id }, menu.Listing.Items.Select(item => item.Id).ToList(), "the two it was opened on are gone, the one selected since stays");
@@ -201,7 +201,7 @@ public sealed class ItemMenuTests
     {
         using var menu = await Menu.Open("transparent.png");
 
-        var copied = await menu.ItemMenu.Act(ItemMenuAction.Copy, null!, menu.Items, null, () => throw new AssertFailedException("a copy hides nothing"), menu.DialogUp);
+        var copied = await menu.ItemMenu.Act(ItemMenuAction.Copy, null!, menu.Items, null, new PasteHide(() => throw new AssertFailedException("a copy hides nothing")), menu.DialogUp);
 
         Assert.IsTrue(copied.Succeeded, copied.Failure?.Sentence);
         var content = menu.Clipboard.Written.Single().Content;
@@ -458,7 +458,7 @@ public sealed class ItemMenuTests
         menu.Dialogs.SaveAnswer = () => Task.FromResult<string?>(chosen);
 
         var copied = await menu.ItemMenu.SaveACopy(null!, saved, menu.DialogUp);
-        var revealed = await menu.ItemMenu.Act(ItemMenuAction.Reveal, null!, [saved], null, () => false, menu.DialogUp);
+        var revealed = await menu.ItemMenu.Act(ItemMenuAction.Reveal, null!, [saved], null, new PasteHide(() => false), menu.DialogUp);
 
         Assert.IsTrue(copied.Succeeded && revealed.Succeeded, $"{copied.Failure?.Sentence} {revealed.Failure?.Sentence}");
         var (_, suggested, type) = menu.Dialogs.SavePickers.Single();
@@ -474,9 +474,9 @@ public sealed class ItemMenuTests
         using var menu = await Menu.Open("photo.jpg");
         var item = menu.Items[0];
 
-        var revealed = await menu.ItemMenu.Act(ItemMenuAction.Reveal, null!, menu.Items, null, () => false, menu.DialogUp);
+        var revealed = await menu.ItemMenu.Act(ItemMenuAction.Reveal, null!, menu.Items, null, new PasteHide(() => false), menu.DialogUp);
         menu.Dialogs.RevealAnswer = new Failure("Reveal in File Explorer", item.FileName, "The system cannot find the file specified.");
-        var failed = await menu.ItemMenu.Act(ItemMenuAction.Reveal, null!, menu.Items, null, () => false, menu.DialogUp);
+        var failed = await menu.ItemMenu.Act(ItemMenuAction.Reveal, null!, menu.Items, null, new PasteHide(() => false), menu.DialogUp);
 
         Assert.IsTrue(revealed.Succeeded);
         CollectionAssert.AreEqual(new[] { item.FilePath, item.FilePath }, menu.Dialogs.Revealed);

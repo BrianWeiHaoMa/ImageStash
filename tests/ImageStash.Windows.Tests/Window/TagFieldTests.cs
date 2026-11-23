@@ -67,7 +67,7 @@ public sealed class TagFieldTests
                 "existing tags containing the word, the one starting with it first; never the name red (G17, N6)");
             Assert.IsTrue(shown.TagField.GetVisualDescendants().OfType<Button>().Any(button => button.Content as string == "reaction" && button.IsEffectivelyVisible), "drawn inside the window");
             shown.TagBox.Text = "#Dog cat";
-            ShownWindow.Press(shown.TagBox, Key.Enter);
+            ShownWindow.Tap(shown.TagBox, Key.Enter);
             Assert.IsTrue(shown.TagField.IsVisible, "Enter leaves the field open for the next tag (G17)");
             Assert.IsTrue(shown.TagBox.IsFocused, "with focus in its box");
             Assert.AreEqual("", shown.TagBox.Text ?? "", "and the box emptied");
@@ -108,7 +108,7 @@ public sealed class TagFieldTests
         {
             ShownWindow.Press(shown.TagBox, Key.Down);
             Assert.AreEqual("reaction", shown.TagField.Field.Chosen);
-            ShownWindow.Press(shown.TagBox, Key.Enter);
+            ShownWindow.Tap(shown.TagBox, Key.Enter);
             Assert.IsTrue(shown.TagBox.IsFocused, "focus stays in the box for the next tag (G17)");
         });
         await ShownWindow.Eventually(() => shown.TagsOf(items[1].Id).Count == 2);
@@ -155,10 +155,10 @@ public sealed class TagFieldTests
         TrayDesktop.Run(() =>
         {
             Assert.AreEqual("", shown.TagBox.Text ?? "", "a cancelled field opens again with nothing typed");
-            ShownWindow.Press(shown.TagBox, Key.Enter);
+            ShownWindow.Tap(shown.TagBox, Key.Enter);
             Assert.IsTrue(shown.TagField.IsVisible && shown.TagBox.IsFocused, "an empty Enter changes nothing and leaves the field open: nothing requires a tag (G17)");
             ShownWindow.Type(shown.TagBox, "##");
-            ShownWindow.Press(shown.TagBox, Key.Enter);
+            ShownWindow.Tap(shown.TagBox, Key.Enter);
             Assert.IsTrue(shown.TagField.IsVisible && shown.TagBox.IsFocused, "nor does one of only #s");
         });
         await Task.Delay(300);
@@ -170,7 +170,7 @@ public sealed class TagFieldTests
             Assert.IsTrue(shown.TagField.IsVisible, "still open");
             ShownWindow.Press(shown.TagBox, Key.Escape);
             Assert.IsTrue(shown.Grid.IsFocused);
-            ShownWindow.Press(shown.Grid, Key.Enter);
+            ShownWindow.Tap(shown.Grid, Key.Enter);
         });
         await ShownWindow.Eventually(() => shown.Uses() == 1);
         CollectionAssert.AreEqual(new[] { item.FilePath }, TestClipboard.Read().Files.ToList(), "the paste path still works after the field (G7, G8)");
@@ -289,7 +289,7 @@ public sealed class TagFieldTests
         });
         Assert.IsEmpty(shown.TagsOf(item.Id), "nothing added before Enter");
 
-        TrayDesktop.Run(() => ShownWindow.Press(shown.TagBox, Key.Enter));
+        TrayDesktop.Run(() => ShownWindow.Tap(shown.TagBox, Key.Enter));
         await ShownWindow.Eventually(() => shown.TagsOf(item.Id).Count == 3);
         CollectionAssert.AreEqual(new[] { "a", "funny", "wor" }, shown.TagsOf(item.Id), "each word a tag (G13, G17)");
         TrayDesktop.Run(() => Assert.IsTrue(shown.TagField.IsVisible && shown.TagBox.IsFocused, "the field still open"));
@@ -323,7 +323,7 @@ public sealed class TagFieldTests
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => (shown.TagBox.Text ?? "").Length > 0));
         TrayDesktop.Run(() => Assert.AreEqual("celebrate facepalm sarcasm wholesome", shown.TagBox.Text, "every word of the clipboard's text in the box as typed (G13)"));
 
-        TrayDesktop.Run(() => ShownWindow.Press(shown.TagBox, Key.Enter));
+        TrayDesktop.Run(() => ShownWindow.Tap(shown.TagBox, Key.Enter));
         await ShownWindow.Eventually(() => shown.TagsOf(item.Id).Count == 4);
         CollectionAssert.AreEqual(new[] { "celebrate", "facepalm", "sarcasm", "wholesome" }, shown.TagsOf(item.Id), "each word a tag (G13, G17)");
     }
@@ -607,7 +607,7 @@ public sealed class TagFieldTests
         TrayDesktop.Run(() =>
         {
             ShownWindow.Type(shown.TagBox, "late");
-            ShownWindow.Press(shown.TagBox, Key.Enter);
+            ShownWindow.Tap(shown.TagBox, Key.Enter);
         });
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Notices.Shown.Count == noticesBefore + 1));
         var named = TrayDesktop.Get(() => shown.Notices.Shown[^1].Text);
@@ -660,7 +660,7 @@ public sealed class TagFieldTests
         TrayDesktop.Run(() =>
         {
             ShownWindow.Type(shown.TagBox, "reaction");
-            ShownWindow.Press(shown.TagBox, Key.Enter);
+            ShownWindow.Tap(shown.TagBox, Key.Enter);
         });
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Chips.Any(count => count.Tag == "reaction")));
         TrayDesktop.Run(() => Assert.DoesNotContain("#reaction", shown.ShownChips(), "carried by one item, it is not among the tags the most items carry that fit (G4)"));
@@ -675,7 +675,7 @@ public sealed class TagFieldTests
         TrayDesktop.Run(() =>
         {
             ShownWindow.Press(shown.TagBox, Key.Down);
-            ShownWindow.Press(shown.TagBox, Key.Enter);
+            ShownWindow.Tap(shown.TagBox, Key.Enter);
         });
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.ShownChips().Contains("#reaction")));
 
@@ -767,7 +767,7 @@ public sealed class TagFieldTests
             TrayDesktop.Run(() =>
             {
                 ShownWindow.Type(shown.TagBox, typed);
-                ShownWindow.Press(shown.TagBox, Key.Enter);
+                ShownWindow.Tap(shown.TagBox, Key.Enter);
                 Assert.IsTrue(shown.TagField.IsVisible && shown.TagBox.IsFocused && (shown.TagBox.Text ?? "") == "", $"after {typed}: open, focus in the emptied box (G17)");
             });
             await ShownWindow.Eventually(() => shown.TagsOf(items[0].Id).SequenceEqual(carried) && TrayDesktop.Get(() => shown.TagField.Field.Tags.SequenceEqual(carried)));
@@ -792,7 +792,7 @@ public sealed class TagFieldTests
         TrayDesktop.Run(() =>
         {
             Assert.IsEmpty(shown.TagField.Field.Suggestions, "x, which one of the two carries, shows with its × and is not suggested");
-            ShownWindow.Press(shown.TagBox, Key.Enter);
+            ShownWindow.Tap(shown.TagBox, Key.Enter);
         });
         await ShownWindow.Eventually(() => shown.TagsOf(items[0].Id).Contains("x"));
 
@@ -892,7 +892,7 @@ public sealed class TagFieldTests
             if (TrayDesktop.Get(() => shown.TagField.IsVisible))
             {
                 TestMouse.Click(TestMouse.Centre(TrayDesktop.Get(() => shown.TagBox)));
-                TrayDesktop.Run(() => ShownWindow.Press(shown.TagBox, Key.Enter));
+                TrayDesktop.Run(() => ShownWindow.Tap(shown.TagBox, Key.Enter));
                 await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled));
             }
             var after = (await shown.Listing.Store!.All()).Value!.Single();

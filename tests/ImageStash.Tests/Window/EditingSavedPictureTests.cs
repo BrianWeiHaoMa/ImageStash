@@ -168,7 +168,7 @@ public sealed class EditingSavedPictureTests
         StringAssert.Contains(lines[2], "Edited here:");
         if (item.Facts.Animated) StringAssert.Contains(lines[0], ClipLength.Words(item.Facts.DurationMs));
         Assert.AreEqual(layers, (await PreviewFacts.EditedLayers(listed.Stash.Store!, item)).Value);
-        Assert.IsTrue((await listed.Handoff.HandOver(null!, [item], null, () => throw new AssertFailedException("headless copy hides nothing"))).Succeeded);
+        Assert.IsTrue((await listed.Handoff.HandOver(null!, [item], null, new PasteHide(() => throw new AssertFailedException("headless copy hides nothing")))).Succeeded);
         var content = listed.Clipboard.Written.Last().Content;
         CollectionAssert.AreEqual(new[] { item.FilePath }, content.FilePaths.ToArray(), "G8 finished file");
         if (item.Facts.Animated)

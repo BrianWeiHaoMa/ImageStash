@@ -7,7 +7,7 @@ namespace ImageStash.Tests.Support;
 /// <summary>The handoff over an open test stash holding the given fixtures, its notices and the clipboard on the stash's clock.</summary>
 public sealed class Handing : IDisposable
 {
-    private Handing(TestStash stash)
+    private Handing(TestStash stash, TimeProvider? handoffClock)
     {
         Stash = stash;
         Notices = new Notices(stash.Clock);
@@ -24,7 +24,7 @@ public sealed class Handing : IDisposable
         Clipboard = new RecordingClipboard(stash.Clock);
         Notifications = new Notices(stash.Clock);
         Target = new RecordingTarget(Steps);
-        Handoff = new Handoff(Listing, Notices, Notifications, Clipboard, Target, stash.Clock, TestStash.ShortRetry, TestStash.ShortRetry);
+        Handoff = new Handoff(Listing, Notices, Notifications, Clipboard, Target, handoffClock ?? stash.Clock, TestStash.ShortRetry, TestStash.ShortRetry);
     }
 
     public TestStash Stash { get; }
@@ -56,9 +56,12 @@ public sealed class Handing : IDisposable
     public IReadOnlyList<StashItem> Items { get; private set; } = [];
 
     /// <summary>Imports the fixtures in one drop, then clears the import's notice, so each check sees only its own.</summary>
-    public static async Task<Handing> Open(params string[] fixtures)
+    public static Task<Handing> Open(params string[] fixtures) => Open(null, fixtures);
+
+    /// <summary>As <see cref="Open(string[])"/>, the handoff's waits and uses on <paramref name="handoffClock"/>, as a check that steps through the paste's bound needs.</summary>
+    public static async Task<Handing> Open(TimeProvider? handoffClock, params string[] fixtures)
     {
-        var handing = new Handing(new TestStash());
+        var handing = new Handing(new TestStash(), handoffClock);
         await handing.Stash.OpenCleanly();
         await handing.Listing.StashOpened(handing.Stash.Store!);
         if (fixtures.Length > 0)
@@ -84,12 +87,15 @@ public sealed class Handing : IDisposable
     /// <summary>Whether the paste's hide leaves the flyout hidden, as the window answers it: so, unless a check says the window stayed (pinned, or a dialog or a drag of its own up, G2).</summary>
     public bool PasteHidesFlyout { get; set; } = true;
 
+    /// <summary>The keys the window holds down, as its key-downs and key-ups tell them: a held Enter, which the paste waits to be let go.</summary>
+    public PressOnce Keys { get; } = new();
+
     /// <summary>The paste as the window makes it, its hide recorded as a step.</summary>
-    public Task<Outcome> Paste(IReadOnlyList<StashItem> items, PasteTarget target) => Handoff.Paste(null!, items, target, () =>
+    public Task<Outcome> Paste(IReadOnlyList<StashItem> items, PasteTarget target) => Handoff.Paste(null!, items, target, new PasteHide(() =>
     {
         Steps.Add("hide");
         return PasteHidesFlyout;
-    });
+    }, Keys));
 
     /// <summary>The seam's drag as the window starts it; the recording seam has no use for the window or the press.</summary>
     public Task<Outcome<bool>> Drag(IReadOnlyList<string> paths) => Clipboard.StartDrag(null!, null!, paths);

@@ -390,8 +390,8 @@ public sealed class Preview : Border
     /// Enter: the handoff on the item, into <paramref name="target"/> or onto the clipboard (G8); a paste's hide closes the
     /// preview with the flyout, unless it holds typed text or the window stays (G1).
     /// </summary>
-    public Task<Outcome> HandOver(TopLevel owner, PasteTarget? target, Func<bool> hideFlyout) =>
-        Act(item => handoff.HandOver(owner, [item], target, hideFlyout));
+    public Task<Outcome> HandOver(TopLevel owner, PasteTarget? target, PasteHide hide) =>
+        Act(item => handoff.HandOver(owner, [item], target, hide));
 
     /// <summary><c>Ctrl+C</c>: the item onto the clipboard, the window staying (G9).</summary>
     public Task<Outcome> Copy(TopLevel owner) => Act(item => handoff.Copy(owner, [item]));

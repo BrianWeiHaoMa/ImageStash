@@ -155,6 +155,35 @@ public sealed class ItemMenuTests
         Assert.IsEmpty(RecycleBinEntries.Of(previewed.FilePath), "the check leaves nothing in the bin");
     }
 
+    [TestMethod]
+    public async Task EnterHeldOnTheItemMenusFirstEntryPastesOnceAndOnlyOnceItIsLetGo()
+    {
+        var target = new PresetTarget();
+        using var shown = ShownWindow.Open(target: target);
+        var items = await shown.OpenStash(shown.Picture("menu held one.png"), shown.Picture("menu held two.png"));
+        TrayDesktop.Run(() => shown.Window.PasteTarget.FromPress(new ForegroundReading(false, PresetTarget.App("Relay"))));
+        TrayDesktop.Run(() => shown.RightClick(items[0].Id));
+
+        TrayDesktop.Run(() =>
+        {
+            shown.SendKey(Key.Down);
+            Assert.AreSame(shown.OpenMenu!.Items.OfType<MenuItem>().First(), shown.Focused, "the menu's first entry, the handoff (G8)");
+            shown.SendKeyDown(Key.Enter);
+            // Windows repeats the press of a held key, now to the window the closed menu gave focus back to.
+            shown.SendKeyDown(Key.Enter, repeat: true);
+            shown.SendKeyDown(Key.Enter, repeat: true);
+        });
+        await Task.Delay(400);
+        Assert.IsEmpty(target.Pasted, "while Enter is down the target is not brought forward (N3)");
+        TrayDesktop.Run(() => Assert.IsTrue(shown.Window.IsVisible, "and the flyout stays"));
+
+        TrayDesktop.Run(() => shown.SendKeyUp(Key.Enter));
+        await ShownWindow.Eventually(() => target.Pasted.Count == 1);
+        await Task.Delay(300);
+        Assert.HasCount(1, target.Pasted, "one paste for the one press, its repeats handing nothing off (G8)");
+        Assert.AreEqual(1L, shown.Uses());
+    }
+
     private const int OwnerOf = 4;
     private const int ExtendedStyle = -20;
     private const nint ToolWindow = 0x80;

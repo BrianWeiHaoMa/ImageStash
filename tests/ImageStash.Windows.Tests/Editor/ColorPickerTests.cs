@@ -56,7 +56,7 @@ public sealed class ColorPickerTests
             hex.Focus();
             hex.SelectAll();
             ShownWindow.Type(hex, "#FF7A1A");
-            ShownWindow.Press(hex, Key.Enter);
+            ShownWindow.Tap(hex, Key.Enter);
 
             var orange = new Rgba(255, 122, 26, 255);
             Assert.AreEqual(orange, ((DrawMarkLayer)editor.Session!.Layers.Layers.Single()).Color, "the selected box takes the colour (G21)");
@@ -131,7 +131,7 @@ public sealed class ColorPickerTests
         {
             editor.Click(0.5, 0.25);
             ShownWindow.Type(editor.Field!, "hi");
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
             editor.Choose(ColorChoices.Hex(blue));
             Assert.AreEqual(blue, Text(editor).Fill, "the swatch colours the text (G21)");
             Assert.IsTrue(((ToggleButton)editor.Button(ColorChoices.Hex(blue))).IsChecked, "and is checked");
@@ -145,7 +145,7 @@ public sealed class ColorPickerTests
             hex.Focus();
             hex.SelectAll();
             ShownWindow.Type(hex, "#FF7A1A");
-            ShownWindow.Press(hex, Key.Enter);
+            ShownWindow.Tap(hex, Key.Enter);
             Assert.AreEqual(new Rgba(255, 122, 26, 255), Text(editor).Fill, "a hex colours the text");
             Assert.AreEqual(Color.FromRgb(255, 122, 26), MoreSwatchFill(editor), "shown inside More");
             ShownWindow.Press(hex, Key.Escape);
@@ -170,7 +170,7 @@ public sealed class ColorPickerTests
             hex.Focus();
             hex.SelectAll();
             ShownWindow.Type(hex, "#00C000");
-            ShownWindow.Press(hex, Key.Enter);
+            ShownWindow.Tap(hex, Key.Enter);
             Assert.AreEqual(Outline.Of(new Rgba(0, 0xC0, 0, 255)), Text(editor).Outline, "a colour of its own");
             Assert.IsFalse(Named(Picker(editor)!, "Auto") is ToggleButton { IsChecked: true } || Named(Picker(editor)!, "None") is ToggleButton { IsChecked: true }, "neither Auto nor None then");
             Assert.AreEqual(Color.FromRgb(0, 0xC0, 0), OutlineSwatchShows(editor).Ring);
@@ -191,7 +191,7 @@ public sealed class ColorPickerTests
             editor.Choose("Label");
             editor.Click(0.05, 0.1);
             ShownWindow.Type(editor.Field!, "hi");
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
             editor.Choose(ColorChoices.Hex(yellow));
         });
 
@@ -231,7 +231,7 @@ public sealed class ColorPickerTests
         {
             editor.Click(0.5, 0.25);
             ShownWindow.Type(editor.Field!, "hi");
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
             Assert.AreEqual(new Rgba(255, 255, 255, 255), Text(editor).Fill, "a Meme starts white, which carries no hue");
         });
         await OpenThePicker(shown, editor);
@@ -253,7 +253,7 @@ public sealed class ColorPickerTests
             hex.Focus();
             hex.SelectAll();
             ShownWindow.Type(hex, "#FF0000");
-            ShownWindow.Press(hex, Key.Enter);
+            ShownWindow.Tap(hex, Key.Enter);
             Assert.AreEqual(new Rgba(255, 0, 0, 255), Text(editor).Fill, "a hex names a colour");
             shown.Click(square);
             Assert.AreEqual(new Rgba(128, 64, 64, 255), Text(editor).Fill, "and its own hue, red's, which the square then gives");
@@ -273,7 +273,7 @@ public sealed class ColorPickerTests
             shown.Window.Height = 1;
             editor.Click(0.5, 0.25);
             ShownWindow.Type(editor.Field!, "hi");
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
             // The import's notice would lie over the picker's foot for its six seconds; the user's × closes it.
             foreach (var close in shown.Window.GetVisualDescendants().OfType<Button>().Where(button => button.IsEffectivelyVisible && AutomationProperties.GetName(button) == "Close" && button.GetVisualAncestors().Any(parent => parent.GetType().Name == "NoticeCard")).ToList())
             {
@@ -296,7 +296,7 @@ public sealed class ColorPickerTests
                 hex.Focus();
                 hex.SelectAll();
                 ShownWindow.Type(hex, ColorChoices.Hex(new Rgba((byte)(step * 30), 0x50, 0x90, 0xFF)));
-                ShownWindow.Press(hex, Key.Enter);
+                ShownWindow.Tap(hex, Key.Enter);
                 shown.Window.UpdateLayout();
                 var card = (Control)Picker(editor)!.GetVisualParent()!;
                 clipped.AddRange(Outside(shown.Window, card, $"with {step} recent colours entered while it shows: the card"));

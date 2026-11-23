@@ -41,7 +41,7 @@ public sealed class PasteTargetTests
         var hints = TrayDesktop.Get(shown.FooterHints);
         var menu = TrayDesktop.Get(() => shown.RightClick(item.Id));
         TrayDesktop.Run(shown.CloseMenu);
-        TrayDesktop.Run(() => ShownWindow.Press(shown.Search, Key.Enter));
+        TrayDesktop.Run(() => ShownWindow.Tap(shown.Search, Key.Enter));
         await Eventually(() => target.Pasted.Count == 1 && shown.Uses() == 1);
 
         CollectionAssert.AreEqual(new[] { "Enter · Paste into Relay", "Ctrl+C · Copy" }, hints, "the footer names the app (G8)");
@@ -160,6 +160,7 @@ public sealed class PasteTargetTests
                 shown.Search.Text = "stripe";
                 ShownWindow.Press(shown.Search, Key.Enter);
                 shown.Activate();
+                ShownWindow.Release(shown.Search, Key.Enter);
             });
             await Task.Delay(300);
             TrayDesktop.Run(() => Assert.AreEqual(Other, shown.Window.PasteTarget.Current, "the footer has moved on to another app meanwhile"));
@@ -182,7 +183,7 @@ public sealed class PasteTargetTests
         TrayDesktop.Run(() => shown.Window.SummonFromShortcut(new ForegroundReading(false, Relay), new SummonAnchor(null)));
         await TrayDesktop.Get(() => shown.Listing.Settle());
 
-        TrayDesktop.Run(() => ShownWindow.Press(shown.Search, Key.Enter));
+        TrayDesktop.Run(() => ShownWindow.Tap(shown.Search, Key.Enter));
         await Eventually(() => target.Pasted.Count == 1);
 
         TrayDesktop.Run(() =>
@@ -204,7 +205,7 @@ public sealed class PasteTargetTests
         {
             // As when Ctrl+O opened the picker while the paste's write was retried for a clipboard another program held.
             shown.Window.DialogUp = true;
-            ShownWindow.Press(shown.Search, Key.Enter);
+            ShownWindow.Tap(shown.Search, Key.Enter);
         });
         await Eventually(() => target.Pasted.Count == 1);
 
@@ -227,7 +228,7 @@ public sealed class PasteTargetTests
 
         using (var holder = OtherProgramHoldingTheClipboard.Start())
         {
-            TrayDesktop.Run(() => ShownWindow.Press(shown.Search, Key.Enter));
+            TrayDesktop.Run(() => ShownWindow.Tap(shown.Search, Key.Enter));
             // As when Ctrl+O opened the picker while the write waited.
             TrayDesktop.Run(() => shown.Window.DialogUp = true);
             Assert.IsEmpty(target.Pasted, "the write waits for the clipboard");
@@ -438,7 +439,7 @@ public sealed class PasteTargetTests
         TrayDesktop.Run(() =>
         {
             shown.Activate();
-            ShownWindow.Press(shown.Search, Key.Enter);
+            ShownWindow.Tap(shown.Search, Key.Enter);
         });
         await Eventually(() => target.Pasted.Count == 1);
         target.Before = Other;
@@ -468,7 +469,7 @@ public sealed class PasteTargetTests
         await shown.OpenStash(shown.Picture("paste elevated.png"));
         await SummonFromShortcut(shown, Relay);
 
-        TrayDesktop.Run(() => ShownWindow.Press(shown.Search, Key.Enter));
+        TrayDesktop.Run(() => ShownWindow.Tap(shown.Search, Key.Enter));
         await Eventually(() => shown.Notifications.Shown.Count == 1);
 
         Assert.AreEqual("Copied · press Ctrl+V", shown.Notifications.Shown.Single().Text, "G8's words");
@@ -487,7 +488,7 @@ public sealed class PasteTargetTests
         TrayDesktop.Run(shown.Window.SummonPinned);
         await Task.Delay(300);
 
-        TrayDesktop.Run(() => ShownWindow.Press(shown.Search, Key.Enter));
+        TrayDesktop.Run(() => ShownWindow.Tap(shown.Search, Key.Enter));
         await Eventually(() => shown.Notifications.Shown.Count == 1);
 
         Assert.AreEqual("Copied · press Ctrl+V", shown.Notifications.Shown.Single().Text);
@@ -510,7 +511,7 @@ public sealed class PasteTargetTests
         var flyout = TrayDesktop.Get(() => shown.Window.TryGetPlatformHandle()!.Handle);
         FrontWindow.WaitUntilInFront(flyout);
 
-        TrayDesktop.Run(() => ShownWindow.Press(shown.Search, Key.Enter));
+        TrayDesktop.Run(() => ShownWindow.Tap(shown.Search, Key.Enter));
 
         FrontWindow.WaitUntilInFront(app.Window);
         await Eventually(() => shown.Notifications.Shown.Count == 1);
@@ -557,7 +558,7 @@ public sealed class PasteTargetTests
         await Task.Delay(300);
 
         var hints = TrayDesktop.Get(shown.FooterHints);
-        TrayDesktop.Run(() => ShownWindow.Press(shown.Search, Key.Enter));
+        TrayDesktop.Run(() => ShownWindow.Tap(shown.Search, Key.Enter));
         await Eventually(() => shown.Uses() == 1);
 
         CollectionAssert.AreEqual(new[] { "Enter · Copy" }, hints, "In use: opened from the tray, the footer reads Enter · Copy");
@@ -642,7 +643,7 @@ public sealed class PasteTargetTests
         TrayDesktop.Run(() => Assert.IsTrue(shown.Window.IsVisible && shown.Preview.IsOpen, "Space on Copy copies and the window stays (G9)"));
         Assert.HasCount(1, target.Pasted, "with no keystroke");
 
-        TrayDesktop.Run(() => ShownWindow.Press(shown.CopyButton, Key.Enter));
+        TrayDesktop.Run(() => ShownWindow.Tap(shown.CopyButton, Key.Enter));
         await Eventually(() => target.Pasted.Count == 2 && shown.Uses() == 3);
         TrayDesktop.Run(() => Assert.IsFalse(shown.Window.IsVisible, "Enter there is the handoff, as everywhere outside a field (G7, G8)"));
 

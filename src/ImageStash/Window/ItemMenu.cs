@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using ImageStash.Files;
@@ -137,11 +138,11 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
     /// Opens the menu for the selection as it is now, at <paramref name="anchor"/> in <paramref name="target"/>'s
     /// coordinates, naming <paramref name="pasteTarget"/> as the footer does now; its entries act on that selection and
     /// paste into that target. <paramref name="dialogUp"/> says when Save a copy…'s picker or Open with…'s dialog is up;
-    /// <paramref name="hideFlyout"/> is the paste's hide (G2); <paramref name="typeATag"/> opens the tag field over the
+    /// <paramref name="hide"/> is the paste's hide, after Enter is let go (G2, N3); <paramref name="typeATag"/> opens the tag field over the
     /// items, <paramref name="preview"/> the preview on the one item, <paramref name="rename"/> the preview on it with
     /// its name in edit, and <paramref name="edit"/> the editor on it.
     /// </summary>
-    public void Show(Control target, Rect anchor, TopLevel owner, PasteTarget? pasteTarget, Func<bool> hideFlyout, Action<bool> dialogUp, Action<IReadOnlyList<StashItem>> typeATag,
+    public void Show(Control target, Rect anchor, TopLevel owner, PasteTarget? pasteTarget, PasteHide hide, Action<bool> dialogUp, Action<IReadOnlyList<StashItem>> typeATag,
         Action<StashItem> preview, Action<StashItem> rename, Action<StashItem> edit)
     {
         var items = listing.SelectedItems;
@@ -151,6 +152,20 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
         }
 
         var menu = new ContextMenu(new TagListDrag()) { Placement = PlacementMode.BottomEdgeAlignedLeft, PlacementRect = anchor, Styles = { TagListHeight.ItemMenuLists(TagListHeight.For(target)) } };
+        if (hide.HeldKeys is { } held)
+        {
+            // Its own popup, whose keys the window never sees: an Enter pressed on its first entry is held as the window
+            // holds one, so its repeats hand nothing off once the menu has closed, and its paste waits for its release (G8, N3).
+            menu.AddHandler(InputElement.KeyDownEvent, (_, e) =>
+            {
+                if (e.Key == Key.Enter)
+                {
+                    held.Pressed(Key.Enter);
+                }
+            }, RoutingStrategies.Tunnel, handledEventsToo: true);
+            menu.AddHandler(InputElement.KeyUpEvent, (_, e) => held.Released(e.Key), RoutingStrategies.Tunnel, handledEventsToo: true);
+        }
+
         var lists = new ShownTagLists(listing, notices, organising, items, typeATag);
         foreach (var entry in Entries(items, pasteTarget))
         {
@@ -177,7 +192,7 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
             }
             else
             {
-                item.Click += (_, _) => _ = Act(entry.Action, owner, items, pasteTarget, hideFlyout, dialogUp);
+                item.Click += (_, _) => _ = Act(entry.Action, owner, items, pasteTarget, hide, dialogUp);
             }
         }
 
@@ -197,9 +212,9 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
     }
 
     /// <summary>What an entry does, on the items the menu was opened on, pasting into the target it named.</summary>
-    public Task<Outcome> Act(ItemMenuAction action, TopLevel owner, IReadOnlyList<StashItem> items, PasteTarget? pasteTarget, Func<bool> hideFlyout, Action<bool> dialogUp) => action switch
+    public Task<Outcome> Act(ItemMenuAction action, TopLevel owner, IReadOnlyList<StashItem> items, PasteTarget? pasteTarget, PasteHide hide, Action<bool> dialogUp) => action switch
     {
-        ItemMenuAction.Paste => handoff.HandOver(owner, items, pasteTarget, hideFlyout),
+        ItemMenuAction.Paste => handoff.HandOver(owner, items, pasteTarget, hide),
         ItemMenuAction.Copy => handoff.Copy(owner, items),
         ItemMenuAction.AddToFavorites => organising.SetFavorite(items, true),
         ItemMenuAction.RemoveFromFavorites => organising.SetFavorite(items, false),

@@ -41,7 +41,8 @@ public sealed class StashWindow : Avalonia.Controls.Window
     private readonly Renaming renaming;
     private readonly Organising organising;
     private readonly ClipboardPaste paste;
-    private readonly PressOnce pasteKey = new();
+    private readonly PressOnce heldKeys = new();
+    private readonly SummonSelection summonSelection = new();
     private readonly ItemMenu itemMenu;
     private readonly TagFieldOverlay tagField;
     private readonly Preview preview;
@@ -138,7 +139,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
         preview.Changed += Cover;
 
         // Before Wire: its handlers of the window's activation, deactivation and Close come first.
-        activation = new WindowActivation(this, chrome, editing, preview, notices, pasteTarget, seams.Target, pasteKey, () => DialogUp, () => DragInProgress);
+        activation = new WindowActivation(this, chrome, editing, preview, notices, pasteTarget, seams.Target, heldKeys, () => DialogUp, () => DragInProgress);
         CaptureHiding = new CaptureReturn(this, chrome, activation, seams.Target, seams.WindowOrder, () => DialogUp, () => DragInProgress, FocusContent).Hiding;
         chrome.Apply(pinnedNow: false);
         Wire();
@@ -343,7 +344,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
         grid.DragStarted += DragOut;
         // Type a tag… gives focus back to the grid, which the right-click focused; it, Preview and Rename open once the
         // menu has closed, whose own focus would otherwise end the field's and leave the preview's on the grid beneath it.
-        grid.ItemMenuRequested += anchor => itemMenu.Show(grid, anchor, this, activation.TargetNow(), activation.HideForPaste, DialogShown,
+        grid.ItemMenuRequested += anchor => itemMenu.Show(grid, anchor, this, activation.TargetNow(), activation.ForPaste, DialogShown,
             items => Dispatcher.UIThread.Post(() => tagField.Open(items, grid), DispatcherPriority.Background),
             item => Dispatcher.UIThread.Post(() => preview.Open(item), DispatcherPriority.Background),
             item => Dispatcher.UIThread.Post(() => preview.Open(item, editingName: true), DispatcherPriority.Background),
@@ -358,7 +359,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
             }
         };
         // The preview's buttons are Enter's and Ctrl+C's own path on its item (G19, G8, G9).
-        preview.HandOverRequested += () => _ = preview.HandOver(this, activation.TargetNow(), activation.HideForPaste);
+        preview.HandOverRequested += () => _ = preview.HandOver(this, activation.TargetNow(), activation.ForPaste);
         preview.CopyRequested += () => _ = preview.Copy(this);
         preview.EditRequested += () =>
         {
@@ -428,6 +429,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
         // Its own menu would then offer a Paste that does nothing (G35); Cut and Copy of its text stay on their keys.
         search.ContextFlyout = null;
         new SearchBoxClipboard(search, drops, notices, HeldClipboard.Retry).Wire();
+        summonSelection.Follow(search);
         // The box is where the query is typed; the listing clears it only by its own reset, which the box shows at once.
         listing.QueryCleared += () => search.Text = "";
         // TextChanging, raised as the text changes: TextChanged comes later, posted, when a load or an import may already
@@ -445,7 +447,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
     private void WireKeys()
     {
         AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
-        AddHandler(KeyUpEvent, (_, e) => pasteKey.Released(e.Key), RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(KeyUpEvent, (_, e) => heldKeys.Released(e.Key), RoutingStrategies.Tunnel, handledEventsToo: true);
         KeyReleases.IgnoreUnpressed(this);
         AddHandler(PointerWheelChangedEvent, (_, e) =>
         {
@@ -484,12 +486,12 @@ public sealed class StashWindow : Avalonia.Controls.Window
         // the list a tag field's chevron opens leaves focus where it was, on the preview's picture as often as in the box.
         var action = OpenTagLists().Count > 0 && (e.Key, e.KeyModifiers) == (Key.Escape, KeyModifiers.None)
             ? KeyAction.Escape
-            : StashKeys.Route(e.Key, e.KeyModifiers, place, !string.IsNullOrEmpty(search.SelectedText));
+            : heldKeys.Acting(e.Key, StashKeys.Route(e.Key, e.KeyModifiers, place, summonSelection.PersonSelected(search.SelectedText)));
         if (StashKeys.Direction(action) is { } direction)
         {
             _ = keys.Move(direction);
         }
-        else if (!RunKeyAction(action, e.Key, place))
+        else if (!RunKeyAction(action, place))
         {
             return;
         }
@@ -502,7 +504,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
     /// focused control, so the search box keeps every typed character and Del deletes one there. The acts on the selection
     /// go after any arrow still waiting for what was typed, in the order pressed (G5).
     /// </summary>
-    private bool RunKeyAction(KeyAction action, Key key, KeyPlace place)
+    private bool RunKeyAction(KeyAction action, KeyPlace place)
     {
         switch (action)
         {
@@ -516,21 +518,19 @@ public sealed class StashWindow : Avalonia.Controls.Window
                 ImportFiles();
                 break;
             case KeyAction.Paste:
-                if (pasteKey.Pressed(key))
-                {
-                    // The words replace the box's selection, or go in at its caret, as a text box's paste does: the search
-                    // box's, or a tag field's as typed text; in any other field the notice says so (G13).
-                    _ = paste.Paste(place == KeyPlace.SearchBox ? words => search.SelectedText = words
-                        : (FocusManager?.GetFocusedElement() as Visual)?.FindAncestorOfType<TagField>() is { } field ? field.PasteNow()
-                        : null);
-                }
-
+                // The words replace the box's selection, or go in at its caret, as a text box's paste does: the search
+                // box's, or a tag field's as typed text; in any other field the notice says so (G13).
+                _ = paste.Paste(place == KeyPlace.SearchBox ? words => search.SelectedText = words
+                    : (FocusManager?.GetFocusedElement() as Visual)?.FindAncestorOfType<TagField>() is { } field ? field.PasteNow()
+                    : null);
+                break;
+            case KeyAction.Held:
                 break;
             case KeyAction.Handoff:
                 // The target as Enter found it, whatever waits before the handoff (G8).
                 var target = activation.TargetNow();
                 // With the preview open, its item, whatever the grid beneath it selects (G8, G19).
-                keys.Then(() => _ = preview.IsOpen ? preview.HandOver(this, target, activation.HideForPaste) : HandOverTypedSelection(target));
+                keys.Then(() => _ = preview.IsOpen ? preview.HandOver(this, target, activation.ForPaste) : HandOverTypedSelection(target));
                 break;
             case KeyAction.Copy:
                 // In the editor, the item being edited as last saved: nothing of the live layers is rendered before Save (G9).
@@ -645,7 +645,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
     private async Task HandOverTypedSelection(PasteTarget? target)
     {
         await listing.Settle();
-        await handoff.HandOver(this, listing.SelectedItems, target, activation.HideForPaste);
+        await handoff.HandOver(this, listing.SelectedItems, target, activation.ForPaste);
     }
 
     /// <summary><c>Ctrl+C</c>: the selection onto the clipboard once what was typed has arrived, and the window stays (G2, G9).</summary>
@@ -656,7 +656,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
     }
 
     /// <summary>A double-click: the handoff on the tile it landed on, which its first click selected (G8).</summary>
-    private void HandOverSelection() => _ = handoff.HandOver(this, listing.SelectedItems, activation.TargetNow(), activation.HideForPaste);
+    private void HandOverSelection() => _ = handoff.HandOver(this, listing.SelectedItems, activation.TargetNow(), activation.ForPaste);
 
     /// <summary>
     /// Space in the grid and a <c>Ctrl</c>+double-click: the preview on the focused item, the one with the ring (G19);
@@ -677,6 +677,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
         if (!editing.IsOpen && !preview.IsOpen)
         {
             search.SelectAll();
+            summonSelection.Made();
         }
     }
 

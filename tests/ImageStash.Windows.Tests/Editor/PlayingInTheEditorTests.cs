@@ -88,7 +88,7 @@ public sealed class PlayingInTheEditorTests
             Assert.AreEqual(caret - 1, field.CaretIndex, "Left moves the caret");
             Assert.IsFalse(editor.Session.Playing, "neither plays");
             Assert.AreEqual(frame, editor.Session.FrameIndex, "nor steps");
-            ShownWindow.Press(field, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(field, Key.Enter, KeyModifiers.Control);
         });
 
         TrayDesktop.Run(() =>

@@ -108,7 +108,7 @@ public sealed class SummonTests
         {
             Assert.AreEqual("d", shown.Search.Text, "typing replaced it (G1)");
             CollectionAssert.AreEqual(new[] { dog.Id }, shown.Listing.Selection.ToList(), "its first match selected (G5)");
-            ShownWindow.Press(shown.Search, Avalonia.Input.Key.Enter);
+            ShownWindow.Tap(shown.Search, Avalonia.Input.Key.Enter);
         });
         await ShownWindow.Eventually(() => shown.Uses() == 1);
         CollectionAssert.AreEqual(new[] { dog.FilePath }, TestClipboard.Read().Files.ToList(), "G8");
@@ -268,7 +268,7 @@ public sealed class SummonTests
         TrayDesktop.Run(() =>
         {
             shown.Listing.Focus(cat.Id);
-            ShownWindow.Press(shown.Search, Avalonia.Input.Key.Enter);
+            ShownWindow.Tap(shown.Search, Avalonia.Input.Key.Enter);
         });
         await ShownWindow.Eventually(() => target.Pasted.Count == 1 && shown.Uses() == 1);
         TrayDesktop.Run(() => Assert.IsFalse(shown.Window.IsVisible, "the paste hid the flyout (G2)"));

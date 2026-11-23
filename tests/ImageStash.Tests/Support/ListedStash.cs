@@ -182,7 +182,10 @@ public sealed class ListedStash : IDisposable
     public bool PasteHidesFlyout { get; set; } = true;
 
     /// <summary>Enter with a paste target, as the window hands over: <paramref name="items"/> pasted into <see cref="RecordingTarget.Relay"/>.</summary>
-    public Task<Outcome> PasteIntoTarget(IReadOnlyList<StashItem> items) => Handoff.Paste(null!, items, RecordingTarget.Relay, () => PasteHidesFlyout);
+    public Task<Outcome> PasteIntoTarget(IReadOnlyList<StashItem> items) => Handoff.Paste(null!, items, RecordingTarget.Relay, new PasteHide(() => PasteHidesFlyout, Keys));
+
+    /// <summary>The keys the window holds down, as its key-downs and key-ups tell them; the paste waits for a held Enter.</summary>
+    public PressOnce Keys { get; } = new();
 
     /// <summary>A summon as the window makes it, the hidden flyout shown afresh, or with <paramref name="pinned"/> the pinned window brought forward (G1).</summary>
     public Task Summon(bool pinned = false) => Listing.Summoned(flyout: !pinned);

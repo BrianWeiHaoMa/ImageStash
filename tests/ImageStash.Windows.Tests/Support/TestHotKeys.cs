@@ -87,6 +87,13 @@ public static class TestHotKeys
         }
     }
 
+    /// <summary>One more press of a key already held, as Windows repeats the press of a held key, with no release.</summary>
+    public static void PressAgain(ushort virtualKey)
+    {
+        Input[] press = [Key(virtualKey, up: false)];
+        Assert.AreEqual(1u, SendInput(1, press, Marshal.SizeOf<Input>()), $"the key was not pressed: error {Marshal.GetLastPInvokeError()}");
+    }
+
     /// <summary>Alt pressed and held, as a person holds it during a double-click, until the returned object is disposed.</summary>
     public static IDisposable HoldAlt() => Hold(VkMenu);
 

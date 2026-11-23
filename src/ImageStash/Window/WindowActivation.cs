@@ -22,7 +22,7 @@ public sealed class WindowActivation
     private readonly Notices notices;
     private readonly PasteTargetHolder pasteTarget;
     private readonly ITarget targets;
-    private readonly PressOnce pasteKey;
+    private readonly PressOnce heldKeys;
     private readonly Func<bool> dialogUp;
     private readonly Func<bool> dragInProgress;
     private bool notificationHasFocus;
@@ -38,9 +38,10 @@ public sealed class WindowActivation
     /// <summary>
     /// Follows <paramref name="window"/>'s activation, deactivation and Close from now on; <paramref name="dialogUp"/> and
     /// <paramref name="dragInProgress"/> say whether a dialog the window opened is up and a drag it started is in progress;
-    /// <paramref name="preview"/> is the preview a hide closes (G1).
+    /// <paramref name="preview"/> is the preview a hide closes (G1); <paramref name="heldKeys"/> are the keys the window
+    /// holds down, let go wherever their release would not be seen here.
     /// </summary>
-    public WindowActivation(Avalonia.Controls.Window window, WindowChrome chrome, Editing editing, Preview preview, Notices notices, PasteTargetHolder pasteTarget, ITarget targets, PressOnce pasteKey, Func<bool> dialogUp, Func<bool> dragInProgress)
+    public WindowActivation(Avalonia.Controls.Window window, WindowChrome chrome, Editing editing, Preview preview, Notices notices, PasteTargetHolder pasteTarget, ITarget targets, PressOnce heldKeys, Func<bool> dialogUp, Func<bool> dragInProgress)
     {
         this.window = window;
         this.chrome = chrome;
@@ -49,7 +50,8 @@ public sealed class WindowActivation
         this.notices = notices;
         this.pasteTarget = pasteTarget;
         this.targets = targets;
-        this.pasteKey = pasteKey;
+        this.heldKeys = heldKeys;
+        ForPaste = new PasteHide(HideForPaste, heldKeys);
         this.dialogUp = dialogUp;
         this.dragInProgress = dragInProgress;
 
@@ -57,8 +59,8 @@ public sealed class WindowActivation
         // focus going to another app, and only that loss hides the flyout (G2).
         window.Deactivated += (_, _) =>
         {
-            // V let go in another app is never seen here.
-            pasteKey.Released();
+            // A key let go in another app is never seen here.
+            heldKeys.Released();
             focusLeftDuringEdit = editing.IsOpen;
             Dispatcher.UIThread.Post(HideIfFocusLeft, DispatcherPriority.Background);
         };
@@ -169,13 +171,16 @@ public sealed class WindowActivation
         }
     }
 
+    /// <summary>The paste's part of the window: Enter let go, then <see cref="HideForPaste"/> (G8, N3).</summary>
+    public PasteHide ForPaste { get; }
+
     /// <summary>
     /// Enter's paste hides the flyout before the target is brought to the front; a pinned window stays, and so does a
     /// flyout whose dialog was opened, or whose drag was started, while the paste's write was retried (G2). A flyout a
     /// capture hid meanwhile is left to the capture, which puts back what it hid (G3). Answers whether the flyout is hidden
     /// once the paste has hidden it, which starts the next summon on Recent (G1).
     /// </summary>
-    public bool HideForPaste()
+    private bool HideForPaste()
     {
         if (window.IsVisible && Summon.FlyoutHides(chrome.Pinned, dialogUp(), dragInProgress(), editing.IsOpen))
         {
@@ -264,6 +269,8 @@ public sealed class WindowActivation
     private void Hide(bool pinnedAfter, bool forCapture)
     {
         ClosePreviewAtHide(pinnedAfter, forCapture);
+        // A key held as the window hides is let go where it will not see it, so its next press acts at the next summon.
+        heldKeys.Released();
         notices.EndHovers();
         // A window that hides while not the active one keeps its popups: no list is left behind (F4).
         foreach (var open in window.OpenedPopups.OfType<TagPicker>().ToList())

@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.VisualTree;
@@ -96,7 +95,7 @@ public sealed class TagFieldTests
     }
 
     [TestMethod]
-    public void TypingAfterDownDropsTheChoiceAndItsHighlightSoEnterCommitsWhatIsTyped() => OnControlThread(() =>
+    public void TypingAfterDownDropsTheChoiceAndItsHighlightSoEnterCommitsWhatIsTyped() => ControlThread.Run(() =>
     {
         var (field, box) = Field("reaction");
         string? committed = null;
@@ -115,7 +114,7 @@ public sealed class TagFieldTests
     });
 
     [TestMethod]
-    public void DownThenEnterCommitsTheLitSuggestion() => OnControlThread(() =>
+    public void DownThenEnterCommitsTheLitSuggestion() => ControlThread.Run(() =>
     {
         var (field, box) = Field("reaction");
         string? committed = null;
@@ -127,37 +126,6 @@ public sealed class TagFieldTests
 
         Assert.AreEqual("reaction", committed, "the suggestion lit is the one Enter takes (G17)");
     });
-
-    /// <summary>The one thread the controls of these checks live on: Avalonia binds its dispatcher to the first thread that builds a control, and checks run in parallel.</summary>
-    private static readonly BlockingCollection<(Action Check, TaskCompletionSource Done)> ControlThread = StartControlThread();
-
-    private static BlockingCollection<(Action Check, TaskCompletionSource Done)> StartControlThread()
-    {
-        var checks = new BlockingCollection<(Action Check, TaskCompletionSource Done)>();
-        new Thread(() =>
-        {
-            foreach (var (check, done) in checks.GetConsumingEnumerable())
-            {
-                try
-                {
-                    check();
-                    done.SetResult();
-                }
-                catch (Exception failed)
-                {
-                    done.SetException(failed);
-                }
-            }
-        }) { IsBackground = true, Name = "TagField checks" }.Start();
-        return checks;
-    }
-
-    private static void OnControlThread(Action check)
-    {
-        var done = new TaskCompletionSource();
-        ControlThread.Add((check, done));
-        done.Task.GetAwaiter().GetResult();
-    }
 
     /// <summary>A tag field with <paramref name="existing"/> to suggest, built with no window, and its text box.</summary>
     private static (TagField Field, TextBox Box) Field(params string[] existing)

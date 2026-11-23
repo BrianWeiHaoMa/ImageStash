@@ -315,11 +315,11 @@ public sealed class EditorCanvasTests
         {
             editor.Click(0.5, 0.25);
             ShownWindow.Type(editor.Field!, "hi");
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
             ShownWindow.Press(editor.Canvas, Key.Escape);
             editor.DoubleClick(editor.OnCanvas(100, Text(editor).Box.Y + 5));
             Assert.IsTrue(editor.Session!.Typing && editor.Field?.Text == "HI", "a double-click on a text edits it (G21)");
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
         });
         var level = await RenderedWindow.Of(shown);
         var (rotate, centre) = TrayDesktop.Get(() => (RotateHandle(editor), Centre(editor)));
@@ -362,7 +362,7 @@ public sealed class EditorCanvasTests
             Assert.IsLessThan(600, editor.Box.Height, "the picture scaled down to the canvas");
             editor.Click(0.5, 0.25);
             ShownWindow.Type(editor.Field!, "hi");
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
         });
         // Read once the frame showing it has rendered: the committed text's box is measured again on the way there.
         var rendered = await RenderedWindow.Of(shown);
@@ -393,7 +393,7 @@ public sealed class EditorCanvasTests
             editor.Choose("Label");
             editor.Click(0.5, 0.02);
             ShownWindow.Type(editor.Field!, "hi");
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
             var (size, box) = (Text(editor).FontSize, Text(editor).Box);
             var corner = editor.OnCanvas(box.X + box.Width, box.Y + box.Height);
             editor.Drag(corner, corner + new Vector(40, 40));
@@ -422,11 +422,11 @@ public sealed class EditorCanvasTests
             {
                 // The field's box takes Enter once it is laid out, as it is on screen.
                 shown.Window.UpdateLayout();
-                ShownWindow.Press(editor.Field!, Key.Enter);
+                ShownWindow.Tap(editor.Field!, Key.Enter);
                 ShownWindow.Type(editor.Field!, line);
             }
 
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
             Assert.AreEqual("one\ntwo\nthree\nfour\nfive\nsix", ((CaptionBarLayer)editor.Session!.Layers.Layers[0]).Text, "six lines, so the band is tall beside the picture");
             var band = LayerGeometry.Bounds(editor.Session.Layers, 0, new ImageStash.Layers.PixelSize(192, 144))!.Value;
             var (size, box) = (FontSize(editor), editor.Box);
@@ -459,7 +459,7 @@ public sealed class EditorCanvasTests
             editor.Choose("Caption bar");
             editor.Click(0.5, 0.5);
             ShownWindow.Type(editor.Field!, "me");
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
             Assert.IsTrue(editor.Session!.SelectedLayer is CaptionBarLayer { Text: "me" }, "the bar selected");
             return LayerGeometry.Bounds(editor.Session.Layers, 0, new ImageStash.Layers.PixelSize(200, 150))!.Value;
         });

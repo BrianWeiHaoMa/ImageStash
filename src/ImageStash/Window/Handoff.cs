@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using ImageStash.Media;
 using ImageStash.Seams;
 using ImageStash.Store;
@@ -29,6 +30,9 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
 
     /// <summary>How long the target has to come to the front before the paste falls back to the notification (G8); a busy app takes a moment.</summary>
     public static readonly TimeSpan PasteBound = TimeSpan.FromSeconds(1);
+
+    /// <summary>Why a paste whose Enter was held past <see cref="PasteBound"/> was not made: in front, the target would have taken its repeats as Send (N3).</summary>
+    public const string EnterHeld = "Enter was still held, and would have reached it";
 
     /// <summary><see cref="ItemFactChange.NotInStash"/> said of several items.</summary>
     private const string NoneInStash = "they are no longer in the stash";
@@ -202,14 +206,17 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
     /// <summary>
     /// Enter, a double-click and the item menu's first entry: with a paste target, the paste into it; with none, the copy (G8).
     /// </summary>
-    public Task<Outcome> HandOver(TopLevel owner, IReadOnlyList<StashItem> items, PasteTarget? target, Func<bool> hideFlyout) =>
-        target is null ? Copy(owner, items) : Paste(owner, items, target, hideFlyout);
+    public Task<Outcome> HandOver(TopLevel owner, IReadOnlyList<StashItem> items, PasteTarget? target, PasteHide hide) =>
+        target is null ? Copy(owner, items) : Paste(owner, items, target, hide);
 
     /// <summary>
     /// The paste into <paramref name="target"/>, in How G8 holds's order: the items onto the clipboard and their uses
-    /// recorded, exactly as <see cref="Copy"/>; then the seam confirms the window still exists and may be sent input;
-    /// then <paramref name="hideFlyout"/>, which answers whether the flyout is hidden after it; then the target is brought
-    /// to the front and sent one paste keystroke. A write that fails is named and nothing else happens. A window that is
+    /// recorded, exactly as <see cref="Copy"/>; then, while the Enter that asked for it is still held, a wait within
+    /// <see cref="PasteBound"/> for its release, so no other app is given the front while its repeats would reach it as
+    /// Send (N3); then the seam confirms the window still exists and may be sent input; then <paramref name="hide"/>'s
+    /// hide, which answers whether the flyout is hidden after it; then the target is brought to the front and sent one
+    /// paste keystroke. Enter held past the bound hides nothing, activates nothing and sends nothing: the copy is made,
+    /// and the notification "Copied · press Ctrl+V" says so (G8). A write that fails is named and nothing else happens. A window that is
     /// gone or cannot be sent input gets the copy that is already made, the flyout hidden as a paste hides it, so the app
     /// the user came from is in front for its <c>Ctrl+V</c>, and then the notification "Copied · press Ctrl+V", never a
     /// second write or a second use. A paste that leaves the flyout hidden, either way, starts the next summon on Recent
@@ -217,7 +224,7 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
     /// nothing else ImageStash writes lands on the clipboard before the target pastes it, and so are the items' file names,
     /// so no other item comes under them before then.
     /// </summary>
-    public async Task<Outcome> Paste(TopLevel owner, IReadOnlyList<StashItem> items, PasteTarget target, Func<bool> hideFlyout)
+    public async Task<Outcome> Paste(TopLevel owner, IReadOnlyList<StashItem> items, PasteTarget target, PasteHide hide)
     {
         if (items.Count == 0)
         {
@@ -243,8 +250,16 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
             }
 
             await Record(items);
+            SetBusy($"Bringing {target.AppName} to the front…");
+            if (!await LetGoInTime(hide.HeldKeys?.LetGo(Key.Enter) ?? Task.CompletedTask))
+            {
+                // The flyout stays, so the held Enter's repeats stay with ImageStash, and nothing starts the next summon anew (G1).
+                notifications.Raise(CopiedNotification);
+                return new Failure(PasteTargetReasons.Action, target.AppName, EnterHeld);
+            }
+
             var reachable = targets.Confirm(target);
-            var started = StartNextSummonOnRecent(hideFlyout());
+            var started = StartNextSummonOnRecent(hide.Hide());
             if (!reachable.Succeeded)
             {
                 notifications.Raise(CopiedNotification);
@@ -252,7 +267,6 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
                 return reachable;
             }
 
-            SetBusy($"Bringing {target.AppName} to the front…");
             var pasted = await targets.ActivateAndPaste(target, PasteBound);
             if (!pasted.Succeeded)
             {
@@ -421,6 +435,20 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
         await listing.Refresh();
     }
 
+    /// <summary>Whether <paramref name="letGo"/> completes within <see cref="PasteBound"/> on the handoff's clock: at once when it already has.</summary>
+    private async Task<bool> LetGoInTime(Task letGo)
+    {
+        if (letGo.IsCompleted)
+        {
+            return true;
+        }
+
+        using var bound = new CancellationTokenSource();
+        var first = await Task.WhenAny(letGo, Task.Delay(PasteBound, clock, bound.Token));
+        await bound.CancelAsync();
+        return first == letGo;
+    }
+
     /// <summary>
     /// After a paste whose flyout is <paramref name="hidden"/>, its uses recorded: Recent with no search, its first item,
     /// the one just handed over, selected alone, for the next summon (G1); the pinned window, or a flyout a dialog or drag
@@ -442,3 +470,10 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
         Changed?.Invoke();
     }
 }
+
+/// <summary>
+/// The window's part in a paste into a target (G8): <see cref="Hide"/> hides the flyout as the paste hides it and answers
+/// whether it is hidden after (G1, G2); <see cref="HeldKeys"/> are the keys the window holds down, an Enter among which the
+/// paste waits to be let go before any other app is given the front (N3); with none, nothing is held.
+/// </summary>
+public sealed record PasteHide(Func<bool> Hide, PressOnce? HeldKeys = null);

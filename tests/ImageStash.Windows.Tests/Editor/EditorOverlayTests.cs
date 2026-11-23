@@ -237,7 +237,7 @@ public sealed partial class EditorOverlayTests
             ShownWindow.Press(editor.Canvas, Key.F2);
             ShownWindow.Press(editor.Canvas, Key.D, KeyModifiers.Control);
             ShownWindow.Press(editor.Canvas, Key.A, KeyModifiers.Control);
-            ShownWindow.Press(editor.Canvas, Key.Enter);
+            ShownWindow.Tap(editor.Canvas, Key.Enter);
         });
         await Task.Delay(300);
         TrayDesktop.Run(() =>
@@ -447,7 +447,7 @@ public sealed partial class EditorOverlayTests
         {
             editor.Click(0.5, 0.2);
             ShownWindow.Type(editor.Field!, "hi");
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
             shown.Window.UpdateLayout();
             PickFromThePicture(shown, editor);
             Assert.IsTrue(editor.Canvas.Picking, "the picker closed as the pick began, and the pick stands (G21)");

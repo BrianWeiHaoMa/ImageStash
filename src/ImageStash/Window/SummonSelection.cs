@@ -1,0 +1,66 @@
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+
+namespace ImageStash.Window;
+
+/// <summary>
+/// The search box's whole text as a summon selects it, so that typing replaces it (G1), which is not the person's
+/// selection: over it <c>Ctrl+C</c> copies the selected items, and only text the person selected in the box goes as text
+/// (G7). It becomes the person's once they change it in the box: a click or a drag there, Shift with an arrow,
+/// Home or End, <c>Ctrl+A</c>, which may make the very range the summon made, or a change of the text, as typing over it
+/// makes; and it lapses when the box loses focus, which clears its selection. Up and Down, which move the grid's
+/// selection and leave the box's alone, change nothing here.
+/// </summary>
+public sealed class SummonSelection
+{
+    /// <summary>The box's selection is still the one the summon made.</summary>
+    public bool Summons { get; private set; }
+
+    /// <summary>Whether the box's <paramref name="selectedText"/> is text the person selected: selected text that is not the summon's.</summary>
+    public bool PersonSelected(string? selectedText) => !Summons && !string.IsNullOrEmpty(selectedText);
+
+    /// <summary>Follows <paramref name="searchBox"/>'s keys, presses, text and focus from now on.</summary>
+    public void Follow(TextBox searchBox)
+    {
+        // Seen whoever handles them, the window's own keys included, so the rule alone decides which change the selection.
+        searchBox.AddHandler(InputElement.KeyDownEvent, (_, e) => KeyDown(e.Key, e.KeyModifiers), RoutingStrategies.Tunnel, handledEventsToo: true);
+        // The left button's press, a click or a drag's start; a right-click inside the selected text keeps it as it is.
+        searchBox.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
+        {
+            if (e.Properties.IsLeftButtonPressed)
+            {
+                Changed();
+            }
+        }, RoutingStrategies.Tunnel, handledEventsToo: true);
+        searchBox.TextChanging += (_, _) => Changed();
+        searchBox.LostFocus += (_, _) => Changed();
+    }
+
+    /// <summary>The summon has just selected the box's whole text (G1).</summary>
+    public void Made() => Summons = true;
+
+    /// <summary>The person changed the box's selection or its text, or the box lost focus: whatever it selects now is the person's.</summary>
+    public void Changed() => Summons = false;
+
+    /// <summary>A key pressed with the box focused: one that selects in the box makes its selection the person's.</summary>
+    public void KeyDown(Key key, KeyModifiers modifiers)
+    {
+        if (SelectsInBox(key, modifiers))
+        {
+            Changed();
+        }
+    }
+
+    /// <summary>
+    /// Whether a key pressed in the box sets its selection (G7): <c>Ctrl+A</c>; Left, Right, Home and End, with or without
+    /// Shift or <c>Ctrl</c>; Up and Down only with Shift, since alone they move the grid's selection.
+    /// </summary>
+    public static bool SelectsInBox(Key key, KeyModifiers modifiers) => (key, modifiers & ~KeyModifiers.Control) switch
+    {
+        (Key.A, KeyModifiers.None) => modifiers == KeyModifiers.Control,
+        (Key.Left or Key.Right or Key.Home or Key.End, KeyModifiers.None or KeyModifiers.Shift) => true,
+        (Key.Up or Key.Down, KeyModifiers.Shift) => true,
+        _ => false,
+    };
+}

@@ -108,7 +108,7 @@ public sealed class TextSavedTests
         await PreviewShows(shown, saved, file);
 
         // The handoff: the finished picture on the real clipboard, as its file, its PNG and its bitmap.
-        TrayDesktop.Run(() => ShownWindow.Press(shown.Search, Key.Enter));
+        TrayDesktop.Run(() => ShownWindow.Tap(shown.Search, Key.Enter));
         await ShownWindow.Eventually(() => target.Pasted.Count == 1 && shown.Uses() == 1);
         var read = TestClipboard.Read();
         CollectionAssert.AreEqual(new[] { saved.FilePath }, read.Files.ToList(), "the finished picture's file (G8)");
@@ -150,7 +150,7 @@ public sealed class TextSavedTests
             editor.Choose("Label");
             editor.Click(0.6, 0.4);
             ShownWindow.Type(editor.Field!, "hi");
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
         });
 
         await Save(shown);
@@ -169,7 +169,7 @@ public sealed class TextSavedTests
         TrayDesktop.Run(() =>
         {
             CollectionAssert.AreEqual(new[] { "Enter · Copy" }, shown.FooterHints(), "no paste target: Enter copies (G8)");
-            ShownWindow.Press(shown.Search, Key.Enter);
+            ShownWindow.Tap(shown.Search, Key.Enter);
         });
         await ShownWindow.Eventually(() => shown.Uses() == 1);
         var read = TestClipboard.Read();
@@ -227,7 +227,7 @@ public sealed class TextSavedTests
             Assert.IsInstanceOfType<TextTool>(editor.Session!.Tool, "Text current at open (G20)");
             editor.Click(0.5, 0.75);
             ShownWindow.Type(editor.Field!, "Hello");
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
             editor.ClickMenuButton("Font");
             editor.ClickMenuEntry("Comic Sans MS");
             editor.Choose(ColorChoices.Hex(Yellow));
@@ -242,7 +242,7 @@ public sealed class TextSavedTests
             hex.Focus();
             hex.SelectAll();
             ShownWindow.Type(hex, ColorChoices.Hex(Blue));
-            ShownWindow.Press(hex, Key.Enter);
+            ShownWindow.Tap(hex, Key.Enter);
             ShownWindow.Press(hex, Key.Escape);
             Assert.IsNull(Named(editor, "Hex"), "the picker closed, the layer still selected");
 
@@ -317,7 +317,7 @@ public sealed class TextSavedTests
             Assert.AreEqual("HELLO", editor.Field?.Text, "a double-click opens its text");
             editor.Field!.CaretIndex = editor.Field.Text!.Length;
             ShownWindow.Type(editor.Field, " again");
-            ShownWindow.Press(editor.Field, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field, Key.Enter, KeyModifiers.Control);
             Assert.AreEqual("HELLO AGAIN", ((TextLayer)editor.Session.Layers.Layers.Single()).Text);
         });
     }

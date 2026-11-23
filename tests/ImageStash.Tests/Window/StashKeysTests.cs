@@ -1,4 +1,7 @@
+using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Input;
+using ImageStash.Tests.Support;
 using ImageStash.Window;
 
 namespace ImageStash.Tests.Window;
@@ -8,8 +11,9 @@ namespace ImageStash.Tests.Window;
 /// and Right from the grid, the box being an ordinary text box that keeps every character and its own caret and text
 /// keys, Tab reaches the grid, <c>Ctrl+A</c> means items only in the grid, typing in the grid returns to the box, Del
 /// deletes the selection in the grid and a character in the box, Enter, Esc and <c>Ctrl+O</c> work from both,
-/// <c>Ctrl+C</c> copies the box's selected text while it has one and otherwise the items, and <c>Ctrl+V</c> pastes from
-/// every place, held or not; inside any other text field,
+/// <c>Ctrl+C</c> copies the text the person selected in the box while it has such a selection and otherwise the items,
+/// the box's whole text as a summon selects it not being theirs, Enter and <c>Ctrl+V</c> act once per press however
+/// long they are held, and <c>Ctrl+V</c> pastes from every place; inside any other text field,
 /// such as the tag field or the name, the keys it uses are its own; Space in the grid opens the preview, F2 opens it
 /// with the name in edit, and while the preview covers the box and the grid its keys act on its item.
 /// </summary>
@@ -94,6 +98,90 @@ public sealed class StashKeysTests
     [TestMethod]
     [DataRow(KeyPlace.SearchBox)]
     [DataRow(KeyPlace.Grid)]
+    [DataRow(KeyPlace.Preview)]
+    public void EnterHandsOffOncePerPressHoweverLongItIsHeld(KeyPlace place)
+    {
+        var keys = new PressOnce();
+        var enter = StashKeys.Route(Key.Enter, KeyModifiers.None, place);
+
+        Assert.AreEqual(KeyAction.Handoff, keys.Acting(Key.Enter, enter));
+        Assert.AreEqual(KeyAction.Held, keys.Acting(Key.Enter, enter), "Windows repeats the press of a held key: no second handoff (G8, N3)");
+        Assert.AreEqual(KeyAction.Held, keys.Acting(Key.Enter, enter));
+        keys.Released(Key.Enter);
+        Assert.AreEqual(KeyAction.Handoff, keys.Acting(Key.Enter, enter), "let go and pressed again: a second handoff");
+    }
+
+    [TestMethod]
+    public void EnterAndCtrlVAreEachHeldOnTheirOwn()
+    {
+        var keys = new PressOnce();
+
+        Assert.AreEqual(KeyAction.Paste, keys.Acting(Key.V, KeyAction.Paste));
+        Assert.AreEqual(KeyAction.Handoff, keys.Acting(Key.Enter, KeyAction.Handoff), "a held Ctrl+V does not swallow Enter");
+        Assert.AreEqual(KeyAction.Held, keys.Acting(Key.V, KeyAction.Paste), "a held Ctrl+V still pastes once (G13)");
+        keys.Released(Key.V);
+        Assert.AreEqual(KeyAction.Held, keys.Acting(Key.Enter, KeyAction.Handoff), "letting go of V does not open the next press of a held Enter");
+        Assert.AreEqual(KeyAction.Paste, keys.Acting(Key.V, KeyAction.Paste));
+        keys.Released(Key.Enter);
+        Assert.AreEqual(KeyAction.Held, keys.Acting(Key.V, KeyAction.Paste), "nor letting go of Enter a held V's");
+        Assert.AreEqual(KeyAction.Handoff, keys.Acting(Key.Enter, KeyAction.Handoff));
+        Assert.AreEqual(KeyAction.MoveDown, keys.Acting(Key.Down, KeyAction.MoveDown));
+        Assert.AreEqual(KeyAction.MoveDown, keys.Acting(Key.Down, KeyAction.MoveDown), "a held arrow moves on as it repeats");
+    }
+
+    [TestMethod]
+    public void AnEnterAFieldTookHandsNothingOffOnItsRepeatsOnceFocusIsBackOnThePreview()
+    {
+        var keys = new PressOnce();
+
+        Assert.AreEqual(KeyAction.None, keys.Acting(Key.Enter, StashKeys.Route(Key.Enter, KeyModifiers.None, KeyPlace.Field)), "the name or tag field commits on its own Enter (G19)");
+        Assert.AreEqual(KeyAction.None, keys.Acting(Key.Enter, StashKeys.Route(Key.Enter, KeyModifiers.None, KeyPlace.Field)), "its repeats stay the field's own");
+        Assert.AreEqual(KeyAction.Held, keys.Acting(Key.Enter, StashKeys.Route(Key.Enter, KeyModifiers.None, KeyPlace.Preview)), "the commit gave focus back to the preview: the same press hands nothing off");
+        keys.Released(Key.Enter);
+        Assert.AreEqual(KeyAction.Handoff, keys.Acting(Key.Enter, StashKeys.Route(Key.Enter, KeyModifiers.None, KeyPlace.Preview)), "let go and pressed again, it does");
+        Assert.AreEqual(KeyAction.None, keys.Acting(Key.Enter, StashKeys.Route(Key.Enter, KeyModifiers.None, KeyPlace.Editor)), "in the editor Enter never pastes (G20)");
+    }
+
+    [TestMethod]
+    public void AnEnterWhoseReleaseTheWindowCannotSeeLetsTheNextSummonsEnterHandOff()
+    {
+        var keys = new PressOnce();
+        Assert.AreEqual(KeyAction.Handoff, keys.Acting(Key.Enter, KeyAction.Handoff));
+        Assert.AreEqual(KeyAction.Held, keys.Acting(Key.Enter, KeyAction.Handoff));
+
+        // The flyout hid, or focus left, with Enter down: its key-up goes to another window.
+        keys.Released();
+
+        Assert.AreEqual(KeyAction.Handoff, keys.Acting(Key.Enter, KeyAction.Handoff), "the next summon's Enter hands off");
+    }
+
+    [TestMethod]
+    public async Task EnterLetGoIsAtOnceWhenItIsUpAndOtherwiseAtItsRelease()
+    {
+        var keys = new PressOnce();
+        Assert.IsTrue(keys.LetGo(Key.Enter).IsCompleted, "not held: nothing to wait for, as a double-click or the menu has none");
+
+        keys.Acting(Key.Enter, KeyAction.Handoff);
+        var letGo = keys.LetGo(Key.Enter);
+        keys.Acting(Key.Enter, KeyAction.Handoff);
+        keys.Released(Key.V);
+        Assert.IsFalse(letGo.IsCompleted, "still held, its repeats coming");
+        keys.Released(Key.Enter);
+        await letGo.WaitAsync(TimeSpan.FromSeconds(5));
+
+        keys.Acting(Key.Enter, KeyAction.Handoff);
+        var unseen = keys.LetGo(Key.Enter);
+        keys.Released();
+        keys.Released(Key.V);
+        Assert.IsFalse(unseen.IsCompleted, "focus gone with Enter down: its release unseen, it may still be down (N3)");
+        Assert.IsTrue(keys.LetGo(Key.Enter).IsCompleted, "a later wait has no press of the window's to wait for");
+        keys.Released(Key.Enter);
+        await unseen.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [TestMethod]
+    [DataRow(KeyPlace.SearchBox)]
+    [DataRow(KeyPlace.Grid)]
     public void EnterHandsOffAndCtrlCCopiesFromTheBoxAndFromTheGrid(KeyPlace place)
     {
         Assert.AreEqual(KeyAction.Handoff, StashKeys.Route(Key.Enter, KeyModifiers.None, place));
@@ -109,6 +197,91 @@ public sealed class StashKeysTests
         Assert.AreEqual(KeyAction.None, StashKeys.Route(Key.C, KeyModifiers.Control, KeyPlace.SearchBox, boxTextSelected: true), "G7: left to the text box, which copies its selected text");
         Assert.AreEqual(KeyAction.Copy, StashKeys.Route(Key.C, KeyModifiers.Control, KeyPlace.SearchBox, boxTextSelected: false));
     }
+
+    [TestMethod]
+    public void CtrlCAfterASummonCopiesTheItemsNotTheSearchTextTheSummonSelected()
+    {
+        var mark = new SummonSelection();
+        mark.Made();
+
+        Assert.AreEqual(KeyAction.Copy, StashKeys.Route(Key.C, KeyModifiers.Control, KeyPlace.SearchBox, mark.PersonSelected("my")), "the summon's selection is not the person's (G7, G1)");
+        mark.KeyDown(Key.Down, KeyModifiers.None);
+        mark.KeyDown(Key.Up, KeyModifiers.None);
+        mark.KeyDown(Key.LeftCtrl, KeyModifiers.Control);
+        mark.KeyDown(Key.LeftShift, KeyModifiers.Shift);
+        Assert.AreEqual(KeyAction.Copy, StashKeys.Route(Key.C, KeyModifiers.Control, KeyPlace.SearchBox, mark.PersonSelected("my")), "Up and Down move the grid's selection and leave the box's alone, and Ctrl or Shift alone selects nothing");
+        Assert.IsTrue(mark.Summons);
+    }
+
+    [TestMethod]
+    [DataRow(Key.A, KeyModifiers.Control)]
+    [DataRow(Key.Left, KeyModifiers.Shift)]
+    [DataRow(Key.Right, KeyModifiers.Shift)]
+    [DataRow(Key.Home, KeyModifiers.Shift)]
+    [DataRow(Key.End, KeyModifiers.Shift)]
+    [DataRow(Key.Left, KeyModifiers.Control | KeyModifiers.Shift)]
+    [DataRow(Key.Up, KeyModifiers.Shift)]
+    [DataRow(Key.Home, KeyModifiers.None)]
+    [DataRow(Key.End, KeyModifiers.None)]
+    public void TextThePersonSelectsInTheBoxAfterASummonIsTheBoxsOwnCopy(Key key, KeyModifiers modifiers)
+    {
+        var mark = new SummonSelection();
+        mark.Made();
+
+        // Ctrl+A, and Shift+End with the caret at the end, leave the very range the summon made.
+        mark.KeyDown(key, modifiers);
+
+        Assert.IsTrue(mark.PersonSelected("my"));
+        Assert.AreEqual(KeyAction.None, StashKeys.Route(Key.C, KeyModifiers.Control, KeyPlace.SearchBox, mark.PersonSelected("my")), "G7: the text the person selected, copied by the box itself, no item and no use");
+    }
+
+    [TestMethod]
+    public void TypingOverTheSummonsSelectionAndSelectingTheNewTextCopiesThatText()
+    {
+        var mark = new SummonSelection();
+        mark.Made();
+
+        mark.Changed();
+
+        Assert.IsTrue(mark.PersonSelected("dog"), "the text typed in its place, then selected");
+        Assert.IsFalse(mark.PersonSelected(""), "no selected text: the items");
+        Assert.AreEqual(KeyAction.None, StashKeys.Route(Key.C, KeyModifiers.Control, KeyPlace.Field, mark.PersonSelected("my")), "another field's Ctrl+C stays its own");
+        Assert.AreEqual(KeyAction.None, StashKeys.Route(Key.C, KeyModifiers.Control, KeyPlace.Field), "with nothing of the box's selected too");
+    }
+
+    [TestMethod]
+    public void TheSearchBoxsSelectingKeysTextAndFocusMakeTheSummonsSelectionThePersons() => ControlThread.Run(() =>
+    {
+        var box = new TextBox { Text = "my" };
+        var mark = new SummonSelection();
+        mark.Follow(box);
+        box.SelectAll();
+        mark.Made();
+        box.SelectAll();
+        Assert.AreEqual("my", box.SelectedText);
+        Assert.IsFalse(mark.PersonSelected(box.SelectedText), "selecting all again is no change of the person's");
+
+        // The window takes Down for the grid before the box sees it.
+        box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Down, Handled = true });
+        Assert.IsFalse(mark.PersonSelected(box.SelectedText), "an arrow that leaves the box's selection alone");
+        box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.A, KeyModifiers = KeyModifiers.Control, Handled = true });
+        Assert.IsTrue(mark.PersonSelected(box.SelectedText), "Ctrl+A in the box, however handled, the very range the summon made");
+
+        mark.Made();
+        box.Text = "my d";
+        Assert.IsFalse(mark.Summons, "typing changed the text");
+
+        mark.Made();
+        box.RaiseEvent(new FocusChangedEventArgs(InputElement.LostFocusEvent));
+        Assert.IsFalse(mark.Summons, "focus left the box, which clears its selection");
+
+        mark.Made();
+        var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
+        box.RaiseEvent(new PointerPressedEventArgs(box, pointer, box, new Point(2, 2), 0, new PointerPointProperties(RawInputModifiers.RightMouseButton, PointerUpdateKind.RightButtonPressed), KeyModifiers.None, 1));
+        Assert.IsTrue(mark.Summons, "a right-click inside the selected text leaves it as it is");
+        box.RaiseEvent(new PointerPressedEventArgs(box, pointer, box, new Point(2, 2), 0, new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None, 1));
+        Assert.IsFalse(mark.Summons, "a click or a drag's start in the box");
+    });
 
     [TestMethod]
     [DataRow(KeyPlace.Preview)]

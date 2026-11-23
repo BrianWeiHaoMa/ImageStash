@@ -246,7 +246,7 @@ public sealed class TagListsTests
         TrayDesktop.Run(() =>
         {
             shown.Grid.Focus();
-            Press(shown.Grid, Key.Enter);
+            Tap(shown.Grid, Key.Enter);
         });
         await Eventually(() => shown.Uses() == 2);
 

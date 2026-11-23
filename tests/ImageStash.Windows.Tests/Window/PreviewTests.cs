@@ -105,7 +105,7 @@ public sealed class PreviewTests
         TrayDesktop.Run(() => ShownWindow.Press(shown.HandoffButton, Key.Tab));
         TrayDesktop.Run(() => ShownWindow.Press(shown.EditButton, Key.Tab));
         TrayDesktop.Run(() => Assert.AreSame(shown.BackArrow, shown.Focused, "Tab reaches the back arrow after the tag field, the handoff button and Edit"));
-        TrayDesktop.Run(() => ShownWindow.Press(shown.BackArrow, Key.Enter));
+        TrayDesktop.Run(() => ShownWindow.Tap(shown.BackArrow, Key.Enter));
         await ShownWindow.Eventually(() => shown.Uses() == 1);
         TrayDesktop.Run(() => Assert.IsTrue(shown.Preview.IsOpen, "Enter on the back arrow is the handoff, not a close"));
 
@@ -162,7 +162,7 @@ public sealed class PreviewTests
         TrayDesktop.Run(() =>
         {
             shown.Listing.Select(items.Select(item => item.Id), items[0].Id);
-            ShownWindow.Press(shown.PreviewPicture, Key.Enter);
+            ShownWindow.Tap(shown.PreviewPicture, Key.Enter);
         });
         await ShownWindow.Eventually(() => shown.Uses() == 1);
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Preview.Facts.Count == 2 && shown.Preview.Facts[1] == "Added today · Used once, just now"));
@@ -190,7 +190,7 @@ public sealed class PreviewTests
         await TrayDesktop.Get(() => shown.Listing.Settle());
         TrayDesktop.Run(() => shown.OpenPreview(two));
 
-        TrayDesktop.Run(() => ShownWindow.Press(shown.PreviewPicture, Key.Enter));
+        TrayDesktop.Run(() => ShownWindow.Tap(shown.PreviewPicture, Key.Enter));
         await ShownWindow.Eventually(() => target.Pasted.Count == 1);
         TrayDesktop.Run(() =>
         {
@@ -213,7 +213,7 @@ public sealed class PreviewTests
         TrayDesktop.Run(() =>
         {
             CollectionAssert.AreEqual(new[] { one.Id }, shown.Listing.Selection.ToList(), "two letters search and select as usual (G5)");
-            ShownWindow.Press(shown.Search, Key.Enter);
+            ShownWindow.Tap(shown.Search, Key.Enter);
         });
         await ShownWindow.Eventually(() => target.Pasted.Count == 2);
         CollectionAssert.AreEqual(new[] { one.FilePath }, TestClipboard.Read().Files.ToList(), "Enter hands over what the grid selects, not the item previewed before");
@@ -237,7 +237,7 @@ public sealed class PreviewTests
 
         TrayDesktop.Run(() => ShownWindow.Press(shown.PreviewPicture, Key.D, KeyModifiers.Control));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Preview.Item is { Favorite: true }));
-        TrayDesktop.Run(() => ShownWindow.Press(shown.PreviewPicture, Key.Enter));
+        TrayDesktop.Run(() => ShownWindow.Tap(shown.PreviewPicture, Key.Enter));
         await ShownWindow.Eventually(() => target.Pasted.Count == 1);
 
         Assert.AreEqual(1, (await shown.Listing.Store!.UseHistory(favorite.Id)).Value!.Count, "handed off once, the item the preview shows");
@@ -448,7 +448,7 @@ public sealed class PreviewTests
         TrayDesktop.Run(() =>
         {
             Assert.AreEqual(beta.Id, shown.Preview.Item?.Id, "the first match previewed");
-            ShownWindow.Press((Control)shown.Focused!, Key.Enter);
+            ShownWindow.Tap((Control)shown.Focused!, Key.Enter);
         });
         await ShownWindow.Eventually(() => target.Pasted.Count == 1 && shown.Uses() == 1);
 

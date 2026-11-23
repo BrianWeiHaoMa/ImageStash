@@ -295,7 +295,7 @@ public sealed class PendingQueryKeysTests
     private static async Task<Outcome> HandOver(ListedStash listed)
     {
         await listed.Listing.Settle();
-        return await listed.Handoff.HandOver(null!, listed.Listing.SelectedItems, null, () => false);
+        return await listed.Handoff.HandOver(null!, listed.Listing.SelectedItems, null, new PasteHide(() => false));
     }
 
     /// <summary><c>Ctrl+C</c> as the window dispatches it: once the listing settles, its selection copied.</summary>

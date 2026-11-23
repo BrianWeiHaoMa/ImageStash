@@ -87,7 +87,7 @@ public sealed class StashWindowTests
         TrayDesktop.Run(() => Assert.IsTrue(shown.Window.GetVisualDescendants().OfType<TextBlock>().Any(text => text.Text == "Enter · Copy" && text.IsEffectivelyVisible),
             "with no paste target the footer reads Enter · Copy (G8)"));
 
-        TrayDesktop.Run(() => ShownWindow.Press(shown.Search, Key.Enter));
+        TrayDesktop.Run(() => ShownWindow.Tap(shown.Search, Key.Enter));
         await Eventually(() => shown.Uses() == 1);
         var read = TestClipboard.Read();
         CollectionAssert.AreEqual(new[] { item.FilePath }, read.Files.ToList(), "Enter from the box copies the selection");
@@ -140,6 +140,52 @@ public sealed class StashWindowTests
         Assert.IsEmpty(TestClipboard.Read().Files, "no item written (G7)");
         Assert.AreEqual(0, shown.Uses(), "and no use recorded (G10)");
         TrayDesktop.Run(() => CollectionAssert.AreEqual(new[] { item.Id }, shown.Listing.Selection.ToList()));
+    }
+
+    [TestMethod]
+    public async Task CtrlCAfterASummonCopiesTheSelectedPictureNotTheSearchTextTheSummonSelectedAndCtrlAMakesItThePersons()
+    {
+        using var shown = ShownWindow.Open();
+        await shown.OpenStash(shown.Picture("summoned copy one.png"), shown.Picture("summoned copy two.png"));
+        TrayDesktop.Run(() => shown.Search.Text = "summoned");
+        await Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == "summoned"));
+        TrayDesktop.Run(() =>
+        {
+            shown.Window.Hide();
+            shown.Window.SummonFromTray();
+        });
+        await Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled));
+        TestClipboard.Empty();
+
+        TrayDesktop.Run(() =>
+        {
+            Assert.AreEqual("summoned", shown.Search.SelectedText, "the summon selected the box's text, so that typing replaces it (G1)");
+            ShownWindow.Press(shown.Search, Key.Down);
+        });
+        await Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled));
+        var selected = TrayDesktop.Get(() => shown.Listing.SelectedItems.Single());
+        TrayDesktop.Run(() =>
+        {
+            Assert.AreEqual("summoned", shown.Search.SelectedText, "Down moved the grid's selection and left the box's alone");
+            ShownWindow.Press(shown.Search, Key.C, KeyModifiers.Control);
+        });
+        await Eventually(() => TestClipboard.Read().Files.Any());
+
+        CollectionAssert.AreEqual(new[] { selected.FilePath }, TestClipboard.Read().Files.ToList(), "the selected picture, not the search text (G7)");
+        Assert.AreNotEqual("summoned", TestClipboard.Text());
+        await Eventually(() => shown.Uses() == 1);
+
+        TestClipboard.Empty();
+        TrayDesktop.Run(() =>
+        {
+            // Ctrl+A makes the very range the summon made; the person made it.
+            ShownWindow.Press(shown.Search, Key.A, KeyModifiers.Control);
+            ShownWindow.Press(shown.Search, Key.C, KeyModifiers.Control);
+        });
+        await Eventually(() => TestClipboard.Text() == "summoned");
+        await Task.Delay(300);
+        Assert.IsEmpty(TestClipboard.Read().Files, "the box's text, no item (G7)");
+        Assert.AreEqual(1, shown.Uses(), "and no use for it (G10)");
     }
 
     [TestMethod]
@@ -244,7 +290,7 @@ public sealed class StashWindowTests
             TrayDesktop.Run(() =>
             {
                 shown.Search.Text = "stripe";
-                ShownWindow.Press(shown.Search, Key.Enter);
+                ShownWindow.Tap(shown.Search, Key.Enter);
             });
             await Task.Delay(300);
         }
@@ -759,7 +805,7 @@ public sealed class StashWindowTests
                 shown.Search.Text = "cat";
                 Assert.IsFalse(shown.Listing.Settled, "the search is still pending when Down and Enter are pressed");
                 ShownWindow.Press(shown.Search, Key.Down);
-                ShownWindow.Press(shown.Search, Key.Enter);
+                ShownWindow.Tap(shown.Search, Key.Enter);
             });
         }
 

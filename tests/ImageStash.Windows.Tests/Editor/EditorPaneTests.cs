@@ -95,7 +95,7 @@ public sealed class EditorPaneTests
                 typed.Focus();
                 typed.SelectAll();
                 ShownWindow.Type(typed, ColorChoices.Hex(seed));
-                ShownWindow.Press(typed, Key.Enter);
+                ShownWindow.Tap(typed, Key.Enter);
             }
 
             var start = Text(editor).Fill;
@@ -313,7 +313,7 @@ public sealed class EditorPaneTests
             hex.Focus();
             hex.SelectAll();
             ShownWindow.Type(hex, "#FF7A1A");
-            ShownWindow.Press(hex, Key.Enter);
+            ShownWindow.Tap(hex, Key.Enter);
             var typed = new Rgba(0xFF, 0x7A, 0x1A, 0xFF);
             Assert.AreEqual(typed, Text(editor).Fill, "the hex's colour, applied at once");
             editor.Release(square, new Point(square.Bounds.Width - 20, 30));
@@ -480,7 +480,7 @@ public sealed class EditorPaneTests
             CloseNotices(shown);
             editor.Click(0.5, 0.25);
             ShownWindow.Type(editor.Field!, "hi");
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
             Assert.AreEqual(White, Text(editor).Fill);
         });
     }

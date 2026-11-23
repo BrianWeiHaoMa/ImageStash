@@ -10,6 +10,11 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 - After a paste hides the stash window, the next shortcut opens it on Recent with an empty search box, the picture you just pasted first and selected on its own, so "shortcut, Enter" pastes it again and two typed letters start a fresh search. Hiding it any other way (clicking back into the chat, the shortcut, Esc) still leaves your search and selection as they were. The pinned window is left as it is.
 - A preview open in the stash window now closes when the window hides, so the next shortcut lands in the search box and typed letters search, instead of finding the old preview, where Enter would paste that picture again. The pinned window keeps its preview; so does a preview whose name or tag you were still typing, and one a screenshot or recording hid for a moment and put back.
 - After importing several pictures, they are no longer all still selected the next time you open the window, where Enter would paste them all: the first of them alone is. Several pictures you selected yourself stay selected.
+- `Ctrl+C` right after the shortcut opens the window now copies the selected picture, as the footer says, instead of the leftover search word the window had selected so that typing replaces it. Text you select in the search box yourself (by dragging, Shift with an arrow, Home or End, or `Ctrl+A`) is still copied as text.
+
+### Fixed
+
+- Holding Enter down no longer pastes the picture twice or reaches the chat as Send: one press hands over once, however long it is held, and the chat is brought forward only once Enter is let go. Still held a second after the picture is ready, nothing is pasted: the picture is on the clipboard and the "Copied · press Ctrl+V" notification says so. An Enter that committed a name or a tag in the preview does not also paste.
 
 ## [0.2.2] - 2026-11-16
 

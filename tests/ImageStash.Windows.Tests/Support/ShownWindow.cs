@@ -385,6 +385,16 @@ public sealed class ShownWindow : IDisposable
     public static void Press(Control target, Key key, KeyModifiers modifiers = KeyModifiers.None) =>
         target.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key, KeyModifiers = modifiers, Source = target });
 
+    /// <summary>
+    /// A key pressed and let go on <paramref name="target"/>, as a tap raises them: Enter acts once per press, and a paste
+    /// waits for its release before another app is given the front (G8, N3).
+    /// </summary>
+    public static void Tap(Control target, Key key, KeyModifiers modifiers = KeyModifiers.None)
+    {
+        Press(target, key, modifiers);
+        Release(target, key);
+    }
+
     /// <summary>Types <paramref name="text"/> into <paramref name="target"/> one character at a time, as the platform raises text input.</summary>
     public static void Type(Control target, string text)
     {
@@ -468,19 +478,28 @@ public sealed class ShownWindow : IDisposable
     /// </summary>
     public void SendKey(Key key)
     {
-        var virtualKey = key switch
-        {
-            Key.Enter => 0x0D,
-            Key.Escape => 0x1B,
-            Key.Up => 0x26,
-            Key.Down => 0x28,
-            _ => throw new ArgumentOutOfRangeException(nameof(key), key, "not a key the checks send"),
-        };
-        var handle = Window.TryGetPlatformHandle()!.Handle;
-        var scan = (nint)(MapVirtualKey((uint)virtualKey, 0) << 16);
-        SendMessage(handle, 0x0100, virtualKey, 1 | scan);
-        SendMessage(handle, 0x0101, virtualKey, unchecked((nint)0xC0000001) | scan);
+        SendKeyDown(key);
+        SendKeyUp(key);
     }
+
+    /// <summary>The press alone of <see cref="SendKey"/>, or with <paramref name="repeat"/> its repeat as Windows sends it while the key is held.</summary>
+    public void SendKeyDown(Key key, bool repeat = false) =>
+        SendMessage(Window.TryGetPlatformHandle()!.Handle, 0x0100, VirtualKey(key), (repeat ? 0x40000001 : 1) | KeyScan(key));
+
+    /// <summary>The release alone of <see cref="SendKey"/>.</summary>
+    public void SendKeyUp(Key key) =>
+        SendMessage(Window.TryGetPlatformHandle()!.Handle, 0x0101, VirtualKey(key), unchecked((nint)0xC0000001) | KeyScan(key));
+
+    private static int VirtualKey(Key key) => key switch
+    {
+        Key.Enter => 0x0D,
+        Key.Escape => 0x1B,
+        Key.Up => 0x26,
+        Key.Down => 0x28,
+        _ => throw new ArgumentOutOfRangeException(nameof(key), key, "not a key the checks send"),
+    };
+
+    private static nint KeyScan(Key key) => (nint)(MapVirtualKey((uint)VirtualKey(key), 0) << 16);
 
     /// <summary>Opens the open menu's submenu with these words; the words of its entries as they are now.</summary>
     public List<string> Submenu(string label)

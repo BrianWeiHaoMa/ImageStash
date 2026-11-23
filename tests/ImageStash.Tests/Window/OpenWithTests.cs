@@ -39,7 +39,7 @@ public sealed class OpenWithTests
         var listedWhenSaid = new TaskCompletionSource<long?>(TaskCreationOptions.RunContinuationsAsynchronously);
         listed.Notifications.Changed += () => listedWhenSaid.TrySetResult(listed.Listing.Items.SingleOrDefault(item => item.Id == cat.Id)?.RenderedRevision);
 
-        var opening = listed.ItemMenu.Act(ItemMenuAction.OpenWith, null!, [cat], null, () => throw new AssertFailedException("Open with… hides nothing"), up.Add);
+        var opening = listed.ItemMenu.Act(ItemMenuAction.OpenWith, null!, [cat], null, new PasteHide(() => throw new AssertFailedException("Open with… hides nothing")), up.Add);
         await Handing.Eventually(() => listed.Dialogs.OpenedWith.Count == 1);
 
         var copy = listed.Dialogs.OpenedWith.Single();
@@ -771,7 +771,7 @@ public sealed class OpenWithTests
 
     /// <summary>Open with… chosen from the item menu on <paramref name="item"/>, the dialog's flag told to <paramref name="up"/>.</summary>
     private static Task<Outcome> Chosen(ListedStash listed, StashItem item, Action<bool>? up = null) =>
-        listed.ItemMenu.Act(ItemMenuAction.OpenWith, null!, [item], null, () => throw new AssertFailedException("Open with… hides nothing"), up ?? (_ => { }));
+        listed.ItemMenu.Act(ItemMenuAction.OpenWith, null!, [item], null, new PasteHide(() => throw new AssertFailedException("Open with… hides nothing")), up ?? (_ => { }));
 
     /// <summary>What the notifications above the tray say, oldest first.</summary>
     private static List<string> Said(ListedStash listed) => [.. listed.Notifications.Shown.ToList().Select(notice => notice.Text)];

@@ -211,7 +211,7 @@ public sealed class CaptureNotificationTests
         await Eventually(() => TrayDesktop.Get(() => desk.Shown.Window.IsActive && !card.Field.IsEditing));
         Assert.AreEqual(desk.Chat.Window, TrayDesktop.Get(() => paste.Current?.Handle), "the press leaves the chat the flyout's target");
         var keysBefore = desk.Chat.Messages().Count;
-        TrayDesktop.Run(() => ShownWindow.Press(desk.Shown.Search, Avalonia.Input.Key.Enter));
+        TrayDesktop.Run(() => ShownWindow.Tap(desk.Shown.Search, Avalonia.Input.Key.Enter));
         await Eventually(() => desk.Chat.Messages().Skip(keysBefore).Contains("WM_KEYDOWN:0x56"));
         Assert.AreEqual(desk.Chat.Window, FrontWindow.GetForegroundWindow(), "Enter pasted into the chat the field was clicked from (G8)");
     }

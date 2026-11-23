@@ -62,7 +62,7 @@ public sealed class TextFieldTests
 
         TrayDesktop.Run(() =>
         {
-            ShownWindow.Press(editor.Field!, Key.Enter);
+            ShownWindow.Tap(editor.Field!, Key.Enter);
             var meme = (TextLayer)editor.Session!.Layers.Layers.Single();
             Assert.AreEqual("HELLO\n", meme.Text, "Enter adds a line, stored as Media breaks lines (G25)");
             Assert.IsGreaterThan(height, meme.Box.Height, "and the box grows by it");
@@ -71,7 +71,7 @@ public sealed class TextFieldTests
         var withField = await RenderedWindow.Of(shown);
         TrayDesktop.Run(() =>
         {
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
             Assert.IsNull(editor.Field, "Ctrl+Enter leaves the field (G25)");
             Assert.AreSame(editor.Canvas, shown.Focused, "for the canvas");
             Assert.IsTrue(editor.Session!.CanUndo && !editor.Session.Typing, "the typing run one step");
@@ -108,7 +108,7 @@ public sealed class TextFieldTests
         {
             editor.Click(0.5, 0.25);
             ShownWindow.Type(editor.Field!, "hi ");
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
         });
         var letters = await RenderedWindow.Of(shown);
         var place = TrayDesktop.Get(() => Inside(shown, InRendering(shown, editor, ((TextLayer)editor.Session!.Layers.Layers.Single()).Box)));
@@ -120,7 +120,7 @@ public sealed class TextFieldTests
             // What the emoji panel inserts arrives as text input; one code unit at a time keeps the pair whole.
             ShownWindow.Type(editor.Field!, "😀");
             Assert.EndsWith("😀", ((TextLayer)editor.Session.Layers.Layers.Single()).Text, "the emoji in the layer (G21)");
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
         });
         var emoji = await RenderedWindow.Of(shown);
         place = TrayDesktop.Get(() => Inside(shown, InRendering(shown, editor, ((TextLayer)editor.Session!.Layers.Layers.Single()).Box)));
@@ -412,7 +412,7 @@ public sealed class TextFieldTests
             label.Focus(NavigationMethod.Tab);
             Assert.IsTrue(editor.Session!.Typing, "Tab onto Text's options before a letter is typed leaves the field open");
 
-            ShownWindow.Press(label, Key.Enter);
+            ShownWindow.Tap(label, Key.Enter);
             Assert.IsTrue(editor.Session.Typing && editor.Session.Layers.Layers.Single() is TextLayer { Preset: TextPreset.Label }, "Enter chooses the preset for the new layer");
             Assert.AreSame(label, shown.Focused, "and focus stays where the keys put it, as a key's choice leaves it");
             editor.Session.Compare = true;
@@ -465,7 +465,7 @@ public sealed class TextFieldTests
         TrayDesktop.Run(() =>
         {
             Assert.IsTrue(editor.Session!.Typing && editor.Field?.Text == "HI", "Ctrl+O is the window's, and the field stays open (G13)");
-            ShownWindow.Press(editor.Field!, Key.Enter);
+            ShownWindow.Tap(editor.Field!, Key.Enter);
             Assert.AreEqual("HI\n", editor.Field!.Text, "Enter is the field's new line");
         });
         await Task.Delay(300);
@@ -489,7 +489,7 @@ public sealed class TextFieldTests
         {
             editor.Click(0.5, 0.2);
             ShownWindow.Type(editor.Field!, "hi");
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
             shown.Window.UpdateLayout();
             editor.Session!.Tools.OfType<TextTool>().Single().Choose("Georgia");
             editor.Session.BeginTyping();

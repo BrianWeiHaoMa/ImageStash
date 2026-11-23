@@ -9,6 +9,7 @@ using ImageStash.Media;
 using ImageStash.Seams;
 using ImageStash.Store;
 using ImageStash.Window;
+using ImageStash.Windows.Seams;
 using ImageStash.Windows.Tests.Support;
 using static ImageStash.Windows.Tests.Support.ShownWindow;
 
@@ -22,7 +23,8 @@ namespace ImageStash.Windows.Tests.Window;
 /// closing for an import and staying for a notice; the <c>+</c> menu's entries and the empty stash's ways in (G2, R10).
 /// Then what real programs put there: Microsoft Edge's Copy image, File Explorer's Copy of files, PowerShell's
 /// Set-Clipboard of an address or of words, an emptied clipboard and one another program holds open (G11, G12, N2, G35);
-/// words pasted with <c>Ctrl+V</c> into the search box through the same one read (G13).
+/// words pasted with <c>Ctrl+V</c> into the search box through the same one read (G13). And Enter, held down as a
+/// person holds it, handing off once and reaching no other app (G8, N3).
 /// </summary>
 [TestClass]
 public sealed class ClipboardPasteTests
@@ -188,6 +190,46 @@ public sealed class ClipboardPasteTests
             Release(shown.Search, Key.V);
         });
         await Eventually(() => TrayDesktop.Get(() => shown.Listing.Items.Count == 2 && shown.Import.Busy is null));
+    }
+
+    /// <summary>
+    /// G8, N3: a real Enter held through a handoff into a chat window of the check's own, which counts its key messages.
+    /// While Enter is down, its press repeating, the handoff has already copied, the flyout stays in front and the chat
+    /// receives nothing; once it is let go, within the paste's one-second bound, the chat comes forward and receives one
+    /// <c>Ctrl+V</c> and no Enter, and one use is recorded.
+    /// </summary>
+    [TestMethod]
+    public async Task AHeldEnterHandsOffOnceAndOnlyOnceLetGoBringsTheChatForwardForOneCtrlVAndNoEnter()
+    {
+        const ushort enter = 0x0D;
+        using var targets = new WindowsTarget();
+        using var desk = await CaptureDesk.Open(["paste held enter.png"], platformTarget: targets);
+        var flyout = desk.Shown.Window;
+        await desk.FlyoutInFront();
+        await Eventually(() => TrayDesktop.Get(() => flyout.PasteTarget.Current?.Handle) == desk.Chat.Window);
+        var handle = TrayDesktop.Get(() => flyout.TryGetPlatformHandle()!.Handle);
+        var before = desk.Chat.Messages().Count;
+        TestClipboard.Empty();
+
+        using (TestHotKeys.Hold(enter))
+        {
+            // The press handed off at once: the copy is made, and the paste waits for the release.
+            await Eventually(() => TestClipboard.Read().Files.Any());
+            TestHotKeys.PressAgain(enter);
+            TestHotKeys.PressAgain(enter);
+            await Task.Delay(150);
+            TrayDesktop.Run(() => Assert.IsTrue(flyout.IsVisible, "while Enter is down the flyout stays (N3)"));
+            Assert.AreEqual(handle, FrontWindow.GetForegroundWindow(), "and the chat is not brought forward");
+            Assert.IsEmpty(desk.Chat.Messages().Skip(before).ToList(), "nothing reached the chat");
+        }
+
+        await Eventually(() => desk.Chat.Messages().Skip(before).Contains("WM_KEYUP:0x11"));
+        await Task.Delay(500);
+        var keys = desk.Chat.Messages().Skip(before).Where(message => message.StartsWith("WM_KEY") || message.StartsWith("WM_SYSKEY")).ToList();
+        CollectionAssert.AreEqual(new[] { "WM_KEYDOWN:0x11", "WM_KEYDOWN:0x56", "WM_KEYUP:0x56", "WM_KEYUP:0x11" }, keys, "one Ctrl+V and no Enter (N3, R6)");
+        Assert.AreEqual(desk.Chat.Window, FrontWindow.GetForegroundWindow(), "the chat in front for it");
+        TrayDesktop.Run(() => Assert.IsFalse(flyout.IsVisible, "the flyout hid once Enter was let go (G2)"));
+        Assert.AreEqual(1, desk.Shown.Uses(), "one handoff for the one press (G10)");
     }
 
     [TestMethod]

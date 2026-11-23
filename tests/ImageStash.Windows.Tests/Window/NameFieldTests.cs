@@ -45,7 +45,7 @@ public sealed class NameFieldTests
             Assert.AreEqual((0, "name two".Length), (shown.NameBox.SelectionStart, shown.NameBox.SelectionEnd), "the name selected, so typing replaces it");
             ShownWindow.Type(shown.NameBox, "dog");
             Assert.AreEqual("dog", shown.NameBox.Text);
-            ShownWindow.Press(shown.NameBox, Key.Enter);
+            ShownWindow.Tap(shown.NameBox, Key.Enter);
             Assert.IsFalse(shown.Preview.EditingName, "Enter closes the field");
             Assert.AreSame(shown.PreviewPicture, shown.Focused, "focus back in the preview");
             Assert.AreEqual("name two", shown.NameField.Shown, "no new name shows before the store has it (G28, R9)");
@@ -64,7 +64,7 @@ public sealed class NameFieldTests
         Assert.AreEqual("dog", (await shown.Listing.Store!.Item(renamed.Id)).Value!.Name);
         Assert.AreEqual(0L, shown.Uses(), "Enter inside the field is the field's, not a handoff (G19)");
 
-        TrayDesktop.Run(() => ShownWindow.Press(shown.PreviewPicture, Key.Enter));
+        TrayDesktop.Run(() => ShownWindow.Tap(shown.PreviewPicture, Key.Enter));
         await ShownWindow.Eventually(() => shown.Uses() == 1);
         CollectionAssert.AreEqual(new[] { Path.Combine(root, "dog.png") }, TestClipboard.Read().Files.ToList(), "Enter outside the field hands the renamed item off, by its new file (G8, P1)");
     }
@@ -152,7 +152,7 @@ public sealed class NameFieldTests
 
             ShownWindow.Press(shown.PreviewPicture, Key.F2);
             Assert.AreEqual("cancel me", shown.NameBox.Text, "the next edit starts from the name, not from what was cancelled");
-            ShownWindow.Press(shown.NameBox, Key.Enter);
+            ShownWindow.Tap(shown.NameBox, Key.Enter);
         });
         await Task.Delay(500);
 
@@ -161,7 +161,7 @@ public sealed class NameFieldTests
         Assert.IsTrue(File.Exists(item.FilePath));
         TrayDesktop.Run(() => Assert.AreEqual("", shown.Said(), "nothing is said"));
 
-        TrayDesktop.Run(() => ShownWindow.Press(shown.PreviewPicture, Key.Enter));
+        TrayDesktop.Run(() => ShownWindow.Tap(shown.PreviewPicture, Key.Enter));
         await ShownWindow.Eventually(() => shown.Uses() == 1);
         CollectionAssert.AreEqual(new[] { item.FilePath }, TestClipboard.Read().Files.ToList(), "the paste path still works after the field (G7, G8)");
     }
@@ -271,7 +271,7 @@ public sealed class NameFieldTests
             shown.OpenPreview(previewed);
             ShownWindow.Press(shown.PreviewPicture, Key.F2);
             ShownWindow.Type(shown.NameBox, "dog");
-            ShownWindow.Press(shown.NameBox, Key.Enter);
+            ShownWindow.Tap(shown.NameBox, Key.Enter);
         });
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Preview.Item?.Name == "dog" && shown.Listing.Items.Count == 1));
 
@@ -280,7 +280,7 @@ public sealed class NameFieldTests
             Assert.IsTrue(shown.Preview.IsOpen, "an item that only left the query keeps the preview on it");
             Assert.AreEqual(previewed.Id, shown.Preview.Item!.Id);
             Assert.AreEqual(items[1].Id, shown.Listing.Items.Single().Id, "the grid beneath lists the query's other match");
-            ShownWindow.Press(shown.PreviewPicture, Key.Enter);
+            ShownWindow.Tap(shown.PreviewPicture, Key.Enter);
         });
         await ShownWindow.Eventually(() => shown.Uses() == 1);
         TrayDesktop.Run(() => shown.HandoffButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)));
@@ -303,7 +303,7 @@ public sealed class NameFieldTests
             shown.OpenPreview(cat);
             ShownWindow.Press(shown.PreviewPicture, Key.F2);
             ShownWindow.Type(shown.NameBox, "dog");
-            ShownWindow.Press(shown.NameBox, Key.Enter);
+            ShownWindow.Tap(shown.NameBox, Key.Enter);
         });
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Preview.Item?.FileName == "dog 2.png"));
         TrayDesktop.Run(() =>
@@ -328,7 +328,7 @@ public sealed class NameFieldTests
         {
             ShownWindow.Press(shown.NameBox, Key.Back);
             Assert.AreEqual("", shown.NameBox.Text, "Backspace takes the selected name away");
-            ShownWindow.Press(shown.NameBox, Key.Enter);
+            ShownWindow.Tap(shown.NameBox, Key.Enter);
         });
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Preview.Item?.FileName == "Untitled.png"));
 
@@ -361,7 +361,7 @@ public sealed class NameFieldTests
         {
             TrayDesktop.Run(() =>
             {
-                ShownWindow.Press(shown.NameBox, Key.Enter);
+                ShownWindow.Tap(shown.NameBox, Key.Enter);
                 Assert.AreEqual("cat", shown.NameField.Shown, "the name as it was until the store answers (G28)");
                 Assert.Contains("Renaming “cat”…", Busy(shown), "the busy state names the rename while the held file is retried (G35)");
             });
@@ -384,13 +384,51 @@ public sealed class NameFieldTests
         {
             ShownWindow.Press(shown.PreviewPicture, Key.F2);
             Assert.AreEqual("dog", shown.NameBox.Text);
-            ShownWindow.Press(shown.NameBox, Key.Enter);
+            ShownWindow.Tap(shown.NameBox, Key.Enter);
         });
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Preview.Item?.FilePath == Path.Combine(root, "dog.png")));
 
         Assert.IsTrue(File.Exists(Path.Combine(root, "dog.png")), "once released, the same name again finishes the rename");
         Assert.IsFalse(File.Exists(cat.FilePath));
         TrayDesktop.Run(() => Assert.AreEqual($"Rename failed: cat.png, {HeldFileRetry.HeldReason}", shown.Said(), "and says nothing more"));
+    }
+
+    [TestMethod]
+    public async Task AnEnterHeldThroughTheNamesCommitHandsNothingOffUntilLetGoAndPressedAgainAndThenCopiesOnce()
+    {
+        using var shown = ShownWindow.Open();
+        var cat = (await shown.OpenStash(shown.Picture("held cat.png"))).Single();
+        TrayDesktop.Run(() =>
+        {
+            shown.OpenPreview(cat);
+            ShownWindow.Press(shown.PreviewPicture, Key.F2);
+            ShownWindow.Type(shown.NameBox, "held dog");
+        });
+        TestClipboard.Empty();
+
+        TrayDesktop.Run(() =>
+        {
+            ShownWindow.Press(shown.NameBox, Key.Enter);
+            // Windows repeats the press of a held key, now on the preview the commit gave focus back to (G19).
+            ShownWindow.Press(shown.PreviewPicture, Key.Enter);
+            ShownWindow.Press(shown.PreviewPicture, Key.Enter);
+        });
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Items.Single().Name == "held dog"));
+        await Task.Delay(500);
+        Assert.AreEqual(0L, shown.Uses(), "the press the name field took hands nothing off");
+        Assert.IsEmpty(TestClipboard.Read().Files);
+
+        TrayDesktop.Run(() =>
+        {
+            ShownWindow.Release(shown.PreviewPicture, Key.Enter);
+            ShownWindow.Press(shown.PreviewPicture, Key.Enter);
+            ShownWindow.Press(shown.PreviewPicture, Key.Enter);
+            ShownWindow.Press(shown.PreviewPicture, Key.Enter);
+        });
+        await ShownWindow.Eventually(() => shown.Uses() == 1);
+        await Task.Delay(500);
+        Assert.AreEqual(1L, shown.Uses(), "pressed again and held, with no target: one copy (G8)");
+        TrayDesktop.Run(() => ShownWindow.Release(shown.PreviewPicture, Key.Enter));
     }
 
     [TestMethod]
@@ -411,8 +449,8 @@ public sealed class NameFieldTests
         {
             TrayDesktop.Run(() =>
             {
-                ShownWindow.Press(shown.NameBox, Key.Enter);
-                ShownWindow.Press(shown.PreviewPicture, Key.Enter);
+                ShownWindow.Tap(shown.NameBox, Key.Enter);
+                ShownWindow.Tap(shown.PreviewPicture, Key.Enter);
                 ShownWindow.Press(shown.PreviewPicture, Key.Escape);
             });
             await Task.Delay(700);
@@ -425,7 +463,7 @@ public sealed class NameFieldTests
         CollectionAssert.AreEqual(new[] { dog }, TestClipboard.Read().Files.ToList(), "the file as renamed, which exists, not the one it was (G8, P1)");
         Assert.IsTrue(File.Exists(dog));
 
-        TrayDesktop.Run(() => ShownWindow.Press(shown.Grid, Key.Enter));
+        TrayDesktop.Run(() => ShownWindow.Tap(shown.Grid, Key.Enter));
         await ShownWindow.Eventually(() => shown.Uses() == 2);
         CollectionAssert.AreEqual(new[] { dog }, TestClipboard.Read().Files.ToList(), "the grid the preview uncovered lists it as renamed");
     }
@@ -448,9 +486,9 @@ public sealed class NameFieldTests
         {
             TrayDesktop.Run(() =>
             {
-                ShownWindow.Press(shown.NameBox, Key.Enter);
+                ShownWindow.Tap(shown.NameBox, Key.Enter);
                 ShownWindow.Press(shown.PreviewPicture, Key.Escape);
-                ShownWindow.Press(shown.PreviewPicture, Key.Enter);
+                ShownWindow.Tap(shown.PreviewPicture, Key.Enter);
             });
             await Task.Delay(700);
             TrayDesktop.Run(() => Assert.IsTrue(shown.Preview.IsOpen, "Esc closes the preview only once the rename has been answered"));
@@ -483,7 +521,7 @@ public sealed class NameFieldTests
         {
             TrayDesktop.Run(() =>
             {
-                ShownWindow.Press(shown.NameBox, Key.Enter);
+                ShownWindow.Tap(shown.NameBox, Key.Enter);
                 ShownWindow.Press(shown.PreviewPicture, Key.Delete);
                 // A paste whose file is skipped by its name ends at once, and its end closes the preview.
                 ShownWindow.Press(shown.PreviewPicture, Key.V, KeyModifiers.Control);

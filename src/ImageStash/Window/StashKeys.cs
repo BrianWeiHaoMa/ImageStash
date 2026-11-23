@@ -24,7 +24,7 @@ public enum KeyAction
     /// <summary>Enter: the handoff on the selection (G7, G8).</summary>
     Handoff,
 
-    /// <summary><c>Ctrl+C</c> with no text selected in the box: the same clipboard content as the handoff, and the window stays (G7, G9).</summary>
+    /// <summary><c>Ctrl+C</c> with no text the person selected in the box: the same clipboard content as the handoff, and the window stays (G7, G9).</summary>
     Copy,
 
     /// <summary><c>Ctrl</c> with <c>+</c>: the next larger thumbnail size (G6).</summary>
@@ -47,6 +47,9 @@ public enum KeyAction
 
     /// <summary><c>Ctrl+E</c> in the box, the grid or the preview: the editor on the one selected item, the preview's while it is open (G7, G20).</summary>
     Edit,
+
+    /// <summary>A repeat of an Enter or a <c>Ctrl+V</c> still held from its press: nothing happens, and no control sees it (G8, G13, N3).</summary>
+    Held,
 }
 
 /// <summary>Where focus is when a key is pressed in the stash window.</summary>
@@ -73,8 +76,11 @@ public enum KeyPlace
 /// Shift with them, <c>Ctrl+A</c>, <c>Ctrl+X</c> and <c>Ctrl+Z</c> are its own; Up and Down move the grid's selection
 /// from the box or the grid without moving focus, and Left and Right move it from the grid; Tab in the box moves focus
 /// to the grid; <c>Ctrl+A</c> in the grid selects every item; Enter, Esc, <c>Ctrl+O</c> and G6's <c>Ctrl</c> with
-/// <c>+</c> or <c>-</c>, on the main keys or the numeric keypad's, work from both; <c>Ctrl+C</c> copies the box's
-/// selected text while it has one, which is the box's own key, and otherwise the selected items, from both; Del in the
+/// <c>+</c> or <c>-</c>, on the main keys or the numeric keypad's, work from both; <c>Ctrl+C</c> copies the text the
+/// person selected in the box while it has such a selection, which is the box's own key, and otherwise the selected
+/// items, from both, the box's whole text as a summon selects it not being the person's until they change it there
+/// (<see cref="SummonSelection"/>); Enter and <c>Ctrl+V</c> act once per press however long they are held, Enter
+/// counted wherever it lands, so a press a field took never hands off (<see cref="PressOnce"/>); Del in the
 /// grid deletes the selection, and in the box a character; <c>Ctrl+D</c> in the grid toggles favorite; Space in the
 /// grid opens the preview, and F2 opens it with the name in edit; and a character typed in the grid goes into the box
 /// with focus. <c>Ctrl+V</c> is the window's paste from every place, the one read of the clipboard, and
@@ -91,7 +97,7 @@ public enum KeyPlace
 /// </summary>
 public static class StashKeys
 {
-    /// <param name="boxTextSelected">The search box has text selected, as it can only while it has focus: it clears its selection on losing focus.</param>
+    /// <param name="boxTextSelected">The search box has text the person selected (<see cref="SummonSelection.PersonSelected"/>), as it can only while it has focus: it clears its selection on losing focus.</param>
     public static KeyAction Route(Key key, KeyModifiers modifiers, KeyPlace place, bool boxTextSelected = false) => place switch
     {
         KeyPlace.Field => (key, modifiers) switch
@@ -184,31 +190,85 @@ public static class StashKeys
 }
 
 /// <summary>
-/// One act per press of a key that acts once however long it is held: Windows repeats the press of a held key, and a
-/// held <c>Ctrl+V</c> would otherwise read the clipboard again and again, each time a new item (G13, N9).
+/// One act per press of a key that acts once however long it is held, and the moment it is let go: Windows repeats the
+/// press of a held key, so a held <c>Ctrl+V</c> would otherwise read the clipboard again and again, each time a new item
+/// (G13, N9), and a held Enter would hand off again and again, its repeats reaching the target as Send once it is in
+/// front (G8, N3). Each key is remembered on its own, so letting go of one never opens another's next press.
 /// </summary>
 public sealed class PressOnce
 {
-    private Key? down;
+    private readonly object gate = new();
+    private readonly HashSet<Key> down = [];
+    private readonly Dictionary<Key, TaskCompletionSource> waiting = [];
 
-    /// <summary>Whether this press of <paramref name="key"/> acts: not while it is still held from the press that acted.</summary>
+    /// <summary>Whether this press of <paramref name="key"/> acts: not while it is still held from an earlier press.</summary>
     public bool Pressed(Key key)
     {
-        if (down == key)
+        lock (gate)
         {
-            return false;
+            return down.Add(key);
         }
-
-        down = key;
-        return true;
     }
 
-    /// <summary>The key let go, so its next press acts; with no key, focus gone where its release would not be seen.</summary>
+    /// <summary>
+    /// What a press of <paramref name="key"/> routed to <paramref name="action"/> does: a repeat of an Enter or a
+    /// <c>Ctrl+V</c> still held is <see cref="KeyAction.Held"/>. Enter is remembered wherever it lands, a text field's own
+    /// Enter included, so the repeats of a press the name or tag field took do not hand off once focus has gone back to
+    /// the preview (G19).
+    /// </summary>
+    public KeyAction Acting(Key key, KeyAction action)
+    {
+        // Only these are remembered: any other key acts on each press, a held arrow moving on as it repeats.
+        var remembered = key == Key.Enter || action == KeyAction.Paste;
+        return remembered && !Pressed(key) && action is (KeyAction.Handoff or KeyAction.Paste) ? KeyAction.Held : action;
+    }
+
+    /// <summary>
+    /// The key let go, so its next press acts, and whatever waits for its release goes on; with no key, every key, focus
+    /// having gone where a release would not be seen: their next presses act, but nothing waiting for a release goes on,
+    /// since the key may still be down (N3).
+    /// </summary>
     public void Released(Key? key = null)
     {
-        if (key is null || down == key)
+        TaskCompletionSource? letGo = null;
+        lock (gate)
         {
-            down = null;
+            if (key is not { } one)
+            {
+                down.Clear();
+                return;
+            }
+
+            down.Remove(one);
+            if (waiting.Remove(one, out var wait))
+            {
+                letGo = wait;
+            }
+        }
+
+        letGo?.SetResult();
+    }
+
+    /// <summary>
+    /// Completes once <paramref name="key"/> is let go: at once when it is not held, else at its release; a release unseen,
+    /// focus having gone elsewhere, completes nothing, so a caller bounds its wait.
+    /// </summary>
+    public Task LetGo(Key key)
+    {
+        lock (gate)
+        {
+            if (!down.Contains(key))
+            {
+                return Task.CompletedTask;
+            }
+
+            if (!waiting.TryGetValue(key, out var wait))
+            {
+                // Its waiter goes on after the key-up's handler, never inside it.
+                waiting[key] = wait = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+
+            return wait.Task;
         }
     }
 }

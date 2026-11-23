@@ -33,7 +33,7 @@ public sealed class FontFallbackNoteTests
         {
             editor.Click(0.5, 0.25);
             ShownWindow.Type(editor.Field!, "hi");
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
         });
         await RenderedWindow.Of(shown);
         await Task.Delay(300);

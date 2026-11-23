@@ -82,7 +82,7 @@ public sealed class TextOptionRowTests
         {
             editor.Click(0.5, 0.25);
             ShownWindow.Type(editor.Field!, "hi");
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
             CollectionAssert.AreEqual(F8.Append("—").Append("All fonts…").ToList(), editor.ClickMenuButton("Font"), "F8's ten in order, then All fonts…");
             foreach (var entry in editor.OpenMenu!.Items.OfType<MenuItem>().Where(entry => F8.Contains((string)entry.Header!)))
             {
@@ -195,7 +195,7 @@ public sealed class TextOptionRowTests
         {
             editor.Click(0.5, 0.25);
             ShownWindow.Type(editor.Field!, "hi");
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
         });
         await Task.Delay(200);
         TrayDesktop.Run(() => Assert.AreEqual(WindowSize.FlyoutDefault.Width, shown.Window.Bounds.Width, 1, "the flyout's default width"));
@@ -213,7 +213,7 @@ public sealed class TextOptionRowTests
         {
             editor.Click(0.5, 0.25);
             ShownWindow.Type(editor.Field!, "hi");
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
             // A family this PC lacks, as a list saved on another PC carries it, so the line under the header shows (E3).
             ((TextTool)editor.Session!.Tool).Choose("No Such Font");
         });

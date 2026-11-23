@@ -139,7 +139,7 @@ public sealed class ToolTipsTests
 
             editor.Click(0.5, 0.25);
             ShownWindow.Type(editor.Field!, "hi");
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
             foreach (var hex in ColorChoices.Swatches.Select(ColorChoices.Hex))
             {
                 Assert.AreEqual(hex, Tip(editor.Button(hex)), "a swatch, a square named by its hex");

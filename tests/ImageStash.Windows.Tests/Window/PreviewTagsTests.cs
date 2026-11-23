@@ -119,7 +119,7 @@ public sealed class PreviewTagsTests
         });
         Assert.IsEmpty(shown.TagsOf(item.Id), "nothing added before Enter");
 
-        TrayDesktop.Run(() => ShownWindow.Press(shown.PreviewTagBox, Key.Enter));
+        TrayDesktop.Run(() => ShownWindow.Tap(shown.PreviewTagBox, Key.Enter));
         await ShownWindow.Eventually(() => shown.TagsOf(item.Id).Count == 2);
         CollectionAssert.AreEqual(new[] { "lion", "stare" }, shown.TagsOf(item.Id), "each word a tag on the preview's item (G13, G17)");
     }
@@ -201,7 +201,7 @@ public sealed class PreviewTagsTests
             CollectionAssert.AreEqual(new[] { "reaction", "Scream" }, shown.PreviewTags.Field.Suggestions.ToList(),
                 "the existing tags containing the word, the one starting with it first; never the name red rest (G17, N6)");
             shown.PreviewTagBox.Text = "#Dog cat";
-            ShownWindow.Press(shown.PreviewTagBox, Key.Enter);
+            ShownWindow.Tap(shown.PreviewTagBox, Key.Enter);
             Assert.IsTrue(shown.Preview.IsOpen, "Enter inside the field is the field's, not a handoff or a close (G19)");
             Assert.AreSame(shown.PreviewTagBox, shown.Focused, "focus left in the box for the next tag (G17)");
             Assert.AreEqual("", shown.PreviewTagBox.Text, "the field emptied");
@@ -219,7 +219,7 @@ public sealed class PreviewTagsTests
         {
             Assert.IsEmpty(shown.PreviewTags.Field.Suggestions, "dog, which the item carries now, is not suggested (G17)");
             ShownWindow.Type(shown.PreviewTagBox, "ance");
-            ShownWindow.Press(shown.PreviewTagBox, Key.Enter);
+            ShownWindow.Tap(shown.PreviewTagBox, Key.Enter);
             Assert.AreSame(shown.PreviewTagBox, shown.Focused, "a second tag, entered the same way");
         });
         await ShownWindow.Eventually(() => shown.TagsOf(plain.Id).Count == 4 && TrayDesktop.Get(() => shown.PreviewTags.Field.Tags.Count == 4));
@@ -236,7 +236,7 @@ public sealed class PreviewTagsTests
         TrayDesktop.Run(() => shown.PreviewTagBox.Focus());
         TrayDesktop.Run(() =>
         {
-            ShownWindow.Press(shown.PreviewTagBox, Key.Enter);
+            ShownWindow.Tap(shown.PreviewTagBox, Key.Enter);
             Assert.AreSame(shown.PreviewTagBox, shown.Focused, "an empty Enter changes nothing, focus staying in the box (G17: nothing requires a tag)");
             ShownWindow.Press(shown.PreviewTagBox, Key.Escape);
             Assert.AreSame(shown.PreviewPicture, shown.Focused, "Esc leaves the field");
@@ -246,7 +246,7 @@ public sealed class PreviewTagsTests
         TrayDesktop.Run(() => Assert.AreEqual("", shown.Said(), "nothing was refused or said"));
         Assert.AreEqual(0L, shown.Uses());
 
-        TrayDesktop.Run(() => ShownWindow.Press(shown.PreviewPicture, Key.Enter));
+        TrayDesktop.Run(() => ShownWindow.Tap(shown.PreviewPicture, Key.Enter));
         await ShownWindow.Eventually(() => shown.Uses() == 1);
         CollectionAssert.AreEqual(new[] { plain.FilePath }, TestClipboard.Read().Files.ToList(), "Enter outside the field hands off the previewed item (G7, G8)");
     }
@@ -270,7 +270,7 @@ public sealed class PreviewTagsTests
         {
             ShownWindow.Press(shown.PreviewTagBox, Key.Down);
             Assert.AreEqual("reaction", shown.PreviewTags.Field.Chosen);
-            ShownWindow.Press(shown.PreviewTagBox, Key.Enter);
+            ShownWindow.Tap(shown.PreviewTagBox, Key.Enter);
         });
         await ShownWindow.Eventually(() => shown.TagsOf(plain.Id).Count == 2);
         CollectionAssert.AreEqual(new[] { "funny", "reaction" }, shown.TagsOf(plain.Id), "the chosen suggestion in place of the word being typed");
@@ -434,7 +434,7 @@ public sealed class PreviewTagsTests
         {
             shown.PreviewTagBox.Focus();
             ShownWindow.Type(shown.PreviewTagBox, "late");
-            ShownWindow.Press(shown.PreviewTagBox, Key.Enter);
+            ShownWindow.Tap(shown.PreviewTagBox, Key.Enter);
         });
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => !shown.Preview.IsOpen));
 
@@ -479,7 +479,7 @@ public sealed class PreviewTagsTests
             Assert.IsTrue(shown.Preview.IsOpen, "the preview as it was left (G1)");
             Assert.IsTrue(shown.PreviewTagBox.IsFocused, "focus back in the field");
             Assert.AreEqual("half", shown.PreviewTagBox.Text, "with what was typed");
-            ShownWindow.Press(shown.PreviewTagBox, Key.Enter);
+            ShownWindow.Tap(shown.PreviewTagBox, Key.Enter);
         });
         await ShownWindow.Eventually(() => shown.TagsOf(item.Id).Count == 1);
         CollectionAssert.AreEqual(new[] { "half" }, shown.TagsOf(item.Id), "nothing of the ended edit was committed");

@@ -148,7 +148,7 @@ public sealed class TrimToolTests
             editor.Choose("Label");
             editor.Click(0.3, 0.3);
             ShownWindow.Type(editor.Field!, "W");
-            ShownWindow.Press(editor.Field!, Key.Enter, KeyModifiers.Control);
+            ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
             Assert.AreEqual(new FrameRange(0, 2), editor.Session!.SelectedRange, "the whole clip by default (G22)");
         });
         var labelled = await RenderedWindow.Of(shown);
