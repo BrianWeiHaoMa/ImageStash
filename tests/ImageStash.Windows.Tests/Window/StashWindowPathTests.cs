@@ -127,6 +127,23 @@ public sealed class StashWindowPathTests
                 Assert.AreEqual(0, TileStarTests.StarInk(rendered, TileStarTests.TileBox(shown, tile.Id)), $"tile {tile.Id} shows no star (G6)");
             }
 
+            ChipRowRoomTests.AssertScopeGlyphs(shown);
+            RaiseClick(shown.Chip("Favorites"));
+        });
+        await Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Scope == Scope.Favorites));
+        TrayDesktop.Run(() =>
+        {
+            shown.Window.UpdateLayout();
+            CollectionAssert.AreEqual(new[] { middle }, shown.Grid.Rows.SelectMany(row => row.Tiles).Select(tile => tile.Id).ToArray(),
+                "the Favorites chip shows only the starred tile (G4)");
+            RaiseClick(shown.Chip("All"));
+        });
+        await Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Scope == Scope.All));
+        TrayDesktop.Run(() =>
+        {
+            shown.Window.UpdateLayout();
+            CollectionAssert.AreEqual(tiles.Select(tile => tile.Id).ToArray(), shown.Grid.Rows.SelectMany(row => row.Tiles).Select(tile => tile.Id).ToArray(),
+                "the All chip restores all three tiles (G4)");
             shown.Search.Focus();
         });
 

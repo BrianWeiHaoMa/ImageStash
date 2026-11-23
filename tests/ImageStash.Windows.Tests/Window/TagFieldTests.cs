@@ -730,7 +730,7 @@ public sealed class TagFieldTests
             shown.ClickSubmenuEntry("Remove tag", "reaction");
             shown.CloseMenu();
         });
-        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && !shown.ChipRow.Children.OfType<Button>().Any(chip => chip.Content as string == "#reaction")));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && !shown.ChipRow.Children.OfType<Button>().Any(chip => ShownWindow.ChipLabel(chip) == "#reaction")));
         TrayDesktop.Run(() =>
         {
             shown.Window.UpdateLayout();

@@ -31,7 +31,7 @@ public sealed class ToolTipRuleTests
     [TestMethod]
     [DataRow("", "Settings")]
     [DataRow("", "Add to your stash")]
-    [DataRow("…", "Every tag")]
+    [DataRow("", "Every tag")]
     public void AControlShownAsAGlyphAloneKeepsATipNamingItsAction(string glyph, string tip)
     {
         Assert.AreEqual(tip, ToolTipRule.Decide([glyph], tip));

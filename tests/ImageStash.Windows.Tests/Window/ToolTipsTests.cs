@@ -101,13 +101,13 @@ public sealed class ToolTipsTests
             Assert.AreEqual("Settings", Tip(shown.SettingsButton), "the gear");
             Assert.AreEqual("Add to your stash", Tip(shown.AddButton), "+");
             Assert.AreEqual("Keep open", Tip(Named(shown.Window, "Keep open")), "the pin");
-            Assert.AreEqual("Every tag", Tip(shown.ChipRow.Children.OfType<Button>().Single(chip => AutomationProperties.GetName(chip) == "Every tag")), "the chip row's …");
+            Assert.AreEqual("Every tag", Tip(shown.Chip("Every tag")), "the tag list's chip");
             var closes = shown.Window.GetVisualDescendants().OfType<Button>().Where(button => AutomationProperties.GetName(button) == "Close").ToList();
             Assert.IsNotEmpty(closes, "the import's notice and its ×");
             Assert.IsTrue(closes.All(close => Tip(close) == "Close"), "a notice's ×");
             foreach (var scope in new[] { "Recent", "Favorites", "All" })
             {
-                Assert.IsNull(Tip(shown.Chip(scope)), $"the scope chip {scope}, its words its action");
+                Assert.AreEqual(scope, Tip(shown.Chip(scope)), $"the glyph chip names its scope");
             }
 
             shown.OpenPreview(items[0]);

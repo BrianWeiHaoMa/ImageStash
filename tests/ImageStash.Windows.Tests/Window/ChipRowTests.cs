@@ -165,16 +165,16 @@ public sealed class ChipRowTests
         {
             var shownChips = shown.ShownChips();
             var row = shown.ChipRow;
-            var named = shownChips.Where(chip => chip != "…").ToList();
+            var named = shownChips.Where(chip => chip != "Every tag").ToList();
             Assert.IsGreaterThan(3, named.Count, "some tag chips fit");
             Assert.IsLessThan(15, named.Count, "not all twelve fit at the flyout's width");
-            Assert.AreEqual("…", shownChips[^1], "the chip that lists every tag ends the row (G4)");
+            Assert.AreEqual("Every tag", shownChips[^1], "the chip that lists every tag ends the row (G4)");
             CollectionAssert.AreEqual(new[] { "Recent", "Favorites", "All" }.Concat(tags.Select(tag => "#" + tag)).Take(named.Count).ToList(), named, "in order, from the first");
             Assert.IsLessThanOrEqualTo(40, row.Bounds.Height, "one line");
-            foreach (var chip in row.Children.OfType<Button>().Where(chip => !shownChips.Contains((string)chip.Content!)))
+            foreach (var chip in row.Children.OfType<Button>().Where(chip => !shownChips.Contains(ShownWindow.ChipLabel(chip))))
             {
-                Assert.IsFalse(chip.IsHitTestVisible, $"{chip.Content} cannot be reached");
-                Assert.IsGreaterThanOrEqualTo(row.Bounds.Width, chip.Bounds.X, $"{chip.Content} lies beyond the row's clipped edge");
+                Assert.IsFalse(chip.IsHitTestVisible, $"{ShownWindow.ChipLabel(chip)} cannot be reached");
+                Assert.IsGreaterThanOrEqualTo(row.Bounds.Width, chip.Bounds.X, $"{ShownWindow.ChipLabel(chip)} lies beyond the row's clipped edge");
             }
         });
     }
@@ -192,8 +192,8 @@ public sealed class ChipRowTests
         TrayDesktop.Run(() =>
         {
             var row = shown.ChipRow;
-            CollectionAssert.AreEqual(new[] { "Recent", "Favorites", "All", "#cat", "…" }, shown.ShownChips());
-            var room = row.Bounds.Width - shown.Chip("#cat").Bounds.Right - 6 - shown.Chip("…").DesiredSize.Width - 6;
+            CollectionAssert.AreEqual(new[] { "Recent", "Favorites", "All", "#cat", "Every tag" }, shown.ShownChips());
+            var room = row.Bounds.Width - shown.Chip("#cat").Bounds.Right - 6 - shown.Chip("Every tag").DesiredSize.Width - 6;
             Assert.IsLessThanOrEqualTo(room, shown.Chip("#z").DesiredSize.Width, "#z alone would fit after #cat");
             Assert.IsGreaterThan(room, shown.Chip("#" + wide).DesiredSize.Width, "the wide tag does not");
         });
@@ -209,7 +209,7 @@ public sealed class ChipRowTests
         await Dispatcher.UIThread.InvokeAsync(() => shown.Listing.Refresh());
         TrayDesktop.Run(() => shown.Search.Text = "w0001");
         await TrayDesktop.Get(() => shown.Listing.Settle());
-        TrayDesktop.Run(() => CollectionAssert.AreEqual(new[] { "Recent", "Favorites", "All", "#w0001", "…" }, shown.ShownChips(), "the query's one tag (G5), and the chip listing every tag, which the row cannot hold (G4)"));
+        TrayDesktop.Run(() => CollectionAssert.AreEqual(new[] { "Recent", "Favorites", "All", "#w0001", "Every tag" }, shown.ShownChips(), "the query's one tag (G5), and the chip listing every tag, which the row cannot hold (G4)"));
 
         // The paste moment leaves the query typed; the next summon keeps it and its one chip (G1).
         var clock = System.Diagnostics.Stopwatch.StartNew();
@@ -230,13 +230,13 @@ public sealed class ChipRowTests
         var full = scoped.Elapsed;
         TrayDesktop.Run(() => shown.Window.Hide());
 
-        CollectionAssert.AreEqual(new[] { "Recent", "Favorites", "All", "#w0001", "…" }, keptChips, "the query's one tag still (G1, G5)");
+        CollectionAssert.AreEqual(new[] { "Recent", "Favorites", "All", "#w0001", "Every tag" }, keptChips, "the query's one tag still (G1, G5)");
         Assert.AreEqual("w0001", keptQuery);
         Assert.AreEqual("w0001", keptText, "all of it selected (G1)");
         Assert.IsLessThan(500, summoned.TotalMilliseconds, $"well within G1's second: {summoned.TotalMilliseconds:F0} ms");
         CollectionAssert.AreEqual(new[] { own.Id }, selected, "All, its first item selected (G4)");
         CollectionAssert.AreEqual(new[] { "Recent", "Favorites", "All", "#w0001" }, shownChips.Take(4).ToList(), "the tags in G4's order, as many as fit");
-        Assert.AreEqual("…", shownChips[^1], "and the chip that lists every tag");
+        Assert.AreEqual("Every tag", shownChips[^1], "and the chip that lists every tag");
         Assert.IsLessThan(1000, full.TotalMilliseconds, $"every tag's row within a second: {full.TotalMilliseconds:F0} ms");
         Assert.IsLessThan(3 + 40, made, $"only the chips that could fit are made, not one per tag: {made}");
     }
@@ -252,12 +252,12 @@ public sealed class ChipRowTests
         TrayDesktop.Run(() => shown.Search.Text = "cat");
         await TrayDesktop.Get(() => shown.Listing.Settle());
         await Task.Delay(100);
-        TrayDesktop.Run(() => CollectionAssert.AreEqual(new[] { "Recent", "Favorites", "All", "#cat", "…" }, shown.ShownChips(), "the row could not hold every tag (G4)"));
+        TrayDesktop.Run(() => CollectionAssert.AreEqual(new[] { "Recent", "Favorites", "All", "#cat", "Every tag" }, shown.ShownChips(), "the row could not hold every tag (G4)"));
 
         TrayDesktop.Run(() => shown.Search.Text = "nothing-matches-this");
         await TrayDesktop.Get(() => shown.Listing.Settle());
         await Task.Delay(100);
-        TrayDesktop.Run(() => CollectionAssert.AreEqual(new[] { "Recent", "Favorites", "All", "…" }, shown.ShownChips(), "no match shows no tag, and every tag is still one click away (G4)"));
+        TrayDesktop.Run(() => CollectionAssert.AreEqual(new[] { "Recent", "Favorites", "All", "Every tag" }, shown.ShownChips(), "no match shows no tag, and every tag is still one click away (G4)"));
     }
 
     [TestMethod]
@@ -270,7 +270,7 @@ public sealed class ChipRowTests
         Rect Place() => TrayDesktop.Get(() =>
         {
             shown.Window.UpdateLayout();
-            return shown.Chip("…").Bounds;
+            return shown.Chip("Every tag").Bounds;
         });
 
         var first = Place();
@@ -278,7 +278,7 @@ public sealed class ChipRowTests
 
         TrayDesktop.Run(() => ShownWindow.RaiseClick(shown.Chip("#cat")));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == "cat"));
-        TrayDesktop.Run(() => CollectionAssert.AreEqual(new[] { "Recent", "Favorites", "All", "#cat", "…" }, shown.ShownChips(), "a lit chip and nothing that narrows: the row has room, and the chip still ends it (G4)"));
+        TrayDesktop.Run(() => CollectionAssert.AreEqual(new[] { "Recent", "Favorites", "All", "#cat", "Every tag" }, shown.ShownChips(), "a lit chip and nothing that narrows: the row has room, and the chip still ends it (G4)"));
         Assert.AreEqual(first, Place(), "a chip lit and the others gone leave it where it was (G4)");
 
         TrayDesktop.Run(() => ShownWindow.RaiseClick(shown.Chip("All")));
@@ -350,7 +350,7 @@ public sealed class ChipRowTests
         TrayDesktop.Run(() => shown.Window.Width = 1600);
         await ShownWindow.Eventually(() => TrayDesktop.Get(shown.ShownChips).Count > madeNarrow);
 
-        var wide = TrayDesktop.Get(shown.ShownChips).Where(chip => chip != "…").ToList();
+        var wide = TrayDesktop.Get(shown.ShownChips).Where(chip => chip != "Every tag").ToList();
         CollectionAssert.AreEqual(new[] { "Recent", "Favorites", "All" }.Concat(tags.Select(tag => "#" + tag)).Take(wide.Count).ToList(), wide, "still in order, from the first (G4)");
         Assert.IsLessThan(3 + 60, wide.Count, "and still up to the first that does not fit");
     }
@@ -456,7 +456,7 @@ public sealed class ChipRowTests
     /// The window's own drag of <paramref name="dragged"/>, started from a press on the first of them in the window in
     /// front, as the user's press leaves it, so the flyout's hide rule judged at the drag's end finds focus still there.
     /// </summary>
-    private static void Drag(ShownWindow shown, params StashItem[] dragged) => TrayDesktop.Run(() =>
+    internal static void Drag(ShownWindow shown, params StashItem[] dragged) => TrayDesktop.Run(() =>
     {
         shown.Activate();
         shown.Listing.Select(dragged.Select(item => item.Id), dragged[0].Id);

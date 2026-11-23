@@ -1,6 +1,19 @@
 using System.Collections.Concurrent;
+using Avalonia.Threading;
 
 namespace ImageStash.Tests.Support;
+
+/// <summary>
+/// Binds Avalonia's dispatcher to <see cref="ControlThread"/> before any check runs: Avalonia binds it to the first thread
+/// that makes one of its objects (a brush included), so a check making one on its own thread first would leave every
+/// control check after it on the wrong thread, whatever order the checks run in.
+/// </summary>
+[TestClass]
+public sealed class ControlThreadFirst
+{
+    [AssemblyInitialize]
+    public static void BindTheDispatcher(TestContext context) => ControlThread.Run(() => _ = Dispatcher.UIThread);
+}
 
 /// <summary>
 /// The one thread the portable checks build Avalonia controls on: Avalonia binds its dispatcher to the first thread that

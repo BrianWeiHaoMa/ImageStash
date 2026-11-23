@@ -171,15 +171,22 @@ public sealed class ShownWindow : IDisposable
     public static Button EveryTagButton(TagField field) =>
         field.GetVisualDescendants().OfType<Button>().Single(button => AutomationProperties.GetName(button) == "Every tag");
 
-    /// <summary>The chip with these words, shown or not.</summary>
-    public Button Chip(string label) => ChipRow.Children.OfType<Button>().Single(chip => chip.Content as string == label);
+    /// <summary>
+    /// The chip called <paramref name="label"/>, shown or not: a scope chip or the chip listing every tag by its name, as
+    /// a screen reader and the scripts find it ("Recent", "Every tag"), since its face is a glyph; a tag chip by its words.
+    /// </summary>
+    public Button Chip(string label) => ChipRow.Children.OfType<Button>().Single(chip => ChipLabel(chip) == label);
 
-    /// <summary>The words of the chips the row shows, in order, once laid out: those whole inside it and reachable.</summary>
+    /// <summary>The labels (<see cref="Chip"/>) of the chips the row shows, in order, once laid out: those whole inside it and reachable.</summary>
     public List<string> ShownChips()
     {
         Window.UpdateLayout();
-        return ChipRow.Children.OfType<Button>().Where(chip => chip.IsHitTestVisible && chip.Bounds.X >= 0 && chip.Bounds.Right <= ChipRow.Bounds.Width).Select(chip => (string)chip.Content!).ToList();
+        return ChipRow.Children.OfType<Button>().Where(chip => chip.IsHitTestVisible && chip.Bounds.X >= 0 && chip.Bounds.Right <= ChipRow.Bounds.Width).Select(ChipLabel).ToList();
     }
+
+    /// <summary>A chip's name when it has one, else its words; never a glyph read as words.</summary>
+    public static string ChipLabel(Button chip) =>
+        AutomationProperties.GetName(chip) is { Length: > 0 } name ? name : chip.Content as string ?? throw new InvalidOperationException("a chip with neither a name nor words");
 
     /// <summary>Whether the chip shows as lit.</summary>
     public bool Lit(string label) => Chip(label).Classes.Contains("accent");

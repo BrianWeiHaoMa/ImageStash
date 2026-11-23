@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -442,7 +441,7 @@ public sealed class StashWindowTests
         TrayDesktop.Run(() =>
         {
             shown.Search.Text = "x";
-            shown.Window.GetVisualDescendants().OfType<Button>().Single(button => button.Content as string == "All").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            RaiseClick(shown.Chip("All"));
         });
         await Task.Delay(500);
         await Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled));

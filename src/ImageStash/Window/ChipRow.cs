@@ -37,10 +37,29 @@ public sealed class OwnDrag(IReadOnlyList<StashItem> items)
 public sealed class ChipRow : Panel
 {
     private const double Spacing = 6;
-    private const double ChipPadding = 14;
+
+    /// <summary>A tag chip's padding each side, where the chip is built and where the row measures and counts chips.</summary>
+    private const double TagChipPadding = 10;
+
+    /// <summary>A scope chip's width, its glyph centred in it: compact, so the row leaves room for tags.</summary>
+    private const double ScopeChipWidth = 36;
 
     /// <summary>The narrowest a tag chip can be, its padding alone, which bounds how many could ever fit in a width.</summary>
-    private const double NarrowestChip = 2 * ChipPadding;
+    internal const double NarrowestChip = 2 * TagChipPadding;
+
+    /// <summary>The line between the scopes and the tag chips, and the room it takes each side.</summary>
+    private const double SeparatorWidth = 1, SeparatorMargin = 2;
+
+    /// <summary>
+    /// Recent, Favorites and All, each shown as its Segoe Fluent Icons glyph (F10), a clock, the favorite star outlined as
+    /// a scope rather than a flag, a grid, and called by G4's name in its tooltip and to a screen reader.
+    /// </summary>
+    private static readonly (Scope Scope, string Name, string Glyph)[] ScopeFaces =
+    [
+        (Scope.Recent, "Recent", ""),
+        (Scope.Favorites, "Favorites", FavoriteStar.Outlined),
+        (Scope.All, "All", ""),
+    ];
 
     private readonly Listing listing;
     private readonly Organising organising;
@@ -62,7 +81,8 @@ public sealed class ChipRow : Panel
     private bool makingMore;
     private int fitting;
     private bool everyTagShown;
-    private readonly Dictionary<string, double> chipWidths = [];
+    /// <summary>The width of each tag chip's words, measured once.</summary>
+    private readonly Dictionary<string, double> wordWidths = [];
     private IDisposable? ring;
 
     /// <param name="ownDrag">The window's own drag in progress, or null.</param>
@@ -75,16 +95,17 @@ public sealed class ChipRow : Panel
         this.search = search;
         // What does not fit is laid beyond the right edge: clipped, it is neither seen nor reached.
         ClipToBounds = true;
-        scopes = [(ScopeChip("Recent", Scope.Recent), Scope.Recent), (ScopeChip("Favorites", Scope.Favorites), Scope.Favorites), (ScopeChip("All", Scope.All), Scope.All)];
-        foreach (var (chip, _) in scopes)
+        scopes = ScopeFaces.Select(face => (ScopeChip(face.Name, face.Glyph, face.Scope), face.Scope)).ToArray();
+        foreach (var (chip, scope) in scopes)
         {
             Children.Add(chip);
+            if (scope == Scope.Favorites)
+            {
+                TakesOwnDrag(chip, tag: null);
+            }
         }
 
-        TakesOwnDrag(scopes[1].Chip, tag: null);
-        everyTag = Chip("…", LookStyles.ScopeChip);
-        AutomationProperties.SetName(everyTag, "Every tag");
-        ToolTipRule.Set(everyTag, "Every tag");
+        everyTag = EveryTagChip();
         everyTag.Click += (_, _) => ToggleEveryTag();
         Children.Add(everyTag);
         LogicalChildren.Add(picker);
@@ -153,7 +174,9 @@ public sealed class ChipRow : Panel
     /// </summary>
     private bool CannotHoldEveryTag(double width)
     {
-        var used = scopes.Sum(scope => scope.Chip.DesiredSize.Width + Spacing);
+        // Counted as the shown row lays its chips out, the separator and each chip's edge included, so a query whose few
+        // chips fit never hides the last chip while the stash's tags would not fit (G4).
+        var used = scopes.Sum(scope => scope.Chip.DesiredSize.Width + Spacing) + SeparatorWidth + 2 * SeparatorMargin + Spacing;
         foreach (var count in listing.Tags)
         {
             used += TagChipWidth(count.Tag) + Spacing;
@@ -166,16 +189,17 @@ public sealed class ChipRow : Panel
         return false;
     }
 
+    /// <summary>A tag chip's width before it is made: its words, its padding and its edge, which Fluent gives every chip alike.</summary>
     private double TagChipWidth(string tag)
     {
-        if (!chipWidths.TryGetValue(tag, out var chipWidth))
+        if (!wordWidths.TryGetValue(tag, out var words))
         {
-            using var words = new TextLayout("#" + tag, new Typeface(TextElement.GetFontFamily(this)), TextElement.GetFontSize(this), null);
-            chipWidth = words.WidthIncludingTrailingWhitespace + NarrowestChip;
-            chipWidths[tag] = chipWidth;
+            using var layout = new TextLayout("#" + tag, new Typeface(TextElement.GetFontFamily(this)), TextElement.GetFontSize(this), null);
+            words = layout.WidthIncludingTrailingWhitespace;
+            wordWidths[tag] = words;
         }
 
-        return chipWidth;
+        return words + NarrowestChip + everyTag.BorderThickness.Left + everyTag.BorderThickness.Right;
     }
 
     private bool Shown(Control child) => ReferenceEquals(child, everyTag) ? everyTagShown : Children.IndexOf(child) < fitting;
@@ -288,7 +312,7 @@ public sealed class ChipRow : Panel
         var at = scopes.Length;
         if (made > 0)
         {
-            var separator = new Border { Width = 1, Height = 20, Margin = new Thickness(2, 0) };
+            var separator = new Border { Width = SeparatorWidth, Height = 20, Margin = new Thickness(SeparatorMargin, 0) };
             separator.Bind(Border.BackgroundProperty, separator.GetResourceObservable(LookKeys.Divider));
             Children.Insert(at++, separator);
         }
@@ -306,26 +330,48 @@ public sealed class ChipRow : Panel
     /// <summary>The widest the row can be now: the widest it was offered, or the window's, which holds it.</summary>
     private double Widest() => Math.Max(widest, TopLevel.GetTopLevel(this)?.ClientSize.Width ?? 0);
 
-    private Button ScopeChip(string label, Scope scope)
+    /// <summary>
+    /// A scope chip, its glyph alone on its face and its name in its tooltip and to a screen reader, which is how a check
+    /// or a script finds it; its click clears the search and shows the scope (G4). The glyph takes the chip's words
+    /// colour, so a lit chip reads as lit in either look as a chip of words does (G5, F10).
+    /// </summary>
+    private Button ScopeChip(string name, string glyph, Scope scope)
     {
-        var chip = Chip(label, LookStyles.ScopeChip);
+        var chip = Chip(IconGlyph.Of(glyph, 16), LookStyles.ScopeChip, padding: 0);
+        chip.Width = ScopeChipWidth;
+        chip.HorizontalContentAlignment = HorizontalAlignment.Center;
+        AutomationProperties.SetName(chip, name);
+        ToolTipRule.Set(chip, name);
         chip.Click += (_, _) => _ = listing.ShowScope(scope);
+        return chip;
+    }
+
+    /// <summary>
+    /// The chip that lists every tag: a tag glyph and a chevron, saying it opens the tags, about as wide as the "…" it
+    /// replaced so the row keeps its room for tag chips (G4); "Every tag" in its tooltip and to a screen reader.
+    /// </summary>
+    private static Button EveryTagChip()
+    {
+        var face = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, Children = { IconGlyph.Of("", 14), IconGlyph.Of("", 10) } };
+        var chip = Chip(face, LookStyles.ScopeChip, padding: 8);
+        AutomationProperties.SetName(chip, "Every tag");
+        ToolTipRule.Set(chip, "Every tag");
         return chip;
     }
 
     /// <summary>A tag chip: its click adds the tag as stored to the search, and a lit chip's click takes its word out (G4).</summary>
     private Button TagChip(string tag)
     {
-        var chip = Chip("#" + tag, LookStyles.TagChip);
+        var chip = Chip("#" + tag, LookStyles.TagChip, TagChipPadding);
         chip.Click += (_, _) => ToggleWord(tag);
         TakesOwnDrag(chip, tag);
         return chip;
     }
 
     /// <summary>A chip of the row, dressed by the take as its <paramref name="kind"/> of chip (<see cref="LookStyles"/>).</summary>
-    private static Button Chip(string label, string kind)
+    private static Button Chip(object content, string kind, double padding)
     {
-        var chip = new Button { Content = label, Height = 32, Padding = new Thickness(ChipPadding, 0), VerticalContentAlignment = VerticalAlignment.Center, Focusable = false };
+        var chip = new Button { Content = content, Height = 32, Padding = new Thickness(padding, 0), VerticalContentAlignment = VerticalAlignment.Center, Focusable = false };
         chip.Classes.Add(kind);
         return chip;
     }

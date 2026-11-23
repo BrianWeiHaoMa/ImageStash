@@ -27,7 +27,7 @@ namespace ImageStash.Windows.Tests.Window;
 [TestClass]
 public sealed class TagPickerTests
 {
-    private const string EveryTag = "…";
+    private const string EveryTag = "Every tag";
 
     [TestMethod]
     public async Task ARowThatHoldsItsChipsHasNoLastChipAndOneThatCannotEndsWithItWhole()
