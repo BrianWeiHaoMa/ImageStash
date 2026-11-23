@@ -107,6 +107,7 @@ public sealed class Transferring
     /// </summary>
     public async Task<Outcome> Export(TopLevel owner)
     {
+        using var acting = UserAct.Begin(StashExport.Action);
         if (CannotBeginReason is { } refused)
         {
             return new Failure(StashExport.Action, StashSubject, refused);
@@ -174,6 +175,7 @@ public sealed class Transferring
     /// </summary>
     public async Task<Outcome> ChooseArchive(TopLevel owner)
     {
+        using var acting = UserAct.Begin(StashImport.Action);
         if (CannotBeginReason is { } refused)
         {
             return new Failure(StashImport.Action, StashSubject, refused);
@@ -229,6 +231,7 @@ public sealed class Transferring
     /// </summary>
     public async Task<Outcome> ConfirmImport()
     {
+        using var acting = UserAct.Begin(StashImport.Action);
         if (Offer is not { } offer)
         {
             return Outcome.Done;

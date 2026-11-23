@@ -10,8 +10,9 @@ namespace ImageStash.Window;
 
 /// <summary>
 /// A notice as a card, in the stash window's stack and in a notification above the tray alike (G16): its words, its
-/// Undo when it has one, and a close button; the pointer over it holds its time, six seconds above the tray and as long
-/// as its words need in the window (Notice.cs).
+/// Undo while the notice offers it, and a close button; the pointer over it holds its time, six seconds above the tray
+/// and as long as its words need in the window (Notice.cs), where a notice naming a problem stays past its time with
+/// its words and its close button, its Undo button gone with the Undo's end.
 /// </summary>
 public static class NoticeCard
 {
@@ -38,6 +39,17 @@ public static class NoticeCard
             var undo = new Button { Content = label, Focusable = false };
             undo.Click += (_, _) => _ = notices.Undo(notice);
             row.Children.Add(undo);
+            // The window keeps a card while its notice shows, past the Undo's end too: the button follows the offer.
+            void Follow()
+            {
+                undo.IsVisible = notices.OffersUndo(notice);
+                if (!notices.Shown.Contains(notice))
+                {
+                    notices.Changed -= Follow;
+                }
+            }
+
+            notices.Changed += Follow;
         }
 
         row.Children.Add(CloseButton(() => notices.Close(notice)));

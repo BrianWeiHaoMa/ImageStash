@@ -211,16 +211,13 @@ public sealed class ClipboardPasteTests
 
         pasting.Clipboard.Reading = Outcome<ClipboardReading>.Of(new ClipboardReading([], null, null, OnlyLink: true));
         await pasting.Paste.Paste();
+        var linkSaid = pasting.Notices.Shown.Select(notice => notice.Text).ToList();
         pasting.Clipboard.Reading = Outcome<ClipboardReading>.Of(new ClipboardReading([], null, null, false));
         await pasting.Paste.Paste();
 
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                "Paste failed: the link, links are not taken and nothing is downloaded; copy the picture itself",
-                "Paste failed: the clipboard, it holds no picture or file",
-            },
-            pasting.Notices.Shown.Select(notice => notice.Text).ToList());
+        CollectionAssert.AreEqual(new[] { "Paste failed: the link, links are not taken and nothing is downloaded; copy the picture itself" }, linkSaid);
+        CollectionAssert.AreEqual(new[] { "Paste failed: the clipboard, it holds no picture or file" }, pasting.Notices.Shown.Select(notice => notice.Text).ToList(),
+            "the later paste's refusal took the place of the earlier's (G16)");
         Assert.AreEqual("kept", pasting.Listing.Query, "nothing was imported, so nothing was reset");
         Assert.AreEqual(0, ended, "no import ended, so a preview over the grid stays");
         Assert.IsEmpty(await pasting.Stash.All());
@@ -280,13 +277,14 @@ public sealed class ClipboardPasteTests
 
         pasting.Clipboard.Reading = Outcome<ClipboardReading>.Of(new ClipboardReading([], null, null, false));
         await pasting.Paste.Paste(box.Add);
+        var first = pasting.Notices.Shown.Single();
         pasting.Clipboard.Reading = Words("");
         await pasting.Paste.Paste(box.Add);
 
         Assert.IsEmpty(box);
-        CollectionAssert.AreEqual(
-            new[] { "Paste failed: the clipboard, it holds no picture or file", "Paste failed: the clipboard, it holds no picture or file" },
-            pasting.Notices.Shown.Select(notice => notice.Text).ToList());
+        Assert.AreEqual("Paste failed: the clipboard, it holds no picture or file", first.Text);
+        Assert.AreEqual("Paste failed: the clipboard, it holds no picture or file", pasting.Notices.Shown.Single().Text);
+        Assert.AreNotSame(first, pasting.Notices.Shown.Single(), "the later paste's notice took the place of the earlier's (G16)");
     }
 
     [TestMethod]
@@ -311,10 +309,12 @@ public sealed class ClipboardPasteTests
         pasting.Clipboard.Reading = new Failure(ClipboardPaste.Action, "the clipboard", HeldClipboard.Reason);
 
         await pasting.Paste.Paste();
+        var held = pasting.Notices.Shown.Single();
         pasting.Clipboard.Reading = Picture(MediaFixtures.Bytes("transparent.png"), null);
         await pasting.Paste.Paste();
 
-        Assert.AreEqual("Paste failed: the clipboard, another program is holding the clipboard open", pasting.Notices.Shown[0].Text);
+        Assert.AreEqual("Paste failed: the clipboard, another program is holding the clipboard open", held.Text);
+        Assert.DoesNotContain(held, pasting.Notices.Shown, "the paste that worked took its place (G16)");
         Assert.HasCount(1, await pasting.Stash.All(), "only the second paste added");
     }
 

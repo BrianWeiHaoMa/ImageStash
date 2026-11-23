@@ -28,6 +28,7 @@ public sealed class Renaming(Listing listing, Notices notices, Handoff handoff)
     /// </summary>
     public async Task<Outcome> Rename(StashItem item, string name)
     {
+        using var acting = UserAct.Begin(ItemRename.Action);
         if (listing.CannotStartReason is { } refused)
         {
             return Named(new Failure(ItemRename.Action, Notices.Describe([item]), refused));

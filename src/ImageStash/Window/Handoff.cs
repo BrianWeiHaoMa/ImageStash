@@ -25,6 +25,9 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
     /// <summary>The refresh after a Save or a Rename, as a failure names it (G26, G35).</summary>
     public const string RefreshAction = "Update the clipboard";
 
+    /// <summary>The act of a paste into the app the person came from, for the notices it raises (G16).</summary>
+    public const string HandOverAct = "Paste into an app";
+
     /// <summary>G8's words when the target is gone or cannot be sent input: what is on the clipboard, never that anything arrived (G10).</summary>
     public const string CopiedNotification = "Copied · press Ctrl+V";
 
@@ -66,6 +69,7 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
     /// </summary>
     public async Task<Outcome> Copy(TopLevel owner, IReadOnlyList<StashItem> items)
     {
+        using var acting = UserAct.Begin(Action);
         if (items.Count == 0)
         {
             return Outcome.Done;
@@ -237,6 +241,7 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
     /// </summary>
     public async Task<Outcome> Paste(TopLevel owner, IReadOnlyList<StashItem> items, PasteTarget target, PasteHide hide)
     {
+        using var acting = UserAct.Begin(HandOverAct);
         if (items.Count == 0)
         {
             return Outcome.Done;
@@ -306,6 +311,7 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
     /// </summary>
     public async Task<Outcome> DragOut(IReadOnlyList<StashItem> items, Func<IReadOnlyList<string>, Task<Outcome<bool>>> drag, Action<bool> dragging, Action dragEnded)
     {
+        using var acting = UserAct.Begin(DragAction);
         if (items.Count == 0)
         {
             return Outcome.Done;
@@ -331,6 +337,8 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
         dragging(true);
         try
         {
+            // Windows runs the window's own drop targets inside the drag: a drop on a chip is an act of its own (G16).
+            using var notTheDrags = UserAct.Within(null);
             dropped = await drag(items.Select(item => item.FilePath).ToList());
         }
         finally

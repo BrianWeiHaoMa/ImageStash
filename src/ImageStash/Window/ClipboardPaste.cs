@@ -28,6 +28,8 @@ public sealed class ClipboardPaste(Listing listing, Notices notices, Import impo
     /// <param name="intoField">Takes the clipboard's words when the paste is the <c>Ctrl+V</c> of the search box or a tag field and it holds neither files nor a picture; else null (G13).</param>
     public async Task Paste(Action<string>? intoField = null)
     {
+        // The paste's act, which its refusal and the batch's result alike carry (G16).
+        using var acting = UserAct.Begin(Action);
         var refused = import.Refusal("the clipboard");
         if (refused is not null && intoField is null)
         {

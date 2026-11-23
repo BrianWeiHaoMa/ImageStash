@@ -29,6 +29,7 @@ public sealed class SearchBoxClipboard(TextBox box, IClipboardAndDrops clipboard
 
     private async Task Write(string action)
     {
+        using var acting = UserAct.Begin(action);
         var text = box.SelectedText;
         if (TopLevel.GetTopLevel(box) is not { } owner || string.IsNullOrEmpty(text))
         {

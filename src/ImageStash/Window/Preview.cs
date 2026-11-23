@@ -32,6 +32,9 @@ namespace ImageStash.Window;
 /// </summary>
 public sealed class Preview : Border
 {
+    /// <summary>Opening the preview, as an act for the notices its reading raises (G16).</summary>
+    public const string OpenAct = "Preview";
+
     private readonly Listing listing;
     private readonly Handoff handoff;
     private readonly Organising organising;
@@ -236,6 +239,7 @@ public sealed class Preview : Border
     /// </summary>
     public void Open(StashItem item, bool editingName = false)
     {
+        using var acting = UserAct.Begin(OpenAct);
         if (item.Id != Item?.Id)
         {
             copied.Withdraw();

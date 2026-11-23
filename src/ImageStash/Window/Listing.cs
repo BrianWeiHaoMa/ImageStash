@@ -117,6 +117,15 @@ public sealed class Listing
     /// <summary>Why an act asked of an item before an import replaced the stash is refused after it (G36, G35).</summary>
     public const string ReplacedSinceReason = "your stash was replaced by an import since it was asked";
 
+    /// <summary>A summon, a search and a scope chosen, as acts for the notices their listing raises (G16).</summary>
+    public const string SummonAct = "Summon";
+
+    /// <inheritdoc cref="SummonAct"/>
+    public const string SearchAct = "Search";
+
+    /// <inheritdoc cref="SummonAct"/>
+    public const string ScopeAct = "Show a scope";
+
     /// <summary>
     /// How many times an import has replaced the stash since the start: an act that took its item before one and reaches
     /// the store after it would reach, by that identity, another item the imported store gave it to (G36, G9).
@@ -261,6 +270,7 @@ public sealed class Listing
     /// <summary>Recent, Favorites or All: clears the search and shows that scope (G4).</summary>
     public Task ShowScope(Scope scope)
     {
+        using var acting = UserAct.Begin(ScopeAct);
         Query = "";
         Scope = scope;
         resetPending = false;
@@ -271,6 +281,7 @@ public sealed class Listing
     /// <summary>The search box changed: its matches, or once it has no words, the scope the user was in (G5).</summary>
     public Task SetQuery(string text)
     {
+        using var acting = UserAct.Begin(SearchAct);
         Query = text;
         return Load(keepSelection: false);
     }
@@ -287,6 +298,7 @@ public sealed class Listing
     /// </summary>
     public Task Summoned(bool flyout)
     {
+        using var acting = UserAct.Begin(SummonAct);
         bool collapsed;
         lock (gate)
         {

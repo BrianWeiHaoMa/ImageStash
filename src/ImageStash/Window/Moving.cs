@@ -144,6 +144,7 @@ public sealed class Moving
     /// </summary>
     public async Task<Outcome> MoveTo(TopLevel owner)
     {
+        using var acting = UserAct.Begin(StashMove.Action);
         if (Asked || picking || running)
         {
             return new Failure(StashMove.Action, StashSubject, MoveReasons.InProgress);

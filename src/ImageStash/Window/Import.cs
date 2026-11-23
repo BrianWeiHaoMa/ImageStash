@@ -39,6 +39,12 @@ public sealed record ImportedFile(string Name, ImportResultKind Result, StashIte
 
     /// <summary>Whether the batch put this file's item in the stash, so its Undo removes it (G12).</summary>
     public bool PutInStash => Item is not null && Result is ImportResultKind.Added or ImportResultKind.Failed;
+
+    /// <summary>
+    /// Whether the batch's notice names a problem for this file (G16): skipped, unreadable or failed, or already in the
+    /// stash with the step after it failed; added, or already in the stash alone, is none.
+    /// </summary>
+    public bool NamesAProblem => Result is ImportResultKind.Skipped or ImportResultKind.Unreadable or ImportResultKind.Failed || Failure is not null;
 }
 
 /// <summary>
@@ -55,6 +61,12 @@ public sealed record ImportedFile(string Name, ImportResultKind Result, StashIte
 public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRetry)
 {
     public const string Action = "Add to the stash";
+
+    /// <summary>The acts a drop and Import files… are, each its own action for the notices they raise (G16).</summary>
+    public const string DropAct = "Drop";
+
+    /// <inheritdoc cref="DropAct"/>
+    public const string PickAct = "Import files";
 
     /// <summary>F3's four formats, as the refusals name them (G12).</summary>
     public const string Formats = "GIF, PNG, JPG and WebP";
@@ -90,6 +102,7 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
     /// </summary>
     public Task<IReadOnlyList<ImportedFile>> Drop(DropContents contents)
     {
+        using var acting = UserAct.Begin(DropAct);
         var litTags = listing.LitTags;
         var subject = contents.Items.Count > 0 ? Describe(contents.Items) : contents.OnlyLink ? "the link" : "what was dropped";
         var refused = Refusal(subject);
@@ -116,6 +129,7 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
     /// </summary>
     public async Task<IReadOnlyList<ImportedFile>> Pick(Func<Task<IReadOnlyList<string>?>> pick, Action<bool> dialogUp)
     {
+        using var acting = UserAct.Begin(PickAct);
         var litTags = listing.LitTags;
         if (Refusal("the files to import") is { } refused)
         {
@@ -287,7 +301,7 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
             }
 
             var text = also is null ? NoticeText(results) : NoticeText(results) + " " + also;
-            notices.Raise(text, batch.Count > 0 ? "Undo" : null, batch.Count > 0 ? () => Undo(store, batch) : null);
+            notices.Raise(text, batch.Count > 0 ? "Undo" : null, batch.Count > 0 ? () => Undo(store, batch) : null, namesAProblem: results.Any(file => file.NamesAProblem));
             return results;
         }
         finally

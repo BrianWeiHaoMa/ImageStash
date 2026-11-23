@@ -34,6 +34,8 @@ public sealed class Deletion(Listing listing, Notices notices)
     /// </summary>
     public async Task<Outcome> DeleteSelection()
     {
+        // The act begins at the press, before the wait, so a Delete asked later is the later act (G16).
+        using var acting = UserAct.Begin(Action);
         var pressed = listing.SelectedItems;
         if (pressed.Count > 0 && pressed.All(item => deleting.Contains(item.Id)))
         {
@@ -51,6 +53,7 @@ public sealed class Deletion(Listing listing, Notices notices)
     /// </summary>
     public async Task<Outcome> Delete(IReadOnlyList<StashItem> items)
     {
+        using var acting = UserAct.Begin(Action);
         var asked = items.DistinctBy(item => item.Id).Where(item => !deleting.Contains(item.Id)).ToList();
         if (asked.Count == 0)
         {

@@ -71,6 +71,15 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
 {
     public const string SaveACopyAction = "Save a copy";
 
+    /// <summary>The acts of Open with…, Reveal in File Explorer and the menu's opening, for the notices they raise (G16).</summary>
+    public const string OpenWithAct = "Open with";
+
+    /// <inheritdoc cref="OpenWithAct"/>
+    public const string MenuAct = "Item menu";
+
+    /// <inheritdoc cref="OpenWithAct"/>
+    public const string RevealAct = "Reveal in File Explorer";
+
     // How many Save a copy… writes run, from the last refusal they passed until the file is written.
     private int savingACopy;
 
@@ -147,6 +156,7 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
     public void Show(Control target, Rect anchor, TopLevel owner, PasteTarget? pasteTarget, PasteHide hide, Action<bool> dialogUp, Action<IReadOnlyList<StashItem>> typeATag,
         Action<StashItem> preview, Action<StashItem> rename, Action<StashItem> edit)
     {
+        using var acting = UserAct.Begin(MenuAct);
         var items = listing.SelectedItems;
         if (items.Count == 0)
         {
@@ -249,6 +259,7 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
 
     public async Task<Outcome> SaveACopy(TopLevel owner, StashItem item, Action<bool> dialogUp)
     {
+        using var acting = UserAct.Begin(SaveACopyAction);
         // From a Move's asking nothing but a handoff, a copy or a drag out starts: this would write beside a stash in
         // motion, perhaps into the folder it is copied to (State: Move); asked again once the picker has answered.
         if (listing.CannotStartReason is { } refused)
@@ -336,6 +347,7 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
     /// </summary>
     public async Task<Outcome> OpenWith(TopLevel owner, StashItem item, Action<bool> dialogUp)
     {
+        using var acting = UserAct.Begin(OpenWithAct);
         var opened = await openWith.Begin(owner, item, dialogUp);
         return opened.Succeeded ? opened : Named(opened.Failure);
     }
@@ -343,6 +355,7 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
     /// <summary>Reveal in File Explorer (G9): the stash folder with the finished picture's file selected; a failure is named.</summary>
     public Outcome RevealInExplorer(StashItem item)
     {
+        using var acting = UserAct.Begin(RevealAct);
         var revealed = dialogs.Reveal(item.FilePath);
         return revealed.Succeeded ? revealed : Named(revealed.Failure);
     }
@@ -551,6 +564,8 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
 
         private async Task ClickThenRead(ItemMenuAction list, string tag)
         {
+            // The click and the reading after it are one act, so what either names is the tag's (G16).
+            using var acting = UserAct.Begin(Organising.TagAct);
             await TagLists.Click(organising, list, items, tag);
             await Read();
         }

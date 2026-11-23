@@ -453,12 +453,15 @@ public sealed class OpenWithTests
         listed.Dialogs.OpenWithAnswer = () => Task.FromResult<Outcome>(new Failure(OpenWith.Action, "cat.png", "the shell refused"));
 
         var failed = await Chosen(listed, cat, up.Add);
+        var failedSaid = listed.Notices.Shown.Select(notice => notice.Text).ToList();
         listed.Dialogs.OpenWithAnswer = () => throw new InvalidOperationException("no shell here");
         var thrown = await Chosen(listed, cat, up.Add);
 
         Assert.AreEqual("Open with… failed: cat.png, the shell refused", failed.Failure?.Sentence);
         Assert.AreEqual("Open with… failed: cat.png, no shell here", thrown.Failure?.Sentence, "an exception is a failure to name (G35)");
-        CollectionAssert.AreEqual(new[] { failed.Failure!.Sentence, thrown.Failure!.Sentence }, listed.Notices.Shown.Select(notice => notice.Text).ToList(), "both named in the window");
+        CollectionAssert.AreEqual(new[] { failed.Failure!.Sentence }, failedSaid, "named in the window");
+        CollectionAssert.AreEqual(new[] { thrown.Failure!.Sentence }, listed.Notices.Shown.Select(notice => notice.Text).ToList(),
+            "named in the window, in the place of the earlier Open with…'s failure (G16)");
         CollectionAssert.AreEqual(new[] { true, false, true, false }, up, "the flag let go each time (G2)");
 
         await OpenedWith.RewriteWhenFree(listed.Dialogs.OpenedWith.Last(), MediaFixtures.DistinctPng(22, 4, 4));

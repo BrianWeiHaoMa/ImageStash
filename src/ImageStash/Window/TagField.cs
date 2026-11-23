@@ -352,6 +352,9 @@ public sealed class TagFieldScroller : ScrollViewer
 /// </summary>
 public sealed class TagFieldOverlay : Border
 {
+    /// <summary>Opening the field over items, as an act for the notices its reading raises (G16).</summary>
+    public const string OpenAct = "Type a tag";
+
     private readonly Listing listing;
     private readonly Organising organising;
     private readonly Notices notices;
@@ -410,6 +413,7 @@ public sealed class TagFieldOverlay : Border
     /// </summary>
     public void Open(IReadOnlyList<StashItem> opened, IInputElement returnFocusTo)
     {
+        using var acting = UserAct.Begin(OpenAct);
         items = opened;
         returnTo = returnFocusTo;
         heading.Text = "Tags of " + Notices.Describe(opened);
@@ -430,6 +434,8 @@ public sealed class TagFieldOverlay : Border
     /// </summary>
     private async Task Commit(string text)
     {
+        // One act with its reading after it, so what either names is the tag's (G16).
+        using var acting = UserAct.Begin(ItemTags.AddAction);
         Field.Clear();
         if (ItemTags.Words(text).Count == 0)
         {
@@ -447,6 +453,7 @@ public sealed class TagFieldOverlay : Border
     /// <summary>A pick in the list: the tag toggled for every item as Add tag ▸ toggles it, the field and the list then showing what they carry (G17).</summary>
     private async Task Toggle(string tag)
     {
+        using var acting = UserAct.Begin(Organising.TagAct);
         var opened = items;
         await organising.ToggleTag(opened, tag);
         if (IsVisible && ReferenceEquals(items, opened))

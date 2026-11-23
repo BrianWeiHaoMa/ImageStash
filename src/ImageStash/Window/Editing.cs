@@ -52,6 +52,9 @@ public sealed class Editing
 
     public const string SaveAsNewItemAction = "Save as new item";
 
+    /// <summary>The editor's Save, as an act for the notices it raises (G16).</summary>
+    public const string SaveAct = "Save";
+
     private const string NotInStash = "it is no longer in the stash";
 
     private readonly Listing listing;
@@ -135,7 +138,11 @@ public sealed class Editing
     /// was rendered from or on <paramref name="startOn"/> (the discarded edit a Cancel notice's Undo brings back); the edit
     /// open on another item is first left as Cancel would leave it. Answers the refusal, named, or done.
     /// </summary>
-    public async Task<Outcome> Open(StashItem item, EditOrigin from, LayerList? startOn = null) => Named(await Opening(item, from, startOn));
+    public async Task<Outcome> Open(StashItem item, EditOrigin from, LayerList? startOn = null)
+    {
+        using var acting = UserAct.Begin(Action);
+        return Named(await Opening(item, from, startOn));
+    }
 
     /// <summary>
     /// A capture notification's Edit or Trim (G16, G20): the editor on the card's own item, whatever the grid selects,
@@ -145,6 +152,7 @@ public sealed class Editing
     /// </summary>
     public async Task<Outcome> OpenFromNotification(CaptureEdit asked)
     {
+        using var acting = UserAct.Begin(Action);
         await listing.ShowScope(Scope.All);
         return Named(await Opening(asked.Item, EditOrigin.Notification, startOn: null, trim: asked.Trim));
     }
@@ -261,6 +269,7 @@ public sealed class Editing
     /// </summary>
     public async Task<Outcome> OpenOnSelection(StashItem? previewItem)
     {
+        using var acting = UserAct.Begin(Action);
         if (previewItem is not null)
         {
             return await Open(previewItem, EditOrigin.Preview);
@@ -320,6 +329,7 @@ public sealed class Editing
 
     private Task<Outcome> Ending(bool asNewItem)
     {
+        using var acting = UserAct.Begin(asNewItem ? SaveAsNewItemAction : SaveAct);
         if (Session is not { IsOpen: true } session)
         {
             return Task.FromResult(Outcome.Done);
@@ -384,6 +394,7 @@ public sealed class Editing
     /// </summary>
     public async Task<Outcome> RevertToOriginal(StashItem item)
     {
+        using var acting = UserAct.Begin(RevertAction);
         if (listing.CannotStartReason is { } refused)
         {
             return Named(new Failure(RevertAction, Name(item), refused));
@@ -446,6 +457,7 @@ public sealed class Editing
     /// </summary>
     public async Task<Outcome> SaveAsNewItem(StashItem item, EditOrigin from)
     {
+        using var acting = UserAct.Begin(SaveAsNewItemAction);
         if (listing.CannotStartReason is { } refused)
         {
             return Named(new Failure(SaveAsNewItemAction, Name(item), refused));

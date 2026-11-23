@@ -23,12 +23,21 @@ public sealed class Organising(Listing listing, Notices notices)
     public bool Changing => Volatile.Read(ref changing) > 0;
 
     /// <summary>
+    /// The acts of a favorite's toggle (<c>Ctrl+D</c>, the preview's star) and of a tag's toggle from a list, for the
+    /// notices they raise (G16); setting a favorite and adding or removing a tag are acts by their own actions' names.
+    /// </summary>
+    public const string FavoriteAct = "Favorite";
+
+    /// <inheritdoc cref="FavoriteAct"/>
+    public const string TagAct = "Tag";
+
+    /// <summary>
     /// <c>Ctrl+D</c> in the grid: the selection, once what was typed has arrived (G5, G7), toggled as
     /// <see cref="ToggleFavorite"/> says. A press while the last one is still being written toggles again, as a held key
     /// repeats it (G17): the selection is taken before waiting behind the change before it, whose refresh may move the
     /// selection off the item pressed (out of Favorites).
     /// </summary>
-    public Task<Outcome> ToggleFavoriteOfSelection() => Counted(async () =>
+    public Task<Outcome> ToggleFavoriteOfSelection() => Counted(FavoriteAct, async () =>
     {
         await listing.Settle();
         return await ToggleFavorite(listing.SelectedItems);
@@ -39,25 +48,25 @@ public sealed class Organising(Listing listing, Notices notices)
     /// read as the listing now shows it, or as the store holds it once the listing no longer lists it, never as the
     /// caller's copy was.
     /// </summary>
-    public Task<Outcome> ToggleFavorite(IReadOnlyList<StashItem> items) => OneAtATime(() => Toggle(items));
+    public Task<Outcome> ToggleFavorite(IReadOnlyList<StashItem> items) => OneAtATime(FavoriteAct, () => Toggle(items));
 
     /// <summary>Sets the flag on every item as given, never toggling it: a drop on Favorites, the menu's entry.</summary>
-    public Task<Outcome> SetFavorite(IReadOnlyList<StashItem> items, bool favorite) => OneAtATime(() => Favorite(items, favorite));
+    public Task<Outcome> SetFavorite(IReadOnlyList<StashItem> items, bool favorite) => OneAtATime(favorite ? ItemFavorite.AddAction : ItemFavorite.RemoveAction, () => Favorite(items, favorite));
 
     /// <summary>Gives every item the tags <paramref name="text"/> commits, as typed; the store splits it into one tag per word.</summary>
     public Task<Outcome> AddTag(IReadOnlyList<StashItem> items, string text) =>
-        OneAtATime(() => Change(items, ItemTags.AddAction, store => store.AddTag(items, text)));
+        OneAtATime(ItemTags.AddAction, () => Change(items, ItemTags.AddAction, store => store.AddTag(items, text)));
 
     /// <summary>Takes <paramref name="tag"/>, in any spelling, off every item.</summary>
     public Task<Outcome> RemoveTag(IReadOnlyList<StashItem> items, string tag) =>
-        OneAtATime(() => Change(items, ItemTags.RemoveAction, store => store.RemoveTag(items, tag)));
+        OneAtATime(ItemTags.RemoveAction, () => Change(items, ItemTags.RemoveAction, store => store.RemoveTag(items, tag)));
 
     /// <summary>
     /// A click on a tag Add tag ▸ lists (G17): while every item still in the stash carries <paramref name="tag"/>, it is
     /// taken off them all; else every item is given it. Decided from the items as <see cref="Present"/> reads them,
     /// never from the caller's copies, so two clicks give and take; an item gone meanwhile is handed on, and refused by name.
     /// </summary>
-    public Task<Outcome> ToggleTag(IReadOnlyList<StashItem> items, string tag) => OneAtATime(async () =>
+    public Task<Outcome> ToggleTag(IReadOnlyList<StashItem> items, string tag) => OneAtATime(TagAct, async () =>
         AllCarry(await Present(items), tag)
             ? await Change(items, ItemTags.RemoveAction, store => store.RemoveTag(items, tag))
             : await Change(items, ItemTags.AddAction, store => store.AddTag(items, tag)));
@@ -86,7 +95,7 @@ public sealed class Organising(Listing listing, Notices notices)
     public static IReadOnlyList<string> CarriedTags(IEnumerable<StashItem> items) =>
         items.SelectMany(item => item.Tags).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToList();
 
-    private Task<Outcome> OneAtATime(Func<Task<Outcome>> change) => Counted(async () =>
+    private Task<Outcome> OneAtATime(string act, Func<Task<Outcome>> change) => Counted(act, async () =>
     {
         await oneAtATime.WaitAsync();
         try
@@ -99,9 +108,13 @@ public sealed class Organising(Listing listing, Notices notices)
         }
     });
 
-    /// <summary>A change counted in <see cref="Changing"/> from when it is asked until it is answered, so a Move waits for it.</summary>
-    private async Task<Outcome> Counted(Func<Task<Outcome>> change)
+    /// <summary>
+    /// A change counted in <see cref="Changing"/> from when it is asked until it is answered, so a Move waits for it, as
+    /// the person's <paramref name="act"/>, which the notices it raises carry (G16).
+    /// </summary>
+    private async Task<Outcome> Counted(string act, Func<Task<Outcome>> change)
     {
+        using var acting = UserAct.Begin(act);
         Interlocked.Increment(ref changing);
         Changed?.Invoke();
         try

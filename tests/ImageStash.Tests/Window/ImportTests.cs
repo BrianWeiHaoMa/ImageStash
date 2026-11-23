@@ -520,20 +520,19 @@ public sealed class ImportTests
         using var importing = await ListedStash.Open();
         await importing.Listing.SetQuery("cat");
 
+        // Each drop's refusal takes the place of the one before, a later act of the same action (G16).
         var link = await importing.Import.Drop(new DropContents([], onlyLink: true, filesUnavailable: false, []));
+        var linkSaid = importing.Notices.Shown.Select(notice => notice.Text).ToList();
         var nothing = await importing.Import.Drop(new DropContents([], onlyLink: false, filesUnavailable: false, []));
+        var nothingSaid = importing.Notices.Shown.Select(notice => notice.Text).ToList();
         var unavailable = await importing.Import.Drop(new DropContents([], onlyLink: false, filesUnavailable: true, []));
 
         Assert.IsEmpty(link);
         Assert.IsEmpty(nothing);
         Assert.IsEmpty(unavailable);
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                "Add to the stash failed: the link, links are not taken and nothing is downloaded; drag the picture itself in",
-                "Add to the stash failed: what was dropped, it holds no file",
-                "Add to the stash failed: what was dropped, its files could not be read from what was dragged",
-            },
+        CollectionAssert.AreEqual(new[] { "Add to the stash failed: the link, links are not taken and nothing is downloaded; drag the picture itself in" }, linkSaid);
+        CollectionAssert.AreEqual(new[] { "Add to the stash failed: what was dropped, it holds no file" }, nothingSaid);
+        CollectionAssert.AreEqual(new[] { "Add to the stash failed: what was dropped, its files could not be read from what was dragged" },
             importing.Notices.Shown.Select(notice => notice.Text).ToList());
         Assert.AreEqual("cat", importing.Listing.Query, "a refused drop is not an import");
         Assert.IsEmpty(importing.Stash.WorkFiles());

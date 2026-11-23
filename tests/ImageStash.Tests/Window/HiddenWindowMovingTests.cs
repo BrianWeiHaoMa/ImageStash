@@ -10,7 +10,8 @@ namespace ImageStash.Tests.Window;
 /// clock therefore does not run (G16, State: Move, G30, G36): none waits for ever; the notice's Undo ends at the wait,
 /// as at its time, what its end runs (a Delete's finish) is started and waited for, and only once it has answered does
 /// the copy begin, a handoff still taken until then (G8); with the window showing the wait holds as before, and a window
-/// that hides while the wait runs lets it go on.
+/// that hides while the wait runs lets it go on. A notice that names a problem keeps its words when its Undo ends, by the
+/// wait or by its time, and is no longer waited for.
 /// </summary>
 [TestClass]
 public sealed class HiddenWindowMovingTests
@@ -149,6 +150,43 @@ public sealed class HiddenWindowMovingTests
         Assert.IsEmpty(listed.Notices.Shown.Where(listed.Notices.OffersUndo).ToList());
         await listed.Listing.ShowScope(Scope.All);
         CollectionAssert.AreEqual(new[] { "one" }, listed.Listing.Items.Select(item => item.Name).ToList());
+    }
+
+    [TestMethod]
+    public async Task AnExportRunWithAnImportsNoticeNamingASkippedFileInTheHiddenWindowLeavesItsWordsWithoutItsUndo()
+    {
+        using var listed = await ListedStash.Open();
+        await listed.Import.Drop(ListedStash.Contents([MediaFixtures.Path("still.png"), listed.Stash.Source("clip.mp4", TestStash.Bytes(1))]));
+        var notice = listed.Notices.Shown.Single();
+        listed.WindowShowing.Seen(visible: false, minimised: false);
+        listed.Dialogs.SaveAnswer = () => Task.FromResult<string?>(listed.Stash.Outside("mine.zip"));
+
+        var exported = await listed.Transferring.Export(null!).WaitAsync(TimeSpan.FromSeconds(20));
+        listed.WindowShowing.Seen(visible: true, minimised: false);
+        listed.Stash.Clock.Now += TimeSpan.FromMinutes(1);
+        listed.Notices.Sweep();
+
+        Assert.IsTrue(exported.Succeeded, exported.Failure?.Sentence);
+        Assert.Contains(notice, listed.Notices.Shown, "at the next summon its words are there");
+        Assert.IsFalse(listed.Notices.OffersUndo(notice), "without its Undo, which the export ended");
+        Assert.HasCount(1, await listed.Stash.All(), "and the export removed nothing");
+    }
+
+    [TestMethod]
+    public async Task AMoveWithTheWindowShowingWaitsNotForANoticeThatStaysOnceItsUndoHasEnded()
+    {
+        using var listed = await ListedStash.Open();
+        await listed.Import.Drop(ListedStash.Contents([MediaFixtures.Path("still.png"), listed.Stash.Source("clip.mp4", TestStash.Bytes(1))]));
+        var notice = listed.Notices.Shown.Single();
+        listed.Stash.Clock.Now += Notices.LastingFor(notice.Words);
+        listed.Notices.Sweep();
+        var chosen = Chose(listed);
+
+        var moved = await listed.Moving.MoveTo(null!).WaitAsync(TimeSpan.FromSeconds(20));
+
+        Assert.IsTrue(moved.Succeeded, moved.Failure?.Sentence);
+        Assert.AreEqual(chosen, listed.Settings.Current.StashFolder);
+        Assert.Contains(notice, listed.Notices.Shown, "its words stay past the Move");
     }
 
     /// <summary>
