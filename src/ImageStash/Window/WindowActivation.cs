@@ -19,7 +19,6 @@ public sealed class WindowActivation
     private readonly WindowChrome chrome;
     private readonly Editing editing;
     private readonly Preview preview;
-    private readonly Notices notices;
     private readonly PasteTargetHolder pasteTarget;
     private readonly ITarget targets;
     private readonly PressOnce heldKeys;
@@ -41,13 +40,12 @@ public sealed class WindowActivation
     /// <paramref name="preview"/> is the preview a hide closes (G1); <paramref name="heldKeys"/> are the keys the window
     /// holds down, let go wherever their release would not be seen here.
     /// </summary>
-    public WindowActivation(Avalonia.Controls.Window window, WindowChrome chrome, Editing editing, Preview preview, Notices notices, PasteTargetHolder pasteTarget, ITarget targets, PressOnce heldKeys, Func<bool> dialogUp, Func<bool> dragInProgress)
+    public WindowActivation(Avalonia.Controls.Window window, WindowChrome chrome, Editing editing, Preview preview, PasteTargetHolder pasteTarget, ITarget targets, PressOnce heldKeys, Func<bool> dialogUp, Func<bool> dragInProgress)
     {
         this.window = window;
         this.chrome = chrome;
         this.editing = editing;
         this.preview = preview;
-        this.notices = notices;
         this.pasteTarget = pasteTarget;
         this.targets = targets;
         this.heldKeys = heldKeys;
@@ -254,9 +252,10 @@ public sealed class WindowActivation
     }
 
     /// <summary>
-    /// The window's one hide, whatever asks for it: no notice stays hovered and no tag list stays up (G16, F4), and an open
-    /// preview closed first, as <see cref="Summon.HideClosesPreview"/> says, so the next summon lands in the search box
-    /// (G1); <paramref name="forCapture"/> for a capture's hide, which keeps it for the capture to put back (G3).
+    /// The window's one hide, whatever asks for it: no tag list stays up (F4), the notices' hovers ending with the showing
+    /// (<see cref="WindowShowing"/>, G16), and an open preview closed first, as <see cref="Summon.HideClosesPreview"/>
+    /// says, so the next summon lands in the search box (G1); <paramref name="forCapture"/> for a capture's hide, which
+    /// keeps it for the capture to put back (G3).
     /// </summary>
     public void HideWindow(bool forCapture = false) => Hide(chrome.Pinned, forCapture);
 
@@ -271,7 +270,6 @@ public sealed class WindowActivation
         ClosePreviewAtHide(pinnedAfter, forCapture);
         // A key held as the window hides is let go where it will not see it, so its next press acts at the next summon.
         heldKeys.Released();
-        notices.EndHovers();
         // A window that hides while not the active one keeps its popups: no list is left behind (F4).
         foreach (var open in window.OpenedPopups.OfType<TagPicker>().ToList())
         {

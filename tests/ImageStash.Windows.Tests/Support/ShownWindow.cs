@@ -582,7 +582,7 @@ public sealed class ShownWindow : IDisposable
         TrayDesktop.UseProductTheme();
         TrayDesktop.Run(() =>
         {
-            var notices = new Notices(noticeClock ?? new StoppedClock());
+            var notices = Notices.InWindow(noticeClock ?? new StoppedClock());
             var notifications = new Notices(new StoppedClock());
             var targets = target ?? new PresetTarget();
             var listing = new Listing(_ => { });

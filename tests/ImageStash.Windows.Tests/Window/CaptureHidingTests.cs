@@ -400,7 +400,8 @@ public sealed class CaptureHidingTests
     public async Task AHoveredNoticeAndAnOpenTagListEndWithTheFlyoutsHideForACapture()
     {
         // G16, F4: the flyout goes for a capture as it goes any other way, so no pointer is over its notices once it has
-        // gone, and one hovered at the start expires six seconds on as an unhovered one does; no list of it stays up.
+        // gone; its clock stops while it is hidden, and once it is back the notice hovered at the start leaves six seconds
+        // on as an unhovered one does; no list of it stays up.
         using var shown = Open();
         await shown.OpenStash(shown.Picture("hidden while hovered.png"));
         var notice = TrayDesktop.Get(() => shown.Notices.Raise("Hovered when the capture started"));
@@ -419,8 +420,11 @@ public sealed class CaptureHidingTests
             Assert.IsFalse(shown.ChipRow.Picker.IsOpen, "no list left behind (F4)");
             ((StoppedClock)shown.Notices.Clock).Advance(Notices.Lasting);
             shown.Notices.Sweep();
-            CollectionAssert.DoesNotContain(shown.Notices.Shown.ToList(), notice, "the hover ended with the hide, so its six seconds ran (G16)");
+            CollectionAssert.Contains(shown.Notices.Shown.ToList(), notice, "its time runs only while the window shows (G16)");
             shown.Window.CaptureHiding.ShowAfterCapture();
+            ((StoppedClock)shown.Notices.Clock).Advance(Notices.Lasting);
+            shown.Notices.Sweep();
+            CollectionAssert.DoesNotContain(shown.Notices.Shown.ToList(), notice, "the hover ended with the hide, so its six seconds ran once shown (G16)");
         });
     }
 

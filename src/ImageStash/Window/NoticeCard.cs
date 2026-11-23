@@ -10,7 +10,8 @@ namespace ImageStash.Window;
 
 /// <summary>
 /// A notice as a card, in the stash window's stack and in a notification above the tray alike (G16): its words, its
-/// Undo when it has one, and a close button; the pointer over it holds its six seconds.
+/// Undo when it has one, and a close button; the pointer over it holds its time, six seconds above the tray and as long
+/// as its words need in the window (Notice.cs).
 /// </summary>
 public static class NoticeCard
 {

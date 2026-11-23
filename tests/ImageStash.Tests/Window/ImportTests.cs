@@ -345,7 +345,7 @@ public sealed class ImportTests
         importing.Stash.Clock.Now += TimeSpan.FromSeconds(10);
         notices.Sweep();
         Assert.AreSame(hovered, notices.Shown.Single(), "it stays while hovered");
-        notices.EndHovers();
+        notices.Hover(hovered, over: false);
         importing.Stash.Clock.Now += TimeSpan.FromSeconds(1.5);
         notices.Sweep();
         Assert.AreSame(hovered, notices.Shown.Single(), "and leaves after the remainder");

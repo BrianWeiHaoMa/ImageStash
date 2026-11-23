@@ -8,9 +8,10 @@ namespace ImageStash.Window;
 /// Move… from the Settings page (G30, G32, State: Move): the folder picker; from the moment a folder is chosen until the
 /// Move has ended, in success or failure, every beginning of a change refused by name (<see cref="Listing.WholeStashActAsked"/>);
 /// a wait, as a busy state naming what it waits for (G35), while a capture, a recording, an edit, a running change, a
-/// drag out or a notice or notification whose Undo still stands is in the way; then Store's Move, the stash opened at
-/// the new folder as the start opens it, handed to the listing before the old store is closed, and the clipboard's copy
-/// of items written again at their new paths when nothing has changed it since (G26). The outcome is said in the stash
+/// drag out or a notice or notification whose Undo still stands is in the way, a notice in the hidden or minimised
+/// stash window having its Undo ended first, as at its time, and what that end runs waited for; then Store's Move, the
+/// stash opened at the new folder as the start opens it, handed to the listing before the old store is closed, and the
+/// clipboard's copy of items written again at their new paths when nothing has changed it since (G26). The outcome is said in the stash
 /// window's notices only once Store's Move has answered, after the old folder's removal (R9); a failure is named (G35).
 /// What Move waits for is registered with <see cref="WaitFor"/> by the parts that know it, and read again on a later turn
 /// of the UI thread, never inside the event that woke it: a notice raises its change before its Undo runs, and that
@@ -44,7 +45,7 @@ public sealed class Moving
     // Move asked meanwhile would be ended by this one's.
     private bool running;
 
-    /// <param name="notices">The stash window's notices, where the outcome is said; they run whether or not the window shows (G16).</param>
+    /// <param name="notices">The stash window's notices, where the outcome is said, there when the window next shows (G16).</param>
     /// <param name="keeper">The one settings keeper, through which Store records the copy and switches the location.</param>
     /// <param name="handoff">The window's one clipboard writer, which writes the clipboard's items again at their new paths.</param>
     /// <param name="openStash">Opens a stash folder as the start does: its pending steps resolved, its Open with… copies classified.</param>
@@ -93,8 +94,10 @@ public sealed class Moving
 
     /// <summary>
     /// The stash window's parts Move waits for: a paste, an import, a copy or a drag out, a Delete, a rename, a change of
-    /// tags or favorites, an edit running, open or still opening, a Save a copy… writing its file, and a notice whose Undo
-    /// still stands (State: Move, G16, G18, G20).
+    /// tags or favorites, an edit running, open or still opening, a Save a copy… writing its file, a notice whose Undo
+    /// still stands while the window shows, and what a notice started on leaving until it has answered: in the hidden or
+    /// minimised window, whose clock does not run, a notice's Undo ends at the reading, as at its time, and what that end
+    /// starts is waited for in its place, so the copy begins only once it has answered (State: Move, G16, G18, G20).
     /// </summary>
     public void WaitForWindow(ClipboardPaste paste, Import import, Handoff copies, Deletion deletion, Renaming renaming, Organising organising, Editing editing, ItemMenu itemMenu, Notices windowNotices)
     {
@@ -106,7 +109,17 @@ public sealed class Moving
         WaitFor(() => organising.Changing ? "the tag or favorite change" : null, heard => organising.Changed += heard);
         WaitFor(() => editing.InProgress ? "the edit" : null, heard => editing.Changed += heard);
         WaitFor(() => itemMenu.SavingACopy ? "Save a copy" : null, heard => itemMenu.Changed += heard);
-        WaitFor(() => UndoStanding(windowNotices, "notice"), heard => windowNotices.Changed += heard);
+        WaitFor(
+            () =>
+            {
+                windowNotices.EndUndosWhileHidden();
+                return UndoStanding(windowNotices, "notice") ?? (windowNotices.Finishing ? "a notice's change to finish" : null);
+            },
+            heard =>
+            {
+                windowNotices.Changed += heard;
+                windowNotices.FinishAnswered += heard;
+            });
     }
 
     /// <summary>
@@ -332,7 +345,7 @@ public sealed class Moving
 
     /// <summary>The notices whose Undo still stands, in words: "the Undo of a notice", "the Undo of 2 notices"; null when none.</summary>
     private static string? UndoStanding(Notices shown, string kind) =>
-        shown.Shown.Count(notice => notice.UndoLabel is not null) switch
+        shown.Shown.Count(shown.OffersUndo) switch
         {
             0 => null,
             1 => $"the Undo of a {kind}",

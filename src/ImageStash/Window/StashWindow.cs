@@ -141,7 +141,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
         preview.Changed += Cover;
 
         // Before Wire: its handlers of the window's activation, deactivation and Close come first.
-        activation = new WindowActivation(this, chrome, editing, preview, notices, pasteTarget, seams.Target, heldKeys, () => DialogUp, () => DragInProgress);
+        activation = new WindowActivation(this, chrome, editing, preview, pasteTarget, seams.Target, heldKeys, () => DialogUp, () => DragInProgress);
         CaptureHiding = new CaptureReturn(this, chrome, activation, seams.Target, seams.WindowOrder, () => DialogUp, () => DragInProgress, FocusContent).Hiding;
         chrome.Apply(pinnedNow: false);
         Wire();
@@ -333,6 +333,8 @@ public sealed class StashWindow : Avalonia.Controls.Window
         // An import renames the stash folder, which a file this window holds open would stop (G36).
         listing.LetGoWhenWithdrawn(() => Task.WhenAll(grid.LetGo(), preview.LetGo()));
         notices.Changed += status.ShowNotices;
+        // The notices' clock runs only while the window shows, a hide of any kind or a minimise stopping it (G16).
+        new WindowShowing(notices).Follow(this);
         import.Changed += ShowBusy;
         handoff.Changed += ShowBusy;
         editing.Changed += ShowBusy;

@@ -8,7 +8,8 @@ using ImageStash.Window;
 namespace ImageStash.Tests.Support;
 
 /// <summary>
-/// An open test stash as the window shows it: its listing, its notices on the stash's clock, and the window's import,
+/// An open test stash as the window shows it: its listing, its notices on the stash's clock, running while the window
+/// shows as the window's rule tells them (shown unless the check says it hid), and the window's import,
 /// paste (over a clipboard the check presets, on the stash's clock), Delete, organising entry and rename path over them;
 /// and the notifications above the tray, on the same clock, with Stash clipboard image over that clipboard raising its
 /// capture notification there; and Take a screenshot and Record a clip over a screen, a region selection and a frame
@@ -29,7 +30,10 @@ public sealed class ListedStash : IDisposable
     private ListedStash(TestStash stash, TimeProvider captureClock, ClipOpener? opener, TimeSpan? editRetry = null, TimeSpan? saveACopyRetry = null)
     {
         Stash = stash;
-        Notices = new Notices(stash.Clock);
+        Notices = Notices.InWindow(stash.Clock);
+        // The window's rule telling its notices whether it shows; these checks stand for a window that shows, until told otherwise.
+        WindowShowing = new WindowShowing(Notices);
+        WindowShowing.Seen(visible: true, minimised: false);
         Listing = new Listing(Failures.Add);
         Import = new Import(Listing, Notices, TestStash.ShortRetry);
         Clipboard = new RecordingClipboard(stash.Clock);
@@ -133,6 +137,9 @@ public sealed class ListedStash : IDisposable
     public List<Failure> Failures { get; } = [];
 
     public Notices Notices { get; }
+
+    /// <summary>The window's rule telling <see cref="Notices"/> whether it shows, which a check tells when the window hid or showed.</summary>
+    public WindowShowing WindowShowing { get; }
 
     /// <summary>The notifications above the tray, which Stash clipboard image raises.</summary>
     public Notices Notifications { get; }

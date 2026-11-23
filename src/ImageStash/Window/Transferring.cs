@@ -60,7 +60,7 @@ public sealed class Transferring
     private string? exported;
     private string? imported;
 
-    /// <param name="notices">The stash window's notices, where every outcome is said; they run whether or not the window shows (G16).</param>
+    /// <param name="notices">The stash window's notices, where every outcome is said, there when the window next shows (G16).</param>
     /// <param name="keeper">The one settings keeper: the export reads the settings that travel from it, the import writes them through it.</param>
     /// <param name="recycleBin">Where the start's finishing, run once after a failure past the import's record, sends the replaced folder (G29).</param>
     /// <param name="handoff">The window's one clipboard writer, whose write of the replaced stash's items is forgotten (G26).</param>

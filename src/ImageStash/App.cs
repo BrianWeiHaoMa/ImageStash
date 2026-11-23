@@ -60,7 +60,7 @@ public sealed class App : Application
         }
 
         NameFailure(trayMenu, ApplyStartWithWindows(settings, seams.StartWithWindows, Environment.ProcessPath!));
-        var notices = new Notices(LocalClock.Instance);
+        var notices = Notices.InWindow(LocalClock.Instance);
         // Before the shortcuts, which Settings remaps through it.
         var keeper = KeepSettings(desktop, settings, notices);
         var shortcuts = this.shortcuts = Shortcuts(keeper, trayMenu);
