@@ -2,9 +2,9 @@ namespace ImageStash.Store;
 
 /// <summary>
 /// G5's search rule, in one place: the query is split on spaces, a leading <c>#</c> is ignored on each word, and every
-/// word must be a substring of the name or of one tag, ignoring case for every script, not only ASCII. Tags are search
-/// words (In use): the words a chip adds to the query and takes out of it, and which of the query's words are tags, are
-/// here too (G4, G5).
+/// word must be a substring of the name or of one tag, ignoring case for every script, not only ASCII. Which matches
+/// G4 lists first, those where every word starts a word, is here too. Tags are search words (In use): the words a chip
+/// adds to the query and takes out of it, and which of the query's words are tags, are here as well (G4, G5).
 /// </summary>
 public static class ItemSearch
 {
@@ -13,8 +13,15 @@ public static class ItemSearch
 
     public static bool IsSearch(string query) => Words(query).Count > 0;
 
-    public static bool Matches(StashItem item, IReadOnlyList<string> words) =>
-        words.All(word => Contains(item.Name, word) || item.Tags.Any(tag => Contains(tag, word)));
+    public static bool Matches(StashItem item, IReadOnlyList<string> words) => EveryWordIn(item, words, Contains);
+
+    /// <summary>
+    /// Whether every one of <paramref name="words"/>, a query's <see cref="Words"/>, starts a word of the item's name or
+    /// of one of its tags, ignoring case as <see cref="Matches"/> does: the matches G4 lists first. A word of a text
+    /// starts at the text's start and after a space, <c>-</c>, <c>_</c> or <c>.</c>, so in
+    /// <c>Screenshot 2026-11-22 10.30.00</c> <c>2026</c> and <c>30</c> start one and <c>re</c> does not.
+    /// </summary>
+    public static bool MatchesAtWordStarts(StashItem item, IReadOnlyList<string> words) => EveryWordIn(item, words, StartsAWord);
 
     /// <summary>
     /// The tags that are words of the query, the lit chips (G5): of <paramref name="tags"/>, as stored, those equal,
@@ -71,4 +78,21 @@ public static class ItemSearch
     private static string Bare(string word) => word.StartsWith('#') ? word[1..] : word;
 
     private static bool Contains(string text, string word) => text.Contains(word, StringComparison.OrdinalIgnoreCase);
+
+    private static bool EveryWordIn(StashItem item, IReadOnlyList<string> words, Func<string, string, bool> holds) =>
+        words.All(word => holds(item.Name, word) || item.Tags.Any(tag => holds(tag, word)));
+
+    // Every place the word lies is tried, not only the first: "Screenshot really" holds "re" mid-word before it starts one.
+    private static bool StartsAWord(string text, string word)
+    {
+        for (var at = text.IndexOf(word, StringComparison.OrdinalIgnoreCase); at >= 0; at = text.IndexOf(word, at + 1, StringComparison.OrdinalIgnoreCase))
+        {
+            if (at == 0 || text[at - 1] is ' ' or '-' or '_' or '.')
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

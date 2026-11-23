@@ -4,12 +4,14 @@ using ImageStash.Layers;
 using ImageStash.Media;
 using ImageStash.Store;
 using ImageStash.Tests.Support;
+using SQLitePCL;
 
 namespace ImageStash.Tests.Store;
 
 /// <summary>
 /// G4's orders, G10's use rows, one item and its use history (G19), what Edit opens on (F3, State: A live failure, G35),
-/// items confirmed by identity before a handoff (G8, G35), and E4's 5,000 items answered well within a second.
+/// items confirmed by identity before a handoff (G8, G35), and E4's 5,000 items answered well within a second, a search
+/// in as many statements whatever the stash's size.
 /// </summary>
 [TestClass]
 public sealed class ItemQueriesTests
@@ -27,6 +29,8 @@ public sealed class ItemQueriesTests
         var sameMillisecond = await stash.Import("same millisecond");
         stash.Clock.Now = stash.Clock.Now.AddSeconds(1);
         var third = await stash.Import("third");
+        // A use moves nothing in All, as it moves nothing in Favorites (G4).
+        await stash.Store!.RecordUses([first], stash.Clock.Now);
 
         var all = await stash.All();
 
@@ -544,6 +548,7 @@ public sealed class ItemQueriesTests
         Assert.HasCount(5000, all.Value!);
         Assert.HasCount(2500, recent.Value!);
         Assert.HasCount(1100, search.Value!, "tag4 and tag40 to tag49 contain the word, each carried by 100 items");
+        Assert.AreEqual("reaction 4998", search.Value![0].Name, "the search timed orders by use: the match used last first");
         Assert.HasCount(1000, favorites.Value!);
         Assert.HasCount(50, counts.Value!);
         Assert.IsTrue(counts.Value!.All(c => c.Items == 100));
@@ -557,6 +562,56 @@ public sealed class ItemQueriesTests
         Assert.AreEqual(1, history.Value!.Count);
         Assert.IsLessThan(100, itemTime.TotalMilliseconds, "one item's own rows, not the stash's");
         Assert.IsLessThan(100, historyTime.TotalMilliseconds, "one item's own uses, not the stash's");
+    }
+
+    [TestMethod]
+    public async Task ASearchIsAsManyStatementsOverHundredsOfItemsWithUsesAsOverAHandful()
+    {
+        var few = await StatementsOfASearch(3);
+        var many = await StatementsOfASearch(1200);
+
+        Assert.IsGreaterThan(0, few);
+        Assert.AreEqual(few, many, "a fixed number of statements over the whole stash, whatever its size (E4)");
+    }
+
+    /// <summary>
+    /// The statements SQLite runs for one search over <paramref name="count"/> items, each with two uses, counted by a
+    /// trace on the store's own connection, opened as the stash opens it. The search is <see cref="ItemQueries.Search"/>,
+    /// which <see cref="StashStore.Search"/> runs whole on the store's thread, since only there is the connection reachable.
+    /// </summary>
+    private static async Task<int> StatementsOfASearch(int count)
+    {
+        using var stash = new TestStash();
+        await stash.OpenCleanly();
+        stash.Close();
+        var now = stash.Clock.Now.ToUnixTimeMilliseconds();
+        stash.Sql($"""
+            WITH RECURSIVE n(k) AS (SELECT 1 UNION ALL SELECT k + 1 FROM n WHERE k < {count})
+            INSERT INTO items (name, added_at, format, width, height, animated, frame_count, duration_ms, original_file, finished_file, original_sha256)
+            SELECT 'reaction ' || k, {now} + k, 'Png', 8, 6, 0, 1, 0, 'reaction ' || k || '.png', 'reaction ' || k || '.png', randomblob(32) FROM n;
+            INSERT INTO tags (item_id, tag) SELECT id, 'tag' || (id % 5) FROM items;
+            INSERT INTO uses (item_id, used_at) SELECT id, {now} + id FROM items;
+            INSERT INTO uses (item_id, used_at) SELECT id, {now} - id FROM items;
+            """);
+        using var thread = new StoreThread();
+        var opened = await thread.Run(() => StoreOpen.Open(stash.Folder, stash.RecycleBin, stash.Retry, stash.Clock, FinishedPicture.Render, null, MediaDecoder.ReadPicture, thread));
+        Assert.IsTrue(opened.Succeeded, opened.Failure?.ToString());
+        var store = opened.Value.Store;
+        try
+        {
+            var (found, statements) = await thread.Read(() =>
+            {
+                var run = 0;
+                raw.sqlite3_trace(store.Connection.Handle, (strdelegate_trace)((_, _) => run++), null);
+                return (ItemQueries.Search(store, "reaction"), run);
+            });
+            Assert.HasCount(count, found.Value!);
+            return statements;
+        }
+        finally
+        {
+            await thread.Run(() => { store.Connection.Dispose(); return true; });
+        }
     }
 
     private static async Task<(T Result, TimeSpan Time)> Timed<T>(Func<Task<T>> query)

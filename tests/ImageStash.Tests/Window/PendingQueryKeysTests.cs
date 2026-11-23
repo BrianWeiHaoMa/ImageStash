@@ -42,7 +42,7 @@ public sealed class PendingQueryKeysTests
     public async Task DownThenEnterBeforeTheMatchesArriveHandsOverTheSecondMatchAndDownDownUpEndsOnTheFirst()
     {
         using var listed = await Listed();
-        var (newer, older) = await DogAndTwoCats(listed);
+        var (_, older) = await DogAndTwoCats(listed);
         var keys = Keys(listed);
 
         Task<Outcome>? handed = null;
@@ -68,7 +68,8 @@ public sealed class PendingQueryKeysTests
         }
 
         await drained;
-        Assert.AreEqual(newer.Id, listed.Listing.Focused, "each arrow in press order: the second Down stays on the last match, Up goes back to the first");
+        // The handoff above used "cat older", so the search now lists it first (G4).
+        Assert.AreEqual(older.Id, listed.Listing.Focused, "each arrow in press order: the second Down stays on the last match, Up goes back to the first");
     }
 
     [TestMethod]
@@ -275,7 +276,7 @@ public sealed class PendingQueryKeysTests
         return (newer, older);
     }
 
-    /// <summary>Four items matching <c>cat</c> and one not, All showing; the matches newest-added first.</summary>
+    /// <summary>Four items matching <c>cat</c> and one not, All showing; the matches, never used, newest-added first.</summary>
     private static async Task<IReadOnlyList<StashItem>> FourCats(ListedStash listed)
     {
         var added = new List<StashItem>();

@@ -21,34 +21,59 @@ public sealed record ItemForEdit(StashItem Item, string OriginalPath, MediaFacts
 /// </summary>
 internal static class ItemQueries
 {
-    private const string NewestAdded = "ORDER BY i.added_at DESC, i.id DESC";
+    // Newest-added first, equal times the later identity first: All's and Favorites' order, and the search's for its never-used matches (G4).
+    private const string NewestAdded = "i.added_at DESC, i.id DESC";
+
+    // Latest use first, equal times the later identity first: Recent's order, and the search's for its matches with a use (G4).
+    private const string LatestUsed = "MAX(u.used_at) DESC, i.id DESC";
 
     /// <summary>Every item, newest-added first; equal times put the later identity first.</summary>
     public static Outcome<IReadOnlyList<StashItem>> All(StoreContext store) =>
-        Listed(store, "List the stash", $"SELECT {StashItem.Columns} FROM items i WHERE {StashItem.NotDeleted} {NewestAdded}");
+        Listed(store, "List the stash", $"SELECT {StashItem.Columns} FROM items i WHERE {StashItem.NotDeleted} ORDER BY {NewestAdded}");
 
     /// <summary>Every favorite, newest-added first, as All orders them (G4).</summary>
     public static Outcome<IReadOnlyList<StashItem>> Favorites(StoreContext store) =>
-        Listed(store, "List favorites", $"SELECT {StashItem.Columns} FROM items i WHERE {StashItem.NotDeleted} AND i.favorite = 1 {NewestAdded}");
+        Listed(store, "List favorites", $"SELECT {StashItem.Columns} FROM items i WHERE {StashItem.NotDeleted} AND i.favorite = 1 ORDER BY {NewestAdded}");
 
     /// <summary>Every item with at least one use, by its latest use, newest first; equal times put the later identity first.</summary>
     public static Outcome<IReadOnlyList<StashItem>> Recent(StoreContext store) =>
         Listed(store, "List recent items", $"""
             SELECT {StashItem.Columns} FROM items i JOIN uses u ON u.item_id = i.id
-            WHERE {StashItem.NotDeleted} GROUP BY i.id ORDER BY MAX(u.used_at) DESC, i.id DESC
+            WHERE {StashItem.NotDeleted} GROUP BY i.id ORDER BY {LatestUsed}
             """);
 
-    /// <summary>The items matching every word of <paramref name="query"/>, newest-added first; with no words, every item.</summary>
+    /// <summary>
+    /// The items matching every word of <paramref name="query"/> (G5), in G4's order for search results: first those where
+    /// every word starts a word of the name or of one tag, then the others; in each, the items with a use by their latest,
+    /// newest first, then the never-used ones newest-added first, equal times putting the later identity first. With no
+    /// words, every item as <see cref="All"/> lists them.
+    /// </summary>
     public static Outcome<IReadOnlyList<StashItem>> Search(StoreContext store, string query)
     {
         var words = ItemSearch.Words(query);
-        var all = All(store);
-        if (!all.Succeeded)
+        if (words.Count == 0)
         {
-            return all.Failure;
+            return All(store);
         }
 
-        return Outcome<IReadOnlyList<StashItem>>.Of(all.Value!.Where(item => ItemSearch.Matches(item, words)).ToList());
+        // Every item's latest use in the one statement, never a look-up per item (E4): the items with a use as Recent orders
+        // them, then the never-used as All does. Named as All's listing is: a search reads the stash as listing it does.
+        var byUse = Listed(store, "List the stash", $"""
+            SELECT {StashItem.Columns} FROM items i LEFT JOIN uses u ON u.item_id = i.id
+            WHERE {StashItem.NotDeleted} GROUP BY i.id
+            ORDER BY MAX(u.used_at) IS NULL,
+                CASE WHEN MAX(u.used_at) IS NULL THEN row_number() OVER (ORDER BY {NewestAdded}) ELSE row_number() OVER (ORDER BY {LatestUsed}) END
+            """);
+        if (!byUse.Succeeded)
+        {
+            return byUse.Failure;
+        }
+
+        // A stable sort, so each group keeps the order of use read above.
+        return Outcome<IReadOnlyList<StashItem>>.Of(byUse.Value!
+            .Where(item => ItemSearch.Matches(item, words))
+            .OrderBy(item => ItemSearch.MatchesAtWordStarts(item, words) ? 0 : 1)
+            .ToList());
     }
 
     /// <summary>

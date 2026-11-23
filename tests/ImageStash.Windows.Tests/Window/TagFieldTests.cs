@@ -690,7 +690,7 @@ public sealed class TagFieldTests
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == "reaction"));
         TrayDesktop.Run(() =>
         {
-            CollectionAssert.AreEqual(new[] { c.Id, b.Id, a.Id }, shown.Listing.Items.Select(item => item.Id).ToList(), "the query's matches, newest-added first (G4, G5)");
+            CollectionAssert.AreEqual(new[] { c.Id, b.Id, a.Id }, shown.Listing.Items.Select(item => item.Id).ToList(), "the query's matches, each starting a word and never used, newest-added first (G4, G5)");
             Assert.IsTrue(shown.Lit("#reaction") && shown.Lit("All"));
             ShownWindow.RaiseClick(shown.Chip("#reaction"));
         });

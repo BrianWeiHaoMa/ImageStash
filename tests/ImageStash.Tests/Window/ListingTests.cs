@@ -162,6 +162,36 @@ public sealed class ListingTests
     }
 
     [TestMethod]
+    public async Task TypingSelectsTheMatchUsedMostRecentlyThoughNewerMatchesWereNeverUsedAndNoWordsShowTheScopeAsBefore()
+    {
+        using var stash = new TestStash();
+        var store = await stash.OpenCleanly();
+        var today = stash.Clock.Now;
+        stash.Clock.Now = today.AddDays(-200);
+        var reallyTired = await stash.Import("really tired");
+        await store.RecordUses([reallyTired], today.AddDays(-1));
+        stash.Clock.Now = today.AddHours(-2);
+        var redCard = await stash.Import("red card");
+        stash.Clock.Now = today;
+        var screenshot = await stash.Import("Screenshot 2026-11-22 10.30.00");
+        var listing = NewListing();
+        await listing.StashOpened(store);
+        await listing.ShowScope(Scope.All);
+        CollectionAssert.AreEqual(new[] { screenshot.Id }, listing.Selection.ToList(), "All, newest-added first, selects its first");
+
+        await listing.SetQuery("re");
+
+        CollectionAssert.AreEqual(new[] { reallyTired.Id, redCard.Id, screenshot.Id }, listing.Items.Select(i => i.Id).ToList(), "the grid lists the store's order");
+        Assert.AreEqual(reallyTired.Id, listing.Focused);
+        CollectionAssert.AreEquivalent(new[] { reallyTired.Id }, listing.Selection.ToList());
+
+        await listing.SetQuery("   ");
+
+        Assert.AreEqual(Scope.All, listing.Scope);
+        CollectionAssert.AreEqual(new[] { screenshot.Id, redCard.Id, reallyTired.Id }, listing.Items.Select(i => i.Id).ToList(), "All stays newest-added first");
+    }
+
+    [TestMethod]
     public async Task AQueryMatchingNothingIsTheNoMatchStateNamingItAndNotTheEmptyStash()
     {
         using var stash = new TestStash();

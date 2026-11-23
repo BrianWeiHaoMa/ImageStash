@@ -436,7 +436,7 @@ public sealed class StashWindowTests
 
         TrayDesktop.Run(() =>
         {
-            CollectionAssert.AreEqual(new[] { car.Id, cat.Id }, shown.Listing.Items.Select(item => item.Id).ToList(), "the matches newest-added first (G5)");
+            CollectionAssert.AreEqual(new[] { car.Id, cat.Id }, shown.Listing.Items.Select(item => item.Id).ToList(), "the matches, both starting a word and never used, newest-added first (G4)");
             CollectionAssert.AreEqual(new[] { car.Id }, shown.Listing.Selection.ToList(), "the selection on the first match (G5)");
         });
     }
