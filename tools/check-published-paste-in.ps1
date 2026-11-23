@@ -198,8 +198,10 @@ try {
         Check (($null -ne $decoded) -and ($decoded.Width -eq $width) -and ($decoded.Height -eq $height) -and ($decoded.GetPixel(0, 0).A -eq 0) -and ($decoded.GetPixel(1, 0).A -eq 255)) "it decodes as the copied $width by $height picture with its transparent corner (G13)"
         if ($decoded) { $decoded.Dispose() }
         Check (@(Get-ChildItem -Path (Join-Path $stash '.work') -Force -ErrorAction SilentlyContinue).Count -eq 0) "$stash\.work\ holds nothing of the finished paste: its file was renamed into place and its step cleared (State, R2)"
-        $notice = Named $flyout 'Added 1 to your stash:*'
-        Check ($notice -eq "Added 1 to your stash: $name. $stillOnly") "the notice says it was added and that an animated picture is added by dragging its file in (G13): '$notice'"
+        # The notice's card shows its count as a line of its own above the words that name the item (G12).
+        $counted = Named $flyout 'Added 1 to your stash'
+        $notice = Named $flyout "Added $([char]0x201C)*"
+        Check (($counted -eq 'Added 1 to your stash') -and ($notice -eq "Added $([char]0x201C)$name$([char]0x201D). $stillOnly")) "the notice counts the one added, names it and says that an animated picture is added by dragging its file in (G12, G13): '$counted' over '$notice'"
         Check ((SearchText $flyout) -eq '') "the paste's import cleared the search (G12): '$(SearchText $flyout)'"
         # Recent lists only the few items used so far; All lists every item, the pasted one newest-added and so first (G4).
         $count = Named $flyout '* items*'
