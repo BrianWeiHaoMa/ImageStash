@@ -40,7 +40,7 @@ public sealed class ClipboardPasteTests
         CollectionAssert.AreEqual(new[] { item.Id, older.Id }, pasting.Listing.Items.Select(each => each.Id).ToList(), "the new item first");
         CollectionAssert.AreEqual(new[] { item.Id }, pasting.Listing.Selection.ToList(), "and selected");
         var notice = pasting.Notices.Shown.Single();
-        Assert.AreEqual($"Added 1 to your stash: Screenshot 2026-10-16 17.30.00. {StillOnly}", notice.Text);
+        Assert.AreEqual(("Added 1 to your stash", $"Added “Screenshot 2026-10-16 17.30.00”. {StillOnly}"), (notice.Heading, notice.Text));
         Assert.AreEqual("Undo", notice.UndoLabel);
         Assert.IsEmpty(pasting.Stash.WorkFiles());
         Assert.AreEqual(1, pasting.Clipboard.Reads, "one read for one paste");
@@ -82,7 +82,7 @@ public sealed class ClipboardPasteTests
         CollectionAssert.AreEqual(new[] { "Screenshot 2026-10-16 17.30.00.png", "Screenshot 2026-10-16 17.30.00 2.png" }, both.Select(item => item.FileName).ToList());
         Assert.AreEqual(new MediaFacts(ImageFormat.Png, 3, 2, false, 1, 0), both[0].Facts);
         CollectionAssert.AreEqual(pixels, MediaFixtures.FirstFrame(both[0].FilePath).Pixels, "the stored PNG holds the bitmap's pixels, alpha included");
-        Assert.AreEqual($"Added 1 to your stash: Screenshot 2026-10-16 17.30.00. {StillOnly}", pasting.Notices.Shown[^1].Text);
+        Assert.AreEqual(("Added 1 to your stash", $"Added “Screenshot 2026-10-16 17.30.00”. {StillOnly}"), (pasting.Notices.Shown[^1].Heading, pasting.Notices.Shown[^1].Text));
 
         await pasting.Notices.Undo(pasting.Notices.Shown[^1]);
 
@@ -103,7 +103,7 @@ public sealed class ClipboardPasteTests
         Assert.IsFalse(item.Facts.Animated);
         CollectionAssert.AreEqual(MediaFixtures.FirstFrame(MediaFixtures.Path("animated.gif")).Pixels, MediaFixtures.FirstFrame(item.FilePath).Pixels, "the GIF's first frame");
         Assert.IsEmpty(pasting.Stash.WorkFiles(), "neither staged copy is left");
-        Assert.AreEqual($"Added 1 to your stash: Screenshot 2026-10-16 17.30.00. {StillOnly}", pasting.Notices.Shown.Single().Text);
+        Assert.AreEqual(("Added 1 to your stash", $"Added “Screenshot 2026-10-16 17.30.00”. {StillOnly}"), (pasting.Notices.Shown.Single().Heading, pasting.Notices.Shown.Single().Text));
     }
 
     [TestMethod]
@@ -115,7 +115,7 @@ public sealed class ClipboardPasteTests
 
         await pasting.Paste.Paste();
 
-        Assert.AreEqual($"Nothing was added. Screenshot 2026-10-16 17.30.00 is unreadable. {StillOnly}", pasting.Notices.Shown.Single().Text);
+        Assert.AreEqual(("Nothing was added · 1 unreadable", $"Screenshot 2026-10-16 17.30.00 is unreadable. {StillOnly}"), (pasting.Notices.Shown.Single().Heading, pasting.Notices.Shown.Single().Text));
         Assert.IsNull(pasting.Notices.Shown.Single().UndoLabel);
         Assert.IsEmpty(pasting.Stash.RootFiles());
         Assert.IsEmpty(pasting.Stash.WorkFiles());
@@ -140,8 +140,8 @@ public sealed class ClipboardPasteTests
         Assert.AreEqual("animated.gif", item.FileName, "the file it came as (F3)");
         CollectionAssert.AreEqual(MediaFixtures.Bytes("animated.gif"), File.ReadAllBytes(item.FilePath));
         Assert.AreEqual(
-            "Added 1 to your stash: animated.gif. Skipped clip.mp4 (a video) and cat.url (a link): ImageStash keeps GIF, PNG, JPG and WebP.",
-            pasting.Notices.Shown.Single().Text,
+            ("Added 1 · 2 skipped", "Skipped clip.mp4 (a video) and cat.url (a link): ImageStash keeps GIF, PNG, JPG and WebP. Added “animated”."),
+            (pasting.Notices.Shown.Single().Heading, pasting.Notices.Shown.Single().Text),
             "the drop's notice, without the pasted picture's sentence");
         Assert.AreEqual("Undo", pasting.Notices.Shown.Single().UndoLabel);
         Assert.Contains("Adding 1 of 3 to your stash…", busy, "the batch's busy state");
@@ -150,7 +150,7 @@ public sealed class ClipboardPasteTests
         pasting.Clipboard.Reading = Files(gif);
         await pasting.Paste.Paste();
 
-        Assert.AreEqual("Nothing was added. animated.gif was already in your stash as “animated”.", pasting.Notices.Shown[^1].Text, "G12's question for a file");
+        Assert.AreEqual(("Nothing was added · 1 already in your stash", "animated.gif was already in your stash as “animated”."), (pasting.Notices.Shown[^1].Heading, pasting.Notices.Shown[^1].Text), "G12's question for a file");
         Assert.HasCount(1, await pasting.Stash.All());
     }
 

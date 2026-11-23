@@ -1,3 +1,4 @@
+using Avalonia.Input;
 using ImageStash.Capture;
 using ImageStash.Editor;
 using ImageStash.Media;
@@ -200,6 +201,22 @@ public sealed class ListedStash : IDisposable
 
     /// <summary>The keys the window holds down, as its key-downs and key-ups tell them; the paste waits for a held Enter.</summary>
     public PressOnce Keys { get; } = new();
+
+    /// <summary>
+    /// A key pressed at <paramref name="place"/> as the window takes it: routed by <see cref="StashKeys.Route"/>, held to
+    /// one act per press by <see cref="Keys"/>, and its action's act run as the window's case runs it; the action is
+    /// returned. Let go with <see cref="PressOnce.Released"/> on <see cref="Keys"/>.
+    /// </summary>
+    public async Task<KeyAction> Press(Key key, KeyModifiers modifiers, KeyPlace place)
+    {
+        var action = Keys.Acting(key, StashKeys.Route(key, modifiers, place));
+        if (action == KeyAction.UndoNotice)
+        {
+            await Notices.UndoNewest();
+        }
+
+        return action;
+    }
 
     /// <summary>A summon as the window makes it, the hidden flyout shown afresh, or with <paramref name="pinned"/> the pinned window brought forward (G1).</summary>
     public Task Summon(bool pinned = false) => Listing.Summoned(flyout: !pinned);

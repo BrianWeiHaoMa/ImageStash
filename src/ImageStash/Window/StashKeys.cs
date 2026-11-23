@@ -48,7 +48,10 @@ public enum KeyAction
     /// <summary><c>Ctrl+E</c> in the box, the grid or the preview: the editor on the one selected item, the preview's while it is open (G7, G20).</summary>
     Edit,
 
-    /// <summary>A repeat of an Enter or a <c>Ctrl+V</c> still held from its press: nothing happens, and no control sees it (G8, G13, N3).</summary>
+    /// <summary><c>Ctrl+Z</c> in the grid and in the preview outside its fields: the Undo of the newest notice that still offers one (G7); the search box, a field and the editor keep their own.</summary>
+    UndoNotice,
+
+    /// <summary>A repeat of an Enter, a <c>Ctrl+V</c> or a <c>Ctrl+Z</c> still held from its press: nothing happens, and no control sees it (G7, G8, G13, N3).</summary>
     Held,
 }
 
@@ -80,20 +83,22 @@ public enum KeyPlace
 /// person selected in the box while it has such a selection, which is the box's own key, and otherwise the selected
 /// items, from both, the box's whole text as a summon selects it not being the person's until they change it there
 /// (<see cref="SummonSelection"/>); Enter and <c>Ctrl+V</c> act once per press however long they are held, Enter
-/// counted wherever it lands, so a press a field took never hands off (<see cref="PressOnce"/>); Del in the
-/// grid deletes the selection, and in the box a character; <c>Ctrl+D</c> in the grid toggles favorite; Space in the
-/// grid opens the preview, and F2 opens it with the name in edit; and a character typed in the grid goes into the box
-/// with focus. <c>Ctrl+V</c> is the window's paste from every place, the one read of the clipboard, and
-/// <c>Shift+Insert</c> is nothing, since no text box has a paste of its own (G13, N9). Inside any other text field the
-/// keys it uses are its own (typed characters, Space, Backspace, Del, the arrows, Enter, Esc, F2, its text's <c>Ctrl+A</c> and
-/// <c>Ctrl+C</c>), so none of them deletes, hands off, closes or moves the selection; only <c>Ctrl+O</c>,
-/// <c>Ctrl+V</c> and the thumbnail size, which a field leaves unused, still reach the window. While the preview covers
-/// the box and the grid, Enter, <c>Ctrl+C</c>, Del, <c>Ctrl+D</c> and F2 act on its item, Esc and Space close it, a
-/// focused button of its own takes Space as its press, <c>Ctrl+O</c>, <c>Ctrl+V</c> and the thumbnail size still work,
-/// and the arrows, <c>Ctrl+A</c> and typing reach neither the grid nor the box, which it hides (G7, G17, G19).
-/// <c>Ctrl+E</c> in the box, the grid or the preview opens the editor. While the editor is open over all of it, only
-/// <c>Ctrl+C</c>, which copies the item as last saved, <c>Ctrl+O</c>, <c>Ctrl+V</c> and the thumbnail size still reach
-/// the window; every other key is the editor's, so Enter never pastes (G20, G9, G11, G13).
+/// counted wherever it lands, so a press a field took never hands off (<see cref="PressOnce"/>); Del in the grid
+/// deletes the selection, and in the box a character; <c>Ctrl+D</c> in the grid toggles favorite; Space in the grid
+/// opens the preview, and F2 opens it with the name in edit; <c>Ctrl+Z</c> in the grid runs the Undo of the newest
+/// notice that still offers one, once per press however long it is held, while in the box it stays the box's own; and a
+/// character typed in the grid goes into the box with focus. <c>Ctrl+V</c> is the window's paste from every place, the
+/// one read of the clipboard, and <c>Shift+Insert</c> is nothing, since no text box has a paste of its own (G13, N9).
+/// Inside any other text field the keys it uses are its own (typed characters, Space, Backspace, Del, the arrows,
+/// Enter, Esc, F2, its text's <c>Ctrl+A</c> and <c>Ctrl+C</c>), so none of them deletes, hands off, closes or moves the
+/// selection; only <c>Ctrl+O</c>, <c>Ctrl+V</c> and the thumbnail size, which a field leaves unused, still reach the
+/// window. While the preview covers the box and the grid, Enter, <c>Ctrl+C</c>, Del, <c>Ctrl+D</c> and F2 act on its
+/// item, Esc and Space close it, <c>Ctrl+Z</c> runs the newest notice's Undo as in the grid, a focused button of its
+/// own takes Space as its press, <c>Ctrl+O</c>, <c>Ctrl+V</c> and the thumbnail size still work, and the arrows,
+/// <c>Ctrl+A</c> and typing reach neither the grid nor the box, which it hides (G7, G17, G19). <c>Ctrl+E</c> in the
+/// box, the grid or the preview opens the editor. While the editor is open over all of it, only <c>Ctrl+C</c>, which
+/// copies the item as last saved, <c>Ctrl+O</c>, <c>Ctrl+V</c> and the thumbnail size still reach the window; every
+/// other key is the editor's, so Enter never pastes and <c>Ctrl+Z</c> is the edit's own undo (G20, G25, G9, G11, G13).
 /// </summary>
 public static class StashKeys
 {
@@ -125,6 +130,7 @@ public static class StashKeys
             (Key.Delete, KeyModifiers.None) => KeyAction.Delete,
             (Key.D, KeyModifiers.Control) => KeyAction.ToggleFavorite,
             (Key.F2, KeyModifiers.None) => KeyAction.Rename,
+            (Key.Z, KeyModifiers.Control) => KeyAction.UndoNotice,
             (Key.Escape, KeyModifiers.None) => KeyAction.Escape,
             (Key.Space, KeyModifiers.None) when place == KeyPlace.Preview => KeyAction.TogglePreview,
             (Key.O, KeyModifiers.Control) => KeyAction.ImportFiles,
@@ -169,6 +175,7 @@ public static class StashKeys
         (Key.D, KeyModifiers.Control) when !inSearchBox => KeyAction.ToggleFavorite,
         (Key.Space, KeyModifiers.None) when !inSearchBox => KeyAction.TogglePreview,
         (Key.F2, KeyModifiers.None) when !inSearchBox => KeyAction.Rename,
+        (Key.Z, KeyModifiers.Control) when !inSearchBox => KeyAction.UndoNotice,
         _ => KeyAction.None,
     };
 
@@ -192,8 +199,9 @@ public static class StashKeys
 /// <summary>
 /// One act per press of a key that acts once however long it is held, and the moment it is let go: Windows repeats the
 /// press of a held key, so a held <c>Ctrl+V</c> would otherwise read the clipboard again and again, each time a new item
-/// (G13, N9), and a held Enter would hand off again and again, its repeats reaching the target as Send once it is in
-/// front (G8, N3). Each key is remembered on its own, so letting go of one never opens another's next press.
+/// (G13, N9), a held Enter would hand off again and again, its repeats reaching the target as Send once it is in
+/// front (G8, N3), and a held <c>Ctrl+Z</c> would undo one notice's change and then the one before it (G7). Each key is
+/// remembered on its own, so letting go of one never opens another's next press.
 /// </summary>
 public sealed class PressOnce
 {
@@ -211,16 +219,17 @@ public sealed class PressOnce
     }
 
     /// <summary>
-    /// What a press of <paramref name="key"/> routed to <paramref name="action"/> does: a repeat of an Enter or a
-    /// <c>Ctrl+V</c> still held is <see cref="KeyAction.Held"/>. Enter is remembered wherever it lands, a text field's own
-    /// Enter included, so the repeats of a press the name or tag field took do not hand off once focus has gone back to
-    /// the preview (G19).
+    /// What a press of <paramref name="key"/> routed to <paramref name="action"/> does: a repeat of an Enter, a
+    /// <c>Ctrl+V</c> or a <c>Ctrl+Z</c> still held is <see cref="KeyAction.Held"/>. Enter and Z are remembered wherever
+    /// they land, a text field's own included, so the repeats of an Enter the name or tag field took do not hand off once
+    /// focus has gone back to the preview (G19), and those of a <c>Ctrl+Z</c> the search box took do not undo a notice
+    /// once focus has gone to the grid (G7).
     /// </summary>
     public KeyAction Acting(Key key, KeyAction action)
     {
         // Only these are remembered: any other key acts on each press, a held arrow moving on as it repeats.
-        var remembered = key == Key.Enter || action == KeyAction.Paste;
-        return remembered && !Pressed(key) && action is (KeyAction.Handoff or KeyAction.Paste) ? KeyAction.Held : action;
+        var remembered = key is Key.Enter or Key.Z || action == KeyAction.Paste;
+        return remembered && !Pressed(key) && action is (KeyAction.Handoff or KeyAction.Paste or KeyAction.UndoNotice) ? KeyAction.Held : action;
     }
 
     /// <summary>

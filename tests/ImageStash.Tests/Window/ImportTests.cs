@@ -51,9 +51,7 @@ public sealed class ImportTests
         Assert.AreEqual(listing.Items[0].Id, listing.Focused);
 
         var notice = importing.Notices.Shown.Single();
-        Assert.AreEqual(
-            $"Added 4 to your stash: photo.jpg, transparent.png, animated.gif and animated.webp. Skipped clip.mp4 (a video) and cat pictures.url (a link): {Formats}.",
-            notice.Text);
+        Assert.AreEqual(("Added 4 · 2 skipped", $"Skipped clip.mp4 (a video) and cat pictures.url (a link): {Formats}."), (notice.Heading, notice.Text));
         Assert.AreEqual("Undo", notice.UndoLabel);
         CollectionAssert.AreEqual(before, sources.Select(path => SHA256.HashData(File.ReadAllBytes(path))).ToList(), "the sources stay untouched");
         Assert.HasCount(5, importing.Stash.RootFiles());
@@ -95,7 +93,7 @@ public sealed class ImportTests
         Assert.AreEqual(ImportResultKind.AlreadyInStash, again.Single().Result);
         Assert.AreEqual("animated", again.Single().Item!.Name);
         var notice = importing.Notices.Shown[^1];
-        Assert.AreEqual("Nothing was added. animated.gif was already in your stash as “animated”.", notice.Text);
+        Assert.AreEqual(("Nothing was added · 1 already in your stash", "animated.gif was already in your stash as “animated”."), (notice.Heading, notice.Text));
         Assert.IsNull(notice.UndoLabel, "nothing was added, so there is nothing to undo");
         CollectionAssert.AreEquivalent(root, importing.Stash.RootFiles());
         Assert.HasCount(1, await importing.Stash.All());
@@ -162,7 +160,7 @@ public sealed class ImportTests
         var results = await importing.Import.Drop(ListedStash.Contents(sources));
 
         Assert.IsTrue(results.All(file => file.Result == ImportResultKind.Unreadable && file.Failure is null));
-        Assert.AreEqual("Nothing was added. cut.png, x.gif and t.webp are unreadable.", importing.Notices.Shown.Single().Text);
+        Assert.AreEqual(("Nothing was added · 3 unreadable", "cut.png, x.gif and t.webp are unreadable."), (importing.Notices.Shown.Single().Heading, importing.Notices.Shown.Single().Text));
         Assert.IsEmpty(await importing.Stash.All());
         Assert.IsEmpty(importing.Stash.RootFiles());
         Assert.IsEmpty(importing.Stash.WorkFiles());
@@ -183,7 +181,7 @@ public sealed class ImportTests
         Assert.AreEqual(ImportResultKind.Failed, results[0].Result);
         Assert.AreEqual(new Failure("Copy into the stash", "held.png", HeldFileRetry.HeldReason), results[0].Failure, "a held file is not unreadable (G35)");
         Assert.AreEqual(ImportResultKind.Added, results[1].Result);
-        Assert.AreEqual($"Added 1 to your stash: photo.jpg. Copy into the stash failed: held.png, {HeldFileRetry.HeldReason}.", importing.Notices.Shown.Single().Text);
+        Assert.AreEqual(("Added 1 · 1 failed", $"Copy into the stash failed: held.png, {HeldFileRetry.HeldReason}. Added “photo”."), (importing.Notices.Shown.Single().Heading, importing.Notices.Shown.Single().Text));
         Assert.IsEmpty(importing.Stash.WorkFiles());
     }
 
@@ -213,7 +211,7 @@ public sealed class ImportTests
         Assert.IsFalse(neverPlaced.PutInStash);
         Assert.AreEqual(new ImportedFile("again.png", ImportResultKind.AlreadyInStash, item, Failure: held), found);
         Assert.IsFalse(found.PutInStash, "a duplicate is not the batch's to undo");
-        Assert.AreEqual($"Nothing was added. Add to the stash failed: held.png, {HeldFileRetry.HeldReason}.", Import.NoticeText([neverPlaced]));
+        Assert.AreEqual(("Nothing was added · 1 failed", $"Add to the stash failed: held.png, {HeldFileRetry.HeldReason}."), Import.NoticeWords([neverPlaced]));
     }
 
     [TestMethod]
@@ -230,7 +228,8 @@ public sealed class ImportTests
         Assert.AreEqual(ImportResultKind.Failed, file.Result, "no success is shown before the last step completed (R9)");
         Assert.IsNotNull(file.Failure);
         var notice = importing.Notices.Shown.Single();
-        Assert.StartsWith("Nothing was added. Add to the stash failed: ", notice.Text);
+        Assert.AreEqual("Nothing was added · 1 failed", notice.Heading);
+        Assert.StartsWith("still.png: Add to the stash failed: ", notice.Text, "named, though its failure names the store");
         Assert.AreEqual(file.Item!.Id, (await importing.Stash.All()).Single().Id, "its picture is in place, so the stash shows it (State: A live failure)");
         Assert.AreEqual("Undo", notice.UndoLabel, "the batch put it in the stash, so Undo removes it (G12)");
 
@@ -254,7 +253,7 @@ public sealed class ImportTests
 
         CollectionAssert.AreEqual(new[] { "notes.txt", "still.png" }, results.Select(file => file.Name).ToList());
         Assert.AreEqual("still", (await importing.Stash.All()).Single().Name);
-        Assert.AreEqual($"Added 1 to your stash: still.png. Skipped notes.txt (a .txt file): {Formats}.", importing.Notices.Shown.Single().Text);
+        Assert.AreEqual(("Added 1 · 1 skipped", $"Skipped notes.txt (a .txt file): {Formats}. Added “still”."), (importing.Notices.Shown.Single().Heading, importing.Notices.Shown.Single().Text));
     }
 
     [TestMethod]
@@ -315,10 +314,10 @@ public sealed class ImportTests
             "the second drop runs after the first");
         Assert.IsNull(importing.Import.Busy);
         Assert.HasCount(21, await importing.Stash.All());
-        var texts = importing.Notices.Shown.Select(notice => notice.Text).ToList();
+        var texts = importing.Notices.Shown.Select(notice => (notice.Heading, notice.Text)).ToList();
         Assert.HasCount(2, texts, "each batch has its own notice");
-        Assert.AreEqual("Added 20 to your stash: " + string.Join(", ", twenty.Take(19).Select(Path.GetFileName)) + " and p20.png.", texts[0]);
-        Assert.AreEqual("Added 1 to your stash: later.png.", texts[1]);
+        Assert.AreEqual(("Added 20 to your stash", ""), texts[0]);
+        Assert.AreEqual(("Added 1 to your stash", "Added “later”."), texts[1]);
     }
 
     [TestMethod]
@@ -418,7 +417,7 @@ public sealed class ImportTests
         var results = (await first).Concat(await second).ToList();
 
         Assert.HasCount(21, results);
-        Assert.IsTrue(results.All(file => file.Result == ImportResultKind.Added), Import.NoticeText(results));
+        Assert.IsTrue(results.All(file => file.Result == ImportResultKind.Added), $"{Import.NoticeWords(results)}");
         var all = await importing.Stash.All();
         Assert.IsTrue(results.All(file => all.Single(item => item.Id == file.Item!.Id).Tags.SequenceEqual(["dog"])), "every item of both batches carries the tag lit at its drop (G11)");
         Assert.AreEqual("", importing.Listing.Query);
@@ -445,8 +444,8 @@ public sealed class ImportTests
         Assert.IsEmpty(failed);
         Assert.HasCount(2, await importing.Stash.All());
         CollectionAssert.AreEqual(
-            new[] { "Added 2 to your stash: still.png and animated.gif.", "Import files failed: the file picker, the dialog broke" },
-            importing.Notices.Shown.Select(notice => notice.Text).ToList(),
+            new[] { ("Added 2 to your stash", "Added “still” and “animated”."), ((string?)null, "Import files failed: the file picker, the dialog broke") },
+            importing.Notices.Shown.Select(notice => (notice.Heading, notice.Text)).ToList(),
             "a cancelled picker changes nothing; a failed one is named");
     }
 

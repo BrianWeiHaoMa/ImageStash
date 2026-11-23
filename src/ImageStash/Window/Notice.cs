@@ -6,9 +6,10 @@ namespace ImageStash.Window;
 /// <summary>A notice inside the stash window: what happened, in words shown unchanged, and an Undo when it has one.</summary>
 public sealed class Notice
 {
-    internal Notice(string text, string? undoLabel, Func<Task<Outcome>>? undo, Func<Task>? left, Func<Notice, Notices, Control>? card, bool namesAProblem, UserAct? act)
+    internal Notice(string text, string? heading, string? undoLabel, Func<Task<Outcome>>? undo, Func<Task>? left, Func<Notice, Notices, Control>? card, bool namesAProblem, UserAct? act)
     {
         Text = text;
+        Heading = heading;
         UndoLabel = undoLabel;
         UndoAction = undo;
         LeftAction = left;
@@ -17,7 +18,11 @@ public sealed class Notice
         Act = act;
     }
 
+    /// <summary>The words under its <see cref="Heading"/>, or all of them when it has none; empty when the heading says it all.</summary>
     public string Text { get; }
+
+    /// <summary>The line the card shows first, semi-bold, above <see cref="Text"/>, as an import's counts (G12); null for most notices.</summary>
+    public string? Heading { get; }
 
     /// <summary>
     /// Whether the notice names a problem: a file skipped as unsupported, an unreadable file, a refusal or a failure
@@ -29,7 +34,7 @@ public sealed class Notice
     public UserAct? Act { get; }
 
     /// <summary>Everything the card reads out as text, its buttons aside: the words a notice's time is counted from (G16).</summary>
-    internal string Words => Text;
+    internal string Words => Heading is null ? Text : $"{Heading} {Text}";
 
     /// <summary>The Undo button's label; null when the notice has no Undo.</summary>
     public string? UndoLabel { get; }
@@ -135,8 +140,8 @@ public sealed class Notices
     /// <summary>The action of every notice's Undo, the person's act of its own.</summary>
     public const string Undoing = "Undo";
 
-    /// <summary>How many items a notice names before it counts them instead.</summary>
-    private const int NamedAtMost = 3;
+    /// <summary>How many items a notice names before it counts them instead, an import's added items too (G12).</summary>
+    internal const int NamedAtMost = 3;
 
     private readonly TimeProvider clock;
     private readonly bool inWindow;
@@ -191,14 +196,15 @@ public sealed class Notices
     /// </param>
     /// <param name="card">The card it is drawn as above the tray, instead of the notice card.</param>
     /// <param name="namesAProblem">Whether <paramref name="text"/> names a skipped or unreadable file, a refusal or a failure.</param>
+    /// <param name="heading">The line shown first above <paramref name="text"/>, counted with it for the notice's time.</param>
     /// <returns>
     /// The notice, carrying the act whose flow raised it; in the stash window, one naming a problem without an Undo is not
     /// shown when a later act of its action has raised a notice already, which takes its place.
     /// </returns>
     public Notice Raise(string text, string? undoLabel = null, Func<Task<Outcome>>? undo = null, Func<Task>? left = null, Func<Notice, Notices, Control>? card = null,
-        bool namesAProblem = false)
+        bool namesAProblem = false, string? heading = null)
     {
-        var notice = new Notice(text, undo is null ? null : undoLabel, undo, left, card, namesAProblem, UserAct.Current);
+        var notice = new Notice(text, heading, undo is null ? null : undoLabel, undo, left, card, namesAProblem, UserAct.Current);
         notice.TimeLeft = inWindow ? LastingFor(notice.Words) : Lasting;
         Settle(notice, clock.GetUtcNow());
         var replaced = inWindow ? TakeOver(notice) : [];
@@ -355,6 +361,12 @@ public sealed class Notices
     {
         using var acting = UserAct.Begin(Undoing);
         Sweep();
+        await RunUndo(notice);
+    }
+
+    /// <summary>The notice's Undo, the stack swept already: nothing unless it still offers one.</summary>
+    private async Task RunUndo(Notice notice)
+    {
         if (!OffersUndo(notice))
         {
             return;
@@ -369,6 +381,31 @@ public sealed class Notices
             Raise(outcome.Failure);
         }
     }
+
+    /// <summary>
+    /// <c>Ctrl+Z</c> in the grid and in the preview outside its fields (G7): the Undo of the newest notice that still
+    /// offers one, once every notice whose time is up has left, so a newer notice without an Undo, or one staying past its
+    /// time, is passed by; nothing when none offers one. Only the stash window's stack: no key reaches the Undo of a
+    /// notification above the tray.
+    /// </summary>
+    public async Task UndoNewest()
+    {
+        if (!inWindow)
+        {
+            throw new InvalidOperationException("No key runs the Undo of a notification above the tray.");
+        }
+
+        using var acting = UserAct.Begin(Undoing);
+        Sweep();
+        if (shown.LastOrDefault(OffersUndo) is { } newest)
+        {
+            // Run on this sweep's answer: a second reading of the clock could end the newest's time and pass the next by.
+            await RunUndo(newest);
+        }
+    }
+
+    /// <summary>The key that runs this stack's newest Undo, which its Undo buttons name: <c>Ctrl+Z</c> in the stash window, none above the tray.</summary>
+    public string? UndoKey => inWindow ? "Ctrl+Z" : null;
 
     /// <summary>
     /// The one transition of a notice's time ending, whatever ends it: its Undo is offered no more; in the stash window a

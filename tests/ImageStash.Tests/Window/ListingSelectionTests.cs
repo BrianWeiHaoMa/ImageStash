@@ -209,7 +209,7 @@ public sealed class ListingSelectionTests
     private static async Task<IReadOnlyCollection<long>> ImportThree(ListedStash listed)
     {
         var results = await listed.Import.Drop(Contents([MediaFixtures.Path("still.png"), MediaFixtures.Path("photo.jpg"), MediaFixtures.Path("animated.gif")]));
-        Assert.IsTrue(results.All(file => file.Result == ImportResultKind.Added), Import.NoticeText(results));
+        Assert.IsTrue(results.All(file => file.Result == ImportResultKind.Added), $"{Import.NoticeWords(results)}");
         return results.Select(file => file.Item!.Id).ToList();
     }
 

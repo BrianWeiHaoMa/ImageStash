@@ -7,6 +7,7 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 ### Added
 
 - A copy now says it worked: after `Ctrl+C`, an Enter that copies (with no app to paste into), or the item menu's Copy, the footer reads "✓ Copied" with the picture's name, or how many pictures, for two seconds before its hints return. In the preview, the button that copies reads "Copied ✓" for a moment instead. A paste into a chat shows nothing of the kind: ImageStash cannot see whether it arrived.
+- `Ctrl+Z` now undoes from the keyboard: in the grid, or in a picture's preview outside its name and tag fields, it runs the Undo of the newest notice that still offers one, so a picture deleted with Del comes back with one key, and pressed again it undoes the change before that. Held down, it undoes once. In the search box it still undoes your typing, and in the editor your last edit; notifications above the tray are never undone by it. A notice's Undo button names the key in its tooltip.
 
 ### Changed
 
@@ -19,6 +20,7 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 - `Ctrl+C` right after the shortcut opens the window now copies the selected picture, as the footer says, instead of the leftover search word the window had selected so that typing replaces it. Text you select in the search box yourself (by dragging, Shift with an arrow, Home or End, or `Ctrl+A`) is still copied as text.
 - A notice in the stash window now stays as long as its words take to read: six seconds for a short one, and for a longer one two seconds plus one for every three and a half words, up to twenty. Its time runs only while the window is showing, so a result that arrives while the window is hidden or minimised, such as an import that ends after you switched back to your chat, is still there, with its whole time ahead of it, when you next open the window. Move…, Export stash… and Import stash… don't wait on a notice in a hidden or minimised window: its Undo ends as if its time were up, and they go ahead once what that ends has finished. Notifications above the tray still stay six seconds.
 - A notice in the stash window that names a problem (a file skipped or unreadable, a refusal, a failure) now stays until you close it with its ×, or until you next do the same thing (another paste, another drop, another delete), whose notice takes its place, so a skipped file or a failed delete is still on screen when you look back. Its Undo still lasts only for the notice's time: once that is up, the Undo button goes and the words stay. A notice that names no problem, such as "Deleted …", leaves at its time as before, and notifications above the tray still leave after six seconds.
+- An import's notice now leads with a semi-bold line of counts ("Added 38 · 1 already in your stash · 1 skipped", or "Added 3 to your stash" when nothing else happened), then names only the files that were not added, each with its reason, so a skipped or failed file is the first thing you read instead of sitting below forty names. The added pictures are named only when there are three or fewer; they are already selected in the grid.
 
 ### Fixed
 

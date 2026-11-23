@@ -54,9 +54,9 @@ public sealed record ImportedFile(string Name, ImportResultKind Result, StashIte
 /// paste, every item the batch adds gets their tags in its own insert, however long the batch waits behind another whose
 /// end clears the search (G11, G12). While a batch runs its busy
 /// state names it and nothing shows as added before its commit returned (G35, R9); afterwards the search is cleared,
-/// All shows the new items first and selected, and a notice states the result for every file with an Undo that
-/// removes everything the batch added. Sources are only ever copied (G11); nothing here writes into the stash but a
-/// stream into the <c>.work\</c> path Store allocated (R2).
+/// All shows the new items first and selected, and a notice counts what became of the files, names every file that was
+/// not added with its reason, and offers an Undo that removes everything the batch added. Sources are only ever copied
+/// (G11); nothing here writes into the stash but a stream into the <c>.work\</c> path Store allocated (R2).
 /// </summary>
 public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRetry)
 {
@@ -79,6 +79,15 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
     [
         new("Pictures (GIF, PNG, JPG, WebP)", Enum.GetValues<ImageFormat>().SelectMany(ImageFormatExtensions.Of).Select(extension => "*" + extension).ToList()),
         new("All files", ["*.*"]),
+    ];
+
+    /// <summary>The results a notice's heading counts after the added files, in its order, and how it counts each (G12).</summary>
+    private static readonly (ImportResultKind Kind, string Words)[] Counted =
+    [
+        (ImportResultKind.AlreadyInStash, "already in your stash"),
+        (ImportResultKind.Skipped, "skipped"),
+        (ImportResultKind.Unreadable, "unreadable"),
+        (ImportResultKind.Failed, "failed"),
     ];
 
     private readonly SemaphoreSlim oneBatchAtATime = new(1, 1);
@@ -227,16 +236,33 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
         return (files, unlisted);
     }
 
-    /// <summary>The notice for a finished batch: every file named with what became of it, the added ones after their count (G12).</summary>
-    public static string NoticeText(IReadOnlyList<ImportedFile> files)
+    /// <summary>
+    /// The notice for a finished batch (G12): its heading counts the files added, already in the stash, skipped,
+    /// unreadable and failed ("Added 38 · 1 already in your stash · 1 skipped", or "Added 3 to your stash" when nothing
+    /// else happened); its details name every file that was not added with its reason, a failure beside a duplicate
+    /// included, and then the added items by name when they are three or fewer. A file the batch put in the stash whose
+    /// last step failed is counted and named as failed, never as added (R9).
+    /// </summary>
+    public static (string Heading, string Details) NoticeWords(IReadOnlyList<ImportedFile> files)
     {
         if (files.Count == 0)
         {
-            return "Nothing was added: there was no file in what was dropped.";
+            return ("Nothing was added: there was no file in what was dropped.", "");
         }
 
-        var added = files.Where(file => file.Result == ImportResultKind.Added).Select(file => file.Name).ToList();
-        var parts = new List<string> { added.Count > 0 ? $"Added {added.Count} to your stash: {Join(added)}." : "Nothing was added." };
+        var added = files.Where(file => file.Result == ImportResultKind.Added).Select(file => file.Item!).ToList();
+        var counted = new List<string> { added.Count > 0 ? $"Added {added.Count}" : "Nothing was added" };
+        foreach (var (kind, words) in Counted)
+        {
+            var count = files.Count(file => file.Result == kind);
+            if (count > 0)
+            {
+                counted.Add($"{count} {words}");
+            }
+        }
+
+        var heading = added.Count > 0 && counted.Count == 1 ? $"Added {added.Count} to your stash" : string.Join(" · ", counted);
+        var parts = new List<string>();
         parts.AddRange(files.Where(file => file.Result == ImportResultKind.AlreadyInStash)
             .Select(file => $"{file.Name} was already in your stash as “{file.Item!.Name}”."));
         var skipped = files.Where(file => file.Result == ImportResultKind.Skipped).ToList();
@@ -251,8 +277,24 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
             parts.Add($"{Join(unreadable.Select(file => file.Name))} {(unreadable.Count == 1 ? "is" : "are")} unreadable.");
         }
 
-        parts.AddRange(files.Where(file => file.Failure is not null).Select(file => file.Failure!.Sentence.TrimEnd('.') + "."));
-        return string.Join(" ", parts);
+        parts.AddRange(files.Where(file => file.Failure is not null).Select(FailureWords));
+        if (added.Count is > 0 and <= Notices.NamedAtMost)
+        {
+            parts.Add($"Added {Notices.Describe(added)}.");
+        }
+
+        return (heading, string.Join(" ", parts));
+    }
+
+    /// <summary>
+    /// A file's failure as its sentence names it, after the file's own name when that sentence names something else, as
+    /// the store a refused write left behind ("still.png: Add to the stash failed: stash.db, …"): every file not added is
+    /// named (G12).
+    /// </summary>
+    private static string FailureWords(ImportedFile file)
+    {
+        var sentence = file.Failure!.Sentence.TrimEnd('.') + ".";
+        return file.Failure.Subject == file.Name ? sentence : $"{file.Name}: {sentence}";
     }
 
     /// <param name="litTags">The tags lit at the user's act, read then, which every item added gets.</param>
@@ -300,8 +342,9 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
                 listing.SelectAdded(added);
             }
 
-            var text = also is null ? NoticeText(results) : NoticeText(results) + " " + also;
-            notices.Raise(text, batch.Count > 0 ? "Undo" : null, batch.Count > 0 ? () => Undo(store, batch) : null, namesAProblem: results.Any(file => file.NamesAProblem));
+            var (heading, details) = NoticeWords(results);
+            var text = also is null ? details : $"{details} {also}".TrimStart();
+            notices.Raise(text, batch.Count > 0 ? "Undo" : null, batch.Count > 0 ? () => Undo(store, batch) : null, namesAProblem: results.Any(file => file.NamesAProblem), heading: heading);
             return results;
         }
         finally

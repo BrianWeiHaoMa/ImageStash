@@ -73,7 +73,7 @@ public sealed class ProblemNoticeTests
 
         Assert.DoesNotContain(refused, listed.Notices.Shown);
         Assert.HasCount(1, listed.Notices.Shown);
-        StringAssert.StartsWith(listed.Notices.Shown.Single().Text, "Added 1 to your stash");
+        Assert.AreEqual("Added 1 to your stash", listed.Notices.Shown.Single().Heading);
     }
 
     [TestMethod]

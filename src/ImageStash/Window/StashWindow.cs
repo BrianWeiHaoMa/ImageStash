@@ -561,6 +561,10 @@ public sealed class StashWindow : Avalonia.Controls.Window
             case KeyAction.Rename:
                 keys.Then(Rename);
                 break;
+            case KeyAction.UndoNotice:
+                // In the order pressed: after a Del still waiting behind an arrow, so it undoes that Delete (G7).
+                keys.Then(() => _ = notices.UndoNewest());
+                break;
             case KeyAction.LargerThumbnails or KeyAction.SmallerThumbnails:
                 ThumbnailSizing.Step(action == KeyAction.LargerThumbnails ? 1 : -1);
                 break;

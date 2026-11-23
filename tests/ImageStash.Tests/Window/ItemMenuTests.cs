@@ -542,7 +542,7 @@ public sealed class ItemMenuTests
             await menu.Listing.StashOpened(menu.Stash.Store!);
             var import = new Import(menu.Listing, menu.Notices, TestStash.ShortRetry);
             var results = await import.Drop(new DropContents(fixtures.Select(MediaFixtures.Path).Select(path => new DroppedItem(Path.GetFileName(path), path, null, IsFolder: false)).ToList(), false, false, []));
-            Assert.IsTrue(results.All(file => file.Result == ImportResultKind.Added), Import.NoticeText(results));
+            Assert.IsTrue(results.All(file => file.Result == ImportResultKind.Added), $"{Import.NoticeWords(results)}");
             menu.Items = results.Select(file => file.Item!).ToList();
             foreach (var notice in menu.Notices.Shown.ToList())
             {

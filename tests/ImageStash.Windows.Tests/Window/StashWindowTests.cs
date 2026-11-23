@@ -55,7 +55,7 @@ public sealed class StashWindowTests
     {
         using var shown = ShownWindow.Open();
 
-        TrayDesktop.Run(() => shown.Notices.Raise(Import.NoticeText(Added(200)), "Undo", () => Task.FromResult(Outcome.Done)));
+        TrayDesktop.Run(() => RaiseImportNotice(shown, [.. Added(4), .. Skipped(200)]));
         await Task.Delay(500);
 
         TrayDesktop.Run(() => Assert.IsTrue(shown.Reachable(shown.Notices.Shown[^1]), "the Undo of a 200-file batch is where a click reaches it"));
@@ -70,7 +70,7 @@ public sealed class StashWindowTests
         {
             for (var batch = 0; batch < 6; batch++)
             {
-                shown.Notices.Raise(Import.NoticeText(Added(40, $"batch {batch} ")), "Undo", () => Task.FromResult(Outcome.Done));
+                RaiseImportNotice(shown, [.. Added(4, $"batch {batch} "), .. Skipped(40, $"batch {batch} ")]);
             }
         });
 
@@ -652,7 +652,7 @@ public sealed class StashWindowTests
         Assert.IsTrue(deleted.All(item => RecycleBinEntries.Of(item.FilePath).Count == 0), "the bin's entries are gone, $R and $I");
         Assert.IsEmpty(Directory.GetFiles(work));
         Assert.AreEqual(0L, shown.Uses(), "neither records a use (G10)");
-        TrayDesktop.Run(() => Assert.IsTrue(shown.Notices.Shown.All(n => n.Text.StartsWith("Added ")), "nothing failed"));
+        TrayDesktop.Run(() => Assert.IsTrue(shown.Notices.Shown.All(n => (n.Heading ?? n.Text).StartsWith("Added ") && !n.NamesAProblem), "nothing failed"));
     }
 
     [TestMethod]
@@ -759,7 +759,7 @@ public sealed class StashWindowTests
         {
             Assert.AreEqual("at", shown.Search.Text, "Del deleted the character after the caret (G7)");
             CollectionAssert.AreEqual(new[] { item.Id }, shown.Listing.Items.Select(i => i.Id).ToList(), "and nothing was deleted");
-            Assert.IsTrue(shown.Notices.Shown.All(n => n.Text.StartsWith("Added ")));
+            Assert.IsTrue(shown.Notices.Shown.All(n => (n.Heading ?? n.Text).StartsWith("Added ") && !n.NamesAProblem));
         });
         Assert.IsTrue(File.Exists(item.FilePath));
         Assert.IsEmpty(RecycleBinEntries.Of(item.FilePath));
@@ -850,6 +850,18 @@ public sealed class StashWindowTests
             ? row.Children.OfType<TextBlock>().Single().Text
             : null;
 
+    /// <summary>A batch's added files, more than its notice names (G12).</summary>
     private static List<ImportedFile> Added(int count, string prefix = "") =>
-        Enumerable.Range(0, count).Select(i => new ImportedFile($"{prefix}reaction {i:000}.png", ImportResultKind.Added)).ToList();
+        Enumerable.Range(0, count).Select(i => new ImportedFile($"{prefix}added {i}.png", ImportResultKind.Added)).ToList();
+
+    /// <summary>A batch's files that were not added, each named in its notice (G12).</summary>
+    private static List<ImportedFile> Skipped(int count, string prefix = "") =>
+        Enumerable.Range(0, count).Select(i => new ImportedFile($"{prefix}reaction {i:000}.mp4", ImportResultKind.Skipped, Type: "a video")).ToList();
+
+    /// <summary>An import's notice for <paramref name="files"/> with its first line and an Undo, as a batch that added some raises it.</summary>
+    private static void RaiseImportNotice(ShownWindow shown, IReadOnlyList<ImportedFile> files)
+    {
+        var (heading, details) = Import.NoticeWords(files);
+        shown.Notices.Raise(details, "Undo", () => Task.FromResult(Outcome.Done), namesAProblem: files.Any(file => file.NamesAProblem), heading: heading);
+    }
 }

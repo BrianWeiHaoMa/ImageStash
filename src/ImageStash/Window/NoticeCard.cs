@@ -9,10 +9,11 @@ using ImageStash.Look;
 namespace ImageStash.Window;
 
 /// <summary>
-/// A notice as a card, in the stash window's stack and in a notification above the tray alike (G16): its words, its
-/// Undo while the notice offers it, and a close button; the pointer over it holds its time, six seconds above the tray
-/// and as long as its words need in the window (Notice.cs), where a notice naming a problem stays past its time with
-/// its words and its close button, its Undo button gone with the Undo's end.
+/// A notice as a card, in the stash window's stack and in a notification above the tray alike (G16): its words, under
+/// its heading in semi-bold when it has one (an import's counts, G12), its Undo while the notice offers it, naming the
+/// key that runs it in the stash window (G7), and a close button; the pointer over it holds its time, six seconds above
+/// the tray and as long as its words need in the window (Notice.cs), where a notice naming a problem stays past its time
+/// with its words and its close button, its Undo button gone with the Undo's end.
 /// </summary>
 public static class NoticeCard
 {
@@ -24,20 +25,16 @@ public static class NoticeCard
     public static Control For(Notice notice, Notices notices)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        // A batch's notice names every file (G12), hundreds for a folder: its words scroll inside the card, so the card
-        // stays in the window and its Undo where a click reaches it (G16).
-        row.Children.Add(new ScrollViewer
-        {
-            Content = new TextBlock { Text = notice.Text, TextWrapping = TextWrapping.Wrap, MaxWidth = 320 },
-            MaxHeight = TextHeight,
-            VerticalAlignment = VerticalAlignment.Center,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-        });
+        row.Children.Add(Words(notice));
         if (notice.UndoLabel is { } label)
         {
             var undo = new Button { Content = label, Focusable = false };
             undo.Click += (_, _) => _ = notices.Undo(notice);
+            if (notices.UndoKey is { } key)
+            {
+                ToolTipRule.Set(undo, $"{label} ({key})");
+            }
+
             row.Children.Add(undo);
             // The window keeps a card while its notice shows, past the Undo's end too: the button follows the offer.
             void Follow()
@@ -57,6 +54,36 @@ public static class NoticeCard
         card.PointerEntered += (_, _) => notices.Hover(notice, over: true);
         card.PointerExited += (_, _) => notices.Hover(notice, over: false);
         return card;
+    }
+
+    /// <summary>
+    /// The notice's words: its heading, when it has one, semi-bold and always in view, above the rest, which scroll inside
+    /// the card: a batch's notice may name hundreds of files that were not added (G12), and the card stays in the window
+    /// with its Undo where a click reaches it (G16).
+    /// </summary>
+    private static Control Words(Notice notice)
+    {
+        var text = new ScrollViewer
+        {
+            Content = new TextBlock { Text = notice.Text, TextWrapping = TextWrapping.Wrap, MaxWidth = 320 },
+            MaxHeight = TextHeight,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
+        if (notice.Heading is not { } heading)
+        {
+            return text;
+        }
+
+        var words = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
+        words.Children.Add(new TextBlock { Text = heading, FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap, MaxWidth = 320 });
+        if (notice.Text.Length > 0)
+        {
+            words.Children.Add(text);
+        }
+
+        return words;
     }
 
     /// <summary>

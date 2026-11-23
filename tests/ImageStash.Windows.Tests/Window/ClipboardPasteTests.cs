@@ -57,7 +57,7 @@ public sealed class ClipboardPasteTests
             CollectionAssert.AreEqual(new[] { pasted.Id }, shown.Listing.Selection.ToList());
             Assert.AreEqual(older.Id, shown.Listing.Items[1].Id);
             Assert.AreEqual("", shown.Search.Text ?? "", "the clipboard's text was not typed into the box");
-            Assert.AreEqual($"Added 1 to your stash: {name}. {StillOnly}", shown.Notices.Shown[^1].Text);
+            Assert.AreEqual(("Added 1 to your stash", $"Added “{name}”. {StillOnly}"), (shown.Notices.Shown[^1].Heading, shown.Notices.Shown[^1].Text));
             Assert.IsTrue(shown.Grid.Rows.SelectMany(row => row.Tiles).Any(tile => tile.Id == pasted.Id), "the grid shows it");
         });
     }
@@ -308,7 +308,7 @@ public sealed class ClipboardPasteTests
         TrayDesktop.Run(() =>
         {
             CollectionAssert.AreEquivalent(new[] { "copied cat.png", "copied dog.gif" }, shown.Listing.Items.Select(item => item.FileName).ToList(), "each the file it came as, named after it");
-            Assert.AreEqual("Added 2 to your stash: copied cat.png and copied dog.gif.", shown.Notices.Shown[^1].Text);
+            Assert.AreEqual(("Added 2 to your stash", "Added “copied cat” and “copied dog”."), (shown.Notices.Shown[^1].Heading, shown.Notices.Shown[^1].Text));
         });
         Assert.IsTrue(File.Exists(cat) && File.Exists(dog), "the sources stay");
     }
@@ -335,7 +335,7 @@ public sealed class ClipboardPasteTests
         TrayDesktop.Run(() =>
         {
             CollectionAssert.AreEqual(new[] { items[0].Id }, shown.Listing.Selection.ToList(), "the last pasted, first in All and selected (G12)");
-            Assert.AreEqual($"Added 1 to your stash: {name}. {StillOnly}", shown.Notices.Shown[^1].Text);
+            Assert.AreEqual(("Added 1 to your stash", $"Added “{name}”. {StillOnly}"), (shown.Notices.Shown[^1].Heading, shown.Notices.Shown[^1].Text));
         });
         var copied = Pixels(EdgePicture);
         Assert.IsTrue(copied.Where((_, at) => at % 4 == 3).Any(alpha => alpha < 255), "the copied picture has transparency to keep");
@@ -394,7 +394,8 @@ public sealed class ClipboardPasteTests
         Assert.AreEqual("copied dancing.gif", added.FileName, "the GIF as the file it came as, named after it (F3, G12)");
         CollectionAssert.AreEqual(File.ReadAllBytes(gif), File.ReadAllBytes(added.FilePath));
         Assert.IsTrue(added.Facts.Animated);
-        TrayDesktop.Run(() => Assert.AreEqual($"Added 1 to your stash: copied dancing.gif. Skipped copied clip.mp4 (a video): ImageStash keeps {Import.Formats}.", shown.Notices.Shown[^1].Text));
+        TrayDesktop.Run(() => Assert.AreEqual(("Added 1 · 1 skipped", $"Skipped copied clip.mp4 (a video): ImageStash keeps {Import.Formats}. Added “copied dancing”."),
+            (shown.Notices.Shown[^1].Heading, shown.Notices.Shown[^1].Text)));
 
         var noticed = TrayDesktop.Get(() => shown.Notices.Shown.Count);
         using (ShellCopy.Of(folder, "copied dancing.gif"))
@@ -410,7 +411,7 @@ public sealed class ClipboardPasteTests
 
         TrayDesktop.Run(() =>
         {
-            Assert.AreEqual("Nothing was added. copied dancing.gif was already in your stash as “copied dancing”.", shown.Notices.Shown[^1].Text);
+            Assert.AreEqual(("Nothing was added · 1 already in your stash", "copied dancing.gif was already in your stash as “copied dancing”."), (shown.Notices.Shown[^1].Heading, shown.Notices.Shown[^1].Text));
             Assert.HasCount(1, shown.Listing.Items);
         });
     }

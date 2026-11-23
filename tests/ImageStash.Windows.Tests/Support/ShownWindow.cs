@@ -544,7 +544,7 @@ public sealed class ShownWindow : IDisposable
             .Select(text => text.Text!).ToList();
 
     /// <summary>What the notices showing say, in order, joined, after the import's own notice that opened the stash.</summary>
-    public string Said() => string.Join(" | ", Notices.Shown.Where(notice => !notice.Text.StartsWith("Added ")).Select(notice => notice.Text));
+    public string Said() => string.Join(" | ", Notices.Shown.Where(notice => !(notice.Heading ?? notice.Text).StartsWith("Added ")).Select(notice => notice.Text));
 
     /// <summary>Clicks the open menu's entry with the given words.</summary>
     public void ClickMenuEntry(string label) => Entry(label).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));

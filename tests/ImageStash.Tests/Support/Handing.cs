@@ -67,7 +67,7 @@ public sealed class Handing : IDisposable
         if (fixtures.Length > 0)
         {
             var results = await handing.Import.Drop(new DropContents(fixtures.Select(MediaFixtures.Path).Select(File).ToList(), false, false, []));
-            Assert.IsTrue(results.All(file => file.Result == ImportResultKind.Added), Import.NoticeText(results));
+            Assert.IsTrue(results.All(file => file.Result == ImportResultKind.Added), $"{Import.NoticeWords(results)}");
             handing.Items = results.Select(file => file.Item!).ToList();
         }
 
