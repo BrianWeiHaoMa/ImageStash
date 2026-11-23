@@ -438,19 +438,19 @@ public sealed class StashKeysTests
     }
 
     [TestMethod]
-    [DataRow(Key.Up, KeyModifiers.None)]
-    [DataRow(Key.Down, KeyModifiers.None)]
-    [DataRow(Key.Left, KeyModifiers.None)]
-    [DataRow(Key.Right, KeyModifiers.None)]
-    [DataRow(Key.Tab, KeyModifiers.None)]
-    [DataRow(Key.A, KeyModifiers.Control)]
-    [DataRow(Key.R, KeyModifiers.None)]
-    [DataRow(Key.Back, KeyModifiers.None)]
-    [DataRow(Key.Insert, KeyModifiers.Shift)]
-    public void InThePreviewTheArrowsTabCtrlAAndTypingReachNeitherTheGridNorTheBoxItCovers(Key key, KeyModifiers modifiers)
+    [DataRow(Key.Up, KeyModifiers.None, KeyAction.StepBack)]
+    [DataRow(Key.Down, KeyModifiers.None, KeyAction.StepOn)]
+    [DataRow(Key.Left, KeyModifiers.None, KeyAction.StepBack)]
+    [DataRow(Key.Right, KeyModifiers.None, KeyAction.StepOn)]
+    [DataRow(Key.Tab, KeyModifiers.None, KeyAction.None)]
+    [DataRow(Key.A, KeyModifiers.Control, KeyAction.None)]
+    [DataRow(Key.R, KeyModifiers.None, KeyAction.None)]
+    [DataRow(Key.Back, KeyModifiers.None, KeyAction.None)]
+    [DataRow(Key.Insert, KeyModifiers.Shift, KeyAction.None)]
+    public void InThePreviewTheArrowsStepItAndTabCtrlAAndTypingReachNeitherTheGridNorTheBoxItCovers(Key key, KeyModifiers modifiers, KeyAction expected)
     {
-        Assert.AreEqual(KeyAction.None, StashKeys.Route(key, modifiers, KeyPlace.Preview));
-        Assert.AreEqual(KeyAction.None, StashKeys.Route(key, modifiers, KeyPlace.PreviewButton));
+        Assert.AreEqual(expected, StashKeys.Route(key, modifiers, KeyPlace.Preview));
+        Assert.AreEqual(expected, StashKeys.Route(key, modifiers, KeyPlace.PreviewButton));
     }
 
     [TestMethod]

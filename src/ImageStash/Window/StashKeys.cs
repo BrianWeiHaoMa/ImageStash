@@ -54,6 +54,12 @@ public enum KeyAction
     /// <summary><c>Ctrl+T</c> from the box, the grid and the preview: the tag field on the selection, or in the preview its own tag box (G7, G17; <see cref="TagKey"/>).</summary>
     AddTags,
 
+    /// <summary>Left or Up in the preview outside its fields: the previous item of the grid's list (G19; <see cref="PreviewStepping"/>).</summary>
+    StepBack,
+
+    /// <summary>Right or Down in the preview outside its fields: the next item of the grid's list (G19; <see cref="PreviewStepping"/>).</summary>
+    StepOn,
+
     /// <summary>A repeat of an Enter, a <c>Ctrl+V</c> or a <c>Ctrl+Z</c> still held from its press: nothing happens, and no control sees it (G7, G8, G13, N3).</summary>
     Held,
 }
@@ -102,9 +108,11 @@ public enum KeyPlace
 /// window, and in the preview's name in edit <c>Ctrl+T</c> too. While the preview covers the box and the grid, Enter,
 /// <c>Ctrl+C</c>, Del, <c>Ctrl+D</c> and F2 act on its item, Esc and Space close it, <c>Ctrl+Z</c> runs the newest
 /// notice's Undo as in the grid, <c>Ctrl+T</c> moves focus to its tag box, a focused button of its
-/// own takes Space as its press, <c>Ctrl+O</c>, <c>Ctrl+V</c> and the thumbnail size still work, and the arrows,
-/// <c>Ctrl+A</c> and typing reach neither the grid nor the box, which it hides (G7, G17, G19). <c>Ctrl+E</c> in the
-/// box, the grid or the preview opens the editor. While the editor is open over all of it, only <c>Ctrl+C</c>, which
+/// own takes Space as its press, <c>Ctrl+O</c>, <c>Ctrl+V</c> and the thumbnail size still work, Left and Up show the
+/// previous item of the grid's list and Right and Down the next, on its picture and on a focused button of its own alike,
+/// on every repeat of a held key (<see cref="PreviewStepping"/>), while inside its name in edit and its tag box the
+/// arrows are the field's, and <c>Ctrl+A</c> and typing reach neither the grid nor the box, which it hides (G7, G17,
+/// G19). <c>Ctrl+E</c> in the box, the grid or the preview opens the editor. While the editor is open over all of it, only <c>Ctrl+C</c>, which
 /// copies the item as last saved, <c>Ctrl+O</c>, <c>Ctrl+V</c> and the thumbnail size still reach the window; every
 /// other key is the editor's, so Enter never pastes and <c>Ctrl+Z</c> is the edit's own undo (G20, G25, G9, G11, G13).
 /// </summary>
@@ -143,6 +151,8 @@ public static class StashKeys
             (Key.T, KeyModifiers.Control) => KeyAction.AddTags,
             (Key.Escape, KeyModifiers.None) => KeyAction.Escape,
             (Key.Space, KeyModifiers.None) when place == KeyPlace.Preview => KeyAction.TogglePreview,
+            (Key.Left or Key.Up, KeyModifiers.None) => KeyAction.StepBack,
+            (Key.Right or Key.Down, KeyModifiers.None) => KeyAction.StepOn,
             (Key.O, KeyModifiers.Control) => KeyAction.ImportFiles,
             (Key.V, KeyModifiers.Control) => KeyAction.Paste,
             (Key.OemPlus or Key.Add, KeyModifiers.Control or (KeyModifiers.Control | KeyModifiers.Shift)) => KeyAction.LargerThumbnails,
@@ -189,6 +199,16 @@ public static class StashKeys
         (Key.Z, KeyModifiers.Control) when !inSearchBox => KeyAction.UndoNotice,
         _ => KeyAction.None,
     };
+
+    /// <summary>
+    /// A key pressed while a list of every tag is open (G17, G19), the list leaving focus where it was: Esc closes the list
+    /// alone wherever focus is, a field's own Esc included; the arrows step no preview from under it, as they step none
+    /// from under its menus; every other key goes as <paramref name="routed"/>.
+    /// </summary>
+    public static KeyAction WithTagListOpen(Key key, KeyModifiers modifiers, KeyAction routed) =>
+        (key, modifiers) == (Key.Escape, KeyModifiers.None) ? KeyAction.Escape
+        : routed is KeyAction.StepBack or KeyAction.StepOn ? KeyAction.None
+        : routed;
 
     /// <summary>
     /// Whether text typed while the grid has focus goes into the search box. Space does not: in the grid it acts on the

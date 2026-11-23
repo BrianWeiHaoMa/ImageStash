@@ -348,16 +348,19 @@ public sealed class PreviewTests
     }
 
     [TestMethod]
-    public async Task WithThePreviewOpenTheArrowsCtrlAAndTypingChangeNothingTheSizeKeysStillWorkAndANoticeShowsAboveIt()
+    public async Task WithThePreviewOpenDownStepsCtrlAAndTypingChangeNothingTheSizeKeysStillWorkAndANoticeShowsAboveIt()
     {
         using var shown = ShownWindow.Open();
-        var items = await shown.OpenStash(shown.Picture("preview keys one.png"), shown.Picture("preview keys two.png"), shown.Picture("preview keys three.png"));
+        await shown.OpenStash(shown.Picture("preview keys one.png"), shown.Picture("preview keys two.png"), shown.Picture("preview keys three.png"));
+        var items = TrayDesktop.Get(() => shown.Listing.Items.ToArray());
         TrayDesktop.Run(() => shown.OpenPreview(items[1]));
         var rowHeight = TrayDesktop.Get(() => shown.Grid.Rows[0].Height);
 
         TrayDesktop.Run(() =>
         {
             ShownWindow.Press(shown.PreviewPicture, Key.Down);
+            Assert.AreEqual(items[2].Id, shown.Preview.Item?.Id, "Down steps to the next item in the grid's list (G19)");
+            CollectionAssert.AreEqual(new[] { items[2].Id }, shown.Listing.Selection.ToList(), "Down selects the previewed item alone");
             ShownWindow.Press(shown.PreviewPicture, Key.A, KeyModifiers.Control);
             shown.PreviewPicture.RaiseEvent(new TextInputEventArgs { RoutedEvent = InputElement.TextInputEvent, Text = "x", Source = shown.PreviewPicture });
             ShownWindow.Press(shown.PreviewPicture, Key.OemMinus, KeyModifiers.Control);
@@ -370,9 +373,9 @@ public sealed class PreviewTests
 
         TrayDesktop.Run(() =>
         {
-            CollectionAssert.AreEqual(new[] { items[1].Id }, shown.Listing.Selection.ToList(), "neither an arrow nor Ctrl+A reaches the grid it covers");
+            CollectionAssert.AreEqual(new[] { items[2].Id }, shown.Listing.Selection.ToList(), "Ctrl+A and typing leave the grid's selection");
             Assert.AreEqual("", shown.Search.Text ?? "", "nothing typed reaches the box");
-            Assert.AreEqual(items[1].Id, shown.Preview.Item?.Id, "the preview still on its item");
+            Assert.AreEqual(items[2].Id, shown.Preview.Item?.Id, "the preview stays on the item Down reached");
         });
 
         var notice = TrayDesktop.Get(() => shown.Notices.Raise("A notice while the preview is open", "Undo", () => Task.FromResult(Outcome.Done)));

@@ -81,11 +81,13 @@ public sealed class StashWindowPathTests
     /// <summary>
     /// The tidying path through the window's parts over a real store, each key through the window's routing to the act
     /// its case calls: three pictures listed in All, the middle one selected; <c>Ctrl+D</c> from the grid makes it a
-    /// favorite, its tile alone carries the star and the preview's star reads filled for it (G17, G6, G19). A tile's pixels
-    /// and the preview's control are beyond these parts: the walk reads the rules they draw from.
+    /// favorite, its tile alone carries the star and the preview's star reads filled for it (G17, G6, G19); with the
+    /// preview open on it, Right steps to the item after it, the grid selecting that one alone and its star reading it no
+    /// favorite, Right again is the list's end, and Left twice shows the first (G19, G8). A tile's pixels and the preview's
+    /// control are beyond these parts: the walk reads the rules they draw from.
     /// </summary>
     [TestMethod]
-    public async Task CtrlDOnTheMiddleOfThreePicturesStarsItsTileAloneAndThePreviewsStarReadsFilled()
+    public async Task CtrlDOnTheMiddleOfThreePicturesStarsItsTileAloneAndThePreviewsStarReadsFilledThenTheArrowsStepThePreview()
     {
         using var listed = await ListedStash.Open();
         foreach (var fixture in new[] { "photo.jpg", "transparent.png", "still.webp" })
@@ -110,6 +112,29 @@ public sealed class StashWindowPathTests
             star.Show(listedNow);
             Assert.IsTrue(star.Filled, "the preview opened on it reads its star filled (G19)");
         });
+
+        // (2) The preview told open on the middle one; Right, Right, Left, Left from the preview.
+        listed.PreviewOpen = true;
+        listed.PreviewItem = listedNow;
+        var (first, last) = (listed.Listing.Items[0], listed.Listing.Items[2]);
+        await PressInThePreview(listed, Key.Right, last);
+        ControlThread.Run(() =>
+        {
+            var star = new PreviewStar(() => { });
+            star.Show(listed.PreviewItem!);
+            Assert.IsFalse(star.Filled, "the item stepped to reads no favorite (G19)");
+        });
+        await PressInThePreview(listed, Key.Right, last);
+        await PressInThePreview(listed, Key.Left, listedNow);
+        await PressInThePreview(listed, Key.Left, first);
+    }
+
+    /// <summary>An arrow pressed in the preview as the window takes it; then the item shown, and the grid's one selected item, read.</summary>
+    private static async Task PressInThePreview(ListedStash listed, Key key, StashItem expected)
+    {
+        Assert.AreEqual(key == Key.Right ? KeyAction.StepOn : KeyAction.StepBack, await listed.Press(key, KeyModifiers.None, KeyPlace.Preview));
+        Assert.AreEqual(expected.Id, listed.PreviewItem?.Id, $"{key} leaves {expected.Name} shown");
+        CollectionAssert.AreEqual(new[] { expected.Id }, listed.Listing.Selection.ToList(), "the grid selecting it alone (G8)");
     }
 
     /// <summary><c>Ctrl+Z</c> pressed in the grid and let go, as the window takes it.</summary>

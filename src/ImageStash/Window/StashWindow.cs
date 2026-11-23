@@ -59,6 +59,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
     private readonly ThumbnailGrid grid;
     private readonly PendingQueryKeys keys;
     private readonly TagKey tagKey;
+    private readonly PreviewStepping previewSteps;
     private readonly WindowStatus status;
     private readonly FooterHints footerHints;
     private readonly SizeWheel sizeWheel = new();
@@ -133,6 +134,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
         preview = new Preview(listing, handoff, organising, deletion, renaming, itemMenu, notices, notices.Clock, pasteTarget, DialogShown, grid);
         // Esc in the field gives focus back to where Ctrl+T was pressed, the box or the grid (G7).
         tagKey = new TagKey(listing, () => preview.IsOpen, preview.FocusTags, () => tagField.IsVisible, items => tagField.Open(items, FocusManager?.GetFocusedElement() ?? grid));
+        previewSteps = new PreviewStepping(listing, () => preview.Item, item => preview.Open(item));
         editor = new EditorOverlay(failure => notices.Raise(failure), seams.Fonts);
         footerHints = new FooterHints(listing, pasteTarget, handoff, notices.Clock);
         status = new WindowStatus(listing, notices, settings, footerHints, scroller, () => preview.IsOpen || editing.IsOpen, () => search.Text = "");
@@ -142,6 +144,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
         var overBody = new Panel { Children = { status.NoticeArea, tagField, dropTarget.Card } };
         Content = WindowLayout.Rows(head, scopes, body, status.Footer, preview, editor, overBody);
         preview.Changed += Cover;
+        preview.Changed += previewSteps.Observe;
 
         // Before Wire: its handlers of the window's activation, deactivation and Close come first.
         activation = new WindowActivation(this, chrome, editing, preview, pasteTarget, seams.Target, heldKeys, () => DialogUp, () => DragInProgress);
@@ -489,11 +492,9 @@ public sealed class StashWindow : Avalonia.Controls.Window
         // Another text field's keys are its own (the tag field's); only those it leaves unused reach the window (G7).
         var focused = FocusManager?.GetFocusedElement();
         var place = StashKeys.PlaceOf(search.IsFocused, focused is TextBox && !ReferenceEquals(focused, search), preview.IsOpen, preview.ButtonFocused, editing.IsOpen, preview.NameFocused);
-        // Esc goes to an open tag list wherever focus is, a field's own Esc included: it closes the list alone (G2, G17);
-        // the list a tag field's chevron opens leaves focus where it was, on the preview's picture as often as in the box.
-        var action = OpenTagLists().Count > 0 && (e.Key, e.KeyModifiers) == (Key.Escape, KeyModifiers.None)
-            ? KeyAction.Escape
-            : heldKeys.Acting(e.Key, StashKeys.Route(e.Key, e.KeyModifiers, place, summonSelection.PersonSelected(search.SelectedText)));
+        // The list a tag field's chevron opens leaves focus where it was, on the preview's picture as often as in the box.
+        var routed = heldKeys.Acting(e.Key, StashKeys.Route(e.Key, e.KeyModifiers, place, summonSelection.PersonSelected(search.SelectedText)));
+        var action = OpenTagLists().Count > 0 ? StashKeys.WithTagListOpen(e.Key, e.KeyModifiers, routed) : routed;
         if (StashKeys.Direction(action) is { } direction)
         {
             _ = keys.Move(direction);
@@ -565,6 +566,12 @@ public sealed class StashWindow : Avalonia.Controls.Window
             case KeyAction.AddTags:
                 // After an arrow still waiting for what was typed, on the selection it reaches (G17).
                 keys.Then(() => tagKey.Press());
+                break;
+            case KeyAction.StepBack:
+                keys.Then(() => previewSteps.Step(StepWay.Back));
+                break;
+            case KeyAction.StepOn:
+                keys.Then(() => previewSteps.Step(StepWay.On));
                 break;
             case KeyAction.LargerThumbnails or KeyAction.SmallerThumbnails:
                 ThumbnailSizing.Step(action == KeyAction.LargerThumbnails ? 1 : -1);

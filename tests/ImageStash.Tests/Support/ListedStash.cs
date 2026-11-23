@@ -27,6 +27,7 @@ public sealed class ListedStash : IDisposable
 {
     private readonly List<RecordingStage> trayRecording = [];
     private bool handedOn;
+    private StashItem? previewItem;
 
     private ListedStash(TestStash stash, TimeProvider captureClock, ClipOpener? opener, TimeSpan? editRetry = null, TimeSpan? saveACopyRetry = null)
     {
@@ -50,6 +51,7 @@ public sealed class ListedStash : IDisposable
         ItemMenu = new ItemMenu(Listing, Notices, Handoff, Organising, Deletion, Editing, OpenWith, Dialogs, saveACopyRetry ?? TestStash.ShortRetry);
         // The window's controls are not here: the preview and the "Tags of …" field are what a check says they are.
         TagKey = new TagKey(Listing, () => PreviewOpen, () => PreviewTagsFocused++, () => TagFieldItems.Count > 0, items => TagFieldItems = items);
+        PreviewStepping = new PreviewStepping(Listing, () => PreviewOpen ? PreviewItem : null, item => PreviewItem = item);
         CaptureNotification = new CaptureNotification(Notifications, Listing, Handoff, new NoWindowShown(), TestStash.ShortRetry);
         StashClipboardImage = new StashClipboardImage(Listing, Notifications, CaptureNotification, Clipboard, stash.Clock, TestStash.ShortRetry, TestStash.ShortRetry);
         Capture = new CaptureSession(Screen, Selection, Frame, opener ?? GifEncoder.Opener(TestStash.ShortRetry), captureClock, failure => Notifications.Raise(failure));
@@ -210,6 +212,23 @@ public sealed class ListedStash : IDisposable
     /// <summary>Whether the preview is open, as a check says; none of its controls is here.</summary>
     public bool PreviewOpen { get; set; }
 
+    /// <summary>
+    /// The item the open preview shows, as a check opens it and as <see cref="PreviewStepping"/> moves it; setting it is
+    /// the preview's change, which the window tells the steps.
+    /// </summary>
+    public StashItem? PreviewItem
+    {
+        get => previewItem;
+        set
+        {
+            previewItem = value;
+            PreviewStepping.Observe();
+        }
+    }
+
+    /// <summary>The arrows' act in the preview, over <see cref="PreviewOpen"/> and <see cref="PreviewItem"/> in place of the preview control.</summary>
+    public PreviewStepping PreviewStepping { get; }
+
     /// <summary>How many times focus was sent to the preview's tag box.</summary>
     public int PreviewTagsFocused { get; private set; }
 
@@ -219,7 +238,7 @@ public sealed class ListedStash : IDisposable
     /// <summary>
     /// A key pressed at <paramref name="place"/> as the window takes it: routed by <see cref="StashKeys.Route"/>, held to
     /// one act per press by <see cref="Keys"/>, and its action's act run as the window's case runs it (Del and
-    /// <c>Ctrl+D</c> as they run with no preview open); the action is returned. Let go with <see cref="PressOnce.Released"/> on <see cref="Keys"/>.
+    /// <c>Ctrl+D</c> as they run with no preview open, the arrows' steps over <see cref="PreviewItem"/>); the action is returned. Let go with <see cref="PressOnce.Released"/> on <see cref="Keys"/>.
     /// </summary>
     public async Task<KeyAction> Press(Key key, KeyModifiers modifiers, KeyPlace place)
     {
@@ -237,6 +256,12 @@ public sealed class ListedStash : IDisposable
                 break;
             case KeyAction.AddTags:
                 TagKey.Press();
+                break;
+            case KeyAction.StepBack:
+                PreviewStepping.Step(StepWay.Back);
+                break;
+            case KeyAction.StepOn:
+                PreviewStepping.Step(StepWay.On);
                 break;
         }
 

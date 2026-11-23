@@ -89,7 +89,7 @@ public sealed class StashWindowPathTests
     }
 
     [TestMethod]
-    public async Task CtrlDInAllStarsOnlyTheMiddleTileAndClickThenSpaceShowsItsFilledPreviewStar()
+    public async Task CtrlDInAllStarsOnlyTheMiddleTileAndClickThenSpaceShowsItsStarBeforeArrowsStepToBothEnds()
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var shown = ShownWindow.Open();
@@ -137,6 +137,22 @@ public sealed class StashWindowPathTests
             Tap(shown.Grid, Key.Space);
             Assert.AreEqual(middle, shown.Preview.Item?.Id);
             Assert.AreEqual(FavoriteStar.Filled, ((TextBlock)PreviewStarTests.StarButton(shown).Content!).Text, "the preview opens with the same favorite flag (G19)");
+
+            Tap(shown.PreviewPicture, Key.Right);
+            Assert.AreEqual(tiles[2].Id, shown.Preview.Item?.Id, "Right shows the next item in All (G19)");
+            CollectionAssert.AreEqual(new[] { tiles[2].Id }, shown.Listing.Selection.ToList());
+            Assert.AreEqual(FavoriteStar.Outlined, ((TextBlock)PreviewStarTests.StarButton(shown).Content!).Text, "the last item is plain");
+
+            Tap(shown.PreviewPicture, Key.Right);
+            Assert.AreEqual(tiles[2].Id, shown.Preview.Item?.Id, "Right at the last item stays there (G19)");
+            CollectionAssert.AreEqual(new[] { tiles[2].Id }, shown.Listing.Selection.ToList());
+
+            Tap(shown.PreviewPicture, Key.Left);
+            Assert.AreEqual(middle, shown.Preview.Item?.Id);
+            Tap(shown.PreviewPicture, Key.Left);
+            Assert.AreEqual(tiles[0].Id, shown.Preview.Item?.Id, "two Left presses reach the first item in All (G19)");
+            Assert.IsTrue(shown.Preview.IsOpen);
+            CollectionAssert.AreEqual(new[] { tiles[0].Id }, shown.Listing.Selection.ToList());
         });
     }
 
