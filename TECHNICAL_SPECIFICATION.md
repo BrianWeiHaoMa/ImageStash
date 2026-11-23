@@ -113,7 +113,7 @@ Store keeps a SHA-256 of each original; a candidate with an equal hash is compar
 
 ### G13. Pasting
 
-Paste image and Ctrl+V read files-then-image: a file list, else the "PNG" format, else a DIB of any depth, else the clipboard's text, in one read; Stash clipboard image reads image-only: "PNG", else a DIB. What is found decides between an import, a PNG item, words into the search box or a tag field (Ctrl+V there alone) and the notice. By construction.
+Paste image and Ctrl+V read files-then-image: a file list, else the "PNG" format, else a DIB of any depth, else the clipboard's text, in one read; Stash clipboard image reads image-only: "PNG", else a DIB. What is found decides between an import, a PNG item, words into the search box, a tag field or, in the editor, a text or caption-bar layer's text (Ctrl+V there alone, which in a layer's text never imports) and the notice. By construction.
 
 ### G14, G15. Capture
 
