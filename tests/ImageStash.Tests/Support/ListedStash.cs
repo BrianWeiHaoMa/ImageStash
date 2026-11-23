@@ -52,6 +52,7 @@ public sealed class ListedStash : IDisposable
         // The window's controls are not here: the preview and the "Tags of …" field are what a check says they are.
         TagKey = new TagKey(Listing, () => PreviewOpen, () => PreviewTagsFocused++, () => TagFieldItems.Count > 0, items => TagFieldItems = items);
         PreviewStepping = new PreviewStepping(Listing, () => PreviewOpen ? PreviewItem : null, item => PreviewItem = item);
+        PreviewStepClicks = new PreviewStepClicks(PreviewStepping, () => PreviewOpen ? PreviewItem : null, () => PreviewClosing, Editing);
         CaptureNotification = new CaptureNotification(Notifications, Listing, Handoff, new NoWindowShown(), TestStash.ShortRetry);
         StashClipboardImage = new StashClipboardImage(Listing, Notifications, CaptureNotification, Clipboard, stash.Clock, TestStash.ShortRetry, TestStash.ShortRetry);
         Capture = new CaptureSession(Screen, Selection, Frame, opener ?? GifEncoder.Opener(TestStash.ShortRetry), captureClock, failure => Notifications.Raise(failure));
@@ -228,6 +229,12 @@ public sealed class ListedStash : IDisposable
 
     /// <summary>The arrows' act in the preview, over <see cref="PreviewOpen"/> and <see cref="PreviewItem"/> in place of the preview control.</summary>
     public PreviewStepping PreviewStepping { get; }
+
+    /// <summary>The ‹ and › clicks' act, over <see cref="PreviewItem"/> and <see cref="PreviewClosing"/> in place of the preview control.</summary>
+    public PreviewStepClicks PreviewStepClicks { get; }
+
+    /// <summary>Whether a close asked while the preview's commit is in flight waits for its answer, as a check says (Esc then).</summary>
+    public bool PreviewClosing { get; set; }
 
     /// <summary>How many times focus was sent to the preview's tag box.</summary>
     public int PreviewTagsFocused { get; private set; }

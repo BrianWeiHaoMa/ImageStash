@@ -115,6 +115,17 @@ public sealed class NameField : Panel
     /// <summary>Whether its text box has focus.</summary>
     public bool BoxFocused => box.IsFocused;
 
+    /// <summary>
+    /// Enter's commit: the edit ended and what the box shows raised as <see cref="Committed"/>; also a click on the
+    /// preview's ‹ or ›, which takes no focus, so its commit is Enter's (G19).
+    /// </summary>
+    public void CommitAsEnter()
+    {
+        var typed = Text;
+        StopEditing();
+        Committed?.Invoke(typed);
+    }
+
     /// <summary>Turns it back into the name with nothing committed; of its events only <see cref="Stopped"/> is raised.</summary>
     public void StopEditing()
     {
@@ -140,9 +151,7 @@ public sealed class NameField : Panel
         switch (e.Key, e.KeyModifiers)
         {
             case (Key.Enter, KeyModifiers.None):
-                var typed = Text;
-                StopEditing();
-                Committed?.Invoke(typed);
+                CommitAsEnter();
                 break;
             case (Key.Escape, KeyModifiers.None):
                 StopEditing();

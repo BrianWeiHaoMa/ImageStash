@@ -145,6 +145,11 @@ public sealed class StashWindow : Avalonia.Controls.Window
         Content = WindowLayout.Rows(head, scopes, body, status.Footer, preview, editor, overBody);
         preview.Changed += Cover;
         preview.Changed += previewSteps.Observe;
+        // The preview's ‹ and ›: the arrows' step for the pointer, once what a field holds typed is committed (G19).
+        var stepClicks = new PreviewStepClicks(previewSteps, () => preview.Item, () => preview.ClosingAfterCommit, editing);
+        preview.StepButtons.Clicked += way => _ = stepClicks.Click(way, preview.CommitDraft);
+        preview.Changed += () => preview.StepButtons.Show(stepClicks);
+        listing.Changed += () => preview.StepButtons.Show(stepClicks);
 
         // Before Wire: its handlers of the window's activation, deactivation and Close come first.
         activation = new WindowActivation(this, chrome, editing, preview, pasteTarget, seams.Target, heldKeys, () => DialogUp, () => DragInProgress);

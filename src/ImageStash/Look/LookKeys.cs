@@ -120,6 +120,11 @@ public static class LookKeys
     /// <summary>A small ground drawn over a picture: the preview's play and pause.</summary>
     public const string PicturePill = Prefix + "PicturePill";
 
+    /// <summary>A button laid over a picture on <see cref="PicturePill"/>, the preview's ‹ and ›: its glyph, and its ground hovered or pressed.</summary>
+    public const string PictureButtonWords = Prefix + "PictureButtonWords";
+
+    public const string PictureButtonHoverGround = Prefix + "PictureButtonHoverGround";
+
     // The Settings page's warning, the editor's swatches.
 
     public const string WarningGround = Prefix + "WarningGround";
@@ -239,6 +244,8 @@ public static class LookKeys
         (FocusRing, LookKind.Brush),
         (PictureSurround, LookKind.Brush),
         (PicturePill, LookKind.Brush),
+        (PictureButtonWords, LookKind.Brush),
+        (PictureButtonHoverGround, LookKind.Brush),
         (WarningGround, LookKind.Brush),
         (WarningMark, LookKind.Brush),
         (SwatchEdge, LookKind.Brush),

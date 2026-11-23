@@ -199,12 +199,18 @@ public sealed class TagField : StackPanel
     /// <summary>Closes the list of every tag, as the field going away does.</summary>
     public void CloseList() => Picker.Close();
 
+    /// <summary>
+    /// Enter's commit: <see cref="EnterCommits"/> raised as <see cref="Committed"/>; also a click on the preview's ‹ or ›,
+    /// which takes no focus, so its commit is Enter's (G19).
+    /// </summary>
+    public void CommitAsEnter() => Committed?.Invoke(EnterCommits);
+
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
         switch (e.Key, e.KeyModifiers)
         {
             case (Key.Enter, KeyModifiers.None):
-                Committed?.Invoke(EnterCommits);
+                CommitAsEnter();
                 break;
             case (Key.Escape, KeyModifiers.None) when Picker.IsOpen:
                 // One thing at a time (G2): the list, and Esc again the field.

@@ -44,7 +44,7 @@ that off.
 | `Ctrl+Shift+PrtScn` | Drag a rectangle, press Record, then Stop: the clip is a GIF in the stash and on the clipboard. |
 | `Ctrl+E` | Edit the selected picture with Text, Crop, Trim, Hide and Draw. |
 | `Ctrl+T` | Tag the selected pictures: type a word and press Enter. In a picture's preview, it goes to the preview's tag box. |
-| `Space`, then the arrows | Preview the selected picture, then step to the previous or next one in the grid. |
+| `Space`, then the arrows | Preview the selected picture, then step to the previous or next one in the grid; the preview's ‹ and › do the same. |
 
 Drop files or a folder onto the window to add them, and tag pictures to find them by a word. `Ctrl+D` makes the
 selected pictures favorites, or takes them off: a favorite's tile carries a small star, and so does its preview, where a

@@ -17,7 +17,8 @@ namespace ImageStash.Window;
 /// The preview (G19, F4): a layer inside the stash window over the whole of its content, never a window of its own,
 /// showing one item at its own size with its animation playing (<see cref="PreviewPicture"/>) and the facts about it
 /// (<see cref="PreviewFacts"/>), with a back arrow, the pointer's way out (G7), its name edited in place
-/// (<see cref="NameField"/>) by a click on it, F2 or the menus' Rename, its star (<see cref="PreviewStar"/>),
+/// (<see cref="NameField"/>) by a click on it, F2 or the menus' Rename, its star (<see cref="PreviewStar"/>), its ‹ and ›
+/// over the picture (<see cref="PreviewStepButtons"/>),
 /// its tags with their × and the tag field
 /// (<see cref="PreviewTags"/>), the handoff button named as the footer names Enter's handoff, Copy beside it while there
 /// is a target to paste into, Edit, and a ⋯ menu of the item menu's entries for its item, Revert to original and Save as
@@ -70,7 +71,10 @@ public sealed class Preview : Border
     /// The name's or the tags' commit in flight, by Enter or by focus leaving the field, with the read of its answer,
     /// which every act of the preview waits for; done while none runs.
     /// </summary>
-    private Task committing = Task.CompletedTask;
+    private Task<Outcome> committing = Task.FromResult(Outcome.Done);
+
+    /// <summary>The opening a close asked while a commit was in flight waits in, or null.</summary>
+    private int? closingIn;
 
     /// <param name="pasteTarget">The paste target the footer names, which names the handoff button.</param>
     /// <param name="dialogUp">Told while Save a copy…'s picker or Open with…'s dialog is up, so the flyout stays (G2).</param>
@@ -138,6 +142,8 @@ public sealed class Preview : Border
         head.Children.Add(more);
 
         picture = new PreviewPicture(failure => notices.Raise(failure)) { Margin = new Thickness(10, 0) };
+        // Over the picture's row, after it so above it, never its child: a press on one neither pauses it nor focuses it (G19).
+        StepButtons = new PreviewStepButtons { Margin = new Thickness(10, 0) };
         // Either key gives focus back to the preview, whose Enter then hands off again (G7, G19); focus moved elsewhere in
         // the window stays there, the name committed as Enter commits it (G19).
         name.Committed += text =>
@@ -189,11 +195,13 @@ public sealed class Preview : Border
 
         var layout = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto,Auto") };
         Grid.SetRow(picture, 1);
+        Grid.SetRow(StepButtons, 1);
         Grid.SetRow(facts, 2);
         Grid.SetRow(tags, 3);
         Grid.SetRow(actions, 4);
         layout.Children.Add(head);
         layout.Children.Add(picture);
+        layout.Children.Add(StepButtons);
         layout.Children.Add(facts);
         layout.Children.Add(tags);
         layout.Children.Add(actions);
@@ -214,6 +222,9 @@ public sealed class Preview : Border
         restating = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
         restating.Tick += (_, _) => RestateTimes();
     }
+
+    /// <summary>Its ‹ and ›, over the picture, which the window has step the preview (G19).</summary>
+    public PreviewStepButtons StepButtons { get; }
 
     /// <summary>Raised when the preview opens or closes and after each read of its item is applied.</summary>
     public event Action? Changed;
@@ -320,6 +331,32 @@ public sealed class Preview : Border
     public bool HoldsTypedText => (name.IsEditing && name.Text != name.Shown) || !string.IsNullOrWhiteSpace(tags.Field.Text);
 
     /// <summary>
+    /// A click on ‹ or ›, which takes no focus (G19): its name in edit, else the words typed in its tag field, committed
+    /// through that field's own Enter, as Enter would commit them there, a chosen suggestion included; the commit with the
+    /// read of its answer, or null when neither holds an edit.
+    /// </summary>
+    public Task<Outcome>? CommitDraft()
+    {
+        if (name.IsEditing)
+        {
+            name.CommitAsEnter();
+        }
+        else if (!string.IsNullOrWhiteSpace(tags.Field.Text))
+        {
+            tags.Field.CommitAsEnter();
+        }
+        else
+        {
+            return null;
+        }
+
+        return committing;
+    }
+
+    /// <summary>Whether a close asked while a commit was in flight waits for its answer, so nothing moves the preview meanwhile (G2, G19).</summary>
+    public bool ClosingAfterCommit => IsOpen && closingIn == openings;
+
+    /// <summary>
     /// Focus as it was left, as a summon gives it back (G1): in the name while it is being edited, else in the tag field
     /// when focus was last there, else on <see cref="FocusTarget"/>.
     /// </summary>
@@ -352,6 +389,7 @@ public sealed class Preview : Border
             return;
         }
 
+        closingIn = openings;
         _ = CloseAfterCommit(openings);
     }
 

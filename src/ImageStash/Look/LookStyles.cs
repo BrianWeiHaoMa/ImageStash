@@ -31,6 +31,9 @@ public sealed class LookStyles : Styles
     /// <summary>A button of an icon alone, without a ground until hovered: the head's gear, + and pin, the editor's icons.</summary>
     public const string IconButton = "iconButton";
 
+    /// <summary>A round glyph button laid over a picture, the preview's ‹ and ›: on the dark pill the play mark sits on, faint while unavailable.</summary>
+    public const string PictureButton = "pictureButton";
+
     private const string Presenter = "PART_ContentPresenter";
 
     /// <summary>The thin thumb: six pixels of Fluent's sixteen-pixel strip, two in from its edge, as Fluent's own two-pixel thumb stands.</summary>
@@ -78,6 +81,7 @@ public sealed class LookStyles : Styles
         Add(Rule(x => x.Is<Button>().Class(IconButton).Class(":pressed").Template().OfType<ContentPresenter>().Name(Presenter),
             (ContentPresenter.BackgroundProperty, LookKeys.IconButtonPressedGround),
             (ContentPresenter.ForegroundProperty, LookKeys.IconButtonHoverWords)));
+        PictureButtons();
         ThinScrollBar(":vertical", vertical: true);
         ThinScrollBar(":horizontal", vertical: false);
     }
@@ -116,6 +120,28 @@ public sealed class LookStyles : Styles
         var style = new Style(selector);
         style.Setters.Add(new Setter(property, value));
         return style;
+    }
+
+    /// <summary>
+    /// The buttons over a picture: the pill's ground and a white glyph at rest, unavailable too, where they are only
+    /// fainter, so they never read as live (G7); a lighter ground hovered or pressed; round, without an edge.
+    /// </summary>
+    private void PictureButtons()
+    {
+        var rest = Rule(x => x.Is<Button>().Class(PictureButton),
+            (TemplatedControl.BackgroundProperty, LookKeys.PicturePill),
+            (TemplatedControl.ForegroundProperty, LookKeys.PictureButtonWords),
+            (TemplatedControl.CornerRadiusProperty, LookKeys.PillRadius));
+        rest.Setters.Add(new Setter(TemplatedControl.BorderThicknessProperty, default(Thickness)));
+        Add(rest);
+        foreach (var (state, ground) in new[] { (":pointerover", LookKeys.PictureButtonHoverGround), (":pressed", LookKeys.PictureButtonHoverGround), (":disabled", LookKeys.PicturePill) })
+        {
+            Add(Rule(x => x.Is<Button>().Class(PictureButton).Class(state).Template().OfType<ContentPresenter>().Name(Presenter),
+                (ContentPresenter.BackgroundProperty, ground),
+                (ContentPresenter.ForegroundProperty, LookKeys.PictureButtonWords)));
+        }
+
+        Add(Constant(x => x.Is<Button>().Class(PictureButton).Class(":disabled"), Visual.OpacityProperty, 0.35));
     }
 
     /// <summary>A chip at rest: its ground, edge and words, and its corners.</summary>

@@ -149,8 +149,13 @@ public sealed class StashWindowPathTests
 
             Tap(shown.PreviewPicture, Key.Left);
             Assert.AreEqual(middle, shown.Preview.Item?.Id);
-            Tap(shown.PreviewPicture, Key.Left);
-            Assert.AreEqual(tiles[0].Id, shown.Preview.Item?.Id, "two Left presses reach the first item in All (G19)");
+        });
+
+        await PreviewStepButtonsTests.ClickStep(shown, shown.Preview.StepButtons.Back);
+        await Eventually(() => TrayDesktop.Get(() => shown.Preview.Item?.Id == tiles[0].Id));
+        TrayDesktop.Run(() =>
+        {
+            Assert.AreEqual(tiles[0].Id, shown.Preview.Item?.Id, "Left followed by Previous reaches the first item in All (G19)");
             Assert.IsTrue(shown.Preview.IsOpen);
             CollectionAssert.AreEqual(new[] { tiles[0].Id }, shown.Listing.Selection.ToList());
         });

@@ -86,6 +86,9 @@ public sealed class Paper : Take
         into[LookKeys.FocusRing] = Solid(dark ? Rgb(0xFFFFFF) : Rgb(0x1B1C20));
         into[LookKeys.PictureSurround] = Solid(dark ? Rgb(0x18191C) : Rgb(0xF2F3F5));
         into[LookKeys.PicturePill] = Solid(Alpha(Rgb(0x1B1C20), 0xCC));
+        // White on the dark pill in either take, so the glyph reads over a white picture and a black one alike (G6).
+        into[LookKeys.PictureButtonWords] = Solid(Rgb(0xFFFFFF));
+        into[LookKeys.PictureButtonHoverGround] = Solid(Alpha(Rgb(0x45474F), 0xE6));
 
         into[LookKeys.WarningGround] = Solid(dark ? Alpha(Rgb(0xFFB900), 0x29) : Rgb(0xFFF4DA));
         into[LookKeys.WarningMark] = Solid(dark ? Rgb(0xF2B12C) : Rgb(0xC98700));
