@@ -34,6 +34,9 @@ public enum ItemMenuAction
     /// <summary>The preview on the one item with its name in edit (G17).</summary>
     Rename,
 
+    /// <summary>Add tags…, as <c>Ctrl+T</c>: the tag field over the items (G17).</summary>
+    AddTags,
+
     /// <summary>Without a tag, the Add tag ▸ submenu; with one, that submenu's entry giving the tag.</summary>
     AddTag,
 
@@ -60,7 +63,8 @@ public sealed record ItemMenuEntry(ItemMenuAction Action, string Label, KeyGestu
 /// The item menu a right-click on a tile opens (G8, G9, G17, G18, G19, G20, G26): the handoff first, which with a paste target is
 /// Paste into that app, with Copy after it, and with none is Copy; for one item Preview and Edit, and on an edited item
 /// Revert to original and Save as new item; then Add to Favorites, or Remove from Favorites while
-/// every item is one; for one item Rename; Add tag ▸, every tag in the stash and Type a tag…; Remove tag ▸, the tags the
+/// every item is one; for one item Rename; Add tags…, which opens the tag field as <c>Ctrl+T</c> does; Add tag ▸, every
+/// tag in the stash and Type a tag…; Remove tag ▸, the tags the
 /// items carry, while they carry one (<see cref="TagLists"/>); then, for one item, Save a copy…, Open with… and Reveal
 /// in File Explorer; last, Delete. An entry shows only once its action works, so the rest of the menu arrives with its
 /// actions and nothing is inert. Save a copy…, Open with… and Reveal are this menu's own actions; the favorites and
@@ -90,6 +94,7 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
     private static readonly ItemMenuEntry RevertEntry = new(ItemMenuAction.RevertToOriginal, "Revert to original", null, "");
     private static readonly ItemMenuEntry SaveAsNewItemEntry = new(ItemMenuAction.SaveAsNewItem, "Save as new item", null, "");
     private static readonly ItemMenuEntry RenameEntry = new(ItemMenuAction.Rename, "Rename", new KeyGesture(Key.F2), "");
+    private static readonly ItemMenuEntry AddTagsEntry = new(ItemMenuAction.AddTags, "Add tags…", new KeyGesture(Key.T, KeyModifiers.Control), "");
     private static readonly ItemMenuEntry SaveACopyEntry = new(ItemMenuAction.SaveACopy, "Save a copy…", null, "", AfterSeparator: true);
     private static readonly ItemMenuEntry DeleteEntry = new(ItemMenuAction.Delete, "Delete", new KeyGesture(Key.Delete), "", AfterSeparator: true);
     private static readonly ItemMenuEntry OpenWithEntry = new(ItemMenuAction.OpenWith, "Open with…", null, "");
@@ -113,8 +118,8 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
         // Remove tag ▸ only while there is a tag to take off, for one item as for several: nothing is inert.
         IReadOnlyList<ItemMenuEntry> tags = Organising.CarriedTags(items).Count > 0 ? [AddTagMenu, RemoveTagMenu] : [AddTagMenu];
         return items.Count == 1
-            ? [.. handoff, PreviewEntry, EditEntry, .. Edited(items[0], afterSeparator: false), favorites, RenameEntry, .. tags, SaveACopyEntry, OpenWithEntry, Reveal, DeleteEntry]
-            : [.. handoff, favorites, .. tags, DeleteEntry with { Label = $"Delete {items.Count} items" }];
+            ? [.. handoff, PreviewEntry, EditEntry, .. Edited(items[0], afterSeparator: false), favorites, RenameEntry, AddTagsEntry, .. tags, SaveACopyEntry, OpenWithEntry, Reveal, DeleteEntry]
+            : [.. handoff, favorites, AddTagsEntry, .. tags, DeleteEntry with { Label = $"Delete {items.Count} items" }];
     }
 
     /// <summary>
@@ -150,7 +155,7 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
     /// coordinates, naming <paramref name="pasteTarget"/> as the footer does now; its entries act on that selection and
     /// paste into that target. <paramref name="dialogUp"/> says when Save a copy…'s picker or Open with…'s dialog is up;
     /// <paramref name="hide"/> is the paste's hide, after Enter is let go (G2, N3); <paramref name="typeATag"/> opens the tag field over the
-    /// items, <paramref name="preview"/> the preview on the one item, <paramref name="rename"/> the preview on it with
+    /// items, for Add tags… and Type a tag…, <paramref name="preview"/> the preview on the one item, <paramref name="rename"/> the preview on it with
     /// its name in edit, and <paramref name="edit"/> the editor on it.
     /// </summary>
     public void Show(Control target, Rect anchor, TopLevel owner, PasteTarget? pasteTarget, PasteHide hide, Action<bool> dialogUp, Action<IReadOnlyList<StashItem>> typeATag,
@@ -201,6 +206,10 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
             else if (entry.Action == ItemMenuAction.Edit)
             {
                 item.Click += (_, _) => edit(items[0]);
+            }
+            else if (entry.Action == ItemMenuAction.AddTags)
+            {
+                item.Click += (_, _) => typeATag(items);
             }
             else
             {

@@ -142,7 +142,7 @@ public sealed class PreviewTests
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Preview.IsOpen && ReferenceEquals(shown.Focused, shown.PreviewPicture)));
 
         Assert.DoesNotContain("Preview", several, "several items get no Preview");
-        CollectionAssert.AreEqual(new[] { "Copy", "Preview", "Edit", "Add to Favorites", "Rename", "Add tag", "Save a copy…", "Open with…", "Reveal in File Explorer", "Delete" }, one, "after the handoff, Delete last (G8, G18)");
+        CollectionAssert.AreEqual(new[] { "Copy", "Preview", "Edit", "Add to Favorites", "Rename", "Add tags…", "Add tag", "Save a copy…", "Open with…", "Reveal in File Explorer", "Delete" }, one, "after the handoff, Delete last (G8, G18)");
         TrayDesktop.Run(() => Assert.AreEqual(items[1].Id, shown.Preview.Item!.Id, "on the item the menu was opened on, focus inside it once the menu closed"));
     }
 

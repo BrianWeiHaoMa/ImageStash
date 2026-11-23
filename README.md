@@ -43,6 +43,7 @@ that off.
 | `Ctrl+PrtScn` | Drag a rectangle: the screenshot is in the stash and on the clipboard. |
 | `Ctrl+Shift+PrtScn` | Drag a rectangle, press Record, then Stop: the clip is a GIF in the stash and on the clipboard. |
 | `Ctrl+E` | Edit the selected picture with Text, Crop, Trim, Hide and Draw. |
+| `Ctrl+T` | Tag the selected pictures: type a word and press Enter. In a picture's preview, it goes to the preview's tag box. |
 
 Drop files or a folder onto the window to add them, and tag pictures to find them by a word. The tray icon's
 right-click menu holds the captures, Settings (where each shortcut can be changed) and Quit.

@@ -129,7 +129,7 @@ public sealed class NameFieldTests
         TrayDesktop.Run(shown.CloseMenu);
 
         CollectionAssert.AreEqual(new[] { "Edit", "Rename", "—", "Save a copy…", "Open with…", "Reveal in File Explorer", "—", "Delete" }, more, "the ⋯ menu opens on Edit, then Rename (G19, G20)");
-        CollectionAssert.AreEqual(new[] { "Copy", "Preview", "Edit", "Add to Favorites", "Rename", "Add tag", "Save a copy…", "Open with…", "Reveal in File Explorer", "Delete" }, one, "after the favorites entry, the handoff first and Delete last (G8, G18)");
+        CollectionAssert.AreEqual(new[] { "Copy", "Preview", "Edit", "Add to Favorites", "Rename", "Add tags…", "Add tag", "Save a copy…", "Open with…", "Reveal in File Explorer", "Delete" }, one, "after the favorites entry, the handoff first and Delete last (G8, G18)");
         Assert.DoesNotContain("Rename", several, "several items get no Rename");
         Assert.AreEqual(0L, shown.Uses());
     }

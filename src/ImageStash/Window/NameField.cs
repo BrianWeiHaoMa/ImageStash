@@ -112,6 +112,9 @@ public sealed class NameField : Panel
     /// <summary>Gives the text box focus again while the name is being edited, as a summon brings it back (G1).</summary>
     public void FocusBox() => box.Focus();
 
+    /// <summary>Whether its text box has focus.</summary>
+    public bool BoxFocused => box.IsFocused;
+
     /// <summary>Turns it back into the name with nothing committed; of its events only <see cref="Stopped"/> is raised.</summary>
     public void StopEditing()
     {

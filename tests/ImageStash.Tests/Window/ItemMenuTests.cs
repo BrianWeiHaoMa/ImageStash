@@ -10,7 +10,7 @@ namespace ImageStash.Tests.Window;
 
 /// <summary>
 /// The item menu over a real stash: its entries for one item and for several, the handoff first, which with a paste
-/// target pastes into the app it names, for one item Preview, then Add to or Remove from Favorites by G17's mixed rule, Add tag ▸,
+/// target pastes into the app it names, for one item Preview, then Add to or Remove from Favorites by G17's mixed rule, Add tags…, Add tag ▸,
 /// Remove tag ▸ while the items carry a tag (their lists are <c>TagListsTests</c>'), Delete last, and nothing that does
 /// not work yet (G8, G17, G18); the favorites entries on the items the menu was opened on, recording no use (G17,
 /// G10); Save a copy… through the save picker, the file's own bytes written where
@@ -23,25 +23,26 @@ namespace ImageStash.Tests.Window;
 public sealed class ItemMenuTests
 {
     [TestMethod]
-    public void OneItemsMenuIsCopyPreviewEditFavoritesRenameAddTagSaveACopyOpenWithRevealAndDeleteAndSeveralItemsGetCopyFavoritesAddTagAndDelete()
+    public void OneItemsMenuIsCopyPreviewEditFavoritesRenameAddTagsAddTagSaveACopyOpenWithRevealAndDeleteAndSeveralItemsGetCopyFavoritesAddTagsAddTagAndDelete()
     {
         var one = ItemMenu.Entries(TestItems.Many(1), null);
         var several = ItemMenu.Entries(TestItems.Many(3), null);
 
-        CollectionAssert.AreEqual(new[] { ItemMenuAction.Copy, ItemMenuAction.Preview, ItemMenuAction.Edit, ItemMenuAction.AddToFavorites, ItemMenuAction.Rename, ItemMenuAction.AddTag, ItemMenuAction.SaveACopy, ItemMenuAction.OpenWith, ItemMenuAction.Reveal, ItemMenuAction.Delete }, one.Select(entry => entry.Action).ToList());
-        CollectionAssert.AreEqual(new[] { "Copy", "Preview", "Edit", "Add to Favorites", "Rename", "Add tag", "Save a copy…", "Open with…", "Reveal in File Explorer", "Delete" }, one.Select(entry => entry.Label).ToList());
+        CollectionAssert.AreEqual(new[] { ItemMenuAction.Copy, ItemMenuAction.Preview, ItemMenuAction.Edit, ItemMenuAction.AddToFavorites, ItemMenuAction.Rename, ItemMenuAction.AddTags, ItemMenuAction.AddTag, ItemMenuAction.SaveACopy, ItemMenuAction.OpenWith, ItemMenuAction.Reveal, ItemMenuAction.Delete }, one.Select(entry => entry.Action).ToList());
+        CollectionAssert.AreEqual(new[] { "Copy", "Preview", "Edit", "Add to Favorites", "Rename", "Add tags…", "Add tag", "Save a copy…", "Open with…", "Reveal in File Explorer", "Delete" }, one.Select(entry => entry.Label).ToList());
         Assert.AreEqual(new KeyGesture(Key.Enter), one[0].Gesture, "the handoff, with no paste target Copy, by its key (G8)");
         Assert.AreEqual(new KeyGesture(Key.Space), one[1].Gesture, "Preview by Space's key, after the handoff (G19)");
         Assert.AreEqual(new KeyGesture(Key.E, KeyModifiers.Control), one[2].Gesture, "Edit by Ctrl+E's key, after Preview (G20)");
         Assert.AreEqual(new KeyGesture(Key.D, KeyModifiers.Control), one[3].Gesture, "the favorites entry by Ctrl+D's key (G17)");
         Assert.AreEqual(new KeyGesture(Key.F2), one[4].Gesture, "Rename by F2's key, after the favorites entry (G17)");
-        Assert.IsNull(one[7].Gesture, "Open with… by no key: the specifications give it none");
-        Assert.AreEqual(new KeyGesture(Key.Delete), one[9].Gesture, "Delete by its key (G18)");
-        CollectionAssert.AreEqual(new[] { false, false, false, true, false, false, true, false, false, true }, one.Select(entry => entry.AfterSeparator).ToList(), "Open with… and Reveal after Save a copy… with no separator between (G19)");
-        CollectionAssert.AreEqual(new[] { ItemMenuAction.Copy, ItemMenuAction.AddToFavorites, ItemMenuAction.AddTag, ItemMenuAction.Delete }, several.Select(entry => entry.Action).ToList());
-        CollectionAssert.AreEqual(new[] { "Copy 3 items", "Add to Favorites", "Add tag", "Delete 3 items" }, several.Select(entry => entry.Label).ToList(), "the handoff says how many it hands over, as Delete does (G8)");
-        CollectionAssert.AreEqual(new KeyGesture?[] { new(Key.Enter), new(Key.D, KeyModifiers.Control), null, new(Key.Delete) }, several.Select(entry => entry.Gesture).ToList());
-        CollectionAssert.AreEqual(new[] { false, true, false, true }, several.Select(entry => entry.AfterSeparator).ToList(), "the favorites and tag entries after the handoff, Delete last, each group after a separator");
+        Assert.AreEqual(new KeyGesture(Key.T, KeyModifiers.Control), one[5].Gesture, "Add tags… by Ctrl+T's key, after Rename (G17)");
+        Assert.IsNull(one[8].Gesture, "Open with… by no key: the specifications give it none");
+        Assert.AreEqual(new KeyGesture(Key.Delete), one[10].Gesture, "Delete by its key (G18)");
+        CollectionAssert.AreEqual(new[] { false, false, false, true, false, false, false, true, false, false, true }, one.Select(entry => entry.AfterSeparator).ToList(), "Open with… and Reveal after Save a copy… with no separator between (G19)");
+        CollectionAssert.AreEqual(new[] { ItemMenuAction.Copy, ItemMenuAction.AddToFavorites, ItemMenuAction.AddTags, ItemMenuAction.AddTag, ItemMenuAction.Delete }, several.Select(entry => entry.Action).ToList());
+        CollectionAssert.AreEqual(new[] { "Copy 3 items", "Add to Favorites", "Add tags…", "Add tag", "Delete 3 items" }, several.Select(entry => entry.Label).ToList(), "the handoff says how many it hands over, as Delete does (G8)");
+        CollectionAssert.AreEqual(new KeyGesture?[] { new(Key.Enter), new(Key.D, KeyModifiers.Control), new(Key.T, KeyModifiers.Control), null, new(Key.Delete) }, several.Select(entry => entry.Gesture).ToList());
+        CollectionAssert.AreEqual(new[] { false, true, false, false, true }, several.Select(entry => entry.AfterSeparator).ToList(), "the favorites and tag entries after the handoff, Delete last, each group after a separator");
         Assert.IsTrue(one.Concat(several).All(entry => entry.Tag is null), "the menu's own entries name no tag; their submenus do");
         foreach (var label in one.Concat(several).Select(entry => entry.Label))
         {
@@ -93,9 +94,9 @@ public sealed class ItemMenuTests
         var two = ItemMenu.Entries([edited, other], null);
         var preview = ItemMenu.PreviewEntries(edited);
 
-        CollectionAssert.AreEqual(new[] { "Copy", "Preview", "Edit", "Revert to original", "Save as new item", "Add to Favorites", "Rename", "Add tag", "Save a copy…", "Open with…", "Reveal in File Explorer", "Delete" },
+        CollectionAssert.AreEqual(new[] { "Copy", "Preview", "Edit", "Revert to original", "Save as new item", "Add to Favorites", "Rename", "Add tags…", "Add tag", "Save a copy…", "Open with…", "Reveal in File Explorer", "Delete" },
             one.Select(entry => entry.Label).ToList(), "G19, G26: after Edit, on the one edited item");
-        CollectionAssert.AreEqual(new[] { false, false, false, false, false, true, false, false, true, false, false, true }, one.Select(entry => entry.AfterSeparator).ToList());
+        CollectionAssert.AreEqual(new[] { false, false, false, false, false, true, false, false, false, true, false, false, true }, one.Select(entry => entry.AfterSeparator).ToList());
         CollectionAssert.AreEqual(new[] { ItemMenuAction.RevertToOriginal, ItemMenuAction.SaveAsNewItem }, one.Skip(3).Take(2).Select(entry => entry.Action).ToList());
         CollectionAssert.AreEqual(new[] { "Paste into Relay", "Copy", "Preview", "Edit", "Revert to original", "Save as new item", "Add to Favorites" }, pasting.Take(7).Select(entry => entry.Label).ToList());
         Assert.IsFalse(two.Any(entry => entry.Action is ItemMenuAction.RevertToOriginal or ItemMenuAction.SaveAsNewItem or ItemMenuAction.Edit), "each acts on one item, so two get neither");
@@ -113,11 +114,11 @@ public sealed class ItemMenuTests
         var plain = TestItems.Sized(2, 100, 100);
         var other = TestItems.Sized(3, 100, 100);
 
-        CollectionAssert.AreEqual(new[] { "Copy", "Preview", "Edit", "Add to Favorites", "Rename", "Add tag", "Remove tag", "Save a copy…", "Open with…", "Reveal in File Explorer", "Delete" }, ItemMenu.Entries([tagged], null).Select(entry => entry.Label).ToList());
-        CollectionAssert.AreEqual(new[] { "Copy 3 items", "Add to Favorites", "Add tag", "Remove tag", "Delete 3 items" }, ItemMenu.Entries([plain, tagged, other], null).Select(entry => entry.Label).ToList(), "one of several carrying a tag is enough");
-        CollectionAssert.AreEqual(new[] { "Copy 2 items", "Add to Favorites", "Add tag", "Delete 2 items" }, ItemMenu.Entries([plain, other], null).Select(entry => entry.Label).ToList(), "nothing to take off, so no Remove tag ▸");
-        CollectionAssert.AreEqual(new[] { false, true, false, false, true }, ItemMenu.Entries([plain, tagged, other], null).Select(entry => entry.AfterSeparator).ToList());
-        Assert.AreEqual(ItemMenuAction.RemoveTag, ItemMenu.Entries([tagged], null)[6].Action);
+        CollectionAssert.AreEqual(new[] { "Copy", "Preview", "Edit", "Add to Favorites", "Rename", "Add tags…", "Add tag", "Remove tag", "Save a copy…", "Open with…", "Reveal in File Explorer", "Delete" }, ItemMenu.Entries([tagged], null).Select(entry => entry.Label).ToList());
+        CollectionAssert.AreEqual(new[] { "Copy 3 items", "Add to Favorites", "Add tags…", "Add tag", "Remove tag", "Delete 3 items" }, ItemMenu.Entries([plain, tagged, other], null).Select(entry => entry.Label).ToList(), "one of several carrying a tag is enough");
+        CollectionAssert.AreEqual(new[] { "Copy 2 items", "Add to Favorites", "Add tags…", "Add tag", "Delete 2 items" }, ItemMenu.Entries([plain, other], null).Select(entry => entry.Label).ToList(), "nothing to take off, so no Remove tag ▸");
+        CollectionAssert.AreEqual(new[] { false, true, false, false, false, true }, ItemMenu.Entries([plain, tagged, other], null).Select(entry => entry.AfterSeparator).ToList());
+        Assert.AreEqual(ItemMenuAction.RemoveTag, ItemMenu.Entries([tagged], null)[7].Action);
     }
 
     [TestMethod]
@@ -128,13 +129,13 @@ public sealed class ItemMenuTests
         var one = ItemMenu.Entries(TestItems.Many(1), relay);
         var several = ItemMenu.Entries(TestItems.Many(3), relay);
 
-        CollectionAssert.AreEqual(new[] { "Paste into Relay", "Copy", "Preview", "Edit", "Add to Favorites", "Rename", "Add tag", "Save a copy…", "Open with…", "Reveal in File Explorer", "Delete" }, one.Select(entry => entry.Label).ToList());
-        CollectionAssert.AreEqual(new[] { ItemMenuAction.Paste, ItemMenuAction.Copy, ItemMenuAction.Preview, ItemMenuAction.Edit, ItemMenuAction.AddToFavorites, ItemMenuAction.Rename, ItemMenuAction.AddTag, ItemMenuAction.SaveACopy, ItemMenuAction.OpenWith, ItemMenuAction.Reveal, ItemMenuAction.Delete }, one.Select(entry => entry.Action).ToList());
-        CollectionAssert.AreEqual(new KeyGesture?[] { new(Key.Enter), new(Key.C, KeyModifiers.Control), new(Key.Space), new(Key.E, KeyModifiers.Control), new(Key.D, KeyModifiers.Control), new(Key.F2), null, null, null, null, new(Key.Delete) }, one.Select(entry => entry.Gesture).ToList(),
-            "Enter pastes, Ctrl+C copies, Space previews, Ctrl+E edits, Ctrl+D favorites, F2 renames, Del deletes (G8, G9, G17, G18, G19, G20)");
-        CollectionAssert.AreEqual(new[] { false, false, false, false, true, false, false, true, false, false, true }, one.Select(entry => entry.AfterSeparator).ToList());
-        CollectionAssert.AreEqual(new[] { "Paste 3 items into Relay", "Copy 3 items", "Add to Favorites", "Add tag", "Delete 3 items" }, several.Select(entry => entry.Label).ToList());
-        CollectionAssert.AreEqual(new[] { false, false, true, false, true }, several.Select(entry => entry.AfterSeparator).ToList());
+        CollectionAssert.AreEqual(new[] { "Paste into Relay", "Copy", "Preview", "Edit", "Add to Favorites", "Rename", "Add tags…", "Add tag", "Save a copy…", "Open with…", "Reveal in File Explorer", "Delete" }, one.Select(entry => entry.Label).ToList());
+        CollectionAssert.AreEqual(new[] { ItemMenuAction.Paste, ItemMenuAction.Copy, ItemMenuAction.Preview, ItemMenuAction.Edit, ItemMenuAction.AddToFavorites, ItemMenuAction.Rename, ItemMenuAction.AddTags, ItemMenuAction.AddTag, ItemMenuAction.SaveACopy, ItemMenuAction.OpenWith, ItemMenuAction.Reveal, ItemMenuAction.Delete }, one.Select(entry => entry.Action).ToList());
+        CollectionAssert.AreEqual(new KeyGesture?[] { new(Key.Enter), new(Key.C, KeyModifiers.Control), new(Key.Space), new(Key.E, KeyModifiers.Control), new(Key.D, KeyModifiers.Control), new(Key.F2), new(Key.T, KeyModifiers.Control), null, null, null, null, new(Key.Delete) }, one.Select(entry => entry.Gesture).ToList(),
+            "Enter pastes, Ctrl+C copies, Space previews, Ctrl+E edits, Ctrl+D favorites, F2 renames, Ctrl+T tags, Del deletes (G8, G9, G17, G18, G19, G20)");
+        CollectionAssert.AreEqual(new[] { false, false, false, false, true, false, false, false, true, false, false, true }, one.Select(entry => entry.AfterSeparator).ToList());
+        CollectionAssert.AreEqual(new[] { "Paste 3 items into Relay", "Copy 3 items", "Add to Favorites", "Add tags…", "Add tag", "Delete 3 items" }, several.Select(entry => entry.Label).ToList());
+        CollectionAssert.AreEqual(new[] { false, false, true, false, false, true }, several.Select(entry => entry.AfterSeparator).ToList());
     }
 
     [TestMethod]

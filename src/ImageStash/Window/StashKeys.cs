@@ -51,6 +51,9 @@ public enum KeyAction
     /// <summary><c>Ctrl+Z</c> in the grid and in the preview outside its fields: the Undo of the newest notice that still offers one (G7); the search box, a field and the editor keep their own.</summary>
     UndoNotice,
 
+    /// <summary><c>Ctrl+T</c> from the box, the grid and the preview: the tag field on the selection, or in the preview its own tag box (G7, G17; <see cref="TagKey"/>).</summary>
+    AddTags,
+
     /// <summary>A repeat of an Enter, a <c>Ctrl+V</c> or a <c>Ctrl+Z</c> still held from its press: nothing happens, and no control sees it (G7, G8, G13, N3).</summary>
     Held,
 }
@@ -70,6 +73,9 @@ public enum KeyPlace
     /// <summary>A button of the open preview, focused.</summary>
     PreviewButton,
 
+    /// <summary>The open preview's name in edit: a text field whose keys are its own, but for <c>Ctrl+T</c>, which moves focus on to the preview's tag box (G17, G19).</summary>
+    PreviewName,
+
     /// <summary>The open editor, over everything else, with no text field focused: its keys are its own (G20, G25).</summary>
     Editor,
 }
@@ -79,7 +85,8 @@ public enum KeyPlace
 /// Shift with them, <c>Ctrl+A</c>, <c>Ctrl+X</c> and <c>Ctrl+Z</c> are its own; Up and Down move the grid's selection
 /// from the box or the grid without moving focus, and Left and Right move it from the grid; Tab in the box moves focus
 /// to the grid; <c>Ctrl+A</c> in the grid selects every item; Enter, Esc, <c>Ctrl+O</c> and G6's <c>Ctrl</c> with
-/// <c>+</c> or <c>-</c>, on the main keys or the numeric keypad's, work from both; <c>Ctrl+C</c> copies the text the
+/// <c>+</c> or <c>-</c>, on the main keys or the numeric keypad's, work from both; <c>Ctrl+T</c>, from both, opens the
+/// tag field on the selection (<see cref="TagKey"/>); <c>Ctrl+C</c> copies the text the
 /// person selected in the box while it has such a selection, which is the box's own key, and otherwise the selected
 /// items, from both, the box's whole text as a summon selects it not being the person's until they change it there
 /// (<see cref="SummonSelection"/>); Enter and <c>Ctrl+V</c> act once per press however long they are held, Enter
@@ -92,8 +99,9 @@ public enum KeyPlace
 /// Inside any other text field the keys it uses are its own (typed characters, Space, Backspace, Del, the arrows,
 /// Enter, Esc, F2, its text's <c>Ctrl+A</c> and <c>Ctrl+C</c>), so none of them deletes, hands off, closes or moves the
 /// selection; only <c>Ctrl+O</c>, <c>Ctrl+V</c> and the thumbnail size, which a field leaves unused, still reach the
-/// window. While the preview covers the box and the grid, Enter, <c>Ctrl+C</c>, Del, <c>Ctrl+D</c> and F2 act on its
-/// item, Esc and Space close it, <c>Ctrl+Z</c> runs the newest notice's Undo as in the grid, a focused button of its
+/// window, and in the preview's name in edit <c>Ctrl+T</c> too. While the preview covers the box and the grid, Enter,
+/// <c>Ctrl+C</c>, Del, <c>Ctrl+D</c> and F2 act on its item, Esc and Space close it, <c>Ctrl+Z</c> runs the newest
+/// notice's Undo as in the grid, <c>Ctrl+T</c> moves focus to its tag box, a focused button of its
 /// own takes Space as its press, <c>Ctrl+O</c>, <c>Ctrl+V</c> and the thumbnail size still work, and the arrows,
 /// <c>Ctrl+A</c> and typing reach neither the grid nor the box, which it hides (G7, G17, G19). <c>Ctrl+E</c> in the
 /// box, the grid or the preview opens the editor. While the editor is open over all of it, only <c>Ctrl+C</c>, which
@@ -105,8 +113,9 @@ public static class StashKeys
     /// <param name="boxTextSelected">The search box has text the person selected (<see cref="SummonSelection.PersonSelected"/>), as it can only while it has focus: it clears its selection on losing focus.</param>
     public static KeyAction Route(Key key, KeyModifiers modifiers, KeyPlace place, bool boxTextSelected = false) => place switch
     {
-        KeyPlace.Field => (key, modifiers) switch
+        KeyPlace.Field or KeyPlace.PreviewName => (key, modifiers) switch
         {
+            (Key.T, KeyModifiers.Control) when place == KeyPlace.PreviewName => KeyAction.AddTags,
             (Key.O, KeyModifiers.Control) => KeyAction.ImportFiles,
             (Key.V, KeyModifiers.Control) => KeyAction.Paste,
             (Key.OemPlus or Key.Add, KeyModifiers.Control or (KeyModifiers.Control | KeyModifiers.Shift)) => KeyAction.LargerThumbnails,
@@ -131,6 +140,7 @@ public static class StashKeys
             (Key.D, KeyModifiers.Control) => KeyAction.ToggleFavorite,
             (Key.F2, KeyModifiers.None) => KeyAction.Rename,
             (Key.Z, KeyModifiers.Control) => KeyAction.UndoNotice,
+            (Key.T, KeyModifiers.Control) => KeyAction.AddTags,
             (Key.Escape, KeyModifiers.None) => KeyAction.Escape,
             (Key.Space, KeyModifiers.None) when place == KeyPlace.Preview => KeyAction.TogglePreview,
             (Key.O, KeyModifiers.Control) => KeyAction.ImportFiles,
@@ -143,12 +153,12 @@ public static class StashKeys
     };
 
     /// <summary>
-    /// Where the window's keys go: a text field other than the search box keeps its own; the open editor covers all the
-    /// rest, so it is next; then the open preview, which covers the box and the grid, its own focused button apart; then
-    /// the box, else the grid.
+    /// Where the window's keys go: a text field other than the search box keeps its own, the preview's name in edit
+    /// (<paramref name="inPreviewName"/>) told apart; the open editor covers all the rest, so it is next; then the open
+    /// preview, which covers the box and the grid, its own focused button apart; then the box, else the grid.
     /// </summary>
-    public static KeyPlace PlaceOf(bool inSearchBox, bool inOtherField, bool previewOpen, bool onPreviewButton, bool editOpen) =>
-        inOtherField ? KeyPlace.Field
+    public static KeyPlace PlaceOf(bool inSearchBox, bool inOtherField, bool previewOpen, bool onPreviewButton, bool editOpen, bool inPreviewName = false) =>
+        inOtherField ? (inPreviewName && previewOpen && !editOpen ? KeyPlace.PreviewName : KeyPlace.Field)
         : editOpen ? KeyPlace.Editor
         : previewOpen ? (onPreviewButton ? KeyPlace.PreviewButton : KeyPlace.Preview)
         : inSearchBox ? KeyPlace.SearchBox
@@ -166,6 +176,7 @@ public static class StashKeys
         (Key.E, KeyModifiers.Control) => KeyAction.Edit,
         (Key.O, KeyModifiers.Control) => KeyAction.ImportFiles,
         (Key.V, KeyModifiers.Control) => KeyAction.Paste,
+        (Key.T, KeyModifiers.Control) => KeyAction.AddTags,
         // The main keyboard's + is Shift with = on many layouts, so Ctrl+= and Ctrl+Shift+= both mean Ctrl with +.
         (Key.OemPlus or Key.Add, KeyModifiers.Control or (KeyModifiers.Control | KeyModifiers.Shift)) => KeyAction.LargerThumbnails,
         (Key.OemMinus or Key.Subtract, KeyModifiers.Control) => KeyAction.SmallerThumbnails,

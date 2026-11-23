@@ -58,6 +58,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
     private readonly ScrollViewer scroller;
     private readonly ThumbnailGrid grid;
     private readonly PendingQueryKeys keys;
+    private readonly TagKey tagKey;
     private readonly WindowStatus status;
     private readonly FooterHints footerHints;
     private readonly SizeWheel sizeWheel = new();
@@ -130,6 +131,8 @@ public sealed class StashWindow : Avalonia.Controls.Window
         var dropTarget = new DropTarget(this, drops, import, () => DragInProgress, () => listing.LitTags);
         tagField = new TagFieldOverlay(listing, organising, notices);
         preview = new Preview(listing, handoff, organising, deletion, renaming, itemMenu, notices, notices.Clock, pasteTarget, DialogShown, grid);
+        // Esc in the field gives focus back to where Ctrl+T was pressed, the box or the grid (G7).
+        tagKey = new TagKey(listing, () => preview.IsOpen, preview.FocusTags, () => tagField.IsVisible, items => tagField.Open(items, FocusManager?.GetFocusedElement() ?? grid));
         editor = new EditorOverlay(failure => notices.Raise(failure), seams.Fonts);
         footerHints = new FooterHints(listing, pasteTarget, handoff, notices.Clock);
         status = new WindowStatus(listing, notices, settings, footerHints, scroller, () => preview.IsOpen || editing.IsOpen, () => search.Text = "");
@@ -347,8 +350,8 @@ public sealed class StashWindow : Avalonia.Controls.Window
         grid.TileDoubleClicked += HandOverSelection;
         grid.TilePreviewRequested += () => OpenPreview(editingName: false);
         grid.DragStarted += DragOut;
-        // Type a tag… gives focus back to the grid, which the right-click focused; it, Preview and Rename open once the
-        // menu has closed, whose own focus would otherwise end the field's and leave the preview's on the grid beneath it.
+        // Type a tag… and Add tags… give focus back to the grid, which the right-click focused; they, Preview and Rename
+        // open once the menu has closed, whose own focus would otherwise end the field's and leave the preview's on the grid beneath it.
         grid.ItemMenuRequested += anchor => itemMenu.Show(grid, anchor, this, activation.TargetNow(), activation.ForPaste, DialogShown,
             items => Dispatcher.UIThread.Post(() => tagField.Open(items, grid), DispatcherPriority.Background),
             item => Dispatcher.UIThread.Post(() => preview.Open(item), DispatcherPriority.Background),
@@ -485,7 +488,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
     {
         // Another text field's keys are its own (the tag field's); only those it leaves unused reach the window (G7).
         var focused = FocusManager?.GetFocusedElement();
-        var place = StashKeys.PlaceOf(search.IsFocused, focused is TextBox && !ReferenceEquals(focused, search), preview.IsOpen, preview.ButtonFocused, editing.IsOpen);
+        var place = StashKeys.PlaceOf(search.IsFocused, focused is TextBox && !ReferenceEquals(focused, search), preview.IsOpen, preview.ButtonFocused, editing.IsOpen, preview.NameFocused);
         // Esc goes to an open tag list wherever focus is, a field's own Esc included: it closes the list alone (G2, G17);
         // the list a tag field's chevron opens leaves focus where it was, on the preview's picture as often as in the box.
         var action = OpenTagLists().Count > 0 && (e.Key, e.KeyModifiers) == (Key.Escape, KeyModifiers.None)
@@ -558,6 +561,10 @@ public sealed class StashWindow : Avalonia.Controls.Window
             case KeyAction.UndoNotice:
                 // In the order pressed: after a Del still waiting behind an arrow, so it undoes that Delete (G7).
                 keys.Then(() => _ = notices.UndoNewest());
+                break;
+            case KeyAction.AddTags:
+                // After an arrow still waiting for what was typed, on the selection it reaches (G17).
+                keys.Then(() => tagKey.Press());
                 break;
             case KeyAction.LargerThumbnails or KeyAction.SmallerThumbnails:
                 ThumbnailSizing.Step(action == KeyAction.LargerThumbnails ? 1 : -1);

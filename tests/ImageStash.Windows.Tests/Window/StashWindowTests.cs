@@ -598,8 +598,8 @@ public sealed class StashWindowTests
         var one = TrayDesktop.Get(() => shown.RightClick(items[2].Id));
         TrayDesktop.Run(() => CollectionAssert.AreEqual(new[] { items[2].Id }, shown.Listing.Selection.ToList(), "an unselected tile becomes the selection"));
 
-        CollectionAssert.AreEqual(new[] { "Copy 2 items", "Add to Favorites", "Add tag", "Delete 2 items" }, several);
-        CollectionAssert.AreEqual(new[] { "Copy", "Preview", "Edit", "Add to Favorites", "Rename", "Add tag", "Save a copy…", "Open with…", "Reveal in File Explorer", "Delete" }, one, "the handoff first (G8), Delete last (G18)");
+        CollectionAssert.AreEqual(new[] { "Copy 2 items", "Add to Favorites", "Add tags…", "Add tag", "Delete 2 items" }, several);
+        CollectionAssert.AreEqual(new[] { "Copy", "Preview", "Edit", "Add to Favorites", "Rename", "Add tags…", "Add tag", "Save a copy…", "Open with…", "Reveal in File Explorer", "Delete" }, one, "the handoff first (G8), Delete last (G18)");
         TrayDesktop.Run(() => shown.ClickMenuEntry("Copy"));
         await Eventually(() => shown.Uses() == 1);
         CollectionAssert.AreEqual(new[] { items[2].FilePath }, TestClipboard.Read().Files.ToList());
@@ -669,7 +669,7 @@ public sealed class StashWindowTests
             shown.ClickMenuEntry("Delete 2 items");
         });
 
-        CollectionAssert.AreEqual(new[] { "Copy 2 items", "Add to Favorites", "Add tag", "Delete 2 items" }, labels);
+        CollectionAssert.AreEqual(new[] { "Copy 2 items", "Add to Favorites", "Add tags…", "Add tag", "Delete 2 items" }, labels);
         await Eventually(() => TrayDesktop.Get(() => shown.Notices.Shown[^1].Text.StartsWith("Deleted ")));
         TrayDesktop.Run(() => CollectionAssert.AreEqual(new[] { items[2].Id }, shown.Listing.Items.Select(item => item.Id).ToList(),
             "the two the menu was opened on, not the selection made since"));

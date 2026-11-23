@@ -290,6 +290,15 @@ public sealed class Preview : Border
     /// <summary>Whether its name is being edited.</summary>
     public bool EditingName => name.IsEditing;
 
+    /// <summary>Whether focus is in its name in edit, where <c>Ctrl+T</c> still moves focus on to its tag box (G17).</summary>
+    public bool NameFocused => name.IsEditing && name.BoxFocused;
+
+    /// <summary>
+    /// <c>Ctrl+T</c> in the preview: focus in its tag box (G17); from the name in edit that is focus leaving the name,
+    /// which commits it (<see cref="FieldLeaving"/>).
+    /// </summary>
+    public void FocusTags() => tags.FocusBox();
+
     /// <summary>
     /// Whether its name field holds a name typed and not yet committed, or its tag field words not yet added, which a hide
     /// keeps rather than throws away (G1, G19).

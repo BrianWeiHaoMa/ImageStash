@@ -25,7 +25,8 @@ public sealed class PreviewTags : Grid
     {
         ColumnDefinitions = new ColumnDefinitions("Auto,*");
         var label = new TextBlock { Text = "Tags", FontSize = 12, Opacity = 0.6, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 9, 14, 0) };
-        Field = new TagField();
+        // The preview's empty box names the key that reaches it from anywhere in the preview (G17).
+        Field = new TagField { Placeholder = Placeholder };
         // The box and its suggestions end the row: while focus is in it, they stay in view as the row grows.
         scroller = new TagFieldScroller(Field, () => HadFocus);
         SetColumn(scroller, 1);
@@ -61,6 +62,9 @@ public sealed class PreviewTags : Grid
 
     /// <summary>A tag's ×: that tag is to be taken off the item.</summary>
     public event Action<string>? Removed;
+
+    /// <summary>What the preview's empty tag box reads.</summary>
+    public const string Placeholder = "Add a tag · Ctrl+T";
 
     public TagField Field { get; }
 

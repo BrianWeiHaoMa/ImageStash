@@ -88,6 +88,13 @@ public sealed class TagField : StackPanel
     /// <summary>The words in the box.</summary>
     public string Text => box.Text ?? "";
 
+    /// <summary>What the empty box reads, until something is typed.</summary>
+    public string Placeholder
+    {
+        get => box.PlaceholderText ?? "";
+        set => box.PlaceholderText = value;
+    }
+
     /// <summary>The tags shown with their ×, in order.</summary>
     public IReadOnlyList<string> Tags { get; private set; } = [];
 
@@ -339,7 +346,7 @@ public sealed class TagFieldScroller : ScrollViewer
 }
 
 /// <summary>
-/// Type a tag… (G17): the tag field over the grid, inside the window's own tree as the drop card and the notices are,
+/// "Tags of …" (G17), opened by Type a tag…, Add tags… and <c>Ctrl+T</c>: the tag field over the grid, inside the window's own tree as the drop card and the notices are,
 /// never a window of its own (F4), so the flyout keeps focus and stays (G2). It acts on the items it was opened on: it
 /// shows the tags they carry, a × taking that tag off every one of them, and scrolls within a bounded height however
 /// many they are; its list of every tag marks the tags every one of them carries, and a pick there gives the tag to every

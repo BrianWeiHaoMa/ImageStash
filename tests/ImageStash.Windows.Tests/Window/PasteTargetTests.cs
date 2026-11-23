@@ -45,7 +45,7 @@ public sealed class PasteTargetTests
         await Eventually(() => target.Pasted.Count == 1 && shown.Uses() == 1);
 
         CollectionAssert.AreEqual(new[] { "Enter · Paste into Relay", "Ctrl+C · Copy" }, hints, "the footer names the app (G8)");
-        CollectionAssert.AreEqual(new[] { "Paste into Relay", "Copy", "Preview", "Edit", "Add to Favorites", "Rename", "Add tag", "Save a copy…", "Open with…", "Reveal in File Explorer", "Delete" }, menu, "and so does the menu (G8), Delete last (G18)");
+        CollectionAssert.AreEqual(new[] { "Paste into Relay", "Copy", "Preview", "Edit", "Add to Favorites", "Rename", "Add tags…", "Add tag", "Save a copy…", "Open with…", "Reveal in File Explorer", "Delete" }, menu, "and so does the menu (G8), Delete last (G18)");
         CollectionAssert.AreEqual(new[] { Relay }, target.Pasted, "pasted into the app in front at the press, not the one the summon's activation came after");
         Assert.IsTrue(hiddenAtThePaste, "the flyout hid before the target was brought forward (G2, G8)");
         TrayDesktop.Run(() => Assert.IsFalse(shown.Window.IsVisible));

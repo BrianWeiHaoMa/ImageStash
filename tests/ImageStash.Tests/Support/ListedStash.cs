@@ -48,6 +48,8 @@ public sealed class ListedStash : IDisposable
         Editing = new Editing(Listing, Notices, Handoff, (original, name, layers, format, work, retry) => Renderer(original, name, layers, format, work, retry), new ColorChoices(), editRetry ?? TestStash.ShortRetry);
         OpenWith = new OpenWith(Listing, Notifications, Editing, Dialogs, OpenWithClock, action => action());
         ItemMenu = new ItemMenu(Listing, Notices, Handoff, Organising, Deletion, Editing, OpenWith, Dialogs, saveACopyRetry ?? TestStash.ShortRetry);
+        // The window's controls are not here: the preview and the "Tags of …" field are what a check says they are.
+        TagKey = new TagKey(Listing, () => PreviewOpen, () => PreviewTagsFocused++, () => TagFieldItems.Count > 0, items => TagFieldItems = items);
         CaptureNotification = new CaptureNotification(Notifications, Listing, Handoff, new NoWindowShown(), TestStash.ShortRetry);
         StashClipboardImage = new StashClipboardImage(Listing, Notifications, CaptureNotification, Clipboard, stash.Clock, TestStash.ShortRetry, TestStash.ShortRetry);
         Capture = new CaptureSession(Screen, Selection, Frame, opener ?? GifEncoder.Opener(TestStash.ShortRetry), captureClock, failure => Notifications.Raise(failure));
@@ -202,17 +204,37 @@ public sealed class ListedStash : IDisposable
     /// <summary>The keys the window holds down, as its key-downs and key-ups tell them; the paste waits for a held Enter.</summary>
     public PressOnce Keys { get; } = new();
 
+    /// <summary><c>Ctrl+T</c>'s act, over <see cref="PreviewOpen"/> and <see cref="TagFieldItems"/> in place of the window's controls.</summary>
+    public TagKey TagKey { get; }
+
+    /// <summary>Whether the preview is open, as a check says; none of its controls is here.</summary>
+    public bool PreviewOpen { get; set; }
+
+    /// <summary>How many times focus was sent to the preview's tag box.</summary>
+    public int PreviewTagsFocused { get; private set; }
+
+    /// <summary>The items the "Tags of …" field is open on, none while closed: opened by <see cref="TagKey"/>, closed by the check as Esc or focus leaving closes it.</summary>
+    public IReadOnlyList<StashItem> TagFieldItems { get; set; } = [];
+
     /// <summary>
     /// A key pressed at <paramref name="place"/> as the window takes it: routed by <see cref="StashKeys.Route"/>, held to
-    /// one act per press by <see cref="Keys"/>, and its action's act run as the window's case runs it; the action is
-    /// returned. Let go with <see cref="PressOnce.Released"/> on <see cref="Keys"/>.
+    /// one act per press by <see cref="Keys"/>, and its action's act run as the window's case runs it (Del as it runs
+    /// with no preview open); the action is returned. Let go with <see cref="PressOnce.Released"/> on <see cref="Keys"/>.
     /// </summary>
     public async Task<KeyAction> Press(Key key, KeyModifiers modifiers, KeyPlace place)
     {
         var action = Keys.Acting(key, StashKeys.Route(key, modifiers, place));
-        if (action == KeyAction.UndoNotice)
+        switch (action)
         {
-            await Notices.UndoNewest();
+            case KeyAction.UndoNotice:
+                await Notices.UndoNewest();
+                break;
+            case KeyAction.Delete when !PreviewOpen:
+                await Deletion.DeleteSelection();
+                break;
+            case KeyAction.AddTags:
+                TagKey.Press();
+                break;
         }
 
         return action;
