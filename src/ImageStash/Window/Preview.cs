@@ -142,7 +142,6 @@ public sealed class Preview : Border
         head.Children.Add(more);
 
         picture = new PreviewPicture(failure => notices.Raise(failure)) { Margin = new Thickness(10, 0) };
-        // Over the picture's row, after it so above it, never its child: a press on one neither pauses it nor focuses it (G19).
         StepButtons = new PreviewStepButtons { Margin = new Thickness(10, 0) };
         // Either key gives focus back to the preview, whose Enter then hands off again (G7, G19); focus moved elsewhere in
         // the window stays there, the name committed as Enter commits it (G19).
@@ -193,15 +192,14 @@ public sealed class Preview : Border
         pasteTarget.Changed += NameHandoff;
         NameHandoff();
 
+        var pictureRow = StepButtons.Over(picture);
         var layout = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto,Auto") };
-        Grid.SetRow(picture, 1);
-        Grid.SetRow(StepButtons, 1);
+        Grid.SetRow(pictureRow, 1);
         Grid.SetRow(facts, 2);
         Grid.SetRow(tags, 3);
         Grid.SetRow(actions, 4);
         layout.Children.Add(head);
-        layout.Children.Add(picture);
-        layout.Children.Add(StepButtons);
+        layout.Children.Add(pictureRow);
         layout.Children.Add(facts);
         layout.Children.Add(tags);
         layout.Children.Add(actions);

@@ -2,8 +2,10 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
+using ImageStash.Look;
 using ImageStash.Seams;
 using ImageStash.Store;
 using ImageStash.Window;
@@ -17,7 +19,8 @@ namespace ImageStash.Windows.Tests.Window;
 /// The preview's ‹ and › on the real desktop, clicked with the real pointer (G19, G7, G6): they step as Left and Right do
 /// and are unavailable at the ends; a press leaves focus, and a name or tag in edit, in its field, which the click then
 /// commits to the item it was typed for, a chosen suggestion included, before the step; they lie over the picture's edges
-/// without scaling it down or pausing it; they read over white and black, light and dark; Esc pressed while the click's
+/// without scaling it down or pausing it; faint with the pointer away from the picture's row, at full strength over it they
+/// read over white and black, light and dark; Esc pressed while the click's
 /// commit is held closes the preview on the item it was typed for.
 /// </summary>
 [TestClass]
@@ -252,6 +255,9 @@ public sealed class PreviewStepButtonsTests
             {
                 TrayDesktop.Run(() => Application.Current!.RequestedThemeVariant = theme);
                 await Eventually(() => TrayDesktop.Get(() => shown.Window.ActualThemeVariant == theme));
+                var pill = TrayDesktop.Get(() => shown.Window.TryFindResource(LookKeys.PicturePill, theme, out var value) && value is ISolidColorBrush brush
+                    ? brush
+                    : throw new AssertFailedException($"no picture pill in {theme}"));
                 foreach (var item in items.Where(item => item.Name is "white" or "black"))
                 {
                     TrayDesktop.Run(() =>
@@ -261,6 +267,12 @@ public sealed class PreviewStepButtonsTests
                         Assert.IsTrue(shown.Preview.StepButtons.On.IsEnabled);
                     });
                     await Eventually(() => TrayDesktop.Get(() => shown.PreviewPicture.Image is not null));
+                    TestMouse.MoveTo(TestMouse.Away);
+                    await Eventually(() => TrayDesktop.Get(() => !shown.PreviewPicture.IsPointerOver && !shown.Preview.StepButtons.IsPointerOver));
+                    var atRest = await RenderedWindow.Of(shown);
+                    // Over the picture's row, on the picture between the buttons, so neither shows its own hover ground.
+                    TestMouse.MoveTo(TestMouse.Centre(shown.PreviewPicture));
+                    await Eventually(() => TrayDesktop.Get(() => shown.PreviewPicture.IsPointerOver));
                     var rendered = await RenderedWindow.Of(shown);
                     var color = item.Name == "white" ? 0xFFFFFFFFu : 0xFF000000u;
                     foreach (var button in new[] { shown.Preview.StepButtons.Back, shown.Preview.StepButtons.On })
@@ -274,11 +286,19 @@ public sealed class PreviewStepButtonsTests
                         // The central rectangle excludes the circular edge. Its most common colour is the pill's ground.
                         var face = place.Deflate(6 * rendered.Scaling);
                         var ground = rendered.Commonest(face, 1).Single();
-                        Assert.IsGreaterThanOrEqualTo(16, Math.Abs(Brightness(ground) - Brightness(color)), $"ground against picture: {what}");
+                        var standsOut = Math.Abs(Brightness(ground) - Brightness(color));
+                        Assert.IsGreaterThanOrEqualTo(16, standsOut, $"ground against picture: {what}");
+                        // Full strength is the pill itself over the picture: a fainter disc could still clear the bar above over black.
+                        var pillOver = Brightness(color) + (pill.Color.G - Brightness(color)) * pill.Color.A / 255d * pill.Opacity;
+                        Assert.AreEqual(pillOver, Brightness(ground), 4d, $"full strength: {what}");
                         var glyphPixels = rendered.ColorCounts(face.X, face.Y, face.Width, face.Height)
                             .Where(pixel => Brightness(pixel.Key) >= Brightness(ground) + 25)
                             .Sum(pixel => pixel.Value);
                         Assert.IsGreaterThanOrEqualTo(3, glyphPixels, $"light glyph against ground: {what}");
+
+                        // With the pointer away, the disc departs from the picture at most half as far: faint, not solid.
+                        var restGround = atRest.Commonest(face, 1).Single();
+                        Assert.IsLessThanOrEqualTo(standsOut / 2, Math.Abs(Brightness(restGround) - Brightness(color)), $"faint at rest: {what}");
                     }
                 }
             }
