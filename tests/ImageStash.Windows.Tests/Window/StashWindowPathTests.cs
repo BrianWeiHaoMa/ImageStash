@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.VisualTree;
+using ImageStash.Layers;
 using ImageStash.Seams;
 using ImageStash.Window;
 using ImageStash.Windows.Tests.Support;
@@ -88,6 +89,10 @@ public sealed class StashWindowPathTests
         TrayDesktop.Run(() => Assert.IsFalse(shown.TagField.IsVisible));
     }
 
+    /// <summary>
+    /// Ctrl+D stars the middle tile. Space opens its preview, and the arrow keys and ‹ step to both ends.
+    /// Ctrl+E edits the picture shown. Clipboard words go into its Meme, and a clipboard picture raises a notice.
+    /// </summary>
     [TestMethod]
     public async Task CtrlDInAllStarsOnlyTheMiddleTileAndClickThenSpaceShowsItsStarBeforeArrowsStepToBothEnds()
     {
@@ -175,6 +180,46 @@ public sealed class StashWindowPathTests
             Assert.AreEqual(tiles[0].Id, shown.Preview.Item?.Id, "Left followed by Previous reaches the first item in All (G19)");
             Assert.IsTrue(shown.Preview.IsOpen);
             CollectionAssert.AreEqual(new[] { tiles[0].Id }, shown.Listing.Selection.ToList());
+        });
+
+        // (3) From the preview into the editor, where Ctrl+V acts on the open layer's text (G13, G25).
+        await PasteIntoMemeFromPreview(shown, tiles[0].Id, tiles.Length);
+    }
+
+    private static async Task PasteIntoMemeFromPreview(ShownWindow shown, long previewedId, int itemCount)
+    {
+        using var editor = new ShownEditor(shown);
+        TrayDesktop.Run(() => Tap(shown.PreviewPicture, Key.E, KeyModifiers.Control));
+        await Eventually(() => TrayDesktop.Get(() => editor.Session?.Item.Id == previewedId));
+        await Eventually(() => TrayDesktop.Get(() =>
+            editor.Canvas.Mapping() is not null &&
+            editor.Canvas.TranslatePoint(editor.At(0.5, 0.25), shown.Window) is { } point &&
+            ReferenceEquals(shown.Window.InputHitTest(point), editor.Canvas)));
+        TestMouse.Click(TrayDesktop.Get(() => editor.Canvas.PointToScreen(editor.At(0.5, 0.25))));
+        await Eventually(() => TrayDesktop.Get(() => editor.Field is { IsFocused: true } && editor.Session!.Typing));
+
+        TestClipboard.PutText("so true");
+        TrayDesktop.Run(() => Tap(editor.Field!, Key.V, KeyModifiers.Control));
+        await Eventually(() => TrayDesktop.Get(() => editor.Field?.Text is { Length: > 0 } || shown.Notices.Shown.Count > 0));
+        Assert.HasCount(itemCount, (await shown.Listing.Store!.All()).Value!, "the words add no stash item");
+        TrayDesktop.Run(() =>
+        {
+            var layer = (TextLayer)editor.Session!.Layers.Layers.Single();
+            Assert.AreEqual(TextPreset.Meme, layer.Preset);
+            Assert.AreEqual("SO TRUE", layer.Text);
+            Assert.AreEqual("SO TRUE", editor.Field?.Text);
+            Assert.IsEmpty(shown.Notices.Shown, "the words paste without a notice");
+        });
+
+        TestClipboard.Put((TestClipboard.Png, File.ReadAllBytes(shown.Picture("path clipboard.png"))));
+        TrayDesktop.Run(() => Tap(editor.Field!, Key.V, KeyModifiers.Control));
+        await Eventually(() => TrayDesktop.Get(() => shown.Notices.Shown.Count > 0));
+        Assert.HasCount(itemCount, (await shown.Listing.Store!.All()).Value!, "the picture adds no stash item");
+        TrayDesktop.Run(() =>
+        {
+            Assert.AreEqual("SO TRUE", editor.Field?.Text);
+            Assert.AreEqual("SO TRUE", ((TextLayer)editor.Session!.Layers.Layers.Single()).Text);
+            Assert.AreEqual("Paste failed: the clipboard, it holds no text to paste", shown.Said());
         });
     }
 

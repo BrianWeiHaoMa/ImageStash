@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ImageStash.Editor;
 using ImageStash.Layers;
@@ -22,7 +23,8 @@ namespace ImageStash.Windows.Tests.Editor;
 /// canvas draws it through Media; Enter adds a line, <c>Ctrl+Enter</c> and Esc leave; no paste of its own; a press
 /// outside it closes it before the press acts, one inside it is its own; focus moving elsewhere in the editor closes it,
 /// but for Text's options pressed before a letter is typed, which change the new layer while the field keeps it and,
-/// once chosen, the focus; the window losing the foreground does not; the window's <c>Ctrl+O</c> and <c>Ctrl+V</c> still run and Enter never pastes;
+/// once chosen, the focus; the window losing the foreground does not; <c>Ctrl+O</c> still opens Import files, the window's
+/// <c>Ctrl+V</c> puts clipboard words into the layer, and Enter never pastes;
 /// a Meme's field holding the uppercase letters drawn, its caret on them.
 /// </summary>
 [TestClass]
@@ -128,7 +130,7 @@ public sealed class TextFieldTests
     }
 
     [TestMethod]
-    public async Task TheFieldHasNoPasteOfItsOwnCtrlVIsTheWindowsAndCtrlCCopiesItsSelectedText()
+    public async Task CtrlVPastesIntoTheFieldShiftInsertDoesNothingAndCtrlCCopiesItsSelection()
     {
         using var shown = ShownWindow.Open();
         using var editor = new ShownEditor(shown);
@@ -138,19 +140,24 @@ public sealed class TextFieldTests
         TrayDesktop.Run(() =>
         {
             editor.Click(0.5, 0.25);
-            ShownWindow.Type(editor.Field!, "own");
-            ShownWindow.Press(editor.Field!, Key.V, KeyModifiers.Control);
-            ShownWindow.Press(editor.Field!, Key.Insert, KeyModifiers.Shift);
-            Assert.AreEqual("OWN", editor.Field!.Text, "nothing pasted into the field (N9, R5)");
+            ShownWindow.Type(editor.Field!, "own ");
+            ShownWindow.Tap(editor.Field!, Key.V, KeyModifiers.Control);
         });
-        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Said().Contains("it holds no picture or file")));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => editor.Field?.Text == "OWN PASTED"));
         TrayDesktop.Run(() =>
         {
-            Assert.IsTrue(editor.Session!.Typing, "the field still open beneath the window's paste");
-            editor.Field!.SelectAll();
-            ShownWindow.Press(editor.Field, Key.C, KeyModifiers.Control);
+            Assert.IsTrue(editor.Session!.Typing, "the field stays open after the window's paste (G13, G25)");
+            ShownWindow.Tap(editor.Field!, Key.Insert, KeyModifiers.Shift);
         });
-        await ShownWindow.Eventually(() => TestClipboard.Text() == "OWN");
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            var field = editor.Field!;
+            Assert.AreEqual("OWN PASTED", field.Text, "Shift+Insert leaves the text alone (N9, R5)");
+            field.SelectionStart = "OWN ".Length;
+            field.SelectionEnd = "OWN PASTED".Length;
+            ShownWindow.Tap(field, Key.C, KeyModifiers.Control);
+        }, DispatcherPriority.Background);
+        await ShownWindow.Eventually(() => TestClipboard.Text() == "PASTED");
     }
 
     [TestMethod]

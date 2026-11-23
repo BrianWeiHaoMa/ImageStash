@@ -1,4 +1,7 @@
 using Avalonia.Input;
+using ImageStash.Editor;
+using ImageStash.Layers;
+using ImageStash.Seams;
 using ImageStash.Store;
 using ImageStash.Tests.Support;
 using ImageStash.Window;
@@ -83,11 +86,14 @@ public sealed class StashWindowPathTests
     /// its case calls: three pictures listed in All, the middle one selected; <c>Ctrl+D</c> from the grid makes it a
     /// favorite, its tile alone carries the star and the preview's star reads filled for it (G17, G6, G19); with the
     /// preview open on it, Right steps to the item after it, the grid selecting that one alone and its star reading it no
-    /// favorite, Right again is the list's end, and Left twice shows the first (G19, G8). A tile's pixels and the preview's
-    /// control are beyond these parts: the walk reads the rules they draw from.
+    /// favorite, Right again is the list's end, and Left twice shows the first (G19, G8); <c>Ctrl+E</c> from the preview
+    /// opens the editor on the item shown, a Meme text layer is added with its text in edit, and <c>Ctrl+V</c> there puts
+    /// the clipboard's words in uppercased, adding no item and saying nothing, while a picture on the clipboard adds no
+    /// item and gets the notice (G20, G13, G21). A tile's pixels, the preview's control and real focus in the layer's text
+    /// are beyond these parts: the walk reads the rules they draw from, and tells the paste the caret is in the text.
     /// </summary>
     [TestMethod]
-    public async Task CtrlDOnTheMiddleOfThreePicturesStarsItsTileAloneAndThePreviewsStarReadsFilledThenTheArrowsStepThePreview()
+    public async Task CtrlDOnTheMiddleOfThreePicturesStarsItsTileAloneThenTheArrowsStepThePreviewAndCtrlVPutsWordsInAMeme()
     {
         using var listed = await ListedStash.Open();
         foreach (var fixture in new[] { "photo.jpg", "transparent.png", "still.webp" })
@@ -127,6 +133,31 @@ public sealed class StashWindowPathTests
         await PressInThePreview(listed, Key.Right, last);
         await PressInThePreview(listed, Key.Left, listedNow);
         await PressInThePreview(listed, Key.Left, first);
+
+        // (3) Ctrl+E from the preview; a Meme added, its text in edit; Ctrl+V there with words, then with a picture.
+        Assert.AreEqual(KeyAction.Edit, await listed.Press(Key.E, KeyModifiers.Control, KeyPlace.Preview));
+        Assert.AreEqual(first.Id, listed.Editing.Session?.Item.Id, "the editor opens on the item shown (G20)");
+        var session = listed.Editing.Session!;
+        session.Text().Choose(TextKind.Meme);
+        session.Click(session.OriginalSize.Width / 2f, session.OriginalSize.Height / 4f);
+        Assert.IsTrue(session is { Typing: true, SelectedLayer: TextLayer { Preset: TextPreset.Meme } }, "a Meme added, its text in edit");
+        listed.LayerTextCaret = TestLayerText.Over(session);
+        listed.Clipboard.Reading = Outcome<ClipboardReading>.Of(new ClipboardReading([], null, null, false, "so true"));
+
+        Assert.AreEqual(KeyAction.Paste, await listed.Press(Key.V, KeyModifiers.Control, KeyPlace.Field));
+        listed.Keys.Released(Key.V);
+
+        Assert.AreEqual("SO TRUE", ((TextLayer)session.SelectedLayer!).Text, "the words in the layer as typed on a Meme (G13, G21)");
+        Assert.HasCount(3, await listed.Stash.All(), "no item added");
+        Assert.IsEmpty(listed.Notices.Shown, "and nothing said");
+
+        listed.Clipboard.Reading = Outcome<ClipboardReading>.Of(new ClipboardReading([], MediaFixtures.Bytes("transparent.png"), null, false));
+        Assert.AreEqual(KeyAction.Paste, await listed.Press(Key.V, KeyModifiers.Control, KeyPlace.Field));
+        listed.Keys.Released(Key.V);
+
+        Assert.HasCount(3, await listed.Stash.All(), "a picture there adds no item (G13)");
+        Assert.AreEqual("Paste failed: the clipboard, it holds no text to paste", listed.Notices.Shown.Single().Text, "the notice says so");
+        Assert.AreEqual("SO TRUE", ((TextLayer)session.SelectedLayer!).Text);
     }
 
     /// <summary>An arrow pressed in the preview as the window takes it; then the item shown, and the grid's one selected item, read.</summary>

@@ -41,6 +41,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
     private readonly Renaming renaming;
     private readonly Organising organising;
     private readonly ClipboardPaste paste;
+    private readonly PasteKey pasteKey;
     private readonly PressOnce heldKeys = new();
     private readonly SummonSelection summonSelection = new();
     private readonly ItemMenu itemMenu;
@@ -84,6 +85,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
         renaming = new Renaming(listing, notices, handoff);
         organising = new Organising(listing, notices);
         paste = new ClipboardPaste(listing, notices, import, drops, notices.Clock, HeldClipboard.Retry);
+        pasteKey = new PasteKey(paste, editing);
         itemMenu = new ItemMenu(listing, notices, handoff, organising, deletion, editing, openWith, dialogs, HeldFileRetry.Duration);
         // What a Move waits for in this window (State: Move); the wait itself is Moving's.
         moving.WaitForWindow(paste, import, handoff, deletion, renaming, organising, editing, itemMenu, notices);
@@ -532,9 +534,11 @@ public sealed class StashWindow : Avalonia.Controls.Window
                 break;
             case KeyAction.Paste:
                 // The words replace the box's selection, or go in at its caret, as a text box's paste does: the search
-                // box's, or a tag field's as typed text; in any other field the notice says so (G13).
-                _ = paste.Paste(place == KeyPlace.SearchBox ? words => search.SelectedText = words
-                    : (FocusManager?.GetFocusedElement() as Visual)?.FindAncestorOfType<TagField>() is { } field ? field.PasteNow()
+                // box's, a tag field's or a layer's open text in the editor as typed text; in any other field the
+                // notice says so (G13).
+                var focused = FocusManager?.GetFocusedElement();
+                _ = pasteKey.Press(editor.OpenTextAt(focused), place == KeyPlace.SearchBox ? words => search.SelectedText = words
+                    : (focused as Visual)?.FindAncestorOfType<TagField>() is { } field ? field.PasteNow()
                     : null);
                 break;
             case KeyAction.Held:

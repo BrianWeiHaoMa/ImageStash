@@ -49,6 +49,7 @@ public sealed class ListedStash : IDisposable
         Editing = new Editing(Listing, Notices, Handoff, (original, name, layers, format, work, retry) => Renderer(original, name, layers, format, work, retry), new ColorChoices(), editRetry ?? TestStash.ShortRetry);
         OpenWith = new OpenWith(Listing, Notifications, Editing, Dialogs, OpenWithClock, action => action());
         ItemMenu = new ItemMenu(Listing, Notices, Handoff, Organising, Deletion, Editing, OpenWith, Dialogs, saveACopyRetry ?? TestStash.ShortRetry);
+        PasteKey = new PasteKey(Paste, Editing);
         // The window's controls are not here: the preview and the "Tags of …" field are what a check says they are.
         TagKey = new TagKey(Listing, () => PreviewOpen, () => PreviewTagsFocused++, () => TagFieldItems.Count > 0, items => TagFieldItems = items);
         PreviewStepping = new PreviewStepping(Listing, () => PreviewOpen ? PreviewItem : null, item => PreviewItem = item);
@@ -230,6 +231,12 @@ public sealed class ListedStash : IDisposable
     /// <summary>The arrows' act in the preview, over <see cref="PreviewOpen"/> and <see cref="PreviewItem"/> in place of the preview control.</summary>
     public PreviewStepping PreviewStepping { get; }
 
+    /// <summary><c>Ctrl+V</c>'s act, over <see cref="LayerTextCaret"/> in place of the window's focus.</summary>
+    public PasteKey PasteKey { get; }
+
+    /// <summary>The layer's open text the caret is in, as a check says, in place of the window's focus; null: the caret is elsewhere.</summary>
+    public IOpenLayerText? LayerTextCaret { get; set; }
+
     /// <summary>The ‹ and › clicks' act, over <see cref="PreviewItem"/> and <see cref="PreviewClosing"/> in place of the preview control.</summary>
     public PreviewStepClicks PreviewStepClicks { get; }
 
@@ -245,13 +252,21 @@ public sealed class ListedStash : IDisposable
     /// <summary>
     /// A key pressed at <paramref name="place"/> as the window takes it: routed by <see cref="StashKeys.Route"/>, held to
     /// one act per press by <see cref="Keys"/>, and its action's act run as the window's case runs it (Del and
-    /// <c>Ctrl+D</c> as they run with no preview open, the arrows' steps over <see cref="PreviewItem"/>); the action is returned. Let go with <see cref="PressOnce.Released"/> on <see cref="Keys"/>.
+    /// <c>Ctrl+D</c> as they run with no preview open, the arrows' steps over <see cref="PreviewItem"/>, <c>Ctrl+E</c> on the
+    /// preview's item while it is open, <c>Ctrl+V</c> into <see cref="LayerTextCaret"/> or, without one, as from a place
+    /// with no field taking words); the action is returned. Let go with <see cref="PressOnce.Released"/> on <see cref="Keys"/>.
     /// </summary>
     public async Task<KeyAction> Press(Key key, KeyModifiers modifiers, KeyPlace place)
     {
         var action = Keys.Acting(key, StashKeys.Route(key, modifiers, place));
         switch (action)
         {
+            case KeyAction.Edit:
+                await Editing.OpenOnSelection(PreviewOpen ? PreviewItem : null);
+                break;
+            case KeyAction.Paste:
+                await PasteKey.Press(LayerTextCaret, intoField: null);
+                break;
             case KeyAction.UndoNotice:
                 await Notices.UndoNewest();
                 break;

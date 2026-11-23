@@ -19,11 +19,13 @@ namespace ImageStash.Editor;
 /// size on screen, and transparent but for its caret and the selection's highlight: every change of its text goes to
 /// the session at once and the canvas draws the layer through Media, so no letter the user reads is the field's (R4).
 /// It shows while the session types into a layer. Enter adds a line, stored as Media breaks lines; it keeps cut and
-/// copy of its text on their keys and has no paste of its own: <c>Ctrl+V</c> is the window's (N9, R5). On a Meme it holds
-/// the uppercase letters Media draws, what is typed uppercased as it lands, so its caret, selection and hits fall on
-/// the letters the canvas shows and the caret goes after every letter a character became ("ß" is "SS"; G21, G25).
+/// copy of its text on their keys and has no paste of its own (its <c>Shift+Insert</c> and menu included): <c>Ctrl+V</c>
+/// is the window's one read of the clipboard (N9, R5), whose words come back through <see cref="Put"/> at its caret as
+/// <see cref="LayerTextPaste"/> makes them, and which never imports from here (G13). On a Meme it holds the uppercase
+/// letters Media draws, what is typed or pasted uppercased as it lands, so its caret, selection and hits fall on the
+/// letters the canvas shows and the caret goes after every letter a character became ("ß" is "SS"; G21, G25).
 /// </summary>
-internal sealed class TextField : Canvas
+internal sealed class TextField : Canvas, IOpenLayerText
 {
     /// <summary>What a screen reader calls it.</summary>
     public const string Called = "Text";
@@ -76,7 +78,7 @@ internal sealed class TextField : Canvas
         // Before the box inserts it, so the box places its own caret after the letters a Meme shows for it.
         box.AddHandler(TextInputEvent, (_, e) =>
         {
-            if (open && e.Text is { } typed && session?.SelectedLayer is TextLayer { Preset: TextPreset.Meme })
+            if (open && e.Text is { } typed && session is { TypesUppercase: true })
             {
                 e.Text = Uppercase.Of(typed);
             }
@@ -97,6 +99,22 @@ internal sealed class TextField : Canvas
                 Place();
             }
         };
+    }
+
+    string IOpenLayerText.Text => box.Text ?? "";
+
+    int IOpenLayerText.SelectionStart => box.SelectionStart;
+
+    int IOpenLayerText.SelectionEnd => box.SelectionEnd;
+
+    /// <summary>The open field's text replaced, which goes to the session as typing does, the caret at <paramref name="caret"/>; nothing while it is closed.</summary>
+    public void Put(string text, int caret)
+    {
+        if (open)
+        {
+            box.Text = text;
+            box.SelectionStart = box.SelectionEnd = box.CaretIndex = caret;
+        }
     }
 
     /// <summary>Whether <paramref name="source"/>, where focus went, is the field.</summary>

@@ -14,9 +14,19 @@ namespace ImageStash.Editor;
 public sealed partial class EditorSession
 {
     private Field? textField;
+    private int openings;
 
     /// <summary>Whether a field is open for typing into the selected text or caption-bar layer.</summary>
     public bool Typing => textField is not null;
+
+    /// <summary>
+    /// Which opening of a field is open, null while none is: a field closed and opened again, on its layer or another, is
+    /// another opening, so what was asked in one never lands in the next (a paste's late answer, G13).
+    /// </summary>
+    public int? TypingOpening => textField?.Opening;
+
+    /// <summary>Whether what is typed or pasted into the open field lands in uppercase: its layer is a Meme (G21: "Meme is uppercase").</summary>
+    public bool TypesUppercase => textField is not null && SelectedLayer is TextLayer { Preset: TextPreset.Meme };
 
     /// <summary>Whether Shift is held, as the view reads it from each pointer event: turning a text layer then snaps to 15° steps (G21).</summary>
     public bool ShiftHeld { get; set; }
@@ -59,7 +69,7 @@ public sealed partial class EditorSession
         {
             // A drag in progress is put back first, or its end would later put back the list the field started from.
             tool.Abandon();
-            textField = new Field(Now, Added: false, SelectedLayer!);
+            textField = new Field(Now, Added: false, SelectedLayer!, ++openings);
             RaiseChanged();
         }
     }
@@ -105,7 +115,7 @@ public sealed partial class EditorSession
     /// <summary>Shows <paramref name="layers"/>, which add the layer at <paramref name="index"/>, and opens its field; the add becomes a step with what is typed.</summary>
     internal void TypeIntoAdded(LayerList layers, int index)
     {
-        textField = new Field(Now, Added: true, layers.Layers[index]);
+        textField = new Field(Now, Added: true, layers.Layers[index], ++openings);
         Show(layers, index);
     }
 
@@ -163,7 +173,7 @@ public sealed partial class EditorSession
 
     /// <summary>
     /// An open field: the layers and selection before it opened (before the click, for a layer the click added), whether
-    /// the click added its layer, and its layer as the field opened on it.
+    /// the click added its layer, its layer as the field opened on it, and which opening it is.
     /// </summary>
-    private readonly record struct Field(Snapshot Before, bool Added, Layer Start);
+    private readonly record struct Field(Snapshot Before, bool Added, Layer Start, int Opening);
 }
