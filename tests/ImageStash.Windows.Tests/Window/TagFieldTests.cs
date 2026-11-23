@@ -621,7 +621,7 @@ public sealed class TagFieldTests
     }
 
     [TestMethod]
-    public async Task FocusMovingElsewhereInTheWindowClosesTheFieldAsEscWould()
+    public async Task FocusMovingToTheSearchBoxAsASummonMovesItAddsTheWordsAndClosesTheField()
     {
         using var shown = ShownWindow.Open();
         var item = (await shown.OpenStash(shown.Picture("focus away.png"))).Single();
@@ -630,14 +630,15 @@ public sealed class TagFieldTests
 
         TrayDesktop.Run(() =>
         {
-            ShownWindow.Type(shown.TagBox, "dropped");
+            ShownWindow.Type(shown.TagBox, "kept");
+            // As a summon moves it: focus leaving the field for another part of the window, whoever moves it.
             shown.Search.Focus();
-            Assert.IsFalse(shown.TagField.IsVisible, "a summon or a click elsewhere focuses another control, which closes the field");
+            Assert.IsFalse(shown.TagField.IsVisible, "focus leaving the field closes it");
             Assert.IsTrue(shown.Search.IsFocused, "and leaves focus where it went");
         });
-        await Task.Delay(300);
+        await ShownWindow.Eventually(() => shown.TagsOf(item.Id).Count == 1);
 
-        Assert.IsEmpty(shown.TagsOf(item.Id), "nothing was committed");
+        CollectionAssert.AreEqual(new[] { "kept" }, shown.TagsOf(item.Id), "the words typed added first, as Enter would (G17)");
         await OpenField(shown, item.Id);
         TrayDesktop.Run(() => Assert.AreEqual("", shown.TagBox.Text ?? ""));
     }

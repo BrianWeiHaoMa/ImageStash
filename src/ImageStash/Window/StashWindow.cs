@@ -366,13 +366,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
         // The preview's buttons are Enter's and Ctrl+C's own path on its item (G19, G8, G9).
         preview.HandOverRequested += () => _ = preview.HandOver(this, activation.TargetNow(), activation.ForPaste);
         preview.CopyRequested += () => _ = preview.Copy(this);
-        preview.EditRequested += () =>
-        {
-            if (preview.Item is { } item)
-            {
-                _ = editing.Open(item, EditOrigin.Preview);
-            }
-        };
+        preview.EditRequested += item => _ = editing.Open(item, EditOrigin.Preview);
         new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) =>
         {
             notices.Sweep();

@@ -63,8 +63,11 @@ public sealed class Preview : Border
     /// <summary>What the facts were last stated from, which their times are stated again from as time passes.</summary>
     private (StashItem Item, long? FileBytes, UseHistory Uses, LayerList Layers)? stated;
 
-    /// <summary>The rename in flight with the read of its answer; done while none runs.</summary>
-    private Task renamed = Task.CompletedTask;
+    /// <summary>
+    /// The name's or the tags' commit in flight, by Enter or by focus leaving the field, with the read of its answer,
+    /// which every act of the preview waits for; done while none runs.
+    /// </summary>
+    private Task committing = Task.CompletedTask;
 
     /// <param name="pasteTarget">The paste target the footer names, which names the handoff button.</param>
     /// <param name="dialogUp">Told while Save a copy…'s picker or Open with…'s dialog is up, so the flyout stays (G2).</param>
@@ -129,12 +132,14 @@ public sealed class Preview : Border
         head.Children.Add(more);
 
         picture = new PreviewPicture(failure => notices.Raise(failure)) { Margin = new Thickness(10, 0) };
-        // Either key gives focus back to the preview, whose Enter then hands off again (G7, G19).
+        // Either key gives focus back to the preview, whose Enter then hands off again (G7, G19); focus moved elsewhere in
+        // the window stays there, the name committed as Enter commits it (G19).
         name.Committed += text =>
         {
             picture.Focus(NavigationMethod.Tab);
             _ = Rename(text);
         };
+        name.Left += text => _ = Rename(text);
         name.Cancelled += () => picture.Focus(NavigationMethod.Tab);
         pictureFacts = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, Opacity = 0.85 };
         useFacts = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, Opacity = 0.6 };
@@ -159,7 +164,12 @@ public sealed class Preview : Border
         edit = new Button { Content = Labelled("", "Edit", "Ctrl+E"), Margin = new Thickness(8, 0, 0, 0) };
         AutomationProperties.SetAutomationId(edit, "Edit");
         AutomationProperties.SetName(edit, "Edit");
-        edit.Click += (_, _) => EditRequested?.Invoke();
+        // On the item as the click found it, once a commit of its name or tags has run (G20).
+        edit.Click += (_, _) => _ = OnItem(item =>
+        {
+            EditRequested?.Invoke(item);
+            return Task.FromResult(Outcome.Done);
+        });
         // The handoff button takes what Copy and Edit leave, its words trimmed, so a long app name never pushes them out
         // of the window (G19, G7); left-aligned, the row is no wider than its buttons, Copy and Edit right beside it.
         var actions = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(12, 0, 12, 12) };
@@ -208,8 +218,8 @@ public sealed class Preview : Border
     /// <summary>Raised by a click on Copy: the window copies the item as <c>Ctrl+C</c> does (G19, G9).</summary>
     public event Action? CopyRequested;
 
-    /// <summary>Raised by Edit and the ⋯ menu's Edit: the window opens the editor on the item (G19, G20).</summary>
-    public event Action? EditRequested;
+    /// <summary>Raised by Edit and the ⋯ menu's Edit: the window opens the editor on the item given (G19, G20).</summary>
+    public event Action<StashItem>? EditRequested;
 
     public bool IsOpen { get; private set; }
 
@@ -307,18 +317,19 @@ public sealed class Preview : Border
     }
 
     /// <summary>
-    /// Esc, Space and its back arrow: closes it once a rename in flight has been answered and read, so the grid it
-    /// uncovers lists the item where the store put its file, and a handoff from there hands that file over (G8, P1).
+    /// Esc, Space and its back arrow: closes it once a commit of its name or tags in flight has been answered and read,
+    /// so the grid it uncovers lists the item where the store put its file, and a handoff from there hands that file over
+    /// (G8, P1).
     /// </summary>
     public void Dismiss()
     {
-        if (renamed.IsCompleted)
+        if (committing.IsCompleted)
         {
             Close();
             return;
         }
 
-        _ = CloseAfterRename(openings);
+        _ = CloseAfterCommit(openings);
     }
 
     /// <summary>Closes it, its play stopped and every read in flight dropped, and gives focus back to the grid (G6).</summary>
@@ -415,22 +426,21 @@ public sealed class Preview : Border
     public Task<Outcome> ToggleFavorite() => Act(item => organising.ToggleFavorite([item]));
 
     /// <summary>
-    /// The name field's Enter: the item renamed through the window's one rename path; the head shows the name it showed
-    /// until the store's answer is read again, so a new name never shows before the store has it (G17, G28, R9).
+    /// The name field's Enter, or focus leaving it: the item renamed through the window's one rename path; the head shows
+    /// the name it showed until the store's answer is read again, so a new name never shows before the store has it
+    /// (G17, G28, R9).
     /// </summary>
-    private Task<Outcome> Rename(string text)
+    private Task<Outcome> Rename(string text) => Committing(Act(item => renaming.Rename(item, text)));
+
+    /// <summary>The tag field's Enter, a suggestion's click, or focus leaving it: the tags typed onto the item, as every tag field commits them (G17).</summary>
+    private Task<Outcome> AddTags(string text) => Committing(Act(item => FieldLeaving.AddTags(organising, [item], text)));
+
+    /// <summary>A field's commit, started on the item as last read, which the acts asked after it wait for (G19, G20).</summary>
+    private Task<Outcome> Committing(Task<Outcome> running)
     {
-        var running = Act(item => renaming.Rename(item, text));
-        renamed = running;
+        committing = running;
         return running;
     }
-
-    /// <summary>
-    /// The tag field's Enter: every tag typed, one per word, onto the item through the window's one organising entry;
-    /// nothing typed, or only <c>#</c>s, changes nothing (G17: nothing requires a tag).
-    /// </summary>
-    private Task<Outcome> AddTags(string text) =>
-        ItemTags.Words(text).Count > 0 ? Act(item => organising.AddTag([item], text)) : Task.FromResult(Outcome.Done);
 
     /// <summary>
     /// The ⋯ menu's entry on the item as last read: Edit opens the editor on it; Rename puts its name in edit; Revert to
@@ -440,7 +450,7 @@ public sealed class Preview : Border
     /// </summary>
     private Task<Outcome> FromMenu(ItemMenuAction action) => action switch
     {
-        ItemMenuAction.Edit => EditOnceTheMenuHasClosed(),
+        ItemMenuAction.Edit => OnItem(EditOnceTheMenuHasClosed),
         ItemMenuAction.Rename => EditNameOnceTheMenuHasClosed(),
         ItemMenuAction.RevertToOriginal => Act(item => itemMenu.OnEdited(action, item, EditOrigin.Preview)),
         ItemMenuAction.SaveAsNewItem => OnItem(item => itemMenu.OnEdited(action, item, EditOrigin.Preview)),
@@ -452,9 +462,9 @@ public sealed class Preview : Border
     };
 
     /// <summary>The ⋯ menu's Edit, posted until the menu has closed, whose own focus going back would otherwise land beneath the editor.</summary>
-    private Task<Outcome> EditOnceTheMenuHasClosed()
+    private Task<Outcome> EditOnceTheMenuHasClosed(StashItem item)
     {
-        Dispatcher.UIThread.Post(() => EditRequested?.Invoke(), DispatcherPriority.Background);
+        Dispatcher.UIThread.Post(() => EditRequested?.Invoke(item), DispatcherPriority.Background);
         return Task.FromResult(Outcome.Done);
     }
 
@@ -465,9 +475,9 @@ public sealed class Preview : Border
         return Task.FromResult(Outcome.Done);
     }
 
-    private async Task CloseAfterRename(int opening)
+    private async Task CloseAfterCommit(int opening)
     {
-        await renamed;
+        await committing;
         if (opening == openings)
         {
             Close();
@@ -527,16 +537,17 @@ public sealed class Preview : Border
     }
 
     /// <summary>
-    /// <paramref name="act"/> on the item as last read once a rename in flight has been answered and read, so a handoff,
-    /// a copy or File Explorer gets its file where the store put it, never where it was (G8, G9, P1). A key pressed while
-    /// the preview showed the item still acts on it when a close pressed before it, waiting for the same rename, has
+    /// <paramref name="act"/> on the item as last read once a commit of its name or tags in flight has been answered and
+    /// read, so a handoff, a copy or File Explorer gets its file where the store put it, never where it was, and a Delete
+    /// or Edit follows the commit a click on it made by leaving a field (G8, G9, G18, G20, P1). A key pressed while
+    /// the preview showed the item still acts on it when a close pressed before it, waiting for the same commit, has
     /// closed the preview meanwhile, or it has opened on another item since: on the item as the store now has it, and on
     /// nothing once it is gone from the stash, which the preview's closing showed (G8, G2, G7).
     /// </summary>
     private async Task<Outcome> OnItem(Func<StashItem, Task<Outcome>> act)
     {
         var asked = Item;
-        await renamed;
+        await committing;
         if (Item is { } item && item.Id == asked?.Id)
         {
             return await act(item);

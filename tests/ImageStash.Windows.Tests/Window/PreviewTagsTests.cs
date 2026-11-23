@@ -17,7 +17,7 @@ namespace ImageStash.Windows.Tests.Window;
 /// every change, wherever it was made; the keys
 /// inside the field its own and no paste of its own (N9, R5), the window's <c>Ctrl+V</c> putting the clipboard's words
 /// in its box as typed (G13); a tag refused for an item no longer in the stash named and the preview closed (G35); focus
-/// moving away ending the edit as Esc would (G17), and a summon bringing the field back as it was left (G1); the field's
+/// moving away committing the edit as Enter would (G17), and a summon bringing the field back as it was left (G1); the field's
 /// list of every tag, whose pick gives the tag to the preview's item or takes it off, and whose Esc closes it alone,
 /// wherever focus is, before the preview (G17, G19, G2).
 /// The summon shows the window on
@@ -445,7 +445,7 @@ public sealed class PreviewTagsTests
     }
 
     [TestMethod]
-    public async Task FocusMovingAwayEndsTheEditAsEscWouldAndASummonBringsTheFieldBackAsItWasLeft()
+    public async Task FocusMovingAwayCommitsTheEditAsEnterWouldAndASummonBringsTheFieldBackAsItWasLeft()
     {
         using var shown = ShownWindow.Open();
         var items = await shown.OpenStash(shown.Picture("left tagging.png"), shown.Picture("left other.png"));
@@ -461,9 +461,14 @@ public sealed class PreviewTagsTests
         TrayDesktop.Run(() =>
         {
             shown.PreviewPicture.Focus(NavigationMethod.Tab);
-            Assert.AreEqual("", shown.PreviewTagBox.Text ?? "", "focus moving elsewhere in the window ends the edit as Esc would (G17)");
+            Assert.AreEqual("", shown.PreviewTagBox.Text ?? "", "focus moving elsewhere in the window commits the edit as Enter would, emptying the box (G17)");
             Assert.IsEmpty(shown.PreviewTags.Field.Suggestions, "its suggestions with it");
             Assert.AreSame(shown.PreviewPicture, shown.Focused, "leaving focus where it went");
+        });
+        await ShownWindow.Eventually(() => shown.TagsOf(item.Id).Count == 1);
+        CollectionAssert.AreEqual(new[] { "ha" }, shown.TagsOf(item.Id), "the words typed, with no suggestion lit, as Enter adds them");
+        TrayDesktop.Run(() =>
+        {
             shown.PreviewTagBox.Focus();
             ShownWindow.Type(shown.PreviewTagBox, "half");
         });
@@ -481,8 +486,8 @@ public sealed class PreviewTagsTests
             Assert.AreEqual("half", shown.PreviewTagBox.Text, "with what was typed");
             ShownWindow.Tap(shown.PreviewTagBox, Key.Enter);
         });
-        await ShownWindow.Eventually(() => shown.TagsOf(item.Id).Count == 1);
-        CollectionAssert.AreEqual(new[] { "half" }, shown.TagsOf(item.Id), "nothing of the ended edit was committed");
+        await ShownWindow.Eventually(() => shown.TagsOf(item.Id).Count == 2);
+        CollectionAssert.AreEquivalent(new[] { "ha", "half" }, shown.TagsOf(item.Id), "the hide committed nothing: what was typed was still there to add");
         TrayDesktop.Run(() => ShownWindow.Press(shown.PreviewTagBox, Key.Escape));
 
         TrayDesktop.Run(shown.Deactivate);

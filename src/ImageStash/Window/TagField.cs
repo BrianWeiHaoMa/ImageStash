@@ -97,6 +97,9 @@ public sealed class TagField : StackPanel
     /// <summary>The suggestion Down or Up has chosen, which Enter commits in place of the word being typed, or null.</summary>
     public string? Chosen => chosen >= 0 ? Suggestions[chosen] : null;
 
+    /// <summary>What Enter would commit now: the words in the box, the chosen suggestion in place of the word being typed; focus leaving commits the same (G17).</summary>
+    public string EnterCommits => Chosen is { } suggestion ? WithSuggestion(Text, suggestion) : Text;
+
     /// <summary>The list of every existing tag, offered on one click while nothing is typed (G17).</summary>
     public TagPicker Picker { get; } = new();
 
@@ -194,7 +197,7 @@ public sealed class TagField : StackPanel
         switch (e.Key, e.KeyModifiers)
         {
             case (Key.Enter, KeyModifiers.None):
-                Commit(Chosen);
+                Committed?.Invoke(EnterCommits);
                 break;
             case (Key.Escape, KeyModifiers.None) when Picker.IsOpen:
                 // One thing at a time (G2): the list, and Esc again the field.
@@ -215,8 +218,6 @@ public sealed class TagField : StackPanel
 
         e.Handled = true;
     }
-
-    private void Commit(string? suggestion) => Committed?.Invoke(suggestion is null ? Text : WithSuggestion(Text, suggestion));
 
     private void ToggleList()
     {
@@ -269,7 +270,7 @@ public sealed class TagField : StackPanel
             // Not focusable, so a click commits it without taking focus from the box.
             var button = new Button { Content = suggestion, Height = 28, Padding = new Thickness(10, 0), VerticalContentAlignment = VerticalAlignment.Center, Focusable = false };
             button.Classes.Add(LookStyles.TagChip);
-            button.Click += (_, _) => Commit(suggestion);
+            button.Click += (_, _) => Committed?.Invoke(WithSuggestion(Text, suggestion));
             suggestionRow.Children.Add(button);
         }
 
@@ -346,9 +347,10 @@ public sealed class TagFieldScroller : ScrollViewer
 /// next, so several are added in a row; Esc closes it and gives focus back to where it was. Every change goes through
 /// the window's one organising entry, which names each refusal (G35). What it shows is read from the store when it
 /// opens, after each change and whenever the listing changes, never kept, so a tag no item carries is neither shown
-/// nor suggested, and one carried is not suggested (G17). Focus moving elsewhere in the window, by a click or a
-/// summon, closes it as Esc would, and so does an import beginning to replace the stash, so nothing typed into it lands
-/// on an item the imported store gives the same number (G36).
+/// nor suggested, and one carried is not suggested (G17). Focus moving elsewhere in the window, by a click, Tab or a
+/// summon putting it in the search box, first gives every item the words typed, as Enter would, then closes it, focus
+/// staying where it went (<see cref="FieldLeaving"/>, G17, G7). An import beginning to replace the stash closes it with
+/// nothing added, so nothing typed into it lands on an item the imported store gives the same number (G36).
 /// </summary>
 public sealed class TagFieldOverlay : Border
 {
@@ -437,13 +439,8 @@ public sealed class TagFieldOverlay : Border
         // One act with its reading after it, so what either names is the tag's (G16).
         using var acting = UserAct.Begin(ItemTags.AddAction);
         Field.Clear();
-        if (ItemTags.Words(text).Count == 0)
-        {
-            return;
-        }
-
         var opened = items;
-        await organising.AddTag(opened, text);
+        await FieldLeaving.AddTags(organising, opened, text);
         if (IsVisible && ReferenceEquals(items, opened))
         {
             await Read();
@@ -529,8 +526,11 @@ public sealed class TagFieldOverlay : Border
 
     private void FocusMoved(object? sender, FocusChangedEventArgs e)
     {
-        if (IsVisible && e.Source is Visual focused && !this.IsVisualAncestorOf(focused))
+        var intoField = e.Source is Visual focused && this.IsVisualAncestorOf(focused);
+        if (FieldLeaving.Commits(IsVisible, intoField))
         {
+            // Started on the items it was opened on before closing lets them go; the act's own reading is then skipped.
+            _ = Commit(Field.EnterCommits);
             Close(giveFocusBack: false);
         }
     }

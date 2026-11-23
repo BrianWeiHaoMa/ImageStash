@@ -15,7 +15,8 @@ namespace ImageStash.Window;
 /// The preview's name, edited in place (G17, G19): the item's name with its rename glyph, which a click, or
 /// <see cref="Edit"/>, turns into a text box in the same place holding the name selected, so typing replaces it. Enter
 /// commits what the box shows, any text, none included (G17: nothing requires a name), and Esc cancels; either turns it
-/// back into the name and raises its event, and focus moving elsewhere in the window cancels it as Esc would. It shows
+/// back into the name and raises its event. Focus moving elsewhere in the window commits it as Enter would, focus
+/// staying where it went (<see cref="FieldLeaving"/>, G19); a hide moves no focus, so the edit outlasts it (G1). It shows
 /// the name it is given and never the typed text, so no new name shows before the store has it (G28, R9); it never
 /// reaches the store itself. Inside the box the keys it uses are its own, and it has no paste of its own and no menu
 /// offering one, as the search box has none: ImageStash reads the clipboard only for its three actions (N9, R5). Never
@@ -65,12 +66,18 @@ public sealed class NameField : Panel
     /// <summary>Enter: the text to commit as the name, exactly as typed; the field shows the name it was given meanwhile.</summary>
     public event Action<string>? Committed;
 
+    /// <summary>
+    /// Focus moved to another part of the window: the text to commit as the name, as Enter's <see cref="Committed"/>
+    /// gives it; focus stays where it went (G19, G7).
+    /// </summary>
+    public event Action<string>? Left;
+
     /// <summary>Esc: nothing is committed.</summary>
     public event Action? Cancelled;
 
     /// <summary>
     /// The edit ended, whatever ended it: Enter and Esc, raised before <see cref="Committed"/> or <see cref="Cancelled"/>;
-    /// focus moving elsewhere in the window; <see cref="StopEditing"/>.
+    /// focus moving elsewhere in the window, raised before <see cref="Left"/>; <see cref="StopEditing"/>.
     /// </summary>
     public event Action? Stopped;
 
@@ -147,9 +154,12 @@ public sealed class NameField : Panel
 
     private void FocusMoved(object? sender, FocusChangedEventArgs e)
     {
-        if (IsEditing && e.Source is Visual focused && !ReferenceEquals(focused, box) && !box.IsVisualAncestorOf(focused))
+        var intoBox = e.Source is Visual focused && (ReferenceEquals(focused, box) || box.IsVisualAncestorOf(focused));
+        if (FieldLeaving.Commits(IsEditing, intoBox))
         {
+            var typed = Text;
             StopEditing();
+            Left?.Invoke(typed);
         }
     }
 }

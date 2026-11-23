@@ -15,9 +15,9 @@ namespace ImageStash.Windows.Tests.Window;
 /// preview, a click on the name and both menus' Rename editing it, F2 in the box the box's; Enter committing through the
 /// store, the item and its file carrying the name once the store has it (P1, R9), " 2" while it is taken, an empty name
 /// committed; Esc cancelling; the keys inside the field its own (G7) and no paste of its own (N9, R5); a renamed item that
-/// left the query still the preview's (G8); a refused rename named, the field closed (G35); focus moving elsewhere ending
-/// the edit, and a summon bringing it back as it was left (G1). The summon shows the window on the primary display for
-/// a moment; the renames are of the check's own pictures under <c>%TEMP%</c>.
+/// left the query still the preview's (G8); a refused rename named, the field closed (G35); focus moving elsewhere
+/// committing the edit as Enter would (G19), and a summon bringing it back as it was left (G1). The summon shows the
+/// window on the primary display for a moment; the renames are of the check's own pictures under <c>%TEMP%</c>.
 /// </summary>
 [TestClass]
 public sealed class NameFieldTests
@@ -548,7 +548,7 @@ public sealed class NameFieldTests
     }
 
     [TestMethod]
-    public async Task FocusMovingElsewhereInTheWindowEndsTheEditAndASummonBringsAnEditBackAsItWasLeft()
+    public async Task FocusMovingElsewhereInTheWindowCommitsTheNameAndASummonBringsAnEditBackAsItWasLeft()
     {
         using var shown = ShownWindow.Open();
         var item = (await shown.OpenStash(shown.Picture("left editing.png"))).Single();
@@ -556,12 +556,17 @@ public sealed class NameFieldTests
         {
             shown.OpenPreview(item);
             ShownWindow.Press(shown.PreviewPicture, Key.F2);
-            ShownWindow.Type(shown.NameBox, "dropped");
+            ShownWindow.Type(shown.NameBox, "kept");
             shown.BackArrow.Focus(NavigationMethod.Tab);
-            Assert.IsFalse(shown.Preview.EditingName, "focus moving elsewhere in the window ends the edit as Esc would");
+            Assert.IsFalse(shown.Preview.EditingName, "focus moving elsewhere in the window ends the edit");
             Assert.AreSame(shown.BackArrow, shown.Focused, "and leaves focus where it went");
+        });
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.NameField.Shown == "kept"));
+        Assert.AreEqual("kept", (await shown.Listing.Store!.Item(item.Id)).Value!.Name, "committing it as Enter would (G19)");
+        TrayDesktop.Run(() =>
+        {
             ShownWindow.Press(shown.BackArrow, Key.F2);
-            Assert.AreEqual("left editing", shown.NameBox.Text, "nothing was kept of what was typed");
+            Assert.AreEqual("kept", shown.NameBox.Text);
             ShownWindow.Type(shown.NameBox, "do");
         });
 
@@ -578,7 +583,7 @@ public sealed class NameFieldTests
             Assert.AreEqual("do", shown.NameBox.Text, "with what was typed");
             ShownWindow.Press(shown.NameBox, Key.Escape);
         });
-        Assert.AreEqual("left editing", (await shown.Listing.Store!.Item(item.Id)).Value!.Name, "nothing was committed");
+        Assert.AreEqual("kept", (await shown.Listing.Store!.Item(item.Id)).Value!.Name, "neither the hide nor Esc committed anything");
     }
 
     /// <summary>The words of the footer's busy state while it shows; empty while it does not.</summary>

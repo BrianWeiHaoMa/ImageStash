@@ -10,8 +10,9 @@ namespace ImageStash.Window;
 /// The preview's tags row (G17, G19): "Tags", then the item's tags each with its ×, and the box with its list of every
 /// tag and its suggestions from the existing tags: the one <see cref="TagField"/> Type a tag… shows over the grid, placed in the preview. It
 /// shows the tags it is given, the item's as the preview last read them, never a copy kept across changes. Enter
-/// commits and Esc cancels, either emptying the box before it raises its event, and focus moving elsewhere in the
-/// window empties it as Esc would; a hide moves no focus, so what is typed outlasts it. However many tags the
+/// commits and Esc cancels, either emptying the box before it raises its event; focus moving elsewhere in the window
+/// commits as Enter would, focus staying where it went (<see cref="FieldLeaving"/>); a hide moves no focus, so what is
+/// typed outlasts it (G1). However many tags the
 /// item carries, the row scrolls within a bounded height, so the picture and the handoff button below it stay in the
 /// window (G19, G7, E4). It never reaches the store itself: the preview acts on its item through the window's one
 /// organising entry. Never a window of its own (F4).
@@ -46,7 +47,10 @@ public sealed class PreviewTags : Grid
         DetachedFromVisualTree += (_, e) => (e.RootVisual as InputElement)?.RemoveHandler(GotFocusEvent, FocusMoved);
     }
 
-    /// <summary>Enter, or a click on a suggestion: the words to commit, as typed, one tag per word.</summary>
+    /// <summary>
+    /// Enter, a click on a suggestion, or focus moving elsewhere in the window: the words to commit, as typed, one tag
+    /// per word.
+    /// </summary>
     public event Action<string>? Committed;
 
     /// <summary>A pick in the list of every tag: that tag is to be given to the item, or taken off it when it carries it (G17).</summary>
@@ -84,11 +88,12 @@ public sealed class PreviewTags : Grid
     private void FocusMoved(object? sender, FocusChangedEventArgs e)
     {
         var inField = e.Source is Visual focused && Field.IsVisualAncestorOf(focused);
-        if (HadFocus && !inField)
+        if (FieldLeaving.Commits(HadFocus, inField))
         {
-            // Focus moving elsewhere in the window ends the edit as Esc would, leaving focus where it went (G17); a hide
-            // moves no focus, so a summon brings the edit back as it was left (G1).
+            // As Enter commits, the box emptied first, focus left where it went (G17, G19, G7).
+            var typed = Field.EnterCommits;
             Clear();
+            Committed?.Invoke(typed);
         }
 
         HadFocus = inField;

@@ -11,7 +11,8 @@ namespace ImageStash.Tests.Window;
 /// leading <c>#</c>s, those starting with it first, then by spelling, a few at most, never a tag the field shows and
 /// never a name; a chosen suggestion takes the place of the word being typed; the list of every tag keeps the store's
 /// order and marks the tags its owner says every item carries; the control itself, given keys with no window: a
-/// suggestion is lit only while Enter would take it (G17).
+/// suggestion is lit only while Enter would take it, and what Enter would commit, which focus leaving commits too, is
+/// what Enter commits (G17).
 /// </summary>
 [TestClass]
 public sealed class TagFieldTests
@@ -126,6 +127,35 @@ public sealed class TagFieldTests
 
         Assert.AreEqual("reaction", committed, "the suggestion lit is the one Enter takes (G17)");
     });
+
+    [TestMethod]
+    public void WhatEnterWouldCommitIsWhatEnterCommits() => ControlThread.Run(() =>
+    {
+        Assert.AreEqual("reaction", EnterCommitsAfter("r", Key.Down, "reaction"), "the lit suggestion in place of the word typed");
+        Assert.AreEqual("funny reaction", EnterCommitsAfter("funny re", Key.Down, "reaction"), "the earlier words kept");
+        Assert.AreEqual("re", EnterCommitsAfter("re", null, "reaction"), "nothing lit: the words as typed");
+    });
+
+    /// <summary>
+    /// What a field with <paramref name="existing"/> to suggest would commit on Enter once <paramref name="typed"/> is in
+    /// its box and <paramref name="key"/> pressed, checked against what its Enter then commits; on the control thread.
+    /// </summary>
+    internal static string EnterCommitsAfter(string typed, Key? key, params string[] existing)
+    {
+        var (field, box) = Field(existing);
+        string? committed = null;
+        field.Committed += text => committed = text;
+        box.Text = typed;
+        if (key is { } pressed)
+        {
+            Press(box, pressed);
+        }
+
+        var wouldCommit = field.EnterCommits;
+        Press(box, Key.Enter);
+        Assert.AreEqual(committed, wouldCommit, "what focus leaving commits is what Enter commits (G17)");
+        return wouldCommit;
+    }
 
     /// <summary>A tag field with <paramref name="existing"/> to suggest, built with no window, and its text box.</summary>
     private static (TagField Field, TextBox Box) Field(params string[] existing)
