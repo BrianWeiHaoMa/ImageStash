@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Threading;
 using ImageStash.Store;
 
@@ -16,7 +17,7 @@ public sealed class WindowStatus
     private readonly Listing listing;
     private readonly Notices notices;
     private readonly SettingsKeeper settings;
-    private readonly PasteTargetHolder pasteTarget;
+    private readonly FooterHints footerHints;
     private readonly ScrollViewer scroller;
     private readonly Func<bool> covered;
     private readonly Action clearSearch;
@@ -24,21 +25,22 @@ public sealed class WindowStatus
     private readonly StackPanel noticeStack;
     private readonly Dictionary<Notice, Control> noticeCards = [];
     private readonly TextBlock count;
-    private readonly StackPanel hints;
+    private readonly DockPanel hints;
     private readonly StackPanel busy;
     private readonly TextBlock busyText;
     private string? shownState;
+    private IReadOnlyList<string> shownHints = [];
 
     /// <summary>
     /// For the window listing <paramref name="listing"/> in <paramref name="scroller"/>, which <paramref name="covered"/>
     /// says the preview or the editor covers, and whose search <paramref name="clearSearch"/> clears.
     /// </summary>
-    public WindowStatus(Listing listing, Notices notices, SettingsKeeper settings, PasteTargetHolder pasteTarget, ScrollViewer scroller, Func<bool> covered, Action clearSearch)
+    public WindowStatus(Listing listing, Notices notices, SettingsKeeper settings, FooterHints footerHints, ScrollViewer scroller, Func<bool> covered, Action clearSearch)
     {
         this.listing = listing;
         this.notices = notices;
         this.settings = settings;
-        this.pasteTarget = pasteTarget;
+        this.footerHints = footerHints;
         this.scroller = scroller;
         this.covered = covered;
         this.clearSearch = clearSearch;
@@ -46,8 +48,9 @@ public sealed class WindowStatus
         noticeStack = new StackPanel { Spacing = 6 };
         NoticeArea = WindowLayout.NoticeArea(noticeStack);
         count = new TextBlock { FontSize = 11.5, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, Opacity = 0.7 };
-        // Enter pastes into the paste target, else copies (G8, In use); the hints show only while there is a selection.
-        hints = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16, VerticalAlignment = VerticalAlignment.Center };
+        // Enter pastes into the paste target, else copies (G8, In use); the hints show only while there is a selection,
+        // or a copy's confirmation stands in for them (G10).
+        hints = new DockPanel { LastChildFill = false, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 16, 0) };
         // G35: the running import's, copy's, delete's or rename's busy state, naming it, until it has finished.
         busyText = new TextBlock { FontSize = 11.5, VerticalAlignment = VerticalAlignment.Center };
         busy = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, IsVisible = false };
@@ -82,15 +85,36 @@ public sealed class WindowStatus
         stashState.IsVisible = state is not null;
         scroller.IsVisible = state is null;
         count.Text = listing.State != StashState.Open ? "" : StashStateView.CountText(listing.Items.Count, listing.Selection.Count);
-        hints.IsVisible = listing.State == StashState.Open && listing.Selection.Count > 0 && !covered();
+        ShowHints();
     }
 
+    /// <summary>The hints for the target and the selection as they are now, or a copy's confirmation in their place (G8, G10).</summary>
     public void ShowHints()
     {
-        hints.Children.Clear();
-        foreach (var text in PasteTargetHolder.Hints(pasteTarget.Current))
+        hints.IsVisible = listing.State == StashState.Open && (listing.Selection.Count > 0 || footerHints.Confirmation is not null) && !covered();
+        var texts = footerHints.Texts;
+        if (texts.SequenceEqual(shownHints))
         {
-            hints.Children.Add(new TextBlock { Text = text, FontSize = 11.5, VerticalAlignment = VerticalAlignment.Center, Opacity = 0.7 });
+            return;
+        }
+
+        shownHints = texts;
+        hints.Children.Clear();
+        var confirming = footerHints.Confirmation is not null;
+        for (var i = 0; i < texts.Count; i++)
+        {
+            // The confirmation at full strength, so it reads at a glance; the hints faint, as standing advice.
+            var text = new TextBlock
+            {
+                Text = texts[i],
+                FontSize = 11.5,
+                VerticalAlignment = VerticalAlignment.Center,
+                Opacity = confirming ? 1 : 0.7,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Margin = new Thickness(0, 0, i < texts.Count - 1 ? 16 : 0, 0),
+            };
+            DockPanel.SetDock(text, Dock.Left);
+            hints.Children.Add(text);
         }
     }
 

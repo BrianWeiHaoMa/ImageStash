@@ -45,6 +45,13 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
     /// <summary>Raised whenever <see cref="Busy"/> or <see cref="Dragging"/> changes.</summary>
     public event Action? Changed;
 
+    /// <summary>
+    /// Raised by <see cref="Copy"/> with the items it put on the clipboard, once the write has returned and its busy state
+    /// has gone (R9, G35), a use the store refused included, since the copy stands (G10); never for a paste into a target,
+    /// whose own words are its notification, nor for a capture's copy or a refresh.
+    /// </summary>
+    public event Action<IReadOnlyList<StashItem>>? Copied;
+
     /// <summary>The running write's busy state in words, or null while none runs (G35).</summary>
     public string? Busy { get; private set; }
 
@@ -64,6 +71,7 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
             return Outcome.Done;
         }
 
+        IReadOnlyList<StashItem> copied;
         await oneWriteAtATime.WaitAsync();
         try
         {
@@ -81,14 +89,17 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
                 return written;
             }
 
+            copied = written.Value!;
             await Record(items);
-            return Outcome.Done;
         }
         finally
         {
             SetBusy(null);
             oneWriteAtATime.Release();
         }
+
+        Copied?.Invoke(copied);
+        return Outcome.Done;
     }
 
     /// <summary>
@@ -345,7 +356,11 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
         return Outcome.Done;
     }
 
-    private async Task<Outcome> Write(TopLevel owner, IReadOnlyList<StashItem> items, Confirmation confirmation)
+    /// <summary>
+    /// The items' current finished pictures on the clipboard; answers the items as the store had them for the write, so a
+    /// Rename while it waited its turn is in the name they went under, as the copy's confirmation names them (G10).
+    /// </summary>
+    private async Task<Outcome<IReadOnlyList<StashItem>>> Write(TopLevel owner, IReadOnlyList<StashItem> items, Confirmation confirmation)
     {
         // The items as the store has them now, by identity, since a file name never is one: a Delete, an import's Undo
         // or a Rename since the menu opened or the selection was read changes whether, and where, each one's file is (G8).
@@ -372,7 +387,7 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
 
         var written = await clipboard.Write(owner, content.Value!, heldClipboardRetry);
         // G35 names what the user acted on, the item, rather than the clipboard.
-        return written.Succeeded ? written : written.Failure with { Subject = Subject(current) };
+        return written.Succeeded ? Outcome<IReadOnlyList<StashItem>>.Of(current) : written.Failure with { Subject = Subject(current) };
     }
 
     /// <summary>
@@ -456,13 +471,16 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
     /// </summary>
     private Task StartNextSummonOnRecent(bool hidden) => hidden ? listing.ShowScope(Scope.Recent) : Task.CompletedTask;
 
-    /// <summary>The items as a failure names them: one by its name, or its file's name when it has none; several by count.</summary>
-    private static string Subject(IReadOnlyList<StashItem> items) => items switch
+    /// <summary>The items as a failure, a busy state and a copy's confirmation name them: one by its name, or its file's name when it has none; several by count.</summary>
+    public static string Subject(IReadOnlyList<StashItem> items) => items switch
     {
         [{ Name.Length: > 0 } one] => one.Name,
         [var unnamed] => unnamed.FileName,
-        _ => $"{items.Count} items",
+        _ => Counted(items.Count),
     };
+
+    /// <summary>Several items by count, as <see cref="Subject"/> and the handoff's name say them: "3 items".</summary>
+    public static string Counted(int count) => $"{count} items";
 
     private void SetBusy(string? busy)
     {

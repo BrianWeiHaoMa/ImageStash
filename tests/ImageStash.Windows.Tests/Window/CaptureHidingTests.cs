@@ -54,7 +54,7 @@ public sealed class CaptureHidingTests
         var beneath = await Task.Run(() => new WindowsScreen().Grab(area, withPointer: false).Value!);
         shown.Target.Before = PresetTarget.App("Chat");
         await desk.FlyoutInFront();
-        await Eventually(() => TrayDesktop.Get(shown.FooterHints).Contains("Enter · Paste into Chat"));
+        await Eventually(() => TrayDesktop.Get(shown.FooterHints).Contains("Enter · Paste 2 items into Chat"));
         // Read again at the restore, the target would be none: the restore is the window's own showing (G8).
         shown.Target.Before = null;
         TrayDesktop.Run(() => shown.Search.Text = "hiding");

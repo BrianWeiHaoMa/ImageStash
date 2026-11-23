@@ -18,7 +18,7 @@ namespace ImageStash.Windows.Tests.Window;
 /// the box, the chips and the footer's hints out of sight and reach, and no window of its own; the facts; Enter, <c>Ctrl+C</c>, Del and <c>Ctrl+D</c> on its item whatever the grid selects (G8, G9, G17, G18);
 /// Esc's first step (G2); a paste's hide closing it, so the next summon types into the box and pastes what that selects
 /// (G1); an import's end and its item's going closing it; only its latest read applied; the paste path through it with
-/// the keyboard alone and with the pointer alone (G7).
+/// the keyboard alone and with the pointer alone (G7), and Ctrl+C's confirmation on the button that copies.
 /// </summary>
 [TestClass]
 public sealed class PreviewTests
@@ -173,6 +173,34 @@ public sealed class PreviewTests
         TrayDesktop.Run(() => ShownWindow.Press(shown.PreviewPicture, Key.C, KeyModifiers.Control));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Preview.Facts.Count == 2 && shown.Preview.Facts[1].StartsWith("Added today · Used 2 times, last ")));
         Assert.AreEqual(2L, shown.Uses(), "Ctrl+C's use on the same item, the window staying (G9, G10)");
+    }
+
+    [TestMethod]
+    [DataRow(true, DisplayName = "the Copy button beside Paste into Relay")]
+    [DataRow(false, DisplayName = "the handoff button when Enter copies")]
+    public async Task CtrlCConfirmsTheCopyOnThePreviewsCopyingButtonThenItsCopyLabelReturns(bool withTarget)
+    {
+        const ushort space = 0x20;
+        var labelTimeout = TimeSpan.FromSeconds(5);
+        using var pointer = TestMouse.PutBackAfterwards();
+        var target = new PresetTarget { Before = withTarget ? Relay : null };
+        using var shown = ShownWindow.Open(target: target, noticeClock: TimeProvider.System);
+        var item = (await shown.OpenStash(shown.Picture("preview copy.png"))).Single();
+        await shown.ClickSearchInFront();
+        TrayDesktop.Run(() => shown.Grid.Focus());
+
+        TestHotKeys.Tap(space);
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Preview.Item?.Id == item.Id && shown.PreviewPicture.IsFocused));
+        var button = TrayDesktop.Get(() => withTarget ? shown.CopyButton : shown.HandoffButton);
+        string[] normal = withTarget ? ["Copy"] : ["Copy", "Enter"];
+        string[] confirmed = withTarget ? ["Copied ✓"] : ["Copied ✓", "Enter"];
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => button.IsEffectivelyVisible && ShownWindow.Words(button).SequenceEqual(normal)), labelTimeout);
+
+        TestHotKeys.Press(Shortcut.Parse("Ctrl+C").Value!);
+
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => ShownWindow.Words(button).SequenceEqual(confirmed)), labelTimeout);
+        CollectionAssert.AreEqual(new[] { item.FilePath }, TestClipboard.Read().Files.ToList());
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => ShownWindow.Words(button).SequenceEqual(normal)), labelTimeout);
     }
 
     [TestMethod]

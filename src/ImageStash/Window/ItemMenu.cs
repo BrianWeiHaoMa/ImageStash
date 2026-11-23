@@ -94,9 +94,11 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
     /// <summary>The entries for a selection of <paramref name="items"/>, in order, with <paramref name="target"/> the paste target or null.</summary>
     public static IReadOnlyList<ItemMenuEntry> Entries(IReadOnlyList<StashItem> items, PasteTarget? target)
     {
+        // The handoff and Copy say how many while several are selected, as the footer's Enter does (G8).
+        var copy = PasteTargetHolder.HandoffName(null, items.Count);
         IReadOnlyList<ItemMenuEntry> handoff = target is null
-            ? [Copy]
-            : [new ItemMenuEntry(ItemMenuAction.Paste, PasteTargetHolder.HandoffName(target), new KeyGesture(Key.Enter), ""), CopyBesidePaste];
+            ? [Copy with { Label = copy }]
+            : [new ItemMenuEntry(ItemMenuAction.Paste, PasteTargetHolder.HandoffName(target, items.Count), new KeyGesture(Key.Enter), ""), CopyBesidePaste with { Label = copy }];
         // G17's mixed rule, as Ctrl+D toggles it: Remove only while every item is a favorite.
         var favorites = Organising.AllFavorites(items) ? RemoveFromFavorites : AddToFavorites;
         // Remove tag ▸ only while there is a tag to take off, for one item as for several: nothing is inert.

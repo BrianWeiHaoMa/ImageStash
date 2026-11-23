@@ -95,17 +95,27 @@ public static class WindowLayout
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
     };
 
-    /// <summary>The footer: the paste hints and the busy state on the left, the count on the right.</summary>
+    /// <summary>
+    /// The footer: the paste hints on the left; the busy state, while something runs, and the count on the right, the
+    /// count in a column of its own; so a long hint or a long name in a copy's confirmation is cut short with an ellipsis
+    /// in what the busy state and the count leave, never drawn over them (G35).
+    /// </summary>
     public static Border Footer(Control hints, StackPanel busy, TextBlock busyText, TextBlock count)
     {
         busy.Children.Add(new ProgressBar { IsIndeterminate = true, Width = 48, MinWidth = 48, VerticalAlignment = VerticalAlignment.Center });
         busy.Children.Add(busyText);
+        // The busy state measured first, whole; the hints then within what is left, which their trimming needs.
+        var left = new DockPanel { LastChildFill = false, ClipToBounds = true, Children = { busy, hints } };
+        DockPanel.SetDock(busy, Dock.Right);
+        DockPanel.SetDock(hints, Dock.Left);
+        Grid.SetColumn(count, 1);
+        count.Margin = new Thickness(12, 0, 0, 0);
         var footer = new Border
         {
             Height = 36,
             Padding = new Thickness(12, 0),
             BorderThickness = new Thickness(0, 1, 0, 0),
-            Child = new Panel { Children = { new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16, Children = { hints, busy } }, count } },
+            Child = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = { left, count } },
         };
         footer.Bind(Border.BorderBrushProperty, footer.GetResourceObservable(LookKeys.Divider));
         return footer;

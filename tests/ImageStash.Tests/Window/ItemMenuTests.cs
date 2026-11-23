@@ -39,7 +39,7 @@ public sealed class ItemMenuTests
         Assert.AreEqual(new KeyGesture(Key.Delete), one[9].Gesture, "Delete by its key (G18)");
         CollectionAssert.AreEqual(new[] { false, false, false, true, false, false, true, false, false, true }, one.Select(entry => entry.AfterSeparator).ToList(), "Open with… and Reveal after Save a copy… with no separator between (G19)");
         CollectionAssert.AreEqual(new[] { ItemMenuAction.Copy, ItemMenuAction.AddToFavorites, ItemMenuAction.AddTag, ItemMenuAction.Delete }, several.Select(entry => entry.Action).ToList());
-        CollectionAssert.AreEqual(new[] { "Copy", "Add to Favorites", "Add tag", "Delete 3 items" }, several.Select(entry => entry.Label).ToList());
+        CollectionAssert.AreEqual(new[] { "Copy 3 items", "Add to Favorites", "Add tag", "Delete 3 items" }, several.Select(entry => entry.Label).ToList(), "the handoff says how many it hands over, as Delete does (G8)");
         CollectionAssert.AreEqual(new KeyGesture?[] { new(Key.Enter), new(Key.D, KeyModifiers.Control), null, new(Key.Delete) }, several.Select(entry => entry.Gesture).ToList());
         CollectionAssert.AreEqual(new[] { false, true, false, true }, several.Select(entry => entry.AfterSeparator).ToList(), "the favorites and tag entries after the handoff, Delete last, each group after a separator");
         Assert.IsTrue(one.Concat(several).All(entry => entry.Tag is null), "the menu's own entries name no tag; their submenus do");
@@ -55,6 +55,18 @@ public sealed class ItemMenuTests
         Assert.IsFalse(several.Any(entry => entry.Action == ItemMenuAction.Rename), "Rename edits the one item's name in its preview, so several get no Rename (G17)");
         Assert.IsFalse(several.Any(entry => entry.Action == ItemMenuAction.Edit), "G20: Edit is unavailable with several selected");
         Assert.IsFalse(several.Any(entry => entry.Action == ItemMenuAction.OpenWith), "Open with… opens one file in one dialog, so several get none (G27, S16)");
+    }
+
+    [TestMethod]
+    public void WithSeveralSelectedTheHandoffAndCopySayHowManyAndTheTargetsAppStays()
+    {
+        var several = ItemMenu.Entries(TestItems.Many(3), RecordingTarget.Relay);
+        var one = ItemMenu.Entries(TestItems.Many(1), RecordingTarget.Relay);
+
+        CollectionAssert.AreEqual(new[] { "Paste 3 items into Relay", "Copy 3 items" }, several.Take(2).Select(entry => entry.Label).ToList(), "the count beside the target's app, as the footer says it (G8)");
+        CollectionAssert.AreEqual(new[] { ItemMenuAction.Paste, ItemMenuAction.Copy }, several.Take(2).Select(entry => entry.Action).ToList());
+        CollectionAssert.AreEqual(new KeyGesture?[] { new(Key.Enter), new(Key.C, KeyModifiers.Control) }, several.Take(2).Select(entry => entry.Gesture).ToList());
+        CollectionAssert.AreEqual(new[] { "Paste into Relay", "Copy" }, one.Take(2).Select(entry => entry.Label).ToList(), "one item is not counted");
     }
 
     [TestMethod]
@@ -102,8 +114,8 @@ public sealed class ItemMenuTests
         var other = TestItems.Sized(3, 100, 100);
 
         CollectionAssert.AreEqual(new[] { "Copy", "Preview", "Edit", "Add to Favorites", "Rename", "Add tag", "Remove tag", "Save a copy…", "Open with…", "Reveal in File Explorer", "Delete" }, ItemMenu.Entries([tagged], null).Select(entry => entry.Label).ToList());
-        CollectionAssert.AreEqual(new[] { "Copy", "Add to Favorites", "Add tag", "Remove tag", "Delete 3 items" }, ItemMenu.Entries([plain, tagged, other], null).Select(entry => entry.Label).ToList(), "one of several carrying a tag is enough");
-        CollectionAssert.AreEqual(new[] { "Copy", "Add to Favorites", "Add tag", "Delete 2 items" }, ItemMenu.Entries([plain, other], null).Select(entry => entry.Label).ToList(), "nothing to take off, so no Remove tag ▸");
+        CollectionAssert.AreEqual(new[] { "Copy 3 items", "Add to Favorites", "Add tag", "Remove tag", "Delete 3 items" }, ItemMenu.Entries([plain, tagged, other], null).Select(entry => entry.Label).ToList(), "one of several carrying a tag is enough");
+        CollectionAssert.AreEqual(new[] { "Copy 2 items", "Add to Favorites", "Add tag", "Delete 2 items" }, ItemMenu.Entries([plain, other], null).Select(entry => entry.Label).ToList(), "nothing to take off, so no Remove tag ▸");
         CollectionAssert.AreEqual(new[] { false, true, false, false, true }, ItemMenu.Entries([plain, tagged, other], null).Select(entry => entry.AfterSeparator).ToList());
         Assert.AreEqual(ItemMenuAction.RemoveTag, ItemMenu.Entries([tagged], null)[6].Action);
     }
@@ -121,7 +133,7 @@ public sealed class ItemMenuTests
         CollectionAssert.AreEqual(new KeyGesture?[] { new(Key.Enter), new(Key.C, KeyModifiers.Control), new(Key.Space), new(Key.E, KeyModifiers.Control), new(Key.D, KeyModifiers.Control), new(Key.F2), null, null, null, null, new(Key.Delete) }, one.Select(entry => entry.Gesture).ToList(),
             "Enter pastes, Ctrl+C copies, Space previews, Ctrl+E edits, Ctrl+D favorites, F2 renames, Del deletes (G8, G9, G17, G18, G19, G20)");
         CollectionAssert.AreEqual(new[] { false, false, false, false, true, false, false, true, false, false, true }, one.Select(entry => entry.AfterSeparator).ToList());
-        CollectionAssert.AreEqual(new[] { "Paste into Relay", "Copy", "Add to Favorites", "Add tag", "Delete 3 items" }, several.Select(entry => entry.Label).ToList());
+        CollectionAssert.AreEqual(new[] { "Paste 3 items into Relay", "Copy 3 items", "Add to Favorites", "Add tag", "Delete 3 items" }, several.Select(entry => entry.Label).ToList());
         CollectionAssert.AreEqual(new[] { false, false, true, false, true }, several.Select(entry => entry.AfterSeparator).ToList());
     }
 

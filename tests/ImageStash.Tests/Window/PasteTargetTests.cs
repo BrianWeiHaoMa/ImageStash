@@ -1,4 +1,6 @@
+using Avalonia.Controls;
 using ImageStash.Seams;
+using ImageStash.Store;
 using ImageStash.Tests.Support;
 using ImageStash.Window;
 
@@ -151,19 +153,135 @@ public sealed class PasteTargetTests
     }
 
     [TestMethod]
-    public void TheHandoffIsNamedPasteIntoTheTargetsAppOrCopy()
+    public void TheHandoffIsNamedPasteIntoTheTargetsAppOrCopyCountingSeveralItems()
     {
-        Assert.AreEqual("Copy", PasteTargetHolder.HandoffName(null), "with no target the handoff is the copy (G8)");
-        Assert.AreEqual("Paste into Relay", PasteTargetHolder.HandoffName(RecordingTarget.Relay), "as the footer's Enter and the preview's button name it (G19)");
+        Assert.AreEqual("Copy", PasteTargetHolder.HandoffName(null, 1), "with no target the handoff is the copy (G8)");
+        Assert.AreEqual("Paste into Relay", PasteTargetHolder.HandoffName(RecordingTarget.Relay, 1), "as the footer's Enter and the preview's button name it (G19)");
+        Assert.AreEqual("Paste 3 items into Relay", PasteTargetHolder.HandoffName(RecordingTarget.Relay, 3), "several are counted, the target's app still named (G8)");
+        Assert.AreEqual("Copy 2 items", PasteTargetHolder.HandoffName(null, 2));
     }
 
     [TestMethod]
     public void TheFooterNamesTheTargetsAppWithCopyBesideItOrReadsCopy()
     {
-        CollectionAssert.AreEqual(new[] { "Enter · Copy" }, PasteTargetHolder.Hints(null).ToList());
-        CollectionAssert.AreEqual(new[] { "Enter · Paste into Relay", "Ctrl+C · Copy" }, PasteTargetHolder.Hints(RecordingTarget.Relay).ToList());
+        CollectionAssert.AreEqual(new[] { "Enter · Copy" }, PasteTargetHolder.Hints(null, 1).ToList());
+        CollectionAssert.AreEqual(new[] { "Enter · Paste into Relay", "Ctrl+C · Copy" }, PasteTargetHolder.Hints(RecordingTarget.Relay, 1).ToList());
         CollectionAssert.AreEqual(new[] { "Enter · Paste into Microsoft Teams (work or school)", "Ctrl+C · Copy" },
-            PasteTargetHolder.Hints(RecordingTarget.App("Microsoft Teams (work or school)")).ToList(), "the name as the seam gave it, never shortened");
+            PasteTargetHolder.Hints(RecordingTarget.App("Microsoft Teams (work or school)"), 1).ToList(), "the name as the seam gave it, never shortened");
+    }
+
+    [TestMethod]
+    public async Task TheFootersEnterHintCountsSeveralSelectedItemsAsTheSelectionChangesWhileTheTargetStays()
+    {
+        using var listed = await ListedStash.Open();
+        var items = await Listed(listed, "one", "two", "three");
+        listed.PasteTarget.FromPress(new ForegroundReading(false, RecordingTarget.Relay));
+
+        ControlThread.Run(() =>
+        {
+            var footer = Footer(listed);
+            listed.Listing.Focus(items[0].Id);
+            var one = Hints(footer);
+            listed.Listing.SelectAll();
+            var three = Hints(footer);
+            listed.Listing.Focus(items[1].Id);
+            var backToOne = Hints(footer);
+            listed.PasteTarget.None();
+            listed.Listing.SelectAll();
+            var copying = Hints(footer);
+
+            CollectionAssert.AreEqual(new[] { "Enter · Paste into Relay", "Ctrl+C · Copy" }, one);
+            CollectionAssert.AreEqual(new[] { "Enter · Paste 3 items into Relay", "Ctrl+C · Copy" }, three, "the footer counts the selection as it changes, the target unchanged (G8)");
+            CollectionAssert.AreEqual(new[] { "Enter · Paste into Relay", "Ctrl+C · Copy" }, backToOne, "one item is not counted");
+            CollectionAssert.AreEqual(new[] { "Enter · Copy 3 items" }, copying, "with no target, Enter copies them all");
+        });
+    }
+
+    [TestMethod]
+    public async Task ACopysConfirmationStandsInForTheHintsForTwoSecondsThenTheHintsReturnAsTheyAreBy()
+    {
+        using var listed = await ListedStash.Open();
+        var reaction = await listed.Stash.ImportFixture("the audacity", "still.png");
+        await Listed(listed, "two", "three");
+        listed.PasteTarget.FromPress(new ForegroundReading(false, RecordingTarget.Relay));
+        listed.Listing.Focus(reaction.Id);
+
+        var copied = await listed.Handoff.Copy(null!, [reaction]);
+        var confirmed = listed.FooterHints.Texts.ToList();
+        var changes = 0;
+        listed.FooterHints.Changed += () => changes++;
+        listed.Stash.Clock.Now += TimeSpan.FromSeconds(1.9);
+        listed.FooterHints.Sweep();
+        var stillConfirmed = listed.FooterHints.Texts.ToList();
+        var changesBefore = changes;
+        listed.Listing.SelectAll();
+        listed.PasteTarget.None();
+        listed.Stash.Clock.Now += TimeSpan.FromSeconds(0.1);
+        listed.FooterHints.Sweep();
+
+        Assert.IsTrue(copied.Succeeded, copied.Failure?.Sentence);
+        CollectionAssert.AreEqual(new[] { "✓ Copied “the audacity”" }, confirmed, "what went on the clipboard, in the hints' place (G10)");
+        CollectionAssert.AreEqual(confirmed, stillConfirmed, "for two seconds");
+        Assert.AreEqual(0, changesBefore);
+        CollectionAssert.AreEqual(new[] { "Enter · Copy 3 items" }, listed.FooterHints.Texts.ToList(), "then the hints, for the target and the selection as they are now");
+        Assert.AreEqual(1, changes, "the window is told to draw them");
+        Assert.IsNull(listed.FooterHints.Confirmation);
+    }
+
+    [TestMethod]
+    public async Task ASecondCopyWithinTheTwoSecondsNamesTheLatestAndLastsTwoSecondsFromIt()
+    {
+        using var listed = await ListedStash.Open();
+        var reaction = await listed.Stash.ImportFixture("the audacity", "still.png");
+        var others = await Listed(listed, "two", "three");
+        listed.Listing.Focus(reaction.Id);
+
+        await listed.Handoff.Copy(null!, [reaction]);
+        listed.Stash.Clock.Now += TimeSpan.FromSeconds(1.5);
+        await listed.Handoff.Copy(null!, others);
+        var latest = listed.FooterHints.Texts.ToList();
+        listed.Stash.Clock.Now += TimeSpan.FromSeconds(1.9);
+        listed.FooterHints.Sweep();
+        var pastTheFirstsTwoSeconds = listed.FooterHints.Texts.ToList();
+        listed.Stash.Clock.Now += TimeSpan.FromSeconds(0.1);
+        listed.FooterHints.Sweep();
+
+        CollectionAssert.AreEqual(new[] { "✓ Copied 2 items" }, latest, "several by count (G10)");
+        CollectionAssert.AreEqual(latest, pastTheFirstsTwoSeconds, "two seconds from the latest copy");
+        CollectionAssert.AreEqual(new[] { "Enter · Copy" }, listed.FooterHints.Texts.ToList());
+    }
+
+    /// <summary>Items named <paramref name="names"/> added to the stash, the listing showing All with them.</summary>
+    private static async Task<List<StashItem>> Listed(ListedStash listed, params string[] names)
+    {
+        var items = new List<StashItem>();
+        foreach (var name in names)
+        {
+            items.Add(await listed.Stash.Import(name));
+        }
+
+        await listed.Listing.ShowScope(Scope.All);
+        return items;
+    }
+
+    /// <summary>The footer as the window wires it: drawn again when the listing, the target or the copy's confirmation changes.</summary>
+    private static WindowStatus Footer(ListedStash listed)
+    {
+        var status = new WindowStatus(listed.Listing, listed.Notices, listed.Settings, listed.FooterHints, new ScrollViewer(), () => false, () => { });
+        listed.Listing.Changed += status.ShowListing;
+        listed.PasteTarget.Changed += status.ShowHints;
+        listed.FooterHints.Changed += status.ShowHints;
+        status.ShowHints();
+        status.ShowListing();
+        return status;
+    }
+
+    /// <summary>The footer's hints as drawn, or none while they are out of sight.</summary>
+    private static List<string> Hints(WindowStatus footer)
+    {
+        var left = (Panel)((Panel)footer.Footer.Child!).Children[0];
+        var hints = left.Children.OfType<DockPanel>().Single();
+        return hints.IsVisible ? hints.Children.Cast<TextBlock>().Select(text => text.Text!).ToList() : [];
     }
 
     /// <summary>A UI thread's context standing still: what is posted to it runs only when the check says.</summary>

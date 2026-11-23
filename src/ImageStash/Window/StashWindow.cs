@@ -59,6 +59,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
     private readonly ThumbnailGrid grid;
     private readonly PendingQueryKeys keys;
     private readonly WindowStatus status;
+    private readonly FooterHints footerHints;
     private readonly SizeWheel sizeWheel = new();
 
     /// <summary>The drag out of the window in progress, or null; a chip it is dropped on takes it (G17).</summary>
@@ -130,7 +131,8 @@ public sealed class StashWindow : Avalonia.Controls.Window
         tagField = new TagFieldOverlay(listing, organising, notices);
         preview = new Preview(listing, handoff, organising, deletion, renaming, itemMenu, notices, notices.Clock, pasteTarget, DialogShown, grid);
         editor = new EditorOverlay(failure => notices.Raise(failure), seams.Fonts);
-        status = new WindowStatus(listing, notices, settings, pasteTarget, scroller, () => preview.IsOpen || editing.IsOpen, () => search.Text = "");
+        footerHints = new FooterHints(listing, pasteTarget, handoff, notices.Clock);
+        status = new WindowStatus(listing, notices, settings, footerHints, scroller, () => preview.IsOpen || editing.IsOpen, () => search.Text = "");
         var body = new Panel { Children = { scroller, status.StateView } };
         // Above the preview too, so a failure is still named and a drop still taken while it is open (G35, G11); the drop
         // card above the notices, so an earlier batch's notices never hide what the next drop will add.
@@ -339,6 +341,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
         paste.Changed += ShowBusy;
         moving.Changed += ShowBusy;
         pasteTarget.Changed += status.ShowHints;
+        footerHints.Changed += status.ShowHints;
         grid.TileDoubleClicked += HandOverSelection;
         grid.TilePreviewRequested += () => OpenPreview(editingName: false);
         grid.DragStarted += DragOut;
@@ -368,7 +371,12 @@ public sealed class StashWindow : Avalonia.Controls.Window
                 _ = editing.Open(item, EditOrigin.Preview);
             }
         };
-        new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => notices.Sweep()).Start();
+        new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) =>
+        {
+            notices.Sweep();
+            footerHints.Sweep();
+            preview.Sweep();
+        }).Start();
         WireSearchBox();
         WireKeys();
         WirePin();

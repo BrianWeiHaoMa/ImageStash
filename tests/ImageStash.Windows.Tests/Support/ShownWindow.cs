@@ -19,8 +19,8 @@ using SkiaSharp;
 namespace ImageStash.Windows.Tests.Support;
 
 /// <summary>
-/// A stash window shown off every display at the flyout's default size, its notices and notifications on a stopped
-/// clock, with a paste target whose answers the check presets.
+/// A stash window shown at the primary display's left edge at the flyout's default size, its notices and notifications
+/// on stopped clocks by default, with a paste target whose answers the check presets.
 /// </summary>
 public sealed class ShownWindow : IDisposable
 {
@@ -223,10 +223,10 @@ public sealed class ShownWindow : IDisposable
         return (IDataTransfer)transfer;
     });
 
-    /// <summary>Waits up to ten seconds for <paramref name="condition"/>, failing the check if it never comes true.</summary>
-    public static async Task Eventually(Func<bool> condition)
+    /// <summary>Waits for <paramref name="condition"/>, failing the check after <paramref name="timeout"/> (ten seconds by default).</summary>
+    public static async Task Eventually(Func<bool> condition, TimeSpan? timeout = null)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(10);
+        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(10));
         while (!condition())
         {
             Assert.IsLessThan(deadline, DateTime.UtcNow, "the condition did not come true");
@@ -234,13 +234,30 @@ public sealed class ShownWindow : IDisposable
         }
     }
 
+    /// <summary>Clicks the rendered search box and waits until the stash window is in front with the box focused.</summary>
+    public async Task ClickSearchInFront()
+    {
+        var search = TrayDesktop.Get(() => Search);
+        await Eventually(() => TrayDesktop.Get(() =>
+        {
+            var centre = search.TranslatePoint(new Point(search.Bounds.Width / 2, search.Bounds.Height / 2), Window);
+            return centre is { } point && Window.InputHitTest(point) is Visual hit && hit.GetSelfAndVisualAncestors().Contains(search);
+        }));
+        TestMouse.Click(TestMouse.Centre(search));
+        var handle = TrayDesktop.Get(() => Window.TryGetPlatformHandle()!.Handle);
+        await Eventually(() => FrontWindow.GetForegroundWindow() == handle && TrayDesktop.Get(() => Window.IsActive && search.IsFocused));
+    }
+
     /// <summary>
     /// Opens a stash in the check's folder for the window to show, keeping its Open with… copies there too, and imports
     /// <paramref name="pictures"/> into it.
     /// </summary>
-    public async Task<IReadOnlyList<StashItem>> OpenStash(params string[] pictures)
+    public Task<IReadOnlyList<StashItem>> OpenStash(params string[] pictures) => OpenStash(TimeProvider.System, pictures);
+
+    /// <summary>Opens a stash whose store dates newly added pictures according to <paramref name="clock"/>.</summary>
+    public async Task<IReadOnlyList<StashItem>> OpenStash(TimeProvider clock, params string[] pictures)
     {
-        store = (await OpenStore(settingsFolder, Path.Combine(settingsFolder, "stash"))).Store!;
+        store = (await OpenStore(settingsFolder, Path.Combine(settingsFolder, "stash"), clock)).Store!;
         return await Dispatcher.UIThread.InvokeAsync(async () =>
         {
             await Listing.StashOpened(store);
@@ -519,10 +536,11 @@ public sealed class ShownWindow : IDisposable
     /// <summary>The window told it has come to the foreground (WM_ACTIVATE, WA_ACTIVE), as Windows tells it after a click on it.</summary>
     public void Activate() => SendMessage(Window.TryGetPlatformHandle()!.Handle, 0x0006, 1, 0);
 
-    /// <summary>The words of the footer's hints, in order.</summary>
+    /// <summary>The words of the footer's visible hints or copy confirmation, in order.</summary>
     public List<string> FooterHints() =>
         Window.GetVisualDescendants().OfType<TextBlock>()
-            .Where(text => text.IsEffectivelyVisible && text.Text is { } words && (words.StartsWith("Enter · ") || words.StartsWith("Ctrl+C · ")))
+            .Where(text => text.IsEffectivelyVisible && text.Text is { } words
+                && (words.StartsWith("Enter · ") || words.StartsWith("Ctrl+C · ") || words.StartsWith("✓ Copied ")))
             .Select(text => text.Text!).ToList();
 
     /// <summary>What the notices showing say, in order, joined, after the import's own notice that opened the stash.</summary>
@@ -556,14 +574,15 @@ public sealed class ShownWindow : IDisposable
 
     /// <param name="platformTarget">The real paste target seam the window reads instead of <paramref name="target"/>'s presets, when a check needs the windows in front read.</param>
     /// <param name="fonts">The fonts seam the window reads instead of the real one.</param>
-    public static ShownWindow Open(PresetDrags? drags = null, PresetTarget? target = null, PresetDialogs? dialogs = null, ITarget? platformTarget = null, IFonts? fonts = null)
+    /// <param name="noticeClock">The clock for in-window notices and copy confirmations, stopped by default.</param>
+    public static ShownWindow Open(PresetDrags? drags = null, PresetTarget? target = null, PresetDialogs? dialogs = null, ITarget? platformTarget = null, IFonts? fonts = null, TimeProvider? noticeClock = null)
     {
         var settingsFolder = Path.Combine(Path.GetTempPath(), "imagestash-window-check-" + Guid.NewGuid().ToString("N"));
         ShownWindow? shown = null;
         TrayDesktop.UseProductTheme();
         TrayDesktop.Run(() =>
         {
-            var notices = new Notices(new StoppedClock());
+            var notices = new Notices(noticeClock ?? new StoppedClock());
             var notifications = new Notices(new StoppedClock());
             var targets = target ?? new PresetTarget();
             var listing = new Listing(_ => { });
@@ -602,8 +621,8 @@ public sealed class ShownWindow : IDisposable
     }
 
     /// <summary>A stash folder opened as the start opens one, its Open with… copies kept in the check's folder.</summary>
-    private static Task<StoreOpening> OpenStore(string settingsFolder, string folder) =>
-        StashStore.Open(folder, new WindowsRecycleBin(), HeldFileRetry.Duration, TimeProvider.System, openWithRoot: Path.Combine(settingsFolder, "open-with"));
+    private static Task<StoreOpening> OpenStore(string settingsFolder, string folder, TimeProvider? clock = null) =>
+        StashStore.Open(folder, new WindowsRecycleBin(), HeldFileRetry.Duration, clock ?? TimeProvider.System, openWithRoot: Path.Combine(settingsFolder, "open-with"));
 
     /// <summary>A later turn of the UI thread, as the product's Move waits for one.</summary>
     private static Task NextTurn()

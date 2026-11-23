@@ -290,14 +290,161 @@ public sealed class HandoffTests
     public async Task NothingSelectedCopiesNothing()
     {
         using var handing = await Handing.Open("transparent.png");
+        var footer = Footer(handing);
 
         var copied = await handing.Copy([]);
 
         Assert.IsTrue(copied.Succeeded);
         Assert.AreEqual(0, handing.Clipboard.Begun);
         Assert.IsEmpty(handing.Notices.Shown);
+        Assert.IsNull(footer.Confirmation, "nothing went on the clipboard, so nothing is confirmed");
         Assert.IsEmpty(handing.Uses());
     }
+
+    [TestMethod]
+    public async Task ACopyIsConfirmedOnlyOnceItsWriteHasReturnedAndNeverBesideItsBusyState()
+    {
+        using var handing = await Handing.Open("transparent.png");
+        var footer = Footer(handing);
+        string? busyAtConfirmation = "never confirmed";
+        footer.Changed += () => busyAtConfirmation = footer.Confirmation is null ? busyAtConfirmation : handing.Handoff.Busy;
+        var release = new TaskCompletionSource();
+        handing.Clipboard.Hold = release.Task;
+
+        var copying = handing.Copy([handing.Items[0]]);
+        await Handing.Eventually(() => handing.Clipboard.Begun == 1);
+        var busyDuringTheWrite = handing.Handoff.Busy;
+        var confirmedDuringTheWrite = footer.Confirmation;
+        release.SetResult();
+        var copied = await copying;
+
+        Assert.IsTrue(copied.Succeeded, copied.Failure?.Sentence);
+        Assert.AreEqual("Copying transparent to the clipboard…", busyDuringTheWrite, "while the copy runs its busy state names it (G35)");
+        Assert.IsNull(confirmedDuringTheWrite, "no success before the write it reports has returned (R9, G28)");
+        Assert.IsNull(busyAtConfirmation, "the confirmation shows once the copy's busy state has gone, never beside it");
+        Assert.AreEqual("✓ Copied “transparent”", footer.Confirmation);
+    }
+
+    [TestMethod]
+    public async Task AnEarlierCopysConfirmationGivesWayWhileTheNextCopyRuns()
+    {
+        using var handing = await Handing.Open("animated.gif", "photo.jpg");
+        var footer = Footer(handing);
+        await handing.Copy([handing.Items[0]]);
+        var first = footer.Confirmation;
+        var release = new TaskCompletionSource();
+        handing.Clipboard.Hold = release.Task;
+
+        var copying = handing.Copy([handing.Items[1]]);
+        await Handing.Eventually(() => handing.Clipboard.Begun == 2);
+        var whileBusy = (handing.Handoff.Busy, footer.Confirmation);
+        release.SetResult();
+        await copying;
+
+        Assert.IsNotNull(first);
+        Assert.AreEqual(("Copying photo to the clipboard…", (string?)null), whileBusy, "the busy state names the copy running, and no earlier success stands beside it (G35)");
+        Assert.AreEqual("✓ Copied “photo”", footer.Confirmation, "then the latest copy is confirmed");
+    }
+
+    [TestMethod]
+    public async Task ACopyRenamedWhileItWaitedItsTurnIsConfirmedUnderTheNameItWentUnder()
+    {
+        using var handing = await Handing.Open("animated.gif", "transparent.png");
+        var footer = Footer(handing);
+        var (first, waiting) = (handing.Items[0], handing.Items[1]);
+        var release = new TaskCompletionSource();
+        handing.Clipboard.Hold = release.Task;
+
+        var copyingFirst = handing.Copy([first]);
+        await Handing.Eventually(() => handing.Clipboard.Begun == 1);
+        var copyingWaiting = handing.Copy([waiting]);
+        var renamed = await handing.Stash.Store!.Rename(waiting, "new cat");
+        release.SetResult();
+        await Task.WhenAll(copyingFirst, copyingWaiting);
+
+        Assert.IsTrue(renamed.Succeeded, renamed.Failure?.Sentence);
+        Assert.AreEqual(renamed.Value!.FilePath, handing.Clipboard.Written[^1].Content.FilePaths.Single(), "the file under its new name went on the clipboard");
+        Assert.AreEqual("✓ Copied “new cat”", footer.Confirmation, "so the confirmation names what went (G10)");
+    }
+
+    [TestMethod]
+    public async Task AClipboardThatCannotBeWrittenConfirmsNothingAndItsFailureIsNamed()
+    {
+        using var handing = await Handing.Open("transparent.png", "photo.jpg");
+        var footer = Footer(handing);
+        handing.Clipboard.FailNext = RecordingClipboard.Held;
+
+        var copied = await handing.Copy(handing.Items);
+
+        Assert.IsFalse(copied.Succeeded);
+        Assert.IsNull(footer.Confirmation, "a write that failed confirms nothing (R9)");
+        Assert.AreEqual(copied.Failure!.Sentence, handing.Notices.Shown.Single().Text, "its failure's notice says so (G35)");
+    }
+
+    [TestMethod]
+    public async Task AUseTheStoreRefusesLeavesTheCopyConfirmedAndTheFailureNamed()
+    {
+        using var handing = await Handing.Open("animated.gif");
+        var footer = Footer(handing);
+        Outcome copied;
+        using (handing.Stash.HoldStore())
+        {
+            copied = await handing.Copy(handing.Items);
+        }
+
+        Assert.IsTrue(copied.Succeeded, "the copy stands (G10)");
+        Assert.AreEqual("✓ Copied “animated”", footer.Confirmation, "so it is confirmed");
+        Assert.StartsWith("Record a use failed: ", handing.Notices.Shown.Single().Text, "and the use it could not record is named (G10, G35)");
+    }
+
+    [TestMethod]
+    public async Task AnItemWithoutANamesCopyIsConfirmedByItsFilesName()
+    {
+        using var handing = await Handing.Open();
+        var footer = Footer(handing);
+        var source = handing.Stash.Source(".png", MediaFixtures.Bytes("still.png"));
+        var unnamed = (await handing.Import.Drop(new DropContents([Handing.File(source)], false, false, []))).Single().Item!;
+
+        var copied = await handing.Copy([unnamed]);
+
+        Assert.IsTrue(copied.Succeeded, copied.Failure?.Sentence);
+        Assert.AreEqual($"✓ Copied “{ItemFileNames.Unnamed}.png”", footer.Confirmation);
+    }
+
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task APasteIntoATargetConfirmsNothingInTheWindowWhicheverWayItEnds(bool targetTakesIt)
+    {
+        using var handing = await Handing.Open("transparent.png");
+        var footer = Footer(handing);
+        if (!targetTakesIt)
+        {
+            handing.Target.Pastes = new Failure(PasteTargetReasons.Action, RecordingTarget.Relay.AppName, "it is gone");
+        }
+
+        var pasted = await handing.Paste([handing.Items[0]], RecordingTarget.Relay);
+
+        Assert.AreEqual(targetTakesIt, pasted.Succeeded, pasted.Failure?.Sentence);
+        Assert.HasCount(1, handing.Clipboard.Written);
+        Assert.IsNull(footer.Confirmation, "a paste never says it arrived; its fallback's notification is its own word (G10, G8)");
+        CollectionAssert.AreEqual(targetTakesIt ? Array.Empty<string>() : [Handoff.CopiedNotification], handing.Notifications.Shown.Select(notice => notice.Text).ToList());
+    }
+
+    [TestMethod]
+    public async Task ACapturesCopyConfirmsNothingInTheWindow()
+    {
+        using var handing = await Handing.Open("transparent.png");
+        var footer = Footer(handing);
+
+        var copied = await handing.Handoff.CopyCapture(null!, handing.Items[0]);
+
+        Assert.IsTrue(copied.Succeeded, copied.Failure?.Sentence);
+        Assert.IsNull(footer.Confirmation, "the capture's notification says it is on the clipboard (G14, G16)");
+    }
+
+    /// <summary>The footer's words over the handoff, as the window composes them, with no paste target.</summary>
+    private static FooterHints Footer(Handing handing) => new(handing.Listing, new PasteTargetHolder(), handing.Handoff, handing.Stash.Clock);
 
     [TestMethod]
     public async Task ACopyPressedDuringAnotherWritesWholeAfterIt()

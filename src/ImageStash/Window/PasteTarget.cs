@@ -26,12 +26,20 @@ public sealed class PasteTargetHolder
     /// <summary>The target Enter pastes into now, or null when Enter copies.</summary>
     public PasteTarget? Current => current;
 
-    /// <summary>The handoff's name, as the footer, the item menu and the preview's button say it (G8, G19): Paste into the target's app, or Copy.</summary>
-    public static string HandoffName(PasteTarget? target) => target is null ? "Copy" : $"Paste into {target.AppName}";
+    /// <summary>
+    /// The handoff of <paramref name="items"/> items, as the footer, the item menu and the preview's button say it (G8,
+    /// G19): Paste into the target's app, or Copy, saying how many while there are several ("Paste 3 items into Slack",
+    /// "Copy 3 items"), so Enter never hands over a forgotten multi-selection unannounced. The preview's one item is never counted.
+    /// </summary>
+    public static string HandoffName(PasteTarget? target, int items)
+    {
+        var counted = items > 1 ? $" {Handoff.Counted(items)}" : "";
+        return target is null ? $"Copy{counted}" : $"Paste{counted} into {target.AppName}";
+    }
 
-    /// <summary>The footer's hints: Enter's handoff, and while there is a target, <c>Ctrl+C</c>'s copy beside it (G8, G9).</summary>
-    public static IReadOnlyList<string> Hints(PasteTarget? target) =>
-        target is null ? [$"Enter · {HandoffName(target)}"] : [$"Enter · {HandoffName(target)}", "Ctrl+C · Copy"];
+    /// <summary>The footer's hints with <paramref name="selected"/> items selected: Enter's handoff, and while there is a target, <c>Ctrl+C</c>'s copy beside it (G8, G9).</summary>
+    public static IReadOnlyList<string> Hints(PasteTarget? target, int selected) =>
+        target is null ? [$"Enter · {HandoffName(target, selected)}"] : [$"Enter · {HandoffName(target, selected)}", "Ctrl+C · Copy"];
 
     /// <summary>The open shortcut was pressed with <paramref name="reading"/> in front: ImageStash's own leaves the target as it is.</summary>
     public void FromPress(ForegroundReading reading)

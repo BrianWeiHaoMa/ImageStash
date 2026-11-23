@@ -47,6 +47,7 @@ public sealed class Preview : Border
     private readonly Button handOff;
     private readonly Button copy;
     private readonly Button edit;
+    private readonly PreviewCopyConfirmation copied;
     private readonly PreviewPicture picture;
     private readonly TextBlock pictureFacts;
     private readonly TextBlock useFacts;
@@ -79,6 +80,8 @@ public sealed class Preview : Border
         this.pasteTarget = pasteTarget;
         this.dialogUp = dialogUp;
         this.returnFocusTo = returnFocusTo;
+        copied = new PreviewCopyConfirmation(handoff, () => IsOpen ? Item : null, clock);
+        copied.Changed += () => NameHandoff();
 
         var back = new Button
         {
@@ -146,9 +149,8 @@ public sealed class Preview : Border
         handOff = new Button { Classes = { "accent" }, HorizontalAlignment = HorizontalAlignment.Left };
         AutomationProperties.SetAutomationId(handOff, "Handoff");
         handOff.Click += (_, _) => HandOverRequested?.Invoke();
-        copy = new Button { Content = Labelled("", "Copy", null) };
+        copy = new Button();
         AutomationProperties.SetAutomationId(copy, "Copy");
-        AutomationProperties.SetName(copy, "Copy");
         copy.Click += (_, _) => CopyRequested?.Invoke();
         copy.Margin = new Thickness(8, 0, 0, 0);
         edit = new Button { Content = Labelled("", "Edit", "Ctrl+E"), Margin = new Thickness(8, 0, 0, 0) };
@@ -234,6 +236,11 @@ public sealed class Preview : Border
     /// </summary>
     public void Open(StashItem item, bool editingName = false)
     {
+        if (item.Id != Item?.Id)
+        {
+            copied.Withdraw();
+        }
+
         reads++;
         openings++;
         Item = item;
@@ -322,6 +329,7 @@ public sealed class Preview : Border
         IsOpen = false;
         IsVisible = false;
         restating.Stop();
+        copied.Withdraw();
         Item = null;
         name.StopEditing();
         tags.Clear();
@@ -462,19 +470,26 @@ public sealed class Preview : Border
         }
     }
 
+    /// <summary>Lets the button that names the copy read as before once its confirmation's time has passed.</summary>
+    public void Sweep() => copied.Sweep();
+
     /// <summary>
-    /// The handoff button reads as the footer's Enter does, Paste into the target's app or Copy, and Copy shows beside it
-    /// only while there is a target, as the footer's <c>Ctrl+C</c> does: without one the handoff is the copy (G19, G8).
+    /// The handoff button reads as the footer's Enter does for its one item, Paste into the target's app or Copy, and Copy
+    /// shows beside it only while there is a target, as the footer's <c>Ctrl+C</c> does: without one the handoff is the
+    /// copy (G19, G8). After a copy of the item, the button that names the copy says so (<see cref="PreviewCopyConfirmation"/>).
     /// </summary>
     private void NameHandoff()
     {
         var target = pasteTarget.Current;
-        var words = PasteTargetHolder.HandoffName(target);
+        var words = copied.HandoffWords(target);
         var content = Labelled(target is null ? "" : "", words, "Enter");
         handOff.Content = content;
         AutomationProperties.SetName(handOff, words);
         // A long app name trims the words: the tip then holds them whole.
         ToolTipRule.ShowWhenTrimmed(handOff, (TextBlock)content.Children[1], words);
+        var copyWords = copied.CopyWords(target);
+        copy.Content = Labelled("", copyWords, null);
+        AutomationProperties.SetName(copy, copyWords);
         copy.IsVisible = target is not null;
     }
 

@@ -38,6 +38,7 @@ public sealed class ListedStash : IDisposable
         Organising = new Organising(Listing, Notices);
         Notifications = new Notices(stash.Clock);
         Handoff = new Handoff(Listing, Notices, Notifications, Clipboard, Target, stash.Clock, TestStash.ShortRetry, TestStash.ShortRetry);
+        FooterHints = new FooterHints(Listing, PasteTarget, Handoff, stash.Clock);
         Renaming = new Renaming(Listing, Notices, Handoff);
         Editing = new Editing(Listing, Notices, Handoff, (original, name, layers, format, work, retry) => Renderer(original, name, layers, format, work, retry), new ColorChoices(), editRetry ?? TestStash.ShortRetry);
         OpenWith = new OpenWith(Listing, Notifications, Editing, Dialogs, OpenWithClock, action => action());
@@ -180,6 +181,12 @@ public sealed class ListedStash : IDisposable
 
     /// <summary>Whether the paste's hide leaves the flyout hidden, as the window answers it: so, unless a check says the window stayed (pinned, or a dialog or a drag of its own up, G2).</summary>
     public bool PasteHidesFlyout { get; set; } = true;
+
+    /// <summary>The paste target the footer names, set by a check as a press or an activation sets it; none until then.</summary>
+    public PasteTargetHolder PasteTarget { get; } = new();
+
+    /// <summary>The footer's words as the window draws them, over the listing, <see cref="PasteTarget"/> and the handoff's copies, on the stash's clock.</summary>
+    public FooterHints FooterHints { get; }
 
     /// <summary>Enter with a paste target, as the window hands over: <paramref name="items"/> pasted into <see cref="RecordingTarget.Relay"/>.</summary>
     public Task<Outcome> PasteIntoTarget(IReadOnlyList<StashItem> items) => Handoff.Paste(null!, items, RecordingTarget.Relay, new PasteHide(() => PasteHidesFlyout, Keys));

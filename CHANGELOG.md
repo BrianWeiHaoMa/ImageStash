@@ -4,7 +4,13 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+
+- A copy now says it worked: after `Ctrl+C`, an Enter that copies (with no app to paste into), or the item menu's Copy, the footer reads "✓ Copied" with the picture's name, or how many pictures, for two seconds before its hints return. In the preview, the button that copies reads "Copied ✓" for a moment instead. A paste into a chat shows nothing of the kind: ImageStash cannot see whether it arrived.
+
 ### Changed
+
+- With several pictures selected, the footer now says how many Enter hands over ("Enter · Paste 3 items into Slack", or "Enter · Copy 3 items"), and so do the item menu's paste and Copy entries, so a selection left over from tidying is never pasted unannounced.
 
 - Search now lists first the pictures where every word you typed starts a word of the name or of a tag, then the rest, and within each, the ones you used most recently first, then those never used, newest first. So typing `re` and Enter pastes the "really" reaction you post every day, not the newest screenshot, whose name holds those letters only inside a word. Everything search found before it still finds; Recent, Favorites and All list as before.
 - After a paste hides the stash window, the next shortcut opens it on Recent with an empty search box, the picture you just pasted first and selected on its own, so "shortcut, Enter" pastes it again and two typed letters start a fresh search. Hiding it any other way (clicking back into the chat, the shortcut, Esc) still leaves your search and selection as they were. The pinned window is left as it is.

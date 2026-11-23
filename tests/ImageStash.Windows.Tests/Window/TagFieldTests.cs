@@ -49,7 +49,7 @@ public sealed class TagFieldTests
         var offered = TrayDesktop.Get(() => shown.Submenu("Add tag"));
         await ClickTypeATag(shown);
 
-        CollectionAssert.AreEqual(new[] { "Copy", "Add to Favorites", "Add tag", "Delete 2 items" }, labels, "nothing to take off, so no Remove tag ▸ (G17)");
+        CollectionAssert.AreEqual(new[] { "Copy 2 items", "Add to Favorites", "Add tag", "Delete 2 items" }, labels, "nothing to take off, so no Remove tag ▸ (G17)");
         CollectionAssert.AreEqual(new[] { "Type a tag…", "dog", "reaction", "Scream" }, offered, "Type a tag… first, then the stash's tags, not the selection's (G17)");
         TrayDesktop.Run(() =>
         {
@@ -533,7 +533,7 @@ public sealed class TagFieldTests
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Submenu("Remove tag").SequenceEqual(["y"])));
         TrayDesktop.Run(shown.CloseMenu);
 
-        CollectionAssert.AreEqual(new[] { "Copy", "Add to Favorites", "Add tag", "Remove tag", "Delete 2 items" }, labels);
+        CollectionAssert.AreEqual(new[] { "Copy 2 items", "Add to Favorites", "Add tag", "Remove tag", "Delete 2 items" }, labels);
         CollectionAssert.AreEqual(new[] { "x", "y" }, removable, "every tag either carries, not only those both carry (G17)");
 
         await shown.Tag([items[0]], "x");
