@@ -423,7 +423,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
         {
             if (back is { Origin: EditOrigin.Preview, Item: { } item })
             {
-                preview.Open(item);
+                preview.Open(item, byPerson: false);
             }
             else
             {
@@ -436,7 +436,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
         {
             if (preview.IsOpen)
             {
-                preview.Open(item);
+                preview.Open(item, byPerson: false);
                 editor.FocusAsLeft();
             }
         };

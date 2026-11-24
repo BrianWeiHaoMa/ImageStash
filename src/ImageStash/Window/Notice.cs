@@ -6,7 +6,8 @@ namespace ImageStash.Window;
 /// <summary>A notice inside the stash window: what happened, in words shown unchanged, and an Undo when it has one.</summary>
 public sealed class Notice
 {
-    internal Notice(string text, string? heading, string? undoLabel, Func<Task<Outcome>>? undo, Func<Task>? left, Func<Notice, Notices, Control>? card, bool namesAProblem, UserAct? act)
+    internal Notice(string text, string? heading, string? undoLabel, Func<Task<Outcome>>? undo, Func<Task>? left, Func<Notice, Notices, Control>? card, bool namesAProblem, UserAct? act,
+        NoticeButton? button)
     {
         Text = text;
         Heading = heading;
@@ -16,6 +17,7 @@ public sealed class Notice
         Card = card;
         NamesAProblem = namesAProblem;
         Act = act;
+        Button = button;
     }
 
     /// <summary>The words under its <see cref="Heading"/>, or all of them when it has none; empty when the heading says it all.</summary>
@@ -40,6 +42,9 @@ public sealed class Notice
     public string? UndoLabel { get; }
 
     internal Func<Task<Outcome>>? UndoAction { get; }
+
+    /// <summary>Its button beside the Undo, as an import's Show (G12); null for most notices.</summary>
+    public NoticeButton? Button { get; }
 
     /// <summary>What runs once the notice's time ends, or it leaves before by its × or a later act, without its Undo; never after Undo.</summary>
     internal Func<Task>? LeftAction { get; }
@@ -197,14 +202,15 @@ public sealed class Notices
     /// <param name="card">The card it is drawn as above the tray, instead of the notice card.</param>
     /// <param name="namesAProblem">Whether <paramref name="text"/> names a skipped or unreadable file, a refusal or a failure.</param>
     /// <param name="heading">The line shown first above <paramref name="text"/>, counted with it for the notice's time.</param>
+    /// <param name="button">Its button beside the Undo (<see cref="NoticeButton"/>).</param>
     /// <returns>
     /// The notice, carrying the act whose flow raised it; in the stash window, one naming a problem without an Undo is not
     /// shown when a later act of its action has raised a notice already, which takes its place.
     /// </returns>
     public Notice Raise(string text, string? undoLabel = null, Func<Task<Outcome>>? undo = null, Func<Task>? left = null, Func<Notice, Notices, Control>? card = null,
-        bool namesAProblem = false, string? heading = null)
+        bool namesAProblem = false, string? heading = null, NoticeButton? button = null)
     {
-        var notice = new Notice(text, heading, undo is null ? null : undoLabel, undo, left, card, namesAProblem, UserAct.Current);
+        var notice = new Notice(text, heading, undo is null ? null : undoLabel, undo, left, card, namesAProblem, UserAct.Current, button);
         notice.TimeLeft = inWindow ? LastingFor(notice.Words) : Lasting;
         Settle(notice, clock.GetUtcNow());
         var replaced = inWindow ? TakeOver(notice) : [];

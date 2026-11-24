@@ -268,9 +268,10 @@ public sealed class Preview : Border
     /// <summary>
     /// Opens on <paramref name="item"/>, or moves to it from the item it showed: the item alone selected in the grid,
     /// focus inside the preview, its picture and name at once and its facts once read (G19, G7); with
-    /// <paramref name="editingName"/>, as F2 and the item menu's Rename open it, its name in edit, selected (G17).
+    /// <paramref name="editingName"/>, as F2 and the item menu's Rename open it, its name in edit, selected (G17); with
+    /// <paramref name="byPerson"/> false, as an edit returning to it opens it, not the person's change (G12).
     /// </summary>
-    public void Open(StashItem item, bool editingName = false)
+    public void Open(StashItem item, bool editingName = false, bool byPerson = true)
     {
         using var acting = UserAct.Begin(OpenAct);
         if (item.Id != Item?.Id)
@@ -290,7 +291,7 @@ public sealed class Preview : Border
         tags.Clear();
         tags.Show(Organising.CarriedTags([item]), []);
         picture.Show(item);
-        listing.Focus(item.Id);
+        listing.FocusForPreview(item.Id, byPerson);
         Changed?.Invoke();
         picture.Focus(NavigationMethod.Tab);
         if (editingName)

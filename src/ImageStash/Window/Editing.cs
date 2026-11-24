@@ -257,7 +257,7 @@ public sealed class Editing
         // Before the editor first shows, so it opens on the tool asked for.
         SelectTrim(Session, trim);
         Session.Changed += OnSessionChanged;
-        listing.Focus(edit.Item.Id);
+        listing.Focus(edit.Item.Id, byPerson: false);
         Changed?.Invoke();
         return Outcome.Done;
     }
@@ -354,7 +354,7 @@ public sealed class Editing
                 return Named(result.Failure!);
             case EditEnding.Continued:
                 await listing.Refresh();
-                listing.Focus(result.Item!.Id);
+                listing.Focus(result.Item!.Id, byPerson: false);
                 Continued?.Invoke(result.Item);
                 Changed?.Invoke();
                 return Outcome.Done;
@@ -535,7 +535,7 @@ public sealed class Editing
     /// <summary>The window back where Edit was started, the item selected there.</summary>
     private void ReturnTo(EditOrigin origin, StashItem item)
     {
-        listing.Focus(item.Id);
+        listing.Focus(item.Id, byPerson: false);
         Returned?.Invoke(new EditReturn(origin, item));
     }
 

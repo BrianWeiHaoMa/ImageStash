@@ -48,6 +48,8 @@ public sealed class Listing
     /// <summary>The selection is the one an import's end made (G12), not since changed by the person or a load.</summary>
     private bool selectionByImport;
 
+    private int personsChanges;
+
     /// <summary>Every tag the stash's items carry, as the latest load read it; never kept across a change (G17).</summary>
     private IReadOnlyList<TagCount> tags = [];
     private Dictionary<long, int> indexOf = [];
@@ -137,6 +139,15 @@ public sealed class Listing
 
     /// <summary>The stash, once it has opened; until then nothing may reach it.</summary>
     public StashStore? Store => store;
+
+    /// <summary>
+    /// How many times the person has changed the search, the scope or the selection since the start, or opened the
+    /// preview (<see cref="FocusForPreview"/>), which an import's end reads to know whether they moved on while it ran
+    /// (G12, <see cref="ImportBegan"/>). Only what the person asked counts, and of the selection only a change: a click on
+    /// the tile already alone selected is none. A call made with <c>byPerson: false</c>, an import's selection, a summon,
+    /// and a load or refresh moving the selection count for nothing.
+    /// </summary>
+    public int PersonsChanges => personsChanges;
 
     /// <summary>The scope the user is in; while a query has words the grid shows its matches instead (G5).</summary>
     public Scope Scope { get; private set; } = Scope.Recent;
@@ -267,10 +278,14 @@ public sealed class Listing
         }
     }
 
-    /// <summary>Recent, Favorites or All: clears the search and shows that scope (G4).</summary>
-    public Task ShowScope(Scope scope)
+    /// <summary>
+    /// Recent, Favorites or All: clears the search and shows that scope (G4); <paramref name="byPerson"/> false for the
+    /// window's own, as an import's end and a paste's return to Recent, which are not the person's change (G12).
+    /// </summary>
+    public Task ShowScope(Scope scope, bool byPerson = true)
     {
         using var acting = UserAct.Begin(ScopeAct);
+        CountChange(byPerson);
         Query = "";
         Scope = scope;
         resetPending = false;
@@ -282,6 +297,7 @@ public sealed class Listing
     public Task SetQuery(string text)
     {
         using var acting = UserAct.Begin(SearchAct);
+        CountChange(true);
         Query = text;
         return Load(keepSelection: false);
     }
@@ -346,22 +362,41 @@ public sealed class Listing
         }
     }
 
-    /// <summary>A plain click: the item becomes the whole selection and is focused.</summary>
-    public void Focus(long id) => Select([id], id);
+    /// <summary>
+    /// A plain click: the item becomes the whole selection and is focused; <paramref name="byPerson"/> false for the
+    /// window's own, as the editor selecting the item it opened on or returns to (G12).
+    /// </summary>
+    public void Focus(long id, bool byPerson = true) => Select([id], id, byImport: false, byPerson);
+
+    /// <summary>
+    /// The preview opened on an item, or moved to it: the item alone selected, as <see cref="Focus"/>; by the person, a
+    /// change of theirs even when the item already was the selection, since opening the preview is one (G12).
+    /// </summary>
+    public void FocusForPreview(long id, bool byPerson = true)
+    {
+        CountChange(byPerson);
+        Select([id], id, byImport: false, byPerson: false);
+    }
 
     /// <summary>Replaces the selection; the focus goes to <paramref name="focus"/>, or to the first selected item in order.</summary>
-    public void Select(IEnumerable<long> ids, long? focus) => Select(ids, focus, byImport: false);
+    public void Select(IEnumerable<long> ids, long? focus) => Select(ids, focus, byImport: false, byPerson: true);
 
-    /// <summary>An import's end: its added items selected (G12), the first of them focused, as an import's selection (<see cref="Summoned"/>).</summary>
-    public void SelectAdded(IEnumerable<long> ids) => Select(ids, null, byImport: true);
+    /// <summary>
+    /// An import's end, or its notice's Show: the items it shows selected (G12), the first of them focused, as an
+    /// import's selection (<see cref="Summoned"/>), never counted as the person's change.
+    /// </summary>
+    public void SelectAdded(IEnumerable<long> ids) => Select(ids, null, byImport: true, byPerson: false);
 
-    private void Select(IEnumerable<long> ids, long? focus, bool byImport)
+    private void Select(IEnumerable<long> ids, long? focus, bool byImport, bool byPerson)
     {
         lock (gate)
         {
-            selection = ids.Where(indexOf.ContainsKey).ToHashSet();
+            var chosen = ids.Where(indexOf.ContainsKey).ToHashSet();
+            var focused = focus is { } f && chosen.Contains(f) ? f : Items.FirstOrDefault(item => chosen.Contains(item.Id))?.Id;
+            CountChange(byPerson && (!chosen.SetEquals(selection) || focused != Focused));
+            selection = chosen;
             selectionByImport = byImport;
-            Focused = focus is { } f && selection.Contains(f) ? f : FirstSelected();
+            Focused = focused;
         }
 
         Raise();
@@ -377,6 +412,7 @@ public sealed class Listing
                 return;
             }
 
+            CountChange(true);
             selectionByImport = false;
             if (selection.Add(id))
             {
@@ -410,7 +446,9 @@ public sealed class Listing
                 (from, Focused) = (to, id);
             }
 
-            selection = Items.Skip(Math.Min(from, to)).Take(Math.Abs(to - from) + 1).Select(item => item.Id).ToHashSet();
+            var run = Items.Skip(Math.Min(from, to)).Take(Math.Abs(to - from) + 1).Select(item => item.Id).ToHashSet();
+            CountChange(!run.SetEquals(selection));
+            selection = run;
             selectionByImport = false;
         }
 
@@ -422,7 +460,9 @@ public sealed class Listing
     {
         lock (gate)
         {
-            selection = Items.Select(item => item.Id).ToHashSet();
+            var all = Items.Select(item => item.Id).ToHashSet();
+            CountChange(!all.SetEquals(selection));
+            selection = all;
             selectionByImport = false;
             Focused = Focused is { } f && selection.Contains(f) ? f : FirstSelected();
         }
@@ -495,6 +535,15 @@ public sealed class Listing
     }
 
     private long? FirstSelected() => Items.FirstOrDefault(item => selection.Contains(item.Id))?.Id;
+
+    /// <summary>Counts one of the person's changes (<see cref="PersonsChanges"/>) when <paramref name="changed"/>.</summary>
+    private void CountChange(bool changed)
+    {
+        if (changed)
+        {
+            Interlocked.Increment(ref personsChanges);
+        }
+    }
 
     /// <summary>The selected item nearest <paramref name="index"/> in order; of two as near, the later.</summary>
     private long? NearestSelected(int index) =>

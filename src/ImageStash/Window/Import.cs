@@ -61,10 +61,11 @@ public sealed record ImportedFile(string Name, ImportResultKind Result, StashIte
 /// stash as gets those it lacks, however long the batch waits behind another whose end clears the search (G11, G12).
 /// While a batch runs its busy
 /// state names it and nothing shows as added before its commit returned (G35, R9); afterwards the search is cleared,
-/// All shows the new items first and selected, and a notice counts what became of the files, names every file that was
-/// not added with its reason and the tags the lit chips gave, and offers an Undo that takes back everything the batch
-/// did. Sources are only ever copied (G11); nothing here writes into the stash but a stream into the <c>.work\</c> path
-/// Store allocated (R2).
+/// All shows the new items first and selected (or, when it added none, the items its files already were in the stash
+/// as), unless the person moved on since their act began it (<see cref="ImportBegan"/>), and a notice counts what became
+/// of the files, names every file that was not added with its reason and the tags the lit chips gave, offers an Undo
+/// that takes back everything the batch did, and, where the window kept what the person left, Show. Sources are only
+/// ever copied (G11); nothing here writes into the stash but a stream into the <c>.work\</c> path Store allocated (R2).
 /// </summary>
 public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRetry)
 {
@@ -117,8 +118,8 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
     public string? Busy { get; private set; }
 
     /// <summary>
-    /// Raised once a batch has run, before the window shows its result (the search cleared, All with the new items first
-    /// and selected), so whatever covers the grid closes first (G12).
+    /// Raised before the window shows a batch's result (the search cleared, All with the new items first and selected), at
+    /// its end or at its notice's Show, so whatever covers the grid closes first (G12).
     /// </summary>
     public event Action? Finishing;
 
@@ -130,6 +131,7 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
     {
         using var acting = UserAct.Begin(DropAct);
         var litTags = listing.LitTags;
+        var began = ImportBegan.In(listing);
         var subject = contents.Items.Count > 0 ? Describe(contents.Items) : contents.OnlyLink ? "the link" : "what was dropped";
         var refused = Refusal(subject);
         if (refused is null && contents.Items.Count == 0)
@@ -146,7 +148,7 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
             return Task.FromResult<IReadOnlyList<ImportedFile>>([]);
         }
 
-        return Run(contents.Items, contents, litTags);
+        return Run(contents.Items, contents, litTags, began);
     }
 
     /// <summary>
@@ -186,6 +188,7 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
             return [];
         }
 
+        var began = ImportBegan.In(listing);
         var chosen = paths.Select(path => new DroppedItem(Path.GetFileName(path), path, null, IsFolder: false)).ToList();
         // The import begins once files are chosen: a Move asked while the picker was up refuses it (State: Move).
         if (Refusal(Describe(chosen)) is { } refusedNow)
@@ -194,24 +197,25 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
             return [];
         }
 
-        return await Run(chosen, null, litTags);
+        return await Run(chosen, null, litTags, began);
     }
 
     /// <summary>
     /// The files a paste found on the clipboard, imported as a drop's would be (G13, G12) after any batch already
     /// running, each item added, or already in the stash, getting <paramref name="litTags"/>, the tags lit when the user
-    /// pasted.
+    /// pasted, its end judged from <paramref name="began"/>, read then too.
     /// </summary>
-    public Task<IReadOnlyList<ImportedFile>> Paste(IReadOnlyList<DroppedItem> files, IReadOnlyList<string> litTags) => Run(files, null, litTags);
+    public Task<IReadOnlyList<ImportedFile>> Paste(IReadOnlyList<DroppedItem> files, IReadOnlyList<string> litTags, ImportBegan began) => Run(files, null, litTags, began);
 
     /// <summary>
     /// The picture a paste found on the clipboard, saved after any batch already running as one still PNG item, even
     /// when its bytes equal an item's original, getting <paramref name="litTags"/>: the PNG bytes as they are when they
     /// are a PNG, else the first frame they or the bitmap give, encoded as PNG (G13, F3). Its notice says that an
-    /// animated picture is added by dragging its file in, and offers Undo as a drop's does (G12).
+    /// animated picture is added by dragging its file in, and offers Undo as a drop's does (G12); its end is judged from
+    /// <paramref name="began"/>, read at the paste.
     /// </summary>
-    public Task<IReadOnlyList<ImportedFile>> Paste(PastedPicture picture, IReadOnlyList<string> litTags) =>
-        Batch(async store => [await pictures.Save(store, picture, litTags)], StillOnly);
+    public Task<IReadOnlyList<ImportedFile>> Paste(PastedPicture picture, IReadOnlyList<string> litTags, ImportBegan began) =>
+        Batch(async store => [await pictures.Save(store, picture, litTags)], StillOnly, began);
 
     /// <summary>
     /// The refusal of an import while the stash cannot take one: it is still opening, or did not open, or a Move is asked
@@ -323,7 +327,8 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
     }
 
     /// <param name="litTags">The tags lit at the user's act, read then, which every item added or already in the stash gets.</param>
-    private Task<IReadOnlyList<ImportedFile>> Run(IReadOnlyList<DroppedItem> items, IDisposable? held, IReadOnlyList<string> litTags) =>
+    /// <param name="began">Read at the user's act, which the batch's end is judged from.</param>
+    private Task<IReadOnlyList<ImportedFile>> Run(IReadOnlyList<DroppedItem> items, IDisposable? held, IReadOnlyList<string> litTags, ImportBegan began) =>
         Batch(async store =>
         {
             try
@@ -343,15 +348,16 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
                 // Every stream has been read: the source may let go of what it handed over.
                 held?.Dispose();
             }
-        }, also: null);
+        }, also: null, began);
 
     /// <summary>
-    /// One batch, after any already running: its busy state while <paramref name="steps"/> run, then its end announced,
-    /// the search cleared, All with the new items first and selected, and the notice for every file, followed by
+    /// One batch, after any already running: its busy state while <paramref name="steps"/> run, then its result shown
+    /// (<see cref="ShowResult"/>), or, when the person moved on since <paramref name="began"/>, their search, scope,
+    /// selection and preview kept over what the stash now holds; and the notice for every file, followed by
     /// <paramref name="also"/> when given, with an Undo, offered when the batch put an item in the stash or gave a tag to
-    /// one already there, that takes back both (G12, R9).
+    /// one already there, that takes back both, and Show when the window was kept (G12, R9).
     /// </summary>
-    private async Task<IReadOnlyList<ImportedFile>> Batch(Func<StashStore, Task<List<ImportedFile>>> steps, string? also)
+    private async Task<IReadOnlyList<ImportedFile>> Batch(Func<StashStore, Task<List<ImportedFile>>> steps, string? also, ImportBegan began)
     {
         await oneBatchAtATime.WaitAsync();
         try
@@ -359,21 +365,29 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
             var store = listing.Store!;
             SetBusy("Adding to your stash…");
             var results = await steps(store);
-            var added = results.Where(file => file.Result == ImportResultKind.Added).Select(file => file.Item!.Id).ToList();
+            var shown = ImportEnd.ItemsShown(results);
             var batch = results.Where(file => file.PutInStash).Select(file => file.Item!.Id).ToList();
             IReadOnlyList<(long Item, IReadOnlyList<string> Tags)> given = results.Where(file => file.Result == ImportResultKind.AlreadyInStash && file.GainedTags.Count > 0)
                 .Select(file => (file.Item!.Id, file.GainedTags)).ToList();
             var undoes = batch.Count > 0 || given.Count > 0;
-            Finishing?.Invoke();
-            await listing.ShowScope(Scope.All);
-            if (added.Count > 0)
+            var kept = began.MovedOn(listing);
+            if (kept)
             {
-                listing.SelectAdded(added);
+                // What the person left stays, its list reading what the stash now holds (G5); Show brings the result up.
+                await listing.Refresh();
             }
+            else
+            {
+                kept = !await ShowResult(shown, byPerson: false);
+            }
+
+            var replacements = listing.Replacements;
+            var show = kept ? new NoticeButton(ImportEnd.Show, () => ShowAgain(shown, replacements)) : null;
 
             var (heading, details) = NoticeWords(results);
             var text = also is null ? details : $"{details} {also}".TrimStart();
-            notices.Raise(text, undoes ? "Undo" : null, undoes ? () => Undo(store, batch, given) : null, namesAProblem: results.Any(file => file.NamesAProblem), heading: heading);
+            notices.Raise(text, undoes ? "Undo" : null, undoes ? () => Undo(store, batch, given) : null, namesAProblem: results.Any(file => file.NamesAProblem), heading: heading,
+                button: show);
             return results;
         }
         finally
@@ -381,6 +395,48 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
             SetBusy(null);
             oneBatchAtATime.Release();
         }
+    }
+
+    /// <summary>
+    /// A batch's result shown, at its end or by its notice's Show (G12): whatever covers the grid closes, an open edit
+    /// staying (G26), the search is cleared, and All shows <paramref name="items"/> selected, the ones it still lists; an
+    /// end with none to select leaves All as its load leaves it. <paramref name="byPerson"/> says whether the person asked
+    /// for it. False when the person changed the search, the scope or the selection while All loaded: that stays theirs.
+    /// </summary>
+    private async Task<bool> ShowResult(IReadOnlyList<long> items, bool byPerson)
+    {
+        Finishing?.Invoke();
+        var loading = listing.ShowScope(Scope.All, byPerson);
+        var loadAsked = ImportBegan.In(listing);
+        await loading;
+        if (loadAsked.MovedOn(listing))
+        {
+            return false;
+        }
+
+        if (byPerson || items.Count > 0)
+        {
+            listing.SelectAdded(items);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The notice's Show: the batch's result shown again, as the person's change, over what the stash now holds; refused
+    /// by name while the stash cannot take a change (a Move, an export or an import of it asked, G36, G35), and, once an
+    /// import has replaced the stash, whose items take these identities again, none of <paramref name="items"/> selected.
+    /// </summary>
+    private async Task ShowAgain(IReadOnlyList<long> items, int replacements)
+    {
+        using var acting = UserAct.Begin(ImportEnd.Show);
+        if (listing.CannotStartReason is { } reason)
+        {
+            notices.Raise(new Failure(ImportEnd.Show, ImportEnd.ShownSubject, reason));
+            return;
+        }
+
+        await ShowResult(listing.Replacements == replacements ? items : [], byPerson: true);
     }
 
     /// <summary>One file through the import's steps: format by name, stage, read, then Store's duplicate question and commit.</summary>

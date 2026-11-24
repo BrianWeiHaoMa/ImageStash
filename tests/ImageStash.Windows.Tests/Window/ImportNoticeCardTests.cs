@@ -13,7 +13,9 @@ namespace ImageStash.Windows.Tests.Window;
 /// <summary>
 /// An import's notice on the real window (G12, G16): its card shows the counts semi-bold above the files that were not
 /// added, and its Undo names the key that runs it; with a tag chip lit, the tags it gave show whole inside the window at
-/// its minimum size (G11, L2). These checks show the stash window.
+/// its minimum size (G11, L2); after a search typed while it ran, its Show beside the Undo, inside the window at its
+/// minimum size, brings the new picture up on a click that leaves the keyboard's focus where it was (G12, G7). These
+/// checks show the stash window.
 /// </summary>
 [TestClass]
 public sealed class ImportNoticeCardTests
@@ -92,6 +94,70 @@ public sealed class ImportNoticeCardTests
         });
     }
 
+    [TestMethod]
+    public async Task AfterASearchTypedWhileItRanTheCardShowsShowBesideUndoInsideTheWindowAndAClickOnShowLeavesTheFocus()
+    {
+        using var shown = ShownWindow.Open();
+        await shown.OpenStash(shown.Picture("older.png"));
+        TransferredStash.CloseNotices(shown);
+        TrayDesktop.Run(() =>
+        {
+            shown.Window.Width = WindowSize.Minimum.Width;
+            shown.Window.Height = WindowSize.Minimum.Height;
+        });
+        await Eventually(() => TrayDesktop.Get(() => Math.Abs(shown.Window.ClientSize.Width - WindowSize.Minimum.Width) <= 0.5
+            && Math.Abs(shown.Window.ClientSize.Height - WindowSize.Minimum.Height) <= 0.5));
+        // The dropped picture's bytes come once released, as a browser's stream does: the search is typed meanwhile. The
+        // skipped clip's long name fills the card's words to their width, beside Show and Undo.
+        var released = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var newcomer = shown.Picture("newcomer.png");
+        var clip = Path.Combine(Path.GetDirectoryName(newcomer)!, "a clip whose name runs on for quite a while before it ends.mp4");
+        File.WriteAllBytes(clip, [1, 2, 3]);
+        var running = TrayDesktop.Get(() => shown.Import.Drop(new DropContents(
+            [new DroppedItem("newcomer.png", null, async () =>
+            {
+                await released.Task;
+                return File.OpenRead(newcomer);
+            }, IsFolder: false), new DroppedItem(Path.GetFileName(clip), clip, null, IsFolder: false)], false, false, [])));
+        TrayDesktop.Run(() =>
+        {
+            shown.Search.Focus();
+            shown.Search.Text = "older";
+        });
+        await Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == "older"));
+        released.SetResult();
+        var added = (await running).First().Item!;
+        await Eventually(() => TrayDesktop.Get(() => NoticeCards(shown).Count == 1));
+
+        var (show, focusedBefore) = TrayDesktop.Get(() =>
+        {
+            shown.Window.UpdateLayout();
+            WindowMinimum.AssertAt(shown.Window.ClientSize, "the window at its minimum");
+            Assert.AreEqual("older", shown.Listing.Query, "the search typed while the import ran is kept (G12)");
+            var card = NoticeCards(shown).Single();
+            var (showButton, undo) = (ShowButton(card), UndoButton(card));
+            var window = new Rect(shown.Window.ClientSize);
+            var showBounds = new Rect(showButton.TranslatePoint(default, shown.Window)!.Value, showButton.Bounds.Size);
+            var undoBounds = new Rect(undo.TranslatePoint(default, shown.Window)!.Value, undo.Bounds.Size);
+            Assert.IsTrue(window.Contains(showBounds) && window.Contains(undoBounds), $"Show and Undo lie whole inside the window: {showBounds}, {undoBounds} in {window}");
+            Assert.IsLessThanOrEqualTo(undoBounds.Left, showBounds.Right, "Show beside the Undo, before it");
+            Assert.IsTrue(showBounds.Top < undoBounds.Bottom && undoBounds.Top < showBounds.Bottom, "side by side on one row");
+            return (showButton, shown.Focused);
+        });
+
+        using var pointer = TestMouse.PutBackAfterwards();
+        TestMouse.Click(TestMouse.Centre(show));
+        await Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == "" && shown.Listing.Selection.Contains(added.Id)));
+
+        TrayDesktop.Run(() =>
+        {
+            Assert.AreEqual("", shown.Search.Text, "Show clears the search box");
+            Assert.AreEqual(Scope.All, shown.Listing.LitChip, "and shows All");
+            CollectionAssert.AreEqual(new[] { added.Id }, shown.Listing.Selection.ToList(), "the new picture selected");
+            Assert.AreSame(focusedBefore, shown.Focused, "the click on Show took no focus (G7)");
+        });
+    }
+
     private static double Top(Visual text, Visual card) => text.TranslatePoint(default, card)!.Value.Y;
 
     /// <summary>The cards of the notices showing in the stash window.</summary>
@@ -100,4 +166,6 @@ public sealed class ImportNoticeCardTests
             && row.Children.OfType<Button>().Any(button => Avalonia.Automation.AutomationProperties.GetName(button) == "Close")).ToList();
 
     private static Button UndoButton(Control card) => card.GetVisualDescendants().OfType<Button>().Single(button => Equals(button.Content, "Undo"));
+
+    private static Button ShowButton(Control card) => card.GetVisualDescendants().OfType<Button>().Single(button => Equals(button.Content, ImportEnd.Show));
 }

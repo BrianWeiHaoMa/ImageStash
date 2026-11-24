@@ -47,6 +47,8 @@ public sealed class ListedStash : IDisposable
         FooterHints = new FooterHints(Listing, PasteTarget, Handoff, stash.Clock);
         Renaming = new Renaming(Listing, Notices, Handoff);
         Editing = new Editing(Listing, Notices, Handoff, (original, name, layers, format, work, retry) => Renderer(original, name, layers, format, work, retry), new ColorChoices(), editRetry ?? TestStash.ShortRetry);
+        // As the window: an import's result, at its end or its Show, closes the preview unless an edit covers it (G12, G26).
+        Import.Finishing += () => PreviewOpen &= Editing.IsOpen;
         OpenWith = new OpenWith(Listing, Notifications, Editing, Dialogs, OpenWithClock, action => action());
         ItemMenu = new ItemMenu(Listing, Notices, Handoff, Organising, Deletion, Editing, OpenWith, Dialogs, saveACopyRetry ?? TestStash.ShortRetry);
         PasteKey = new PasteKey(Paste, Editing);
@@ -265,7 +267,8 @@ public sealed class ListedStash : IDisposable
     /// A key pressed at <paramref name="place"/> as the window takes it: routed by <see cref="StashKeys.Route"/>, held to
     /// one act per press by <see cref="Keys"/>, and its action's act run as the window's case runs it (Del and
     /// <c>Ctrl+D</c> as they run with no preview open, the arrows' steps over <see cref="PreviewItem"/>, <c>Ctrl+E</c> on the
-    /// preview's item while it is open, <c>Ctrl+V</c> into <see cref="LayerTextCaret"/> or, without one, as from a place
+    /// preview's item while it is open, Space opening <see cref="PreviewOpen"/> on the focused item or closing it,
+    /// <c>Ctrl+V</c> into <see cref="LayerTextCaret"/> or, without one, as from a place
     /// with no field taking words); the action is returned. Let go with <see cref="PressOnce.Released"/> on <see cref="Keys"/>.
     /// </summary>
     public async Task<KeyAction> Press(Key key, KeyModifiers modifiers, KeyPlace place)
@@ -296,6 +299,15 @@ public sealed class ListedStash : IDisposable
                 break;
             case KeyAction.StepOn:
                 PreviewStepping.Step(StepWay.On);
+                break;
+            case KeyAction.TogglePreview when PreviewOpen:
+                PreviewOpen = false;
+                break;
+            case KeyAction.TogglePreview when Listing.Items.FirstOrDefault(item => item.Id == Listing.Focused) is { } focused:
+                // The preview's opening as it reaches the listing: its item alone selected (G19).
+                PreviewOpen = true;
+                PreviewItem = focused;
+                Listing.FocusForPreview(focused.Id);
                 break;
         }
 

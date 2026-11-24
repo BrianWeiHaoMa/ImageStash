@@ -39,8 +39,10 @@ public sealed class ClipboardPaste(Listing listing, Notices notices, Import impo
             return;
         }
 
-        // Taken at the act, as Ctrl+O takes the tags before its dialog: a batch queued behind another keeps them (G11, F12).
+        // Taken at the act, as Ctrl+O takes the tags before its dialog: a batch queued behind another keeps them, and its end
+        // asks whether the person moved on since this act (G11, G12, F12).
         var litTags = listing.LitTags;
+        var began = ImportBegan.In(listing);
         var at = clock.GetLocalNow();
         var read = await ReadOnce();
         if (!read.Succeeded)
@@ -57,11 +59,11 @@ public sealed class ClipboardPaste(Listing listing, Notices notices, Import impo
         }
         else if (read.Value is { Files.Count: > 0 } files)
         {
-            await import.Paste(files.Files, litTags);
+            await import.Paste(files.Files, litTags, began);
         }
         else if (read.Value is { Png: not null } or { Image: not null })
         {
-            await import.Paste(new PastedPicture(AutoName.Screenshot(at), read.Value.Png, read.Value.Image), litTags);
+            await import.Paste(new PastedPicture(AutoName.Screenshot(at), read.Value.Png, read.Value.Image), litTags, began);
         }
         else if (read.Value!.OnlyLink)
         {

@@ -16,7 +16,8 @@ namespace ImageStash.Tests.Window;
 /// <c>Ctrl+T</c> opens the tag field on the selection, and focus moving on adds what was typed there (G7, G17). Moving
 /// focus between real controls is beyond these parts: the walk drives the rule a field calls as focus leaves it.
 /// Collecting into a stash that holds pictures: with a tag chip lit, a drop tags its new picture and the one the stash
-/// already held, its notice says so, and its Undo takes back both (G11, G12).
+/// already held, its notice says so, and its Undo takes back both (G11, G12); a drop whose picture comes in after the
+/// person typed a search and moved the selection leaves both, and its notice's Show brings the new picture up (G12).
 /// </summary>
 [TestClass]
 public sealed class StashWindowPathTests
@@ -272,6 +273,32 @@ public sealed class StashWindowPathTests
         Assert.IsFalse(stash.Any(item => item.Id == added.Id), "its Undo removes the added item");
         Assert.IsEmpty(stash.Single(item => item.Id == held.Id).Tags, "and takes the tag off the other (G12)");
         CollectionAssert.AreEqual(new[] { "cat" }, stash.Single(item => item.Id == carrying.Id).Tags.ToList(), "leaving what the batch did not give");
+
+        // (2) A drop whose new picture the walk holds back while it types a search the picture's name matches too and
+        // moves the selection.
+        listed.Stash.Tag(held.Id, "pet");
+        listed.Stash.Tag(carrying.Id, "pet");
+        var arriving = new HeldBackFile(MediaFixtures.Path("transparent.png"), "pet three.png");
+        var running = listed.Import.Drop(arriving.Drop);
+        await listed.Listing.SetQuery("pet");
+        Assert.HasCount(2, listed.Listing.Items);
+        listed.Listing.MoveFocus(Direction.Right, []);
+        var moved = listed.Listing.Selection.Single();
+        Assert.AreEqual(listed.Listing.Items[1].Id, moved, "the selection moved off the first match");
+        arriving.Release();
+        var third = (await running).Single().Item!;
+
+        Assert.AreEqual("pet", listed.Listing.Query, "the search as the walk left it");
+        CollectionAssert.AreEqual(new[] { moved }, listed.Listing.Selection.ToList(), "and the selection");
+        CollectionAssert.Contains(listed.Listing.Items.Select(item => item.Id).ToList(), third.Id, "the new picture listed among the matches (G5)");
+        var kept = listed.Notices.Shown[^1];
+        Assert.AreEqual(ImportEnd.Show, kept.Button?.Label, "the notice offers Show (G12)");
+
+        await NoticeButton.Press(listed.Notices, kept);
+
+        Assert.AreEqual(("", Scope.All), (listed.Listing.Query, listed.Listing.LitChip), "Show clears the search and shows All");
+        Assert.AreEqual(third.Id, listed.Listing.Items[0].Id, "the new item first");
+        CollectionAssert.AreEqual(new[] { third.Id }, listed.Listing.Selection.ToList(), "and selected");
         Assert.IsEmpty(listed.Failures);
     }
 

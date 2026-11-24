@@ -477,7 +477,7 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
     /// the one just handed over, selected alone, for the next summon (G1); the pinned window, or a flyout a dialog or drag
     /// of its own kept up, as it was. Started before the keystroke, which does not wait for it.
     /// </summary>
-    private Task StartNextSummonOnRecent(bool hidden) => hidden ? listing.ShowScope(Scope.Recent) : Task.CompletedTask;
+    private Task StartNextSummonOnRecent(bool hidden) => hidden ? listing.ShowScope(Scope.Recent, byPerson: false) : Task.CompletedTask;
 
     /// <summary>The items as a failure, a busy state and a copy's confirmation name them: one by its name, or its file's name when it has none; several by count.</summary>
     public static string Subject(IReadOnlyList<StashItem> items) => items switch
