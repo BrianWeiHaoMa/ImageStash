@@ -30,9 +30,10 @@ public sealed class ShownWindow : IDisposable
     private ContextMenu? openMenu;
     private IDisposable? menus;
 
-    private ShownWindow(StashWindow window, Notices notices, Notices notifications, PresetTarget target, Listing listing, Import import, Handoff handoff, Editing editing, OpenWith openWith, Moving moving, SettingsKeeper settings, string settingsFolder)
+    private ShownWindow(StashWindow window, Notices notices, Notices notifications, PresetTarget target, Listing listing, Import import, Handoff handoff, Editing editing, OpenWith openWith, Moving moving, SettingsKeeper settings, string settingsFolder, NoTrayIcon quietWindows)
     {
         Window = window;
+        QuietWindows = quietWindows;
         Moving = moving;
         // The store a Move opened is the one the check closes at its end.
         moving.Moved += opened => store = opened;
@@ -56,6 +57,9 @@ public sealed class ShownWindow : IDisposable
     public Notices Notifications { get; }
 
     public PresetTarget Target { get; }
+
+    /// <summary>The Quiet-windows seam the window reads, whose pointer's primary button the check holds and lets go.</summary>
+    public NoTrayIcon QuietWindows { get; }
 
     public Listing Listing { get; }
 
@@ -594,7 +598,8 @@ public sealed class ShownWindow : IDisposable
             var targets = target ?? new PresetTarget();
             var listing = new Listing(_ => { });
             var keeper = new SettingsKeeper(settingsFolder, Store.Settings.Load(settingsFolder, HeldFileRetry.Duration), HeldFileRetry.Duration, SettingsKeeper.Quiet, _ => { });
-            var seams = new PlatformSeams(null!, null!, null!, null!, null!, new NoTrayIcon(), drags ?? (IClipboardAndDrops)new WindowsClipboardAndDrops(), dialogs ?? (IDialogsAndExplorer)new WindowsDialogsAndExplorer(), null!, platformTarget ?? targets, new WindowsScreen(), fonts ?? new WindowsFonts(), new WindowsBorderDrag(), new WindowsWindowOrder());
+            var quietWindows = new NoTrayIcon();
+            var seams = new PlatformSeams(null!, null!, null!, null!, null!, quietWindows, drags ?? (IClipboardAndDrops)new WindowsClipboardAndDrops(), dialogs ?? (IDialogsAndExplorer)new WindowsDialogsAndExplorer(), null!, platformTarget ?? targets, new WindowsScreen(), fonts ?? new WindowsFonts(), new WindowsBorderDrag(), new WindowsWindowOrder());
             var handoff = new Handoff(listing, notices, notifications, seams.ClipboardAndDrops, seams.Target, new StoppedClock(), HeldFileRetry.Duration, HeldClipboard.Retry);
             var import = new Import(listing, notices, HeldFileRetry.Duration);
             var editing = new Editing(listing, notices, handoff, FinishedPicture.Render, new ColorChoices(), HeldFileRetry.Duration);
@@ -611,7 +616,7 @@ public sealed class ShownWindow : IDisposable
                 Height = WindowSize.FlyoutDefault.Height,
             };
             window.Show();
-            shown = new ShownWindow(window, notices, notifications, targets, listing, import, handoff, editing, openWith, moving, keeper, settingsFolder);
+            shown = new ShownWindow(window, notices, notifications, targets, listing, import, handoff, editing, openWith, moving, keeper, settingsFolder, quietWindows);
             // The item menu is a popup of its own, outside the window's tree: it is found as it opens on the grid, and the
             // preview's ⋯ menu as it opens on its button.
             var opening = shown;

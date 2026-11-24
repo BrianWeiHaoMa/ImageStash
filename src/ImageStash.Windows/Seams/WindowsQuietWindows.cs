@@ -13,8 +13,8 @@ namespace ImageStash.Windows.Seams;
 /// one moves no activation and no focus, whatever window is in front (G16); a window shown only in parts through its
 /// window region, which Windows neither draws nor hit-tests outside (G15); its corners rounded as Windows 11 rounds its
 /// own windows; the tray icon's rectangle, which the shell
-/// reports for the icon's identity (S16), read afresh at every call; and the pointer's position, in physical pixels
-/// because Avalonia makes the process per-monitor DPI aware (S10).
+/// reports for the icon's identity (S16), read afresh at every call; the pointer's position, in physical pixels
+/// because Avalonia makes the process per-monitor DPI aware (S10); and whether its primary button is held.
 /// </summary>
 public sealed class WindowsQuietWindows(WindowsTray tray) : IQuietWindows
 {
@@ -33,6 +33,9 @@ public sealed class WindowsQuietWindows(WindowsTray tray) : IQuietWindows
     private const int WhCbt = 5;
     private const int HcbtActivate = 5;
     private const int HcbtSetFocus = 9;
+    private const int VkLButton = 0x01;
+    private const int VkRButton = 0x02;
+    private const int SmSwapButton = 23;
 
     private readonly ConditionalWeakTable<Avalonia.Controls.Window, object> keptInactive = [];
 
@@ -255,6 +258,10 @@ public sealed class WindowsQuietWindows(WindowsTray tray) : IQuietWindows
 
     public PixelPoint? PointerPosition() => GetCursorPos(out var point) ? new PixelPoint(point.X, point.Y) : null;
 
+    // GetAsyncKeyState reads the physical button, whichever logical button it is mapped to; SM_SWAPBUTTON says whether the
+    // right one is the primary. It answers zero, so not held, while UIPI keeps it from an elevated app in front.
+    public bool PrimaryButtonHeld() => (GetAsyncKeyState(GetSystemMetrics(SmSwapButton) != 0 ? VkRButton : VkLButton) & 0x8000) != 0;
+
     public PixelRect? FrontWindowRectangle() =>
         GetForegroundWindow() is var window && window != 0 && GetWindowRect(window, out var bounds) && bounds.Right > bounds.Left && bounds.Bottom > bounds.Top
             ? new PixelRect(bounds.Left, bounds.Top, bounds.Right - bounds.Left, bounds.Bottom - bounds.Top)
@@ -311,6 +318,12 @@ public sealed class WindowsQuietWindows(WindowsTray tray) : IQuietWindows
 
     [DllImport("user32.dll", ExactSpelling = true)]
     private static extern nint GetForegroundWindow();
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    private static extern short GetAsyncKeyState(int key);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    private static extern int GetSystemMetrics(int index);
 
     [DllImport("user32.dll", ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

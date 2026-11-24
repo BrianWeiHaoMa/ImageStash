@@ -232,12 +232,26 @@ public sealed class TrayIconMidScreen(WindowsQuietWindows real) : IQuietWindows
 
     public PixelPoint? PointerPosition() => real.PointerPosition();
 
+    public bool PrimaryButtonHeld() => real.PrimaryButtonHeld();
+
     public PixelRect? FrontWindowRectangle() => real.FrontWindowRectangle();
 }
 
-/// <summary>A desktop where neither the tray icon nor the pointer can be found, so a summon falls back to centring.</summary>
+/// <summary>
+/// A desktop where neither the tray icon nor the pointer can be found, so a summon falls back to centring, and whose
+/// pointer's primary button is up until a check holds it (<see cref="ButtonHeld"/>), so the real mouse plays no part.
+/// </summary>
 public sealed class NoTrayIcon : IQuietWindows
 {
+    private volatile bool buttonHeld;
+
+    /// <summary>Whether the pointer's primary button is held, as a check holds it and lets it go, from any thread.</summary>
+    public bool ButtonHeld
+    {
+        get => buttonHeld;
+        set => buttonHeld = value;
+    }
+
     public void ShowWithoutActivating(Avalonia.Controls.Window window)
     {
         window.ShowActivated = false;
@@ -261,6 +275,8 @@ public sealed class NoTrayIcon : IQuietWindows
     public PixelRect? TrayIconRectangle() => null;
 
     public PixelPoint? PointerPosition() => null;
+
+    public bool PrimaryButtonHeld() => buttonHeld;
 
     public PixelRect? FrontWindowRectangle() => null;
 }

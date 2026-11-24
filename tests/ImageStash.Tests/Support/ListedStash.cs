@@ -513,6 +513,8 @@ public sealed class NoWindowShown : IQuietWindows
 
     public Avalonia.PixelPoint? PointerPosition() => null;
 
+    public bool PrimaryButtonHeld() => false;
+
     public Avalonia.PixelRect? FrontWindowRectangle() => null;
 }
 

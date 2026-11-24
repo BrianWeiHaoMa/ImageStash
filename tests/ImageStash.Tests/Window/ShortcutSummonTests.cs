@@ -165,6 +165,8 @@ public sealed class ShortcutSummonTests
             return At;
         }
 
+        public bool PrimaryButtonHeld() => throw new NotSupportedException("A summon never waits on the pointer's button (G1).");
+
         public PixelRect? Front { get; set; }
 
         public PixelRect? FrontWindowRectangle()

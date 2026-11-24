@@ -52,6 +52,13 @@ public interface IQuietWindows
     PixelPoint? PointerPosition();
 
     /// <summary>
+    /// Whether the pointer's primary button is held down now, wherever it was pressed and whichever app is in front: the
+    /// button the person clicks with, which is the right one for a person who swapped the buttons (G2). False when the
+    /// platform cannot say. From any thread.
+    /// </summary>
+    bool PrimaryButtonHeld();
+
+    /// <summary>
     /// The rectangle of the window in front on the desktop in physical pixels, from any thread, whose display the
     /// shortcut's flyout is centred on when neither a caret nor the pointer can be found (G1); null when no window is in
     /// front or the platform cannot say.

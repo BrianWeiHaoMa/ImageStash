@@ -47,6 +47,21 @@ public static class TestMouse
     /// <summary>The pointer moved to <paramref name="at"/> and the left button released there, ending a drag.</summary>
     public static void Release(PixelPoint at) => Send(Move(at), Button(LeftUp));
 
+    /// <summary>
+    /// The pointer moved to <paramref name="at"/> and the button the person clicks with pressed there and held: SendInput's
+    /// buttons are the physical ones, so it is the right one when the buttons are swapped.
+    /// </summary>
+    public static void PressPrimary(PixelPoint at) => Send(Move(at), Button(Swapped ? RightDown : LeftDown));
+
+    /// <summary>The pointer moved to <paramref name="at"/> and the button <see cref="PressPrimary"/> pressed released there.</summary>
+    public static void ReleasePrimary(PixelPoint at) => Send(Move(at), Button(Swapped ? RightUp : LeftUp));
+
+    /// <summary>The pointer moved to <paramref name="at"/> and the other button pressed there and held.</summary>
+    public static void PressSecondary(PixelPoint at) => Send(Move(at), Button(Swapped ? LeftDown : RightDown));
+
+    /// <summary>The pointer moved to <paramref name="at"/> and the button <see cref="PressSecondary"/> pressed released there.</summary>
+    public static void ReleaseSecondary(PixelPoint at) => Send(Move(at), Button(Swapped ? LeftUp : RightUp));
+
     /// <summary>A right click at <paramref name="at"/>, in physical pixels on the desktop.</summary>
     public static void RightClick(PixelPoint at) => Send(Move(at), Button(RightDown), Button(RightUp));
 
@@ -71,6 +86,9 @@ public static class TestMouse
             },
         };
     }
+
+    /// <summary>Whether the person swapped the buttons (SM_SWAPBUTTON).</summary>
+    private static bool Swapped => GetSystemMetrics(23) != 0;
 
     private static Input Button(uint flags) => new() { Type = InputMouse, Mouse = new MouseInput { Flags = flags } };
 

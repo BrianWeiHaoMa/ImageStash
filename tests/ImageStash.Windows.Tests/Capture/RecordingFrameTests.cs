@@ -536,6 +536,8 @@ public sealed class RecordingFrameTests
 
         public PixelPoint? PointerPosition() => real.PointerPosition();
 
+        public bool PrimaryButtonHeld() => real.PrimaryButtonHeld();
+
         public PixelRect? FrontWindowRectangle() => real.FrontWindowRectangle();
     }
 

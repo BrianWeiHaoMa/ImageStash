@@ -78,6 +78,15 @@ public sealed class DropTarget
     /// <summary>The drop card, for the window to lay over its grid.</summary>
     public Control Card { get; }
 
+    /// <summary>
+    /// Whether a drag from outside is over the window: from its entering until its drop, or until it has left and not
+    /// come straight back into another of the window's controls.
+    /// </summary>
+    public bool DragOver => draggedData is not null;
+
+    /// <summary>Raised once a drop from outside has been handed to the import, in the drop's own turn.</summary>
+    public event Action? Dropped;
+
     private void OnDragEnter(object? sender, DragEventArgs e)
     {
         if (draggingOut())
@@ -125,6 +134,7 @@ public sealed class DropTarget
 
         e.DragEffects = Accepting(e.DragEffects);
         _ = import.Drop(drops.ReadDrop(e.DataTransfer));
+        Dropped?.Invoke();
     }
 
     /// <summary>

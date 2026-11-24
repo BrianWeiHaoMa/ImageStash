@@ -17,7 +17,8 @@ namespace ImageStash.Windows.Tests.Window;
 /// brings the item back; <c>Ctrl+T</c>, a tag typed and a real click on the grid tag the item. It shows the stash window,
 /// clicks its grid with the real pointer and deletes a picture of its own into the Recycle Bin, whose entry the Undo
 /// removes. The first run's pinned empty stash gives way to the grid once a real click on its Paste row adds the picture
-/// on the clipboard (G2, G13).
+/// on the clipboard (G2, G13). A flyout whose focus goes while the pointer's primary button is held stays, takes a drag
+/// and its drop, and hides; a press with no drag hides it once the button is up, and the open shortcut at once (G2, G11).
 /// </summary>
 [TestClass]
 public sealed class StashWindowPathTests
@@ -265,6 +266,92 @@ public sealed class StashWindowPathTests
             Assert.IsTrue(shown.Grid.IsEffectivelyVisible, "to the grid with the pasted picture");
             Assert.IsTrue(shown.Search.IsFocused, "the focus where it was (G7)");
         });
+    }
+
+    [TestMethod]
+    public async Task AFlyoutWhoseFocusGoesWhileTheButtonIsHeldStaysTakesADragAndItsDropHidesThenShowsTheImportAtTheNextSummon()
+    {
+        using var shown = ShownWindow.Open();
+        var kept = (await shown.OpenStash(shown.Picture("held kept.png"))).Single();
+        TrayDesktop.Run(() => shown.Notices.Close(shown.Notices.Shown.Single()));
+        var data = await shown.Files(shown.Picture("held dropped.png"));
+        TrayDesktop.Run(() =>
+        {
+            shown.Window.Hide();
+            shown.Window.SummonFromShortcut(new ForegroundReading(false, PresetTarget.App("Relay")), new SummonAnchor(null));
+            shown.OpenPreview(kept);
+        });
+
+        // A press on a picture in a browser takes the focus before its drag begins.
+        shown.QuietWindows.ButtonHeld = true;
+        TrayDesktop.Run(shown.Deactivate);
+        await Task.Delay(300);
+        TrayDesktop.Run(() =>
+        {
+            Assert.IsTrue(shown.Window.IsVisible, "the flyout stays while the press begun in the other app is held (G2)");
+            RaiseDrag(shown.Window, DragDrop.DragEnterEvent, data);
+            RaiseDrag(shown.Window, DragDrop.DragOverEvent, data);
+        });
+        // The button comes up over the flyout before the drop reaches it.
+        shown.QuietWindows.ButtonHeld = false;
+        await Task.Delay(300);
+        TrayDesktop.Run(() =>
+        {
+            Assert.IsTrue(shown.Window.IsVisible, "a drag over it keeps it until the drop (G11)");
+            Assert.AreEqual(DragDropEffects.Copy, RaiseDrag(shown.Window, DragDrop.DropEvent, data));
+            Assert.IsFalse(shown.Window.IsVisible, "the drop is followed by the hide in its own turn, focus being elsewhere (G2)");
+            Assert.IsFalse(shown.Preview.IsOpen, "the window's one hide closed the preview (G1)");
+        });
+
+        await Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Items.Count == 2 && shown.Import.Busy is null));
+        TrayDesktop.Run(() => shown.Window.SummonFromShortcut(new ForegroundReading(false, PresetTarget.App("Relay")), new SummonAnchor(null)));
+        await Eventually(() => TrayDesktop.Get(() => shown.Window.IsVisible && shown.Listing.Settled && CardSays(shown, "Added 1 to your stash")));
+        TrayDesktop.Run(() =>
+        {
+            var added = shown.Listing.Items.Single(item => item.Id != kept.Id);
+            Assert.AreEqual(Scope.All, shown.Listing.LitChip, "the import ended on All (G12)");
+            CollectionAssert.AreEqual(new[] { added.Id }, shown.Listing.Selection.ToArray(), "with the new picture first and selected");
+            Assert.IsTrue(shown.Search.IsFocused, "the summon lands in the search box (G1)");
+            var buttons = shown.Window.GetVisualDescendants().OfType<Button>().Where(button => button.IsEffectivelyVisible).Select(button => button.Content as string).ToList();
+            CollectionAssert.Contains(buttons, "Undo", "the import's notice waited for the summon with its Undo (G16)");
+            CollectionAssert.DoesNotContain(buttons, ImportEnd.Show, "nothing the person did moved them on, so nothing to Show (G12)");
+        });
+    }
+
+    [TestMethod]
+    public async Task AClickElsewhereHidesTheFlyoutOnceTheButtonIsUpAndTheOpenShortcutHidesAWaitingFlyoutAtOnce()
+    {
+        using var shown = ShownWindow.Open();
+        await shown.OpenStash(shown.Picture("held click.png"));
+        var relay = new ForegroundReading(false, PresetTarget.App("Relay"));
+        TrayDesktop.Run(() =>
+        {
+            shown.Window.Hide();
+            shown.Window.SummonFromShortcut(relay, new SummonAnchor(null));
+        });
+
+        shown.QuietWindows.ButtonHeld = true;
+        TrayDesktop.Run(shown.Deactivate);
+        await Task.Delay(300);
+        TrayDesktop.Run(() => Assert.IsTrue(shown.Window.IsVisible, "a click held in another app no longer hides it at the press (G2)"));
+        shown.QuietWindows.ButtonHeld = false;
+        await Eventually(() => TrayDesktop.Get(() => !shown.Window.IsVisible), TimeSpan.FromSeconds(2));
+
+        TrayDesktop.Run(() =>
+        {
+            shown.Window.SummonFromShortcut(relay, new SummonAnchor(null));
+            Assert.IsTrue(shown.Window.IsVisible);
+        });
+        shown.QuietWindows.ButtonHeld = true;
+        TrayDesktop.Run(shown.Deactivate);
+        await Task.Delay(300);
+        TrayDesktop.Run(() =>
+        {
+            Assert.IsTrue(shown.Window.IsVisible, "waiting on the held button");
+            shown.Window.SummonFromShortcut(relay, new SummonAnchor(null));
+            Assert.IsFalse(shown.Window.IsVisible, "the open shortcut hides it at once, waiting for nothing (G2)");
+        });
+        shown.QuietWindows.ButtonHeld = false;
     }
 
     private static bool CardSays(ShownWindow shown, string text) =>

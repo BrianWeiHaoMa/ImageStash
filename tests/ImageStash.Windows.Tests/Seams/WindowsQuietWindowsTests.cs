@@ -11,7 +11,8 @@ namespace ImageStash.Windows.Tests.Seams;
 /// <summary>
 /// The real notification area and pointer supply fresh physical placement hints, or no hint; a quiet window is
 /// activated by a field's take and by nothing else, whichever window is in front (G16); a quiet window shown only in
-/// parts is there only in them, and what lies beneath takes the rest (G15).
+/// parts is there only in them, and what lies beneath takes the rest (G15); the pointer's primary button reads held from
+/// its press to its release, and the other button never (G2).
 /// </summary>
 [TestClass]
 public sealed class WindowsQuietWindowsTests
@@ -43,6 +44,57 @@ public sealed class WindowsQuietWindowsTests
         var desktop = TrayDesktop.VirtualDesktop;
         Assert.IsTrue(new PixelRect(desktop.X, desktop.Y, desktop.Width + 1, desktop.Height + 1).Contains(pointer.Value), $"Pointer {pointer} lies outside virtual desktop {desktop}.");
     });
+
+    [TestMethod]
+    public void ThePrimaryButtonReadsHeldFromItsPressUntilItsReleaseAndTheOtherButtonNever()
+    {
+        using var pointer = TestMouse.PutBackAfterwards();
+        using var tray = new WindowsTray();
+        using var other = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 100, 400));
+        var quiet = new WindowsQuietWindows(tray);
+        var on = TestMouse.Centre(other.Window);
+        Assert.IsFalse(quiet.PrimaryButtonHeld(), "up before any press");
+
+        TestMouse.PressPrimary(on);
+        try
+        {
+            Assert.IsTrue(Within(quiet.PrimaryButtonHeld), "held from its press in a window not ImageStash's (G2)");
+        }
+        finally
+        {
+            TestMouse.ReleasePrimary(on);
+        }
+
+        Assert.IsTrue(Within(() => !quiet.PrimaryButtonHeld()), "up once released");
+        TestMouse.PressSecondary(on);
+        try
+        {
+            // Read only once Windows has the press: the other physical button is down.
+            Assert.IsTrue(Within(() => (GetAsyncKeyState(GetSystemMetrics(23) != 0 ? 0x01 : 0x02) & 0x8000) != 0), "the other button's press arrived");
+            Assert.IsFalse(quiet.PrimaryButtonHeld(), "the other button is not the one the person clicks with");
+        }
+        finally
+        {
+            TestMouse.ReleaseSecondary(on);
+        }
+    }
+
+    /// <summary>Whether <paramref name="condition"/> holds within a second, as input sent reaches Windows' state a moment later.</summary>
+    private static bool Within(Func<bool> condition)
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (!condition())
+        {
+            if (clock.ElapsedMilliseconds > 1000)
+            {
+                return false;
+            }
+
+            Thread.Sleep(10);
+        }
+
+        return true;
+    }
 
     [TestMethod]
     public void TheWindowInFrontIsReadWithItsRectangle()
@@ -351,6 +403,12 @@ public sealed class WindowsQuietWindowsTests
     {
         public int X, Y;
     }
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    private static extern short GetAsyncKeyState(int key);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    private static extern int GetSystemMetrics(int index);
 
     [DllImport("user32.dll", ExactSpelling = true)]
     private static extern nint SetFocus(nint window);

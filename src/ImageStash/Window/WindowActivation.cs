@@ -9,8 +9,9 @@ namespace ImageStash.Window;
 /// (G2, G8): ImageStash gaining focus from another app sets the target to the window that had focus just before, while
 /// the window's own showings (a summon, the pin, the unpin, the return after a capture) are absorbed; the flyout hides
 /// once focus has gone to another app, unless a dialog, a drag or an edit of its own keeps it, or focus went to
-/// ImageStash's own notification or Settings page; Close unpins and hides; and a hide closes an open preview first, as
-/// G1 says. It owns the window's activation state, which the window changes only through the transitions named for each
+/// ImageStash's own notification or Settings page, and only once the pointer's primary button is up when it was held as
+/// focus went (<see cref="FocusLossHide"/>); Close unpins and hides; and a hide closes an open preview first, as G1
+/// says. It owns the window's activation state, which the window changes only through the transitions named for each
 /// event, and the hide itself. UI thread only.
 /// </summary>
 public sealed class WindowActivation
@@ -24,6 +25,7 @@ public sealed class WindowActivation
     private readonly PressOnce heldKeys;
     private readonly Func<bool> dialogUp;
     private readonly Func<bool> dragInProgress;
+    private readonly FocusLossHide focusLoss;
     private bool notificationHasFocus;
     private SettingsWindow? settingsPage;
 
@@ -38,9 +40,12 @@ public sealed class WindowActivation
     /// Follows <paramref name="window"/>'s activation, deactivation and Close from now on; <paramref name="dialogUp"/> and
     /// <paramref name="dragInProgress"/> say whether a dialog the window opened is up and a drag it started is in progress;
     /// <paramref name="preview"/> is the preview a hide closes (G1); <paramref name="heldKeys"/> are the keys the window
-    /// holds down, let go wherever their release would not be seen here.
+    /// holds down, let go wherever their release would not be seen here; <paramref name="primaryButtonHeld"/> reads the
+    /// pointer's primary button wherever it was pressed, and <paramref name="dragOver"/> says whether a drag from outside
+    /// is over the window, which the hide for a loss of focus waits on (G2), reading the button on <paramref name="clock"/>.
     /// </summary>
-    public WindowActivation(Avalonia.Controls.Window window, WindowChrome chrome, Editing editing, Preview preview, PasteTargetHolder pasteTarget, ITarget targets, PressOnce heldKeys, Func<bool> dialogUp, Func<bool> dragInProgress)
+    public WindowActivation(Avalonia.Controls.Window window, WindowChrome chrome, Editing editing, Preview preview, PasteTargetHolder pasteTarget, ITarget targets, PressOnce heldKeys, Func<bool> dialogUp, Func<bool> dragInProgress,
+        Func<bool> primaryButtonHeld, Func<bool> dragOver, TimeProvider clock)
     {
         this.window = window;
         this.chrome = chrome;
@@ -52,6 +57,7 @@ public sealed class WindowActivation
         ForPaste = new PasteHide(HideForPaste, heldKeys);
         this.dialogUp = dialogUp;
         this.dragInProgress = dragInProgress;
+        focusLoss = new FocusLossHide(primaryButtonHeld, dragOver, FocusLeft, () => HideWindow(), clock, action => Dispatcher.UIThread.Post(action));
 
         // Judged once the events have settled: a change of the window's own frame deactivates it for a moment without
         // focus going to another app, and only that loss hides the flyout (G2).
@@ -68,6 +74,8 @@ public sealed class WindowActivation
         window.Activated += (_, _) =>
         {
             focusLeftDuringEdit = false;
+            // Focus is back: a hide waiting on a held button has nothing left to wait for (G2).
+            focusLoss.Stop();
             if (ownShowingRuns)
             {
                 ownActivationExpected = false;
@@ -240,16 +248,20 @@ public sealed class WindowActivation
     }
 
     /// <summary>
-    /// The flyout hides once focus has gone to another app, unless a dialog or a drag of its own is up (G2); focus with
-    /// ImageStash's own notification or Settings page has not gone to another app.
+    /// A drop from outside has been handed to the import: a flyout whose hide waits on the press that drop ended is judged
+    /// now, in the drop's turn, so the import ends in a hidden flyout whatever its speed (G2, G12).
     /// </summary>
-    private void HideIfFocusLeft()
-    {
-        if (window.IsVisible && !window.IsActive && !notificationHasFocus && settingsPage is not { IsActive: true } && Summon.FlyoutHides(chrome.Pinned, dialogUp(), dragInProgress(), editing.IsOpen))
-        {
-            HideWindow();
-        }
-    }
+    public void DropTaken() => focusLoss.Dropped();
+
+    /// <summary>The flyout hides once focus has gone to another app, and the pointer's primary button is up (<see cref="FocusLossHide"/>).</summary>
+    private void HideIfFocusLeft() => focusLoss.FocusMayHaveLeft();
+
+    /// <summary>
+    /// Whether the flyout shows while focus has gone to another app and nothing of its own keeps it: a dialog, a drag or
+    /// an edit (G2); focus with ImageStash's own notification or Settings page has not gone to another app.
+    /// </summary>
+    private bool FocusLeft() =>
+        window.IsVisible && !window.IsActive && !notificationHasFocus && settingsPage is not { IsActive: true } && Summon.FlyoutHides(chrome.Pinned, dialogUp(), dragInProgress(), editing.IsOpen);
 
     /// <summary>
     /// The window's one hide, whatever asks for it: no tag list stays up (F4), the notices' hovers ending with the showing
@@ -268,6 +280,7 @@ public sealed class WindowActivation
     private void Hide(bool pinnedAfter, bool forCapture)
     {
         ClosePreviewAtHide(pinnedAfter, forCapture);
+        focusLoss.Stop();
         // A key held as the window hides is let go where it will not see it, so its next press acts at the next summon.
         heldKeys.Released();
         // A window that hides while not the active one keeps its popups: no list is left behind (F4).

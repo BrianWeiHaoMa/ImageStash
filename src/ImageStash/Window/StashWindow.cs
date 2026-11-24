@@ -156,7 +156,9 @@ public sealed class StashWindow : Avalonia.Controls.Window
         listing.Changed += () => preview.StepButtons.Show(stepClicks);
 
         // Before Wire: its handlers of the window's activation, deactivation and Close come first.
-        activation = new WindowActivation(this, chrome, editing, preview, pasteTarget, seams.Target, heldKeys, () => DialogUp, () => DragInProgress);
+        activation = new WindowActivation(this, chrome, editing, preview, pasteTarget, seams.Target, heldKeys, () => DialogUp, () => DragInProgress,
+            quietWindows.PrimaryButtonHeld, () => dropTarget.DragOver, LocalClock.Instance);
+        dropTarget.Dropped += activation.DropTaken;
         CaptureHiding = new CaptureReturn(this, chrome, activation, seams.Target, seams.WindowOrder, () => DialogUp, () => DragInProgress, FocusContent).Hiding;
         chrome.Apply(pinnedNow: false);
         Wire();

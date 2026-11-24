@@ -439,5 +439,7 @@ public sealed class RefusedActivation : IQuietWindows
 
     public PixelPoint? PointerPosition() => null;
 
+    public bool PrimaryButtonHeld() => false;
+
     public PixelRect? FrontWindowRectangle() => null;
 }
