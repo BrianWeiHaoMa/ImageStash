@@ -103,13 +103,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
         seams.BorderDrag.StopAtMinimum(this);
         head = WindowLayout.Head(search, WindowLayout.SettingsButton(() => SettingsRequested?.Invoke()), AddMenu.Button(settings, act => unavailable(act), paste, ImportFiles, () => ScreenshotRequested?.Invoke(), () => RecordRequested?.Invoke()), pin);
 
-        // A chip's word goes into the box, which searches it, so the box, the grid and the lit chips agree (G4, G5); the
-        // caret goes to its end, with nothing selected, whatever a summon left selected (G1).
-        scopes = new ChipRow(listing, organising, () => ownDrag, text =>
-        {
-            search.Text = text;
-            search.SelectionStart = search.SelectionEnd = search.CaretIndex = text.Length;
-        })
+        scopes = new ChipRow(listing, organising, () => ownDrag)
         { Margin = new Thickness(10, 4, 10, 8) };
 
         thumbnails = new Thumbnails<Bitmap>(
@@ -464,17 +458,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
         search.ContextFlyout = null;
         new SearchBoxClipboard(search, drops, notices, HeldClipboard.Retry).Wire();
         summonSelection.Follow(search);
-        // The box is where the query is typed; the listing clears it only by its own reset, which the box shows at once.
-        listing.QueryCleared += () => search.Text = "";
-        // TextChanging, raised as the text changes: TextChanged comes later, posted, when a load or an import may already
-        // have changed what the window shows (G5, G12). The listing's own clear comes back here and is not searched again.
-        search.TextChanging += (_, _) =>
-        {
-            if ((search.Text ?? "") != listing.Query)
-            {
-                _ = listing.SetQuery(search.Text ?? "");
-            }
-        };
+        SearchBoxQuery.Wire(search, listing);
     }
 
     /// <summary>The window's keys, the wheel's size steps and typing in the grid (G6, G7).</summary>

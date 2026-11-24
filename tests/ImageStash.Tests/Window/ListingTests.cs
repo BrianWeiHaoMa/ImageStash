@@ -290,7 +290,7 @@ public sealed class ListingTests
         var listing = NewListing();
         await listing.StashOpened(stash.Store!);
         var cleared = new List<string>();
-        listing.QueryCleared += () => cleared.Add(listing.Query);
+        listing.QueryChangedByWindow += () => cleared.Add(listing.Query);
 
         await listing.SetQuery("cat");
         await listing.Refresh();

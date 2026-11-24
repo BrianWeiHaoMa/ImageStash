@@ -3,17 +3,16 @@ namespace ImageStash.Window;
 /// <summary>
 /// The moment the person's act began an import (G12): the drop, the files chosen with Import files…, the paste, read
 /// then and not when a batch queued behind another gets its turn. At the batch's end it says whether the person moved on
-/// meanwhile, having changed the search, the scope or the selection, or opened the preview, as
-/// <see cref="Listing.PersonsChanges"/> counts what the person asked and nothing the window did itself (an earlier
-/// import's end, a summon, a load).
+/// meanwhile by changing the search, scope or selection or opening the preview. A pending chip choice counts at its
+/// click once accepted.
 /// </summary>
-public readonly record struct ImportBegan(int PersonsChanges)
+public readonly record struct ImportBegan(long Input)
 {
     /// <summary>Read at the person's act.</summary>
-    public static ImportBegan In(Listing listing) => new(listing.PersonsChanges);
+    public static ImportBegan In(Listing listing) => new(listing.InputOrder);
 
     /// <summary>Whether the person has changed the search, the scope or the selection, or opened the preview, since.</summary>
-    public bool MovedOn(Listing listing) => listing.PersonsChanges != PersonsChanges;
+    public bool MovedOn(Listing listing) => listing.LastPersonChange > Input;
 }
 
 /// <summary>What an import's end shows, and its notice's Show shows again (G12).</summary>

@@ -204,11 +204,8 @@ public sealed class ChipRowTests
         {
             ControlThread.Run(() =>
             {
-                var row = new ChipRow(shown, listed.Organising, () => drag, _ => { });
-                var chip = row.Children.OfType<Button>().Single(button => button.Content as string == "#reaction");
-                using var data = new DataTransfer();
-                chip.RaiseEvent(new DragEventArgs(DragDrop.DropEvent, data, chip, new Point(1, 1), KeyModifiers.None)
-                    { DragEffects = DragDropEffects.Copy });
+                var row = new ChipRow(shown, listed.Organising, () => drag);
+                DropOn(row, "#reaction");
             });
             await finished.Task.WaitAsync(TimeSpan.FromSeconds(5));
         }
@@ -240,20 +237,157 @@ public sealed class ChipRowTests
         await listed.Organising.AddTag([tagged], "reaction");
         await listed.Listing.ShowScope(Scope.Favorites);
         Assert.IsEmpty(listed.Listing.Items);
-        var query = "";
         ControlThread.Run(() =>
         {
-            var row = new ChipRow(listed.Listing, listed.Organising, () => null, text => query = text);
+            var row = new ChipRow(listed.Listing, listed.Organising, () => null);
             var chip = row.Children.OfType<Button>().Single(button => button.Content as string == "#reaction");
             Assert.IsTrue(chip.IsEnabled);
-            chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Click(chip, listed.Listing);
         });
-        Assert.AreEqual("reaction", query);
-        Assert.AreEqual(tagged.Id, (await listed.Stash.Store!.Search(query)).Value!.Single().Id);
+        Assert.AreEqual("reaction", listed.Listing.Query);
+        Assert.AreEqual(tagged.Id, listed.Listing.Items.Single().Id);
+    }
+
+    [TestMethod]
+    public async Task EveryTagFitsAtTheRightEdgeWhenTheSearchLeavesAnExistingTagOutOfAWideRow()
+    {
+        using var listed = await ListedStash.Open();
+        var cat = await listed.Stash.Import("one");
+        var dog = await listed.Stash.Import("two");
+        listed.Stash.Tag(cat.Id, "cat");
+        listed.Stash.Tag(dog.Id, "dog");
+        await listed.Listing.SetQuery("cat");
+
+        ControlThread.Run(() =>
+        {
+            var row = Row(listed.Listing, listed.Organising);
+            var size = new Size(700, 40);
+            var catChip = row.Children.OfType<Button>().Single(chip => chip.Content as string == "#cat");
+            catChip.Width = 50;
+            var picker = row.Children.OfType<Button>().Last();
+            picker.Width = 40;
+            row.Measure(size);
+            row.Arrange(new Rect(size));
+            Assert.IsTrue(catChip.IsHitTestVisible);
+            Assert.IsTrue(picker.IsHitTestVisible, "dog would fit here, but selecting it requires Every tag");
+            Assert.AreEqual(size.Width, picker.Bounds.Right);
+        });
+    }
+
+    [TestMethod]
+    public async Task AChipUnavailableForFilteringStillTakesATileDrop()
+    {
+        using var listed = await ListedStash.Open();
+        var store = listed.Stash.Store!;
+        var cat = await listed.Stash.Import("one");
+        var dog = await listed.Stash.Import("two");
+        await store.AddTag([cat], "cat");
+        await store.AddTag([dog], "dog");
+        var shown = new Listing(listed.Failures.Add);
+        await shown.StashOpened(store);
+        await shown.ChooseTag("cat");
+
+        var drag = new OwnDrag([cat]);
+        var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        listed.Organising.Changed += () =>
+        {
+            if (!listed.Organising.Changing)
+            {
+                finished.TrySetResult();
+            }
+        };
+        ControlThread.Run(() =>
+        {
+            var row = new ChipRow(shown, listed.Organising, () => drag);
+            row.Measure(new Size(400, 40));
+            Dispatcher.UIThread.RunJobs();
+            var chip = row.Children.OfType<Button>().Single(button => button.Content as string == "#dog");
+            Assert.IsLessThan(1d, chip.Opacity, "the tag has no matching carrier");
+            Assert.AreEqual(DragDropEffects.Copy, DropOn(row, "#dog"));
+        });
+
+        await finished.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.IsTrue(drag.TakenByChip);
+        Assert.AreEqual("cat", shown.Query);
+        CollectionAssert.AreEqual(new[] { "cat", "dog" }, (await store.Item(cat.Id)).Value!.Tags.ToArray());
+    }
+
+    [TestMethod]
+    public async Task TwoClicksOnTheSameChipFilterAndThenRestoreTheGridWithoutMovingTheChips()
+    {
+        using var listed = await ListedStash.Open();
+        var store = listed.Stash.Store!;
+        var cat = await listed.Stash.Import("picture one");
+        var dog = await listed.Stash.Import("picture two");
+        await store.AddTag([cat], "cat");
+        await store.AddTag([dog], "dog");
+        await listed.Listing.ShowScope(Scope.All);
+        var changes = listed.Listing.PersonsChanges;
+        ControlThread.Run(() =>
+        {
+            var row = Row(listed.Listing, listed.Organising);
+            var box = WindowLayout.SearchBox();
+            SearchBoxQuery.Wire(box, listed.Listing);
+            row.Measure(new Size(400, 40));
+            Dispatcher.UIThread.RunJobs();
+            var dogChip = row.Children.OfType<Button>().Single(chip => chip.Content as string == "#dog");
+
+            Click(dogChip, listed.Listing);
+            Assert.AreEqual("dog", listed.Listing.Query);
+            Assert.AreEqual("dog", box.Text);
+            Assert.AreEqual(3, box.CaretIndex);
+            Assert.AreEqual("", box.SelectedText ?? "");
+            Assert.AreEqual(changes + 1, listed.Listing.PersonsChanges);
+            Assert.AreEqual(dog.Id, listed.Listing.Items.Single().Id);
+            CollectionAssert.AreEqual(new[] { "#cat", "#dog" }, row.Children.OfType<Button>().Select(chip => chip.Content).OfType<string>().ToArray());
+            Assert.AreSame(dogChip, row.Children.OfType<Button>().Single(chip => chip.Content as string == "#dog"));
+            Click(dogChip, listed.Listing);
+            Assert.AreEqual("", listed.Listing.Query);
+            Assert.AreEqual("", box.Text ?? "");
+            Assert.HasCount(2, listed.Listing.Items);
+            Assert.AreEqual(changes + 2, listed.Listing.PersonsChanges);
+
+            ActAndSettle(listed.Listing, () => box.Text = "ca");
+            Assert.AreEqual("ca", listed.Listing.Query);
+            Assert.AreEqual(cat.Id, listed.Listing.Items.Single().Id);
+            CollectionAssert.AreEqual(new[] { "cat" }, listed.Listing.Chips.Select(chip => chip.Tag).ToArray());
+            Assert.AreEqual(changes + 3, listed.Listing.PersonsChanges);
+        });
+    }
+
+    private static void Click(Button chip, Listing listing) =>
+        ActAndSettle(listing, () => chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)));
+
+    private static void ActAndSettle(Listing listing, Action act)
+    {
+        var previous = SynchronizationContext.Current;
+        AvaloniaSynchronizationContext.InstallIfNeeded();
+        try
+        {
+            act();
+            var settled = listing.Settle().WaitAsync(TimeSpan.FromSeconds(5));
+            var frame = new DispatcherFrame();
+            _ = settled.ContinueWith(_ => frame.Continue = false, TaskScheduler.FromCurrentSynchronizationContext());
+            Dispatcher.UIThread.PushFrame(frame);
+            settled.GetAwaiter().GetResult();
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+    }
+
+    private static DragDropEffects DropOn(ChipRow row, string tag)
+    {
+        var chip = row.Children.OfType<Button>().Single(button => button.Content as string == tag);
+        using var data = new DataTransfer();
+        var drop = new DragEventArgs(DragDrop.DropEvent, data, chip, new Point(1, 1), KeyModifiers.None) { DragEffects = DragDropEffects.Copy };
+        chip.RaiseEvent(drop);
+        return drop.DragEffects;
     }
 
     private static ChipRow Row(Listing listing, Organising? organising = null) =>
-        new(listing, organising ?? new Organising(listing, new Notices(TimeProvider.System)), () => null, _ => { });
+        new(listing, organising ?? new Organising(listing, new Notices(TimeProvider.System)), () => null);
 
     private static List<bool> Lit(IEnumerable<Button> chips) => chips.Select(chip => chip.Classes.Contains("accent")).ToList();
 

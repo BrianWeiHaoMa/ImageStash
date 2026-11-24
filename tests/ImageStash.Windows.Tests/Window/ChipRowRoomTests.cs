@@ -228,6 +228,129 @@ public sealed class ChipRowRoomTests
     }
 
     [TestMethod]
+    public async Task WideRowOffersEveryTagWhenAStationaryChipCannotFilter()
+    {
+        using var pointer = TestMouse.PutBackAfterwards();
+        using var shown = Open();
+        var items = await shown.OpenStash(shown.Picture("orchard first.png"), shown.Picture("orchard second.png"));
+        await shown.Tag([items[0]], "pear");
+        await shown.Tag([items[1]], "plum");
+        await TrayDesktop.Get(() => shown.Listing.ShowScope(Scope.All));
+        TrayDesktop.Run(() => shown.Window.Width = 900);
+        await Eventually(() => TrayDesktop.Get(() => shown.Window.ClientSize.Width >= 899));
+        await shown.ClickSearchInFront();
+
+        string[] tags = ["#pear", "#plum"];
+        var before = TrayDesktop.Get(() =>
+        {
+            CollectionAssert.AreEqual(Scopes.Select(scope => scope.Name).Concat(tags).ToArray(), shown.ShownChips());
+            return ChipRowTests.ChipBounds(shown, tags);
+        });
+        var pear = await ChipRowTests.ClickPoint(TrayDesktop.Get(() => shown.Chip("#pear")));
+        var plum = TestMouse.Centre(TrayDesktop.Get(() => shown.Chip("#plum")));
+        TestMouse.Click(pear);
+        await Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == "pear"));
+        TrayDesktop.Run(() =>
+        {
+            CollectionAssert.AreEqual(new[] { items[0].Id }, shown.Listing.Items.Select(item => item.Id).ToArray());
+            CollectionAssert.AreEqual(before, ChipRowTests.ChipBounds(shown, tags), "plum stays in the row while no match carries it (G5)");
+            Assert.IsFalse(shown.Lit("#plum"));
+            Assert.AreEqual(EveryTag, shown.ShownChips()[^1]);
+            Assert.AreEqual(shown.ChipRow.Bounds.Width, shown.Chip(EveryTag).Bounds.Right, 0.5);
+        });
+
+        var everyTag = await ChipRowTests.ClickPoint(TrayDesktop.Get(() => shown.Chip(EveryTag)));
+        Assert.AreEqual(plum, await ChipRowTests.ClickPoint(TrayDesktop.Get(() => shown.Chip("#plum"))));
+        TestMouse.Click(plum);
+        TestMouse.Click(everyTag);
+        await Eventually(() => TrayDesktop.Get(() => shown.ChipRow.Picker.IsOpen));
+        var entry = TrayDesktop.Get(() =>
+        {
+            Assert.AreEqual("pear", shown.Search.Text, "clicking the grey plum chip leaves the query alone (G5)");
+            CollectionAssert.AreEqual(new[] { new TagPickerEntry("pear", true), new TagPickerEntry("plum", false) },
+                shown.ChipRow.Picker.Entries.ToArray());
+            return Entry(shown.ChipRow.Picker, "plum");
+        });
+        TestMouse.Click(await ChipRowTests.ClickPoint(entry));
+        await Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == "pear plum"));
+        TrayDesktop.Run(() =>
+        {
+            Assert.AreEqual("pear plum", shown.Search.Text);
+            Assert.IsTrue(shown.Listing.NoMatch);
+            Assert.IsTrue(shown.Lit("#plum"), "the grey tag can be picked and becomes lit even with no matches (G5)");
+            CollectionAssert.AreEqual(before, ChipRowTests.ChipBounds(shown, tags), "picking a tag leaves the tag rectangles in place (G5)");
+            Assert.IsTrue(shown.ChipRow.Picker.IsOpen);
+            Assert.AreEqual(shown.ChipRow.Bounds.Width, shown.Chip(EveryTag).Bounds.Right, 0.5, "the open picker keeps its anchor at the edge");
+            Tap(shown.Search, Key.Escape);
+        });
+        await Eventually(() => TrayDesktop.Get(() => !shown.ChipRow.Picker.IsOpen));
+        Assert.AreEqual(plum, await ChipRowTests.ClickPoint(TrayDesktop.Get(() => shown.Chip("#plum"))));
+        TestMouse.Click(plum);
+        await Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == "pear"));
+        TrayDesktop.Run(() => CollectionAssert.AreEqual(new[] { items[0].Id }, shown.Listing.Items.Select(item => item.Id).ToArray(),
+            "the lit chip can remove its word even under a no-match query (G5)"));
+    }
+
+    [TestMethod]
+    public async Task ARealTileDragOntoAGreyChipAppliesItsLiveTag()
+    {
+        using var pointer = TestMouse.PutBackAfterwards();
+        using var shown = Open();
+        var items = await shown.OpenStash(shown.Picture("drag carrier.png"), shown.Picture("drop carrier.png"));
+        await shown.Tag([items[0]], "first");
+        await shown.Tag([items[1]], "second");
+        await TrayDesktop.Get(() => shown.Listing.ShowScope(Scope.All));
+        await shown.ClickSearchInFront();
+        TestMouse.Click(await ChipRowTests.ClickPoint(TrayDesktop.Get(() => shown.Chip("#first"))));
+        await Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == "first"));
+
+        const string grey = "#second";
+        await shown.DropTargetAt(grey);
+        var target = TestMouse.Centre(TrayDesktop.Get(() => shown.Chip(grey)));
+        var before = TrayDesktop.Get(() => ChipRowTests.ChipBounds(shown, "#first", grey));
+        var (tile, startDrag) = TrayDesktop.Get(() =>
+        {
+            CollectionAssert.AreEqual(new[] { items[0].Id }, shown.Listing.Items.Select(item => item.Id).ToArray());
+            Assert.IsFalse(shown.Lit(grey));
+            Assert.DoesNotContain("second", shown.Listing.Items.Single().Tags);
+            Assert.IsLessThan(shown.Chip("#first").Opacity, shown.Chip(grey).Opacity, "the live drop target is dimmed while filtering (G5)");
+            var centre = shown.Window.PointToClient(shown.TileOnScreen(items[0].Id));
+            return (shown.Window.PointToScreen(centre), shown.Window.PointToScreen(centre + new Vector(20, 0)));
+        });
+        await Eventually(() => TrayDesktop.Get(() => shown.Window.InputHitTest(shown.Window.PointToClient(tile)) is ThumbnailGrid));
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        TrayDesktop.Run(() => shown.Chip(grey).AddHandler(DragDrop.DragEnterEvent, (_, _) => entered.TrySetResult(), handledEventsToo: true));
+
+        // The shell's drag loop runs on the UI thread. Observe its progress without dispatching work there.
+        TestMouse.Press(tile);
+        try
+        {
+            TestMouse.MoveTo(startDrag);
+            await Eventually(() => shown.Handoff.Dragging);
+            TestMouse.MoveTo(target);
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        finally
+        {
+            TestMouse.Release(target);
+        }
+
+        await Eventually(() => !shown.Handoff.Dragging && shown.TagsOf(items[0].Id).Contains("second"));
+        await TrayDesktop.Get(() => shown.Listing.Settle());
+        TrayDesktop.Run(() =>
+        {
+            Assert.AreEqual("first", shown.Search.Text, "dropping applies a tag without changing the filter (G17)");
+            CollectionAssert.AreEqual(new[] { items[0].Id }, shown.Listing.Items.Select(item => item.Id).ToArray());
+            CollectionAssert.AreEqual(before, ChipRowTests.ChipBounds(shown, "#first", grey), "a tag refresh keeps the held places");
+            Assert.AreEqual(1d, shown.Chip(grey).Opacity, "the tag now has a matching carrier");
+        });
+        Assert.AreEqual(0, shown.Uses(), "an internal drop records no use (G10)");
+        Assert.AreEqual(target, await ChipRowTests.ClickPoint(TrayDesktop.Get(() => shown.Chip(grey))));
+        TestMouse.Click(target);
+        await Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == "first second"));
+    }
+
+    [TestMethod]
     public async Task FirstOverflowKeepsTheRightmostTagTargetForSuccessiveDrops()
     {
         using var pointer = TestMouse.PutBackAfterwards();

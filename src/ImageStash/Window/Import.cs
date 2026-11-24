@@ -373,6 +373,11 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
             IReadOnlyList<(long Item, IReadOnlyList<string> Tags)> given = results.Where(file => file.Result == ImportResultKind.AlreadyInStash && file.GainedTags.Count > 0)
                 .Select(file => (file.Item!.Id, file.GainedTags)).ToList();
             var undoes = batch.Count > 0 || given.Count > 0;
+            if (listing.TagChoicePending)
+            {
+                await listing.Settle();
+            }
+
             var kept = began.MovedOn(listing);
             if (kept)
             {

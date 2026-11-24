@@ -106,7 +106,7 @@ public sealed class ImportEndTests
                 await listed.Listing.ShowScope(Scope.Favorites);
                 break;
             case "a tag chip":
-                await listed.Listing.SetQuery(ItemSearch.WithWord(listed.Listing.Query, "cat"));
+                await listed.Listing.ChooseTag("cat");
                 break;
             case "Space":
                 Assert.AreEqual(KeyAction.TogglePreview, await listed.Press(Key.Space, KeyModifiers.None, KeyPlace.Grid));
@@ -147,6 +147,63 @@ public sealed class ImportEndTests
     }
 
     [TestMethod]
+    public async Task AnImportThatLeavesAnEmptyQueryAndAllInPlaceKeepsTheClickedRow()
+    {
+        using var listed = await ListedStash.Open();
+        var cat = await listed.Stash.ImportFixture("one", "still.png");
+        var dog = await listed.Stash.ImportFixture("two", "photo.jpg");
+        listed.Stash.Tag(cat.Id, "cat");
+        listed.Stash.Tag(dog.Id, "dog");
+        await listed.Listing.ShowScope(Scope.All);
+        await listed.Listing.SetQuery("cat");
+        await listed.Listing.ChooseTag("cat");
+        Assert.AreEqual("", listed.Listing.Query);
+        CollectionAssert.AreEqual(new[] { "cat" }, listed.Listing.Chips.Select(chip => chip.Tag).ToArray());
+
+        var imported = await listed.Import.Drop(ListedStash.Contents([MediaFixtures.Path("transparent.png")]));
+
+        Assert.AreEqual(Scope.All, listed.Listing.Scope);
+        Assert.AreEqual("", listed.Listing.Query);
+        CollectionAssert.AreEqual(new[] { "cat" }, listed.Listing.Chips.Select(chip => chip.Tag).ToArray());
+        Assert.AreEqual(imported.Single().Item!.Id, listed.Listing.Focused);
+    }
+
+    [TestMethod]
+    public async Task AChipClickedBeforeTheDropDoesNotCountAsMovingOnWhileTheImportRuns()
+    {
+        using var listed = await ListedStash.Open();
+        var carrier = await listed.Stash.ImportFixture("carrier", "still.png");
+        Assert.IsTrue((await listed.Stash.Store!.AddTag([carrier], "cat dog")).Single().Succeeded);
+        var listing = listed.Listing;
+        await listing.ShowScope(Scope.All);
+        var file = new HeldBackFile(MediaFixtures.Path("photo.jpg"));
+        Task cat, dog;
+        Task<IReadOnlyList<ImportedFile>> importing;
+        using (listed.Stash.HoldStore())
+        {
+            cat = listing.ChooseTag("cat");
+            dog = listing.ChooseTag("dog");
+            CollectionAssert.AreEqual(new[] { "cat" }, listing.LitTags.ToArray(), "only cat is lit when the file is dropped");
+            importing = listed.Import.Drop(file.Drop);
+        }
+
+        try
+        {
+            await Task.WhenAll(cat, dog);
+            Assert.AreEqual("cat dog", listing.Query);
+        }
+        finally
+        {
+            file.Release();
+        }
+
+        var item = (await importing).Single().Item!;
+        Assert.AreEqual("", listing.Query, "the import selects its result when the person did not move on after dropping");
+        Assert.AreEqual(item.Id, listing.Focused);
+        CollectionAssert.AreEqual(new[] { "cat" }, item.Tags.ToArray(), "the drop uses the tags lit at the drop");
+    }
+
+    [TestMethod]
     public async Task AKeptSearchListsANewItemAndAnItemJustTaggedThatMatchItTheSelectionStaying()
     {
         using var listed = await ListedStash.Open();
@@ -154,7 +211,8 @@ public sealed class ImportEndTests
         var cat = await listed.Stash.ImportFixture("cat one", "animated.gif");
         var other = await listed.Stash.ImportFixture("cat three", "animated.webp");
         listed.Stash.Tag(cat.Id, "cat");
-        await listed.Listing.SetQuery(ItemSearch.WithWord("", "cat"));
+        await listed.Listing.Refresh();
+        await listed.Listing.ChooseTag("cat");
         Assert.AreEqual(other.Id, listed.Listing.Focused, "the newest match first");
         var arriving = new HeldBackFile(MediaFixtures.Path("transparent.png"), "cat two.png");
         var again = new HeldBackFile(MediaFixtures.Path("still.png"));

@@ -37,7 +37,7 @@ public enum Direction
 /// store's query on the store's thread and applies its result only if no later load has started, so the grid answers
 /// the latest keystroke (G5, E4).
 /// </summary>
-public sealed class Listing
+public sealed partial class Listing
 {
     private readonly object gate = new();
     private readonly Action<Failure> failed;
@@ -49,9 +49,14 @@ public sealed class Listing
     private bool selectionByImport;
 
     private int personsChanges;
+    private long inputOrder;
 
-    /// <summary>Every tag the stash's items carry, as the latest load read it; never kept across a change (G17).</summary>
-    private IReadOnlyList<TagCount> tags = [];
+    // A deferred click keeps its place in the input order. Only an accepted change updates either last-change marker.
+    internal long InputOrder => Interlocked.Read(ref inputOrder);
+    internal long LastPersonChange { get; private set; }
+
+    private long NextInput() => Interlocked.Increment(ref inputOrder);
+
     private (long Commits, long FileSteps)? tagsVersion;
     private ListingOrder order = new();
     private StashStore? withdrawnStore;
@@ -83,10 +88,9 @@ public sealed class Listing
     public event Action? Changed;
 
     /// <summary>
-    /// Raised as the listing clears the query itself (a scope chip, an import's All), before its load, so the search box
-    /// empties at once and the next letter typed starts a new query (G4, G12).
+    /// Raised when a chip choice or scope reset changes the query, so the search box reflects it immediately.
     /// </summary>
-    public event Action? QueryCleared;
+    public event Action? QueryChangedByWindow;
 
     public StashState State { get; private set; } = StashState.Opening;
 
@@ -163,8 +167,7 @@ public sealed class Listing
 
     /// <summary>
     /// How many times the person has changed the search, the scope or the selection since the start, or opened the
-    /// preview (<see cref="FocusForPreview"/>), which an import's end reads to know whether they moved on while it ran
-    /// (G12, <see cref="ImportBegan"/>). Only what the person asked counts, and of the selection only a change: a click on
+    /// preview (<see cref="FocusForPreview"/>). Only accepted actions count, and of the selection only a change: a click on
     /// the tile already alone selected is none. A call made with <c>byPerson: false</c>, an import's selection, a summon,
     /// and a load or refresh moving the selection count for nothing.
     /// </summary>
@@ -182,20 +185,20 @@ public sealed class Listing
     internal int RecentReorders { get; private set; }
 
     /// <summary>
-    /// The tag chips in display order (G4, G5). With no query a zero count marks an inactive place. The row fits as many
+    /// The tag chips in display order (G4, G5). A zero count marks an inactive place. The row fits as many
     /// whole chips as it can. <see cref="Tags"/> is the live list for pickers and import.
     /// </summary>
     public IReadOnlyList<TagCount> Chips { get; private set; } = [];
 
     /// <summary>Every tag the stash's items carry, the commonest first, as the latest load read it, whatever the query (G4).</summary>
-    public IReadOnlyList<TagCount> Tags => tags;
+    public IReadOnlyList<TagCount> Tags => order.Tags.Live;
 
     /// <summary>
     /// The tags whose chips are lit: the existing tags that are words of the query, ignoring case and a leading
     /// <c>#</c>, in the query's order (G5). Read from every tag, not from the matches or the chips the row's width
     /// shows, so the tags new items get follow what was typed, a query matching nothing included (G11).
     /// </summary>
-    public IReadOnlyList<string> LitTags => ItemSearch.LitTags(Query, tags.Select(count => count.Tag));
+    public IReadOnlyList<string> LitTags => order.Tags.Lit(Query);
 
     public IReadOnlySet<long> Selection => selection;
 
@@ -213,8 +216,8 @@ public sealed class Listing
     /// <summary>Whether the last load started has been applied, or has failed.</summary>
     public bool Settled => applied == started;
 
-    /// <summary>How many loads that move the selection to the first item have started: an arrow waiting for one is superseded by the next (G5).</summary>
-    public int SelectionResets { get; private set; }
+    /// <summary>The input order of the latest accepted selection reset. A newer reset supersedes a waiting arrow (G5).</summary>
+    internal long LastSelectionReset { get; private set; }
 
     /// <summary>The stash is open, nothing is searched, and it holds no item at all: the empty state (G2).</summary>
     public bool IsEmptyStash => State == StashState.Open && Settled && !IsSearch && Items.Count == 0 && stashEmpty;
@@ -319,7 +322,8 @@ public sealed class Listing
 
     private void ClearTagCounts()
     {
-        tags = [];
+        order.Tags.ForgetRead();
+        searchRead = null;
         Chips = [];
         tagsVersion = null;
     }
@@ -334,6 +338,7 @@ public sealed class Listing
         CountChange(byPerson);
         lock (gate)
         {
+            var changesView = Query.Length > 0 || Scope != scope;
             Query = "";
             Scope = scope;
             resetPending = false;
@@ -345,11 +350,15 @@ public sealed class Listing
 
             if (byPerson)
             {
-                order.RequestTagOrder();
+                order.Tags.RequestOrder();
+            }
+            else if (changesView)
+            {
+                order.Tags.Edited();
             }
         }
 
-        QueryCleared?.Invoke();
+        QueryChangedByWindow?.Invoke();
         return Load(keepSelection: false);
     }
 
@@ -358,7 +367,12 @@ public sealed class Listing
     {
         using var acting = UserAct.Begin(SearchAct);
         CountChange(true);
-        Query = text;
+        lock (gate)
+        {
+            Query = text;
+            order.Tags.Edited();
+        }
+
         return Load(keepSelection: false);
     }
 
@@ -382,7 +396,15 @@ public sealed class Listing
     /// <paramref name="flyout"/> keeps, of several items an import selected, the first alone (G1, G12), whether the import
     /// ended before the hide or while the flyout was hidden; the pinned window brought forward keeps them all.
     /// </summary>
-    public Task Summoned(bool flyout)
+    public Task Summoned(bool flyout) => TagChoicePending ? SummonAfterTagChoices(flyout) : SummonNow(flyout);
+
+    private async Task SummonAfterTagChoices(bool flyout)
+    {
+        await Settle();
+        await SummonNow(flyout);
+    }
+
+    private Task SummonNow(bool flyout)
     {
         using var acting = UserAct.Begin(SummonAct);
         bool collapsed;
@@ -395,7 +417,7 @@ public sealed class Listing
             // The first show after start: the stash may have changed since its last load, as a capture's commit does
             // before its refresh, so it is judged once more; a stash not yet listed is judged at its first load (G1).
             judge = resetPending && listedOnce;
-            order.RequestTagOrder();
+            order.Tags.RequestOrder();
             if (Scope == Scope.Recent)
             {
                 order.RequestRecentOrder();
@@ -404,11 +426,12 @@ public sealed class Listing
             read = store is not null && (judge || loadFailed || !Settled || Scope == Scope.Recent || tagsVersion != store.ListingVersion);
             if (store is not null && !read)
             {
-                order.CountedTags(tags);
-                chipsChanged = !IsSearch && !Chips.SequenceEqual(order.TagPlaces);
+                order.Tags.Counted(Tags);
+                var next = order.Tags.Shown(Query, IsSearch);
+                chipsChanged = !Chips.SequenceEqual(next);
                 if (chipsChanged)
                 {
-                    Chips = order.TagPlaces;
+                    Chips = next;
                 }
             }
 
@@ -430,10 +453,21 @@ public sealed class Listing
     }
 
     /// <summary>
-    /// Completes once the latest load started has been applied or has failed, however many start meanwhile, so a key
-    /// acts on the selection of what was typed, not of what showed before it (G5).
+    /// Waits for pending tag choices and the latest load so keys act on the resulting selection (G5, G7).
     /// </summary>
-    public Task Settle()
+    public Task Settle() => TagChoicePending ? SettleAfterTagChoices() : SettleRead();
+
+    private async Task SettleAfterTagChoices()
+    {
+        do
+        {
+            await order.Tags.PendingChoice;
+            await SettleRead();
+        }
+        while (!Settled || TagChoicePending);
+    }
+
+    private Task SettleRead()
     {
         lock (gate)
         {
@@ -631,12 +665,16 @@ public sealed class Listing
     private long? FirstSelected() => Items.FirstOrDefault(item => selection.Contains(item.Id))?.Id;
 
     /// <summary>Counts one of the person's changes (<see cref="PersonsChanges"/>) when <paramref name="changed"/>.</summary>
-    private void CountChange(bool changed)
+    private void CountChange(bool changed, long? at = null)
     {
         ActedOn();
         if (changed)
         {
-            Interlocked.Increment(ref personsChanges);
+            lock (gate)
+            {
+                LastPersonChange = Math.Max(LastPersonChange, at ?? NextInput());
+                personsChanges++;
+            }
         }
     }
 
@@ -660,7 +698,7 @@ public sealed class Listing
     private long? NearestSelected(int index) =>
         selection.Count == 0 ? null : selection.MinBy(id => (Math.Abs(indexOf[id] - index), indexOf[id] < index))!;
 
-    private async Task Load(bool keepSelection)
+    private async Task Load(bool keepSelection, bool showPendingQuery = false, long? selectionAt = null)
     {
         int load;
         string query;
@@ -672,7 +710,10 @@ public sealed class Listing
         {
             load = ++started;
             selectionResetWaiting |= !keepSelection;
-            SelectionResets += keepSelection ? 0 : 1;
+            if (!keepSelection)
+            {
+                LastSelectionReset = Math.Max(LastSelectionReset, selectionAt ?? NextInput());
+            }
             (query, scope, reset) = (Query, Scope, resetPending);
             searching = ItemSearch.IsSearch(query);
             // Search can cover Recent. Read its membership on refresh so successive arrivals still join in order.
@@ -692,8 +733,16 @@ public sealed class Listing
             return;
         }
 
+        // Keep the search read available to a click that follows it, even if toggling a lit chip supersedes the display.
+        var reading = Run(opened, query, scope, reset, () => ReferenceEquals(store, opened));
+        searchRead = searching ? (query, reading) : null;
+        if (showPendingQuery)
+        {
+            Raise();
+        }
+
         // A load whose store a Move has replaced, or let go of, is abandoned after each await: that store is closed (G30).
-        var loaded = await Run(opened, query, scope, reset, () => ReferenceEquals(store, opened));
+        var loaded = await reading;
         if (loaded is null || !ReferenceEquals(store, opened))
         {
             return;
@@ -730,6 +779,10 @@ public sealed class Listing
                 if (loaded.Items.Succeeded)
                 {
                     ApplyLoadedItems(loaded, searching, reset, keepSelection);
+                    if (searching)
+                    {
+                        order.Tags.Matched(query, Items);
+                    }
                 }
 
                 if (coveredRecent?.Value is { } recent)
@@ -739,12 +792,11 @@ public sealed class Listing
 
                 if (counted.Value is { } currentTags)
                 {
-                    tags = currentTags;
                     tagsVersion = version;
-                    order.CountedTags(tags);
+                    order.Tags.Counted(currentTags);
                 }
 
-                Chips = searching ? ChipsFor(query, tags, Items) : order.TagPlaces;
+                Chips = order.Tags.Shown(query, searching, rank: loaded.Items.Succeeded && counted.Succeeded);
             }
         }
 
@@ -841,39 +893,6 @@ public sealed class Listing
             selectionByImport = false;
             Focused = items.Count > 0 ? items[0].Id : null;
         }
-    }
-
-    /// <summary>
-    /// The chips for <paramref name="query"/> over every tag in <paramref name="counts"/>, the stash's order: all of them
-    /// while it has no word; else the tags that are its words, then the tags that contain one of its words without being
-    /// one, in the stash's order, so a tag being typed stays in reach, then the tags carried by some of
-    /// <paramref name="matches"/> and not by all, which alone would narrow them, the most carried among them first, each
-    /// with that count, ties in the stash's order; each tag once, in the first of the three it belongs to (G5).
-    /// </summary>
-    public static IReadOnlyList<TagCount> ChipsFor(string query, IReadOnlyList<TagCount> counts, IReadOnlyList<StashItem> matches)
-    {
-        if (!ItemSearch.IsSearch(query))
-        {
-            return counts;
-        }
-
-        var lit = ItemSearch.LitTags(query, counts.Select(count => count.Tag));
-        var words = ItemSearch.Words(query);
-        var typing = counts.Where(count => !lit.Contains(count.Tag) && ItemSearch.ContainsAWord(count.Tag, words)).ToList();
-        // A set, so the narrowing group's test stays linear in the stash's tags however many are being typed (G1, E4).
-        var typed = typing.Select(count => count.Tag).ToHashSet();
-        var carried = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        foreach (var tag in matches.SelectMany(item => item.Tags))
-        {
-            carried[tag] = carried.GetValueOrDefault(tag) + 1;
-        }
-
-        var narrowing = counts
-            .Where(count => !lit.Contains(count.Tag) && !typed.Contains(count.Tag)
-                && carried.GetValueOrDefault(count.Tag) is > 0 and var carriers && carriers < matches.Count)
-            .Select(count => new TagCount(count.Tag, carried[count.Tag]))
-            .OrderByDescending(count => count.Items);
-        return [.. lit.Select(tag => counts.First(count => count.Tag == tag)), .. typing, .. narrowing];
     }
 
     /// <summary>The items a load shows, the scope it resolved, and whether it learned that the stash holds nothing.</summary>

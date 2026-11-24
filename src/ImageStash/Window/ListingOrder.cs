@@ -2,13 +2,11 @@ using ImageStash.Store;
 
 namespace ImageStash.Window;
 
-/// <summary>The order of Recent and of the unfiltered tag row between summons and scope choices.</summary>
+/// <summary>The order of Recent and the tag row for this stash.</summary>
 internal sealed class ListingOrder
 {
     private IReadOnlyList<long> recent = [];
-    private bool takeTagOrder = true;
-
-    public IReadOnlyList<TagCount> TagPlaces { get; private set; } = [];
+    public TagChipOrder Tags { get; } = new();
 
     public bool RecentReorderPending { get; private set; } = true;
 
@@ -21,8 +19,6 @@ internal sealed class ListingOrder
     }
 
     public void RecentChanged() => RecentReadPending = true;
-
-    public void RequestTagOrder() => takeTagOrder = true;
 
     public IReadOnlyList<StashItem> Recent(IReadOnlyList<StashItem> current)
     {
@@ -47,26 +43,5 @@ internal sealed class ListingOrder
         RecentReorderPending = false;
         RecentReadPending = false;
         return current;
-    }
-
-    public void CountedTags(IReadOnlyList<TagCount> current)
-    {
-        TagPlaces = takeTagOrder ? current : KeepTagPlaces(current);
-        takeTagOrder = false;
-    }
-
-    private IReadOnlyList<TagCount> KeepTagPlaces(IReadOnlyList<TagCount> current)
-    {
-        var remaining = current.ToDictionary(count => count.Tag, StringComparer.OrdinalIgnoreCase);
-        var ordered = new List<TagCount>(Math.Max(TagPlaces.Count, current.Count));
-        foreach (var place in TagPlaces)
-        {
-            // Keep even the old spelling until the next reorder so reviving a tag cannot change the slot's width.
-            var carriers = remaining.Remove(place.Tag, out var count) ? count.Items : 0;
-            ordered.Add(place with { Items = carriers });
-        }
-
-        ordered.AddRange(current.Where(count => remaining.ContainsKey(count.Tag)));
-        return ordered;
     }
 }

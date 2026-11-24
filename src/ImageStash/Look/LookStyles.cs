@@ -25,6 +25,9 @@ public sealed class LookStyles : Styles
     /// <summary>A tag's chip in the chip row, and a suggestion in the tag field.</summary>
     public const string TagChip = "tagChip";
 
+    /// <summary>A tag place whose filter action is unavailable.</summary>
+    public const string FilterUnavailable = "filterUnavailable";
+
     /// <summary>A chip while lit, scope or tag: Fluent's accent class, which these rules dress in the take's keys.</summary>
     public const string Lit = "accent";
 
@@ -51,6 +54,12 @@ public sealed class LookStyles : Styles
         Chip(TagChip, LookKeys.TagChipGround, LookKeys.TagChipBorder, LookKeys.TagChipWords);
         Hovered(ScopeChip, LookKeys.ScopeChipHoverGround, LookKeys.ScopeChipHoverBorder, LookKeys.ScopeChipHoverWords);
         Hovered(TagChip, LookKeys.TagChipHoverGround, LookKeys.TagChipBorder, LookKeys.TagChipWords);
+        foreach (var state in new[] { ":pointerover", ":pressed" })
+        {
+            Add(Rule(x => x.OfType<Button>().Class(TagChip).Class(FilterUnavailable).Class(state).Template().OfType<ContentPresenter>().Name(Presenter),
+                (ContentPresenter.BackgroundProperty, LookKeys.TagChipGround),
+                (ContentPresenter.ForegroundProperty, LookKeys.TagChipWords)));
+        }
         foreach (var chip in new[] { ScopeChip, TagChip })
         {
             // After the unlit rules, so a lit chip's own keys win, hovered or not; on the template's presenter, where

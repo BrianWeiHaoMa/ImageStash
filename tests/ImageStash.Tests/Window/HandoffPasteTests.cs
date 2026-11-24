@@ -169,7 +169,7 @@ public sealed class HandoffPasteTests
         using var handing = await Handing.Open();
         var (myCat, _, bore) = await Searched(handing);
         var cleared = 0;
-        handing.Listing.QueryCleared += () => cleared++;
+        handing.Listing.QueryChangedByWindow += () => cleared++;
 
         var pasted = await handing.Paste([myCat], RecordingTarget.Relay);
 

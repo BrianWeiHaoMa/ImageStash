@@ -161,6 +161,47 @@ public sealed class ListingStoreChangesTests
     }
 
     [TestMethod]
+    public async Task ReplacingTheStashDiscardsHeldSearchPlacesAndRejectsAChoiceWaitingOnTheOldStore()
+    {
+        using var before = new TestStash();
+        using var after = new TestStash();
+        await before.OpenCleanly();
+        await after.OpenCleanly();
+        var previous = await before.Import("picture");
+        var replacement = await after.Import("picture");
+        var another = await after.Import("another");
+        Assert.AreEqual(previous.Id, replacement.Id);
+        before.Tag(previous.Id, "cat");
+        before.Tag(previous.Id, "dog");
+        after.Tag(replacement.Id, "cat");
+        after.Tag(replacement.Id, "dog");
+        after.Tag(replacement.Id, "new");
+        after.Tag(another.Id, "cat");
+        var listing = NewListing();
+        await listing.StashOpened(before.Store!);
+        await listing.ShowScope(Scope.All);
+
+        Task first, choice;
+        using (before.HoldStore())
+        {
+            first = listing.ChooseTag("cat");
+            Assert.IsFalse(listing.Settled);
+            choice = listing.ChooseTag("dog");
+            await listing.Withdraw();
+            listing.StashReplaced();
+            await listing.StashOpened(after.Store!);
+            Assert.IsFalse(choice.IsCompleted, "the old search that would have licensed dog is still held");
+        }
+        await Task.WhenAll(first, choice);
+
+        Assert.AreEqual("cat", listing.Query);
+        CollectionAssert.AreEqual(new[] { "cat", "dog", "new" }, listing.Chips.Select(chip => chip.Tag).ToArray(), "the replacement ranks its own tags");
+        CollectionAssert.AreEqual(new[] { another.Id, replacement.Id }, listing.Items.Select(item => item.Id).ToArray());
+        CollectionAssert.AreEqual(new[] { "cat", "dog", "new" }, listing.Tags.Select(chip => chip.Tag).ToArray());
+        Assert.IsEmpty(failures);
+    }
+
+    [TestMethod]
     [DataRow(false, DisplayName = "the stash listed again")]
     [DataRow(true, DisplayName = "the stash not opened again")]
     public async Task ALoadOfTheOldStoreInFlightWhenAnImportWithdrawsTheListingAppliesNothing(bool reopenFails)

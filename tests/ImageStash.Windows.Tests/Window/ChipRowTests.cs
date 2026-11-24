@@ -11,12 +11,11 @@ using ImageStash.Windows.Tests.Support;
 namespace ImageStash.Windows.Tests.Window;
 
 /// <summary>
-/// The chip row of the stash window laid out by the real desktop platform at the flyout's size, off every display and
-/// never activated: Recent · Favorites · All and the tags carried by the most items on one line of whole chips, the last
-/// chip for every tag ending a row that cannot hold them (G4); a chip's click adding its tag to the box's words, the lit
-/// chip's taking it out, the row following with the lit chips and the tags that narrow (G4, G5); tiles of the window's own drag dropped on a tag chip or Favorites applying it with no use and nothing imported, the
-/// flyout staying (G17, G10, G11, G2); another program's drag over a chip being the window's drop, tagged by the lit
-/// chip (G11).
+/// The chip row in a real stash window: Recent · Favorites · All and the tags carried by the most items on one line of
+/// whole chips, the last chip offering every tag (G4, G5); a chip's click adding its tag to the box's words, the lit
+/// chip's taking it out, and both clicks leaving the tag chips in place (G4, G5); tiles of the window's own drag dropped
+/// on a tag chip or Favorites applying it with no use and nothing imported, the flyout staying (G17, G10, G11, G2);
+/// another program's drag over a chip being the window's drop, tagged by the lit chip (G11).
 /// </summary>
 [TestClass]
 public sealed class ChipRowTests
@@ -50,7 +49,7 @@ public sealed class ChipRowTests
             Assert.IsTrue(shown.Lit("All"), "All lit while a query is typed (G5)");
             Assert.IsTrue(shown.Lit("#Dog"), "and the chip whose tag is a word of the query (G5)");
             Assert.IsFalse(shown.Lit("Favorites"));
-            CollectionAssert.AreEqual(new[] { "Recent", "Favorites", "All", "#Dog" }, shown.ShownChips(), "the lit chip; cat is on no match (G5)");
+            CollectionAssert.AreEqual(new[] { "Recent", "Favorites", "All", "#Dog", "#cat", "Every tag" }, shown.ShownChips(), "cat stays in place and the picker offers it (G5)");
             ShownWindow.RaiseClick(shown.Chip("#Dog"));
         });
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == ""));
@@ -66,8 +65,9 @@ public sealed class ChipRowTests
     }
 
     [TestMethod]
-    public async Task ChipsAddWordsThatNarrowTogetherAndALitChipTakesItsWordOutTheRowFollowing()
+    public async Task ClickingTheSameNonLeadingChipTwiceFiltersAndRestoresTheGridWithoutMovingTheChips()
     {
+        using var pointer = TestMouse.PutBackAfterwards();
         using var shown = ShownWindow.Open();
         var items = await shown.OpenStash(shown.Picture("a.png"), shown.Picture("b.png"), shown.Picture("c.png"), shown.Picture("d.png"));
         await shown.Tag([items.Single(i => i.Name == "a")], "dog cat");
@@ -76,22 +76,55 @@ public sealed class ChipRowTests
         await shown.Tag([items.Single(i => i.Name == "d")], "cat fun");
         await TrayDesktop.Get(() => shown.Listing.ShowScope(Scope.All));
         string[] scopes = ["Recent", "Favorites", "All"];
-        TrayDesktop.Run(() => CollectionAssert.AreEqual(scopes.Concat(["#dog", "#cat", "#fun"]).ToList(), shown.ShownChips()));
+        string[] tags = ["#dog", "#cat", "#fun"];
+        await shown.ClickSearchInFront();
+        var places = TrayDesktop.Get(() =>
+        {
+            CollectionAssert.AreEqual(scopes.Concat(tags).ToList(), shown.ShownChips());
+            return ChipBounds(shown, tags);
+        });
+        var cat = await ClickPoint(TrayDesktop.Get(() => shown.Chip("#cat")));
 
-        TrayDesktop.Run(() => ShownWindow.RaiseClick(shown.Chip("#cat")));
+        TestMouse.Click(cat);
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == "cat"));
         TrayDesktop.Run(() =>
         {
             Assert.AreEqual("cat", shown.Search.Text);
-            CollectionAssert.AreEqual(scopes.Concat(["#cat", "#dog", "#fun"]).ToList(), shown.ShownChips(), "the lit one, then those that narrow (G5)");
+            Assert.AreEqual("", shown.Search.SelectedText ?? "");
+            Assert.AreEqual(3, shown.Search.CaretIndex);
+            CollectionAssert.AreEquivalent(items.Where(item => item.Name is "a" or "d").Select(item => item.Id).ToArray(),
+                shown.Listing.Items.Select(item => item.Id).ToArray(), "the first click filters to cat (G5)");
             Assert.IsTrue(shown.Lit("#cat") && !shown.Lit("#dog"));
-            ShownWindow.RaiseClick(shown.Chip("#dog"));
+            CollectionAssert.AreEqual(scopes.Concat(tags).ToList(), shown.ShownChips());
+            CollectionAssert.AreEqual(places, ChipBounds(shown, tags), "the first click leaves every tag at its original rectangle (G5)");
+            Assert.IsTrue(shown.Search.IsFocused);
+            shown.Search.SelectAll();
+            Assert.AreEqual("cat", shown.Search.SelectedText);
         });
+
+        TestMouse.Click(cat);
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == ""));
+        TrayDesktop.Run(() =>
+        {
+            Assert.AreEqual("", shown.Search.Text ?? "");
+            Assert.AreEqual("", shown.Search.SelectedText ?? "");
+            Assert.AreEqual(0, shown.Search.CaretIndex);
+            Assert.IsTrue(shown.Search.IsFocused);
+            Assert.IsFalse(shown.Lit("#cat"));
+            CollectionAssert.AreEquivalent(items.Select(item => item.Id).ToArray(), shown.Listing.Items.Select(item => item.Id).ToArray(),
+                "the second click at the same point restores the scope's items (G4)");
+            CollectionAssert.AreEqual(scopes.Concat(tags).ToList(), shown.ShownChips());
+            CollectionAssert.AreEqual(places, ChipBounds(shown, tags), "the second click leaves the rectangles in place too (G5)");
+            ShownWindow.RaiseClick(shown.Chip("#cat"));
+        });
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == "cat"));
+        TrayDesktop.Run(() => ShownWindow.RaiseClick(shown.Chip("#dog")));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == "cat dog"));
         TrayDesktop.Run(() =>
         {
             Assert.AreEqual("cat dog", shown.Search.Text, "a second chip adds a word, never replaces (G4)");
-            CollectionAssert.AreEqual(scopes.Concat(["#cat", "#dog"]).ToList(), shown.ShownChips(), "both lit, nothing narrows further");
+            CollectionAssert.AreEqual(scopes.Concat(tags).Append("Every tag").ToList(), shown.ShownChips(), "both lit, fun stays in its place, and the picker offers it (G5)");
+            CollectionAssert.AreEqual(places, ChipBounds(shown, tags));
             Assert.IsTrue(shown.Lit("#cat") && shown.Lit("#dog"));
             Assert.HasCount(1, shown.Listing.Items);
             ShownWindow.RaiseClick(shown.Chip("#cat"));
@@ -100,7 +133,8 @@ public sealed class ChipRowTests
         TrayDesktop.Run(() =>
         {
             Assert.AreEqual("dog", shown.Search.Text, "a lit chip's click takes its word out (G4)");
-            CollectionAssert.AreEqual(scopes.Concat(["#dog", "#cat", "#fun"]).ToList(), shown.ShownChips(), "the tie by the stash's count, then spelling");
+            CollectionAssert.AreEqual(scopes.Concat(tags).ToList(), shown.ShownChips(), "fun is carried by a match again (G5)");
+            CollectionAssert.AreEqual(places, ChipBounds(shown, tags));
             ShownWindow.RaiseClick(shown.Chip("All"));
         });
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == ""));
@@ -274,12 +308,18 @@ public sealed class ChipRowTests
         });
 
         var first = Place();
+        var beforeClick = TrayDesktop.Get(shown.ShownChips);
         TrayDesktop.Run(() => Assert.AreEqual(shown.ChipRow.Bounds.Width, first.Right, 0.5, "at the row's right edge (G4)"));
 
         TrayDesktop.Run(() => ShownWindow.RaiseClick(shown.Chip("#cat")));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == "cat"));
-        TrayDesktop.Run(() => CollectionAssert.AreEqual(new[] { "Recent", "Favorites", "All", "#cat", "Every tag" }, shown.ShownChips(), "a lit chip and nothing that narrows: the row has room, and the chip still ends it (G4)"));
-        Assert.AreEqual(first, Place(), "a chip lit and the others gone leave it where it was (G4)");
+        TrayDesktop.Run(() => CollectionAssert.AreEqual(beforeClick, shown.ShownChips(), "the filter leaves the chips in place (G5)"));
+        Assert.AreEqual(first, Place(), "the picker stays at the edge on a chip click (G4)");
+
+        TrayDesktop.Run(() => ShownWindow.Type(shown.Search, "x"));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == "catx"));
+        TrayDesktop.Run(() => CollectionAssert.AreEqual(new[] { "Recent", "Favorites", "All", "Every tag" }, shown.ShownChips(), "editing the box rebuilds the row (G5)"));
+        Assert.AreEqual(first, Place(), "the picker stays at the edge after the edit (G4)");
 
         TrayDesktop.Run(() => ShownWindow.RaiseClick(shown.Chip("All")));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == ""));
@@ -319,7 +359,7 @@ public sealed class ChipRowTests
     }
 
     [TestMethod]
-    public async Task UnderATypedWordTheTagsContainingItStayAndAChipOrAPickCompletesTheWord()
+    public async Task OnlyTheUnfinishedLastWordTypedInTheBoxIsCompletedByAChip()
     {
         using var shown = ShownWindow.Open();
         var items = await shown.OpenStash(shown.Picture("p1.png"), shown.Picture("p2.png"), shown.Picture("p3.png"), shown.Picture("q1.png"));
@@ -329,8 +369,7 @@ public sealed class ChipRowTests
         await shown.Tag([items[3]], "alpha");
         string[] scopes = ["Recent", "Favorites", "All"];
 
-        TrayDesktop.Run(() => shown.Search.Text = "jo");
-        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == "jo"));
+        await TypeQuery(shown, "jo");
         TrayDesktop.Run(() =>
         {
             CollectionAssert.AreEqual(new[] { "joy", "joyous", "alpha", "work" }, shown.Listing.Chips.Select(chip => chip.Tag).ToList(), "the tags being typed, then those that narrow (G5)");
@@ -350,11 +389,37 @@ public sealed class ChipRowTests
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == "joy alpha"));
         TrayDesktop.Run(() => Assert.AreEqual("joy alpha", shown.Search.Text, "a tag containing no word of the query is added (G4)"));
 
-        TrayDesktop.Run(() => shown.Search.Text = "alpha jo");
-        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == "alpha jo"));
-        TrayDesktop.Run(() => ShownWindow.RaiseClick(shown.Chip("#joyous")));
-        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == "alpha joyous"));
-        TrayDesktop.Run(() => Assert.AreEqual("alpha joyous", shown.Search.Text, "the last word it contains is the one it takes the place of (G4)"));
+        foreach (var (typed, expected) in new[]
+        {
+            ("alpha #JO", "alpha joyous"),
+            ("alpha #JO ", "alpha #JO joyous"),
+            ("alpha #JOY", "alpha #JOY joyous"),
+            ("jo alpha", "jo alpha joyous"),
+        })
+        {
+            await TypeQuery(shown, typed);
+            TrayDesktop.Run(() => ShownWindow.RaiseClick(shown.Chip("#joyous")));
+            await TrayDesktop.Get(() => shown.Listing.Settle());
+            TrayDesktop.Run(() =>
+            {
+                Assert.AreEqual(expected, shown.Search.Text, $"clicking #joyous after typing '{typed}' (G4, G5)");
+                Assert.AreEqual("", shown.Search.SelectedText ?? "");
+                Assert.AreEqual(expected.Length, shown.Search.CaretIndex);
+                CollectionAssert.AreEqual(new[] { items[0].Id }, shown.Listing.Items.Select(item => item.Id).ToArray());
+            });
+        }
+    }
+
+    private static async Task TypeQuery(ShownWindow shown, string text)
+    {
+        TrayDesktop.Run(() =>
+        {
+            shown.Search.Focus();
+            shown.Search.SelectAll();
+            ShownWindow.Type(shown.Search, text);
+            Assert.AreEqual(text, shown.Search.Text);
+        });
+        await TrayDesktop.Get(() => shown.Listing.Settle());
     }
 
     [TestMethod]
@@ -483,6 +548,29 @@ public sealed class ChipRowTests
         shown.Press(dragged[0].Id);
         shown.MovePointer(dragged[0].Id, 20, 0);
     });
+
+    internal static Rect[] ChipBounds(ShownWindow shown, params string[] labels)
+    {
+        shown.Window.UpdateLayout();
+        return labels.Select(label =>
+        {
+            var chip = shown.Chip(label);
+            return new Rect(chip.TranslatePoint(default, shown.Window)!.Value, chip.Bounds.Size);
+        }).ToArray();
+    }
+
+    internal static async Task<PixelPoint> ClickPoint(Button button)
+    {
+        PixelPoint at = default;
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() =>
+        {
+            at = TestMouse.Centre(button);
+            return TopLevel.GetTopLevel(button) is { } root
+                && root.InputHitTest(root.PointToClient(at)) is Visual hit
+                && hit.GetSelfAndVisualAncestors().Contains(button);
+        }));
+        return at;
+    }
 
     private static List<long> Carrying(ShownWindow shown, string tag) =>
         shown.Listing.Items.Where(item => item.Tags.Contains(tag)).Select(item => item.Id).ToList();

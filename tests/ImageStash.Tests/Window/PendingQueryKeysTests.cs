@@ -39,6 +39,103 @@ public sealed class PendingQueryKeysTests
     }
 
     [TestMethod]
+    public async Task EnterAfterAQueuedTagChoiceHandsOverItsMatch()
+    {
+        using var listed = await Listed();
+        var (_, older) = await DogAndTwoCats(listed);
+        var listing = listed.Listing;
+        await listed.Stash.Store!.AddTag([older], "dog");
+        await listing.Refresh();
+
+        var tagReadHeld = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        IDisposable? held = null;
+        listing.QueryChangedByWindow += () =>
+        {
+            held = listed.Stash.HoldStore();
+            tagReadHeld.SetResult();
+        };
+
+        Task typed, tag, settling;
+        Task<Outcome> handed;
+        using (listed.Stash.HoldStore())
+        {
+            typed = listing.SetQuery("cat");
+            tag = listing.ChooseTag("dog");
+            settling = listing.Settle();
+            handed = HandOver(listed);
+        }
+
+        bool returnedBeforeTagRead;
+        try
+        {
+            await typed;
+            await tagReadHeld.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            returnedBeforeTagRead = settling.IsCompleted;
+        }
+        finally
+        {
+            held?.Dispose();
+        }
+
+        await Task.WhenAll(tag, settling, handed);
+        Assert.IsFalse(returnedBeforeTagRead, "the key's wait includes the pending tag choice and its read");
+        Assert.IsTrue((await handed).Succeeded);
+        CollectionAssert.AreEqual(new[] { older.Id }, listed.Clipboard.Written.Single().Content.Items.ToArray());
+    }
+
+    [TestMethod]
+    public async Task DownAfterAQueuedTagChoiceMovesAmongItsMatches()
+    {
+        using var listed = await Listed();
+        var cats = await FourCats(listed);
+        var older = cats.Skip(2).ToArray();
+        var listing = listed.Listing;
+        await listed.Stash.Store!.AddTag(older, "dog");
+        await listing.Refresh();
+        var keys = Keys(listed);
+
+        Task search, tagged, arrow;
+        using (listed.Stash.HoldStore())
+        {
+            search = listing.SetQuery("cat");
+            tagged = listing.ChooseTag("dog");
+            arrow = keys.Move(Direction.Down);
+        }
+
+        await Task.WhenAll(search, tagged, arrow);
+        Assert.AreEqual("cat dog", listing.Query);
+        Assert.AreEqual(older[1].Id, listing.Focused);
+    }
+
+    [TestMethod]
+    public async Task ARejectedChipClickDoesNotSupersedeDownBeforeEnter()
+    {
+        using var listed = await Listed();
+        var (newer, older) = await DogAndTwoCats(listed);
+        var listing = listed.Listing;
+        var dog = listing.Items.Single(item => item.Name == "dog");
+        await listed.Stash.Store!.AddTag([newer, older], "cat");
+        await listed.Stash.Store.AddTag([dog], "dog");
+        await listing.Refresh();
+        var keys = Keys(listed);
+
+        Task search, tagged, arrow;
+        Task<Outcome>? handed = null;
+        using (listed.Stash.HoldStore())
+        {
+            search = listing.ChooseTag("cat");
+            arrow = keys.Move(Direction.Down);
+            tagged = listing.ChooseTag("dog");
+            keys.Then(() => handed = HandOver(listed));
+        }
+
+        await Task.WhenAll(search, tagged, arrow);
+        Assert.AreEqual("cat", listing.Query);
+        Assert.IsTrue((await handed!).Succeeded);
+        CollectionAssert.AreEqual(new[] { older.Id }, listed.Clipboard.Written.Single().Content.Items.ToArray());
+    }
+
+    [TestMethod]
     public async Task DownThenEnterBeforeTheMatchesArriveHandsOverTheSecondMatchAndDownDownUpEndsOnTheFirst()
     {
         using var listed = await Listed();

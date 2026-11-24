@@ -205,6 +205,36 @@ public sealed class ImportTagsTests
     }
 
     [TestMethod]
+    public async Task TwoDropsSnapshotTheTagOnEitherSideOfItsLastCarrierLosingIt()
+    {
+        using var importing = await ListedStash.Open();
+        var carrier = await TaggedItem(importing, "carrier", "cat");
+        var store = importing.Stash.Store!;
+        await importing.Listing.ShowScope(Scope.All);
+        await importing.Listing.ChooseTag("cat");
+        var firstFile = new HeldBackFile(MediaFixtures.Path("photo.jpg"));
+        var first = importing.Import.Drop(firstFile.Drop);
+        Task<IReadOnlyList<ImportedFile>> second;
+        try
+        {
+            Assert.IsTrue((await store.RemoveTag([carrier], "cat")).Single().Succeeded);
+            await importing.Listing.Refresh();
+            Assert.AreEqual(new TagCount("cat", 0), importing.Listing.Chips.Single());
+            Assert.IsEmpty(importing.Listing.LitTags);
+            second = importing.Import.Drop(ListedStash.Contents([MediaFixtures.Path("transparent.png")]));
+        }
+        finally
+        {
+            firstFile.Release();
+        }
+
+        var firstItem = (await first).Single().Item!;
+        var secondItem = (await second).Single().Item!;
+        CollectionAssert.AreEqual(new[] { "cat" }, (await TagsOf(importing, firstItem)).ToArray(), "the earlier drop keeps its live snapshot");
+        Assert.IsEmpty(await TagsOf(importing, secondItem), "the second drop took its snapshot while the place was dead");
+    }
+
+    [TestMethod]
     public async Task AMoveWaitsWhileTheNoticeOfAnImportThatOnlyGaveATagOffersItsUndoWhichRunsBeforeTheCopy()
     {
         using var importing = await ListedStash.Open();

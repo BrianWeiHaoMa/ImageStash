@@ -9,8 +9,7 @@ namespace ImageStash.Window;
 /// dispatched at once, never after an earlier act has completed, so Down, Enter, Down hands over the row Down reached
 /// and ends on the next. An act takes the selection it acts on as it is dispatched. A query typed, or a scope chosen,
 /// after an arrow and before that arrow's load has applied supersedes it: that arrow does nothing and the new matches
-/// arrive with their first selected (G5). With no arrow waiting, an arrow moves at once and an act is dispatched at
-/// once, as the window does without a pending search.
+/// arrive with their first selected (G5). Keys dispatched after a queued tag choice wait for its result too.
 /// </summary>
 /// <param name="laidOutRows">The grid's rows laid out for the items the listing holds now, a layout pass forced when owed.</param>
 public sealed class PendingQueryKeys(Listing listing, Func<IReadOnlyList<GridRow>> laidOutRows)
@@ -25,13 +24,13 @@ public sealed class PendingQueryKeys(Listing listing, Func<IReadOnlyList<GridRow
     /// </summary>
     public Task Move(Direction direction)
     {
-        if (pressed.Count == 0 && listing.Settled)
+        if (pressed.Count == 0 && listing.Settled && !listing.TagChoicePending)
         {
             listing.MoveFocus(direction, laidOutRows());
             return Task.CompletedTask;
         }
 
-        pressed.Enqueue(new Pressed(direction, null, listing.SelectionResets));
+        pressed.Enqueue(new Pressed(direction, null, listing.InputOrder));
         if (!draining)
         {
             drained = Drain();
@@ -40,16 +39,20 @@ public sealed class PendingQueryKeys(Listing listing, Func<IReadOnlyList<GridRow
         return drained;
     }
 
-    /// <summary>A key act: dispatched now while no arrow waits; else as soon as every arrow pressed before it has applied or been superseded.</summary>
+    /// <summary>A key act, dispatched after any earlier arrow or tag choice still waiting for results.</summary>
     public void Then(Action act)
     {
-        if (pressed.Count == 0)
+        if (pressed.Count == 0 && !listing.TagChoicePending)
         {
             act();
             return;
         }
 
         pressed.Enqueue(new Pressed(null, act, 0));
+        if (!draining)
+        {
+            drained = Drain();
+        }
     }
 
     private async Task Drain()
@@ -66,19 +69,24 @@ public sealed class PendingQueryKeys(Listing listing, Func<IReadOnlyList<GridRow
             {
                 if (next.Act is { } act)
                 {
+                    if (listing.TagChoicePending)
+                    {
+                        await listing.Settle();
+                    }
+
                     pressed.Dequeue();
                     act();
                     continue;
                 }
 
                 // A change's refresh may start after the awaited load: the arrow waits for the listing to settle again.
-                while (!listing.Settled && listing.SelectionResets == next.Resets)
+                while ((!listing.Settled || listing.TagChoicePending) && listing.LastSelectionReset <= next.Input)
                 {
                     await listing.Settle();
                 }
 
                 pressed.Dequeue();
-                if (listing.SelectionResets == next.Resets)
+                if (listing.LastSelectionReset <= next.Input)
                 {
                     listing.MoveFocus(next.Direction!.Value, laidOutRows());
                 }
@@ -90,6 +98,6 @@ public sealed class PendingQueryKeys(Listing listing, Func<IReadOnlyList<GridRow
         }
     }
 
-    /// <summary>One key: an arrow, with the count of selection resets started when it was pressed, or an act.</summary>
-    private sealed record Pressed(Direction? Direction, Action? Act, int Resets);
+    /// <summary>An arrow with its place in the input order, or a key act.</summary>
+    private sealed record Pressed(Direction? Direction, Action? Act, long Input);
 }

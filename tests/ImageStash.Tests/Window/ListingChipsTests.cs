@@ -154,12 +154,20 @@ public sealed class ListingChipsTests
         Assert.AreEqual(Scope.All, listing.LitChip);
 
         await listing.SetQuery("joy");
-        CollectionAssert.AreEqual(new[] { "joy", "joyous", "alpha", "work" }, ChipTags(listing), "joy lit, joyous after it once, though it narrows too (G5)");
+        CollectionAssert.AreEqual(new[] { "joy", "alpha", "work", "joyous" }, ChipTags(listing), "joy is a complete tag and joyous only joins as a narrowing tag");
         CollectionAssert.AreEqual(new[] { "joy" }, listing.LitTags.ToList());
 
         await listing.SetQuery("alpha #JO");
         CollectionAssert.AreEqual(new[] { "alpha", "joy", "joyous" }, ChipTags(listing), "alpha lit, then the tags containing jo, ignoring case and #; work is on neither match");
         CollectionAssert.AreEqual(new[] { "p1", "p2" }, Names(listing));
+
+        await listing.SetQuery("alpha #OY");
+        CollectionAssert.AreEqual(new[] { "alpha", "joy", "joyous" }, ChipTags(listing), "a final fragment can occur inside an existing tag");
+
+        await listing.SetQuery("jo alpha");
+        CollectionAssert.AreEqual(new[] { "alpha", "joyous" }, ChipTags(listing), "jo is no longer the final word, and joy is on every match");
+        await listing.SetQuery("jo ");
+        CollectionAssert.AreEqual(new[] { "alpha", "work", "joyous" }, ChipTags(listing), "with a trailing space, only narrowing tags follow");
     }
 
     [TestMethod]
@@ -169,7 +177,9 @@ public sealed class ListingChipsTests
         var counts = Enumerable.Range(0, 50_000).Select(i => new TagCount($"a{i:00000}", 1)).ToList();
         var clock = Stopwatch.StartNew();
 
-        var chips = Listing.ChipsFor("a", counts, []);
+        var order = new TagChipOrder();
+        order.Counted(counts);
+        var chips = order.Shown("a", searching: true);
 
         Assert.HasCount(50_000, chips, "each tag once, as a tag being typed (G5)");
         Assert.IsLessThan(2000, clock.ElapsedMilliseconds, $"well within G1's second for the row's input: {clock.ElapsedMilliseconds} ms");
@@ -200,7 +210,7 @@ public sealed class ListingChipsTests
     }
 
     [TestMethod]
-    public async Task ALitTagStaysLitWithNoMatchAndGoesOnceNoItemCarriesIt()
+    public async Task ALitTagStaysLitWithNoMatchAndLeavesADeadPlaceUntilTheNextEdit()
     {
         using var listed = await FourTagged();
         var listing = listed.Listing;
@@ -211,6 +221,7 @@ public sealed class ListingChipsTests
         CollectionAssert.AreEqual(new[] { "dog" }, listing.LitTags.ToList(), "so new items still get it (G11)");
 
         await listing.SetQuery("fun");
+        var places = ChipTags(listing);
         foreach (var item in listing.Items.ToList())
         {
             await listed.Organising.RemoveTag([item], "fun");
@@ -218,7 +229,10 @@ public sealed class ListingChipsTests
 
         Assert.AreEqual("fun", listing.Query, "the word stays in the box as a plain word (G17, G5)");
         Assert.IsEmpty(listing.LitTags, "a tag no item carries lights nothing");
-        CollectionAssert.DoesNotContain(ChipTags(listing), "fun");
+        CollectionAssert.AreEqual(places, ChipTags(listing), "the refresh holds the typed row in place");
+        Assert.AreEqual(new TagCount("fun", 0), listing.Chips.Single(chip => chip.Tag == "fun"));
+        await listing.SetQuery("fu");
+        CollectionAssert.DoesNotContain(ChipTags(listing), "fun", "the next edit discards dead places");
     }
 
     [TestMethod]
@@ -229,6 +243,212 @@ public sealed class ListingChipsTests
         await listed.Listing.SetQuery("ca");
 
         CollectionAssert.AreEqual(new[] { ("dog", 3), ("cat", 2), ("fun", 2) }, listed.Listing.Tags.Select(tag => (tag.Tag, tag.Items)).ToList(), "what the chip that lists every tag opens on (G4)");
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task APendingChipReadCannotAdmitAnUnrelatedTagAndALitChipCanStillBeRemoved(bool removeCat)
+    {
+        using var listed = await ListedStash.Open();
+        var store = listed.Stash.Store!;
+        var cat = await listed.Stash.Import("one");
+        var dog = await listed.Stash.Import("two");
+        await store.AddTag([cat], "cat");
+        await store.AddTag([dog], "dog");
+        var listing = listed.Listing;
+        await listing.ShowScope(Scope.All);
+        var changes = listing.PersonsChanges;
+        Task catRead, dogChoice, undo = Task.CompletedTask;
+        using (listed.Stash.HoldStore())
+        {
+            catRead = listing.ChooseTag("cat");
+            Assert.IsFalse(listing.Settled);
+            dogChoice = listing.ChooseTag("dog");
+            Assert.AreEqual("cat", listing.Query, "the previous unfiltered grid cannot license the dog click");
+            if (removeCat)
+            {
+                undo = listing.ChooseTag("cat");
+                Assert.AreEqual("", listing.Query, "the lit chip is removable before any read comes back");
+                Assert.IsFalse(listing.Settled);
+            }
+        }
+
+        await Task.WhenAll(catRead, dogChoice, undo);
+        Assert.AreEqual(removeCat ? "" : "cat", listing.Query);
+        CollectionAssert.AreEqual(removeCat ? Array.Empty<string>() : new[] { "cat" }, listing.LitTags.ToArray());
+        CollectionAssert.AreEqual(removeCat ? new[] { dog.Id, cat.Id } : new[] { cat.Id }, listing.Items.Select(item => item.Id).ToArray());
+        Assert.AreEqual(changes + (removeCat ? 2 : 1), listing.PersonsChanges);
+        CollectionAssert.AreEqual(new[] { "cat", "dog" }, ChipTags(listing));
+    }
+
+    [TestMethod]
+    public async Task EveryTagCanAddAnUnavailableTagAndBothLitTagsCanBeRemovedFromAnEmptyResult()
+    {
+        using var listed = await ListedStash.Open();
+        var cat = await listed.Stash.Import("one");
+        var dog = await listed.Stash.Import("two");
+        listed.Stash.Tag(cat.Id, "cat");
+        listed.Stash.Tag(dog.Id, "dog");
+        var listing = listed.Listing;
+        await listing.ShowScope(Scope.All);
+        await listing.ChooseTag("cat");
+
+        Assert.IsFalse(listing.CanFilterTag("dog", searching: true, lit: false));
+        await listing.ChooseTag("dog");
+        Assert.AreEqual("cat", listing.Query, "the row's live dog chip is unavailable for filtering");
+        await listing.ChooseTag("dog", fromPicker: true);
+        Assert.IsTrue(listing.NoMatch);
+        CollectionAssert.AreEqual(new[] { "cat", "dog" }, listing.LitTags.ToArray());
+        await listing.ChooseTag("cat");
+        Assert.AreEqual(dog.Id, listing.Items.Single().Id);
+        await listing.ChooseTag("dog");
+        Assert.AreEqual("", listing.Query);
+        Assert.IsTrue(listing.CanFilterTag("cat", searching: false, lit: false), "clearing by clicking releases the restriction immediately");
+        CollectionAssert.AreEqual(new[] { "cat", "dog" }, ChipTags(listing));
+    }
+
+    [TestMethod]
+    public async Task SuccessiveCompatibleChipsClickedDuringAReadApplyInClickOrder()
+    {
+        using var listed = await ListedStash.Open();
+        var together = await listed.Stash.Import("one");
+        Assert.IsTrue((await listed.Stash.Store!.AddTag([together], "cat vacation joy")).Single().Succeeded);
+        var listing = listed.Listing;
+        await listing.ShowScope(Scope.All);
+
+        Task cat, vacation, joy;
+        using (listed.Stash.HoldStore())
+        {
+            cat = listing.ChooseTag("cat");
+            Assert.IsFalse(listing.Settled);
+            vacation = listing.ChooseTag("vacation");
+            joy = listing.ChooseTag("joy");
+        }
+        await Task.WhenAll(cat, vacation, joy);
+
+        Assert.AreEqual("cat vacation joy", listing.Query);
+        CollectionAssert.AreEqual(new[] { "cat", "vacation", "joy" }, listing.LitTags.ToArray());
+        Assert.AreEqual(together.Id, listing.Items.Single().Id);
+    }
+
+    [TestMethod]
+    public async Task RemovingALitChipDoesNotDiscardAnEarlierCompatibleClickAwaitingItsRead()
+    {
+        using var listed = await ListedStash.Open();
+        var item = await listed.Stash.Import("picture");
+        Assert.IsTrue((await listed.Stash.Store!.AddTag([item], "cat dog")).Single().Succeeded);
+        var listing = listed.Listing;
+        await listing.ShowScope(Scope.All);
+
+        Task first, second, undo;
+        using (listed.Stash.HoldStore())
+        {
+            first = listing.ChooseTag("cat");
+            second = listing.ChooseTag("dog");
+            undo = listing.ChooseTag("cat");
+            Assert.AreEqual("", listing.Query, "the lit word comes out before the earlier read is available");
+        }
+
+        await Task.WhenAll(first, second, undo);
+        Assert.AreEqual("dog", listing.Query, "the earlier compatible choice still applies");
+        CollectionAssert.AreEqual(new[] { "dog" }, listing.LitTags.ToArray());
+        Assert.AreEqual(item.Id, listing.Items.Single().Id);
+    }
+
+    [TestMethod]
+    public async Task AQueuedChipCannotCompleteAFragmentOnlyExposedByALaterRemoval()
+    {
+        using var listed = await ListedStash.Open();
+        var carrier = await listed.Stash.Import("picture");
+        await listed.Stash.Import("job");
+        Assert.IsTrue((await listed.Stash.Store!.AddTag([carrier], "cat joy")).Single().Succeeded);
+        var listing = listed.Listing;
+        await listing.SetQuery("jo");
+
+        Task cat, joy, undo;
+        using (listed.Stash.HoldStore())
+        {
+            cat = listing.ChooseTag("cat");
+            joy = listing.ChooseTag("joy");
+            undo = listing.ChooseTag("cat");
+            Assert.AreEqual("jo", listing.Query, "remove cat immediately");
+        }
+
+        await Task.WhenAll(cat, joy, undo);
+        Assert.AreEqual("jo joy", listing.Query);
+        Assert.AreEqual(carrier.Id, listing.Items.Single().Id);
+    }
+
+    [TestMethod]
+    public async Task SummoningWaitsForAnEarlierCompatibleChipChoiceAndThenReranks()
+    {
+        using var listed = await ListedStash.Open();
+        var carrier = await listed.Stash.Import("picture");
+        Assert.IsTrue((await listed.Stash.Store!.AddTag([carrier], "cat dog zoo")).Single().Succeeded);
+        var listing = listed.Listing;
+        await listing.ShowScope(Scope.All);
+
+        Task cat, dog, summoned;
+        using (listed.Stash.HoldStore())
+        {
+            cat = listing.ChooseTag("cat");
+            dog = listing.ChooseTag("dog");
+            summoned = listed.Summon(pinned: true);
+        }
+
+        await Task.WhenAll(cat, dog, summoned);
+        Assert.AreEqual("cat dog", listing.Query);
+        Assert.AreEqual(carrier.Id, listing.Focused);
+        CollectionAssert.AreEqual(new[] { "cat", "dog" }, ChipTags(listing));
+    }
+
+    [TestMethod]
+    public async Task TakingOutALitTagDoesNotReopenAnExplicitlyFinishedWordForCompletion()
+    {
+        using var listed = await ListedStash.Open();
+        var item = await listed.Stash.Import("picture");
+        Assert.IsTrue((await listed.Stash.Store!.AddTag([item], "cat joy")).Single().Succeeded);
+        var listing = listed.Listing;
+        await listing.SetQuery("cat jo ");
+
+        await listing.ChooseTag("cat");
+        Assert.AreEqual("jo ", listing.Query);
+        await listing.ChooseTag("joy", fromPicker: true);
+        Assert.AreEqual("jo joy", listing.Query);
+    }
+
+    [TestMethod]
+    public async Task TypingReranksAfterAChipClickEvenIfItsReadFinishesLate()
+    {
+        using var listed = await FourTagged();
+        var listing = listed.Listing;
+        Task picked, typed;
+        using (listed.Stash.HoldStore())
+        {
+            picked = listing.ChooseTag("cat");
+            typed = listing.SetQuery("fun cat");
+        }
+        await Task.WhenAll(picked, typed);
+
+        Assert.AreEqual("fun cat", listing.Query);
+        CollectionAssert.AreEqual(new[] { "fun", "cat" }, ChipTags(listing));
+        CollectionAssert.AreEqual(new[] { "D" }, Names(listing));
+
+        await listing.ChooseTag("cat");
+        CollectionAssert.AreEqual(new[] { "fun", "cat" }, ChipTags(listing), "the held row keeps the two original places");
+        await listed.Summon(pinned: true);
+        CollectionAssert.AreEqual(new[] { "fun", "dog", "cat" }, ChipTags(listing), "summon ranks the same search afresh");
+        await listing.ChooseTag("fun");
+        CollectionAssert.AreEqual(new[] { "fun", "dog", "cat" }, ChipTags(listing), "clicking off the last word keeps the row");
+
+        await listing.SetQuery("  ");
+        CollectionAssert.AreEqual(new[] { "dog", "cat", "fun" }, ChipTags(listing), "a direct edit back to no words restores the unfiltered row");
+        await listing.ChooseTag("cat");
+        await listing.ShowScope(Scope.Favorites);
+        CollectionAssert.AreEqual(new[] { "dog", "cat", "fun" }, ChipTags(listing));
+        Assert.AreEqual("", listing.Query);
+        Assert.AreEqual(Scope.Favorites, listing.LitChip);
     }
 
     [TestMethod]

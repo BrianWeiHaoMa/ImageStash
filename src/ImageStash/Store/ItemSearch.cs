@@ -44,22 +44,24 @@ public static class ItemSearch
         return words.Select(word => spelled.GetValueOrDefault(word)).OfType<string>().Distinct().ToList();
     }
 
-    /// <summary>Whether <paramref name="tag"/> contains one of <paramref name="words"/>, a query's <see cref="Words"/>, ignoring case (G5).</summary>
-    public static bool ContainsAWord(string tag, IReadOnlyList<string> words) => words.Any(word => Contains(tag, word));
+    /// <summary>The final word being typed, without its leading #, while it has no following space and is not an existing tag.</summary>
+    internal static string? UnfinishedLastWord(string query, IEnumerable<string> tags)
+    {
+        var word = Bare(query[(query.LastIndexOf(' ') + 1)..]);
+        return word.Length > 0 && !tags.Contains(word, StringComparer.OrdinalIgnoreCase) ? word : null;
+    }
 
     /// <summary>
-    /// The query with <paramref name="tag"/> added as a word, as a chip's click adds it (G4): in place of the last word
-    /// the tag contains, ignoring case and a leading <c>#</c>, the words then joined by single spaces, since that is the
-    /// word being typed; else as its last word.
+    /// The query with the tag completing the unfinished final word when it contains it, or appended as a new word (G4).
     /// </summary>
-    public static string WithWord(string query, string tag)
+    public static string WithWord(string query, string tag, IEnumerable<string> tags) =>
+        WithWord(query, tag, UnfinishedLastWord(query, tags));
+
+    internal static string WithWord(string query, string tag, string? unfinished)
     {
-        var typed = Typed(query);
-        var completed = Array.FindLastIndex(typed, word => Bare(word).Length > 0 && Contains(tag, Bare(word)));
-        if (completed >= 0)
+        if (unfinished is not null && Contains(tag, unfinished))
         {
-            typed[completed] = tag;
-            return string.Join(' ', typed);
+            return query[..(query.LastIndexOf(' ') + 1)] + tag;
         }
 
         var kept = query.TrimEnd(' ');
@@ -68,16 +70,19 @@ public static class ItemSearch
 
     /// <summary>
     /// The query without every word equal to <paramref name="tag"/>, ignoring case and a leading <c>#</c>, and the
-    /// remaining words as typed, joined by single spaces, as a lit chip's click leaves it (G4).
+    /// remaining words joined by single spaces. Keep an explicit trailing space so removal cannot reopen a finished word.
     /// </summary>
-    public static string WithoutWord(string query, string tag) =>
-        string.Join(' ', Typed(query).Where(word => !string.Equals(Bare(word), tag, StringComparison.OrdinalIgnoreCase)));
+    public static string WithoutWord(string query, string tag)
+    {
+        var remaining = string.Join(' ', Typed(query).Where(word => !string.Equals(Bare(word), tag, StringComparison.OrdinalIgnoreCase)));
+        return remaining.Length > 0 && query.EndsWith(' ') ? remaining + " " : remaining;
+    }
 
     private static string[] Typed(string query) => query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
     private static string Bare(string word) => word.StartsWith('#') ? word[1..] : word;
 
-    private static bool Contains(string text, string word) => text.Contains(word, StringComparison.OrdinalIgnoreCase);
+    internal static bool Contains(string text, string word) => text.Contains(word, StringComparison.OrdinalIgnoreCase);
 
     private static bool EveryWordIn(StashItem item, IReadOnlyList<string> words, Func<string, string, bool> holds) =>
         words.All(word => holds(item.Name, word) || item.Tags.Any(tag => holds(tag, word)));

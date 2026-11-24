@@ -1,0 +1,90 @@
+using ImageStash.Store;
+
+namespace ImageStash.Window;
+
+public sealed partial class Listing
+{
+    private (string Query, Task<Loaded?> Result)? searchRead;
+
+    internal bool TagChoicePending => !order.Tags.PendingChoice.IsCompleted;
+
+    internal bool CanFilterTag(string tag, bool searching, bool lit) =>
+        order.Tags.FilterAvailability(tag, Query, searching, lit) ?? !Settled;
+
+    /// <summary>Chooses a visible chip or a live tag from Every tag. A lit chip can be removed while its read is pending.</summary>
+    internal Task ChooseTag(string tag, bool fromPicker = false)
+    {
+        var chips = order.Tags;
+        var revision = chips.Revision;
+        var lit = LitTags.Contains(tag, StringComparer.OrdinalIgnoreCase);
+        if (lit || !(TagChoicePending || (!fromPicker && IsSearch && !Settled)))
+        {
+            return ApplyTagChoice(tag, chips, revision, fromPicker, pending: null);
+        }
+
+        var available = fromPicker ? true : chips.FilterAvailability(tag, Query, IsSearch, lit: false);
+        if (available == false)
+        {
+            return Task.CompletedTask;
+        }
+
+        var earlierRead = available is null && searchRead is { } read && read.Query == Query ? read.Result : null;
+        var fragment = ItemSearch.UnfinishedLastWord(Query, Tags.Select(count => count.Tag));
+        var pending = new PendingTagChoice(NextInput(), earlierRead, fragment);
+        return chips.PendingChoice = ChooseTagAfterRead(chips.PendingChoice, tag, chips, revision, fromPicker, pending);
+    }
+
+    private async Task ChooseTagAfterRead(Task earlier, string tag, TagChipOrder chips, int revision, bool fromPicker, PendingTagChoice pending)
+    {
+        // A lit chip can be removed immediately. A queued choice still needs a carrier in the search it was clicked on.
+        await earlier;
+        if (pending.EarlierRead is not null
+            && ((await pending.EarlierRead)?.Items.Value is not { } matches
+                || !matches.Any(item => item.Tags.Contains(tag, StringComparer.OrdinalIgnoreCase))))
+        {
+            return;
+        }
+
+        while (!Settled && chips == order.Tags && revision == chips.Revision)
+        {
+            await SettleRead();
+        }
+
+        await ApplyTagChoice(tag, chips, revision, fromPicker, pending);
+    }
+
+    private Task ApplyTagChoice(string tag, TagChipOrder chips, int revision, bool fromPicker, PendingTagChoice? pending)
+    {
+        using var acting = UserAct.Begin(SearchAct);
+        lock (gate)
+        {
+            if (chips != order.Tags || revision != chips.Revision || chips.LiveTag(tag) is not { } live)
+            {
+                return Task.CompletedTask;
+            }
+
+            var lit = LitTags.Contains(live.Tag);
+            if (!fromPicker && (chips.FilterAvailability(tag, Query, IsSearch, lit) != true
+                || (pending is not null && !Chips.Any(place => string.Equals(place.Tag, tag, StringComparison.OrdinalIgnoreCase)))))
+            {
+                return Task.CompletedTask;
+            }
+
+            var fragment = ItemSearch.UnfinishedLastWord(Query, Tags.Select(count => count.Tag));
+            if (pending is not null && !string.Equals(fragment, pending.Fragment, StringComparison.OrdinalIgnoreCase))
+            {
+                // An immediate removal must not expose a new word for an earlier click to complete.
+                fragment = null;
+            }
+
+            Query = lit ? ItemSearch.WithoutWord(Query, live.Tag) : ItemSearch.WithWord(Query, live.Tag, fragment);
+            chips.Chosen(Chips);
+        }
+
+        CountChange(true, pending?.Input);
+        QueryChangedByWindow?.Invoke();
+        return Load(keepSelection: false, showPendingQuery: true, selectionAt: pending?.Input);
+    }
+
+    private sealed record PendingTagChoice(long Input, Task<Loaded?>? EarlierRead, string? Fragment);
+}

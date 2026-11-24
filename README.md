@@ -50,11 +50,12 @@ Start Menu or its `ImageStash.Windows.exe`, opens the stash window, as a click o
 | `Space`, then the arrows | Preview the selected picture, then step to the previous or next one in the grid; the preview's ‹ and › do the same. |
 
 A new screenshot, recording or stashed clipboard image appears in Recent before you use it. Recent keeps its order
-while you work. Opening ImageStash again or choosing a scope applies the latest order. The tag chips also keep their
-places while the search box is empty, so you can drop several tiles on the same chip. Drop files or a folder onto the
-window to add them, and tag pictures to find them by a word. `Ctrl+D` makes the
-selected pictures favorites, or takes them off: a favorite's tile carries a small star, and so does its preview, where a
-click on the star does the same. The tray icon's right-click menu holds the captures, Pause shortcuts, Settings
+while you work. Opening ImageStash again or choosing a scope applies the latest order. Click a tag chip to filter the
+grid, then click it in the same place to remove it from the search. Typing updates the suggestions. A chip can complete
+the unfinished last word, as in `cat jo` becoming `cat joy`. Every tag lets you pick existing tags that are dimmed or
+missing from the row. Drop tiles onto a tag chip to give them that tag, or drop files or a folder onto the window to
+add them. `Ctrl+D` makes the selected pictures favorites, or takes them off: a favorite's tile carries a small star,
+and so does its preview, where a click on the star does the same. The tray icon's right-click menu holds the captures, Pause shortcuts, Settings
 (where each shortcut can be changed) and Quit. While shortcuts are paused, Settings offers Resume. The stash footer
 offers it too when it fits. The tray icon shows a red dot during a recording. At other times it shows a pause badge
 while shortcuts are paused, or a warning badge when Pause is off and a shortcut is unavailable. The tooltip names

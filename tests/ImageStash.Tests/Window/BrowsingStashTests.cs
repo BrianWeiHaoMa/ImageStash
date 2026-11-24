@@ -168,5 +168,42 @@ public sealed class BrowsingStashTests
         CollectionAssert.AreEqual(new[] { second.Id, first.Id, used.Id }, listed.Listing.Items.Select(item => item.Id).ToArray());
     }
 
+    [TestMethod]
+    public async Task FilteringFromRecentHoldsTheChipPlacesAndCompletesOnlyTheFinalFragment()
+    {
+        using var listed = await ListedStash.Open();
+        var together = await listed.Stash.Capture("together");
+        var cat = await listed.Stash.Import("another picture");
+        var unrelated = await listed.Stash.Import("outside Recent");
+        Assert.IsTrue((await listed.Stash.Store!.AddTag([together], "cat vacation Joy")).Single().Succeeded);
+        listed.Stash.Tag(cat.Id, "cat");
+        listed.Stash.Tag(unrelated.Id, "spare");
+        var listing = listed.Listing;
+        await listing.ShowScope(Scope.Recent);
+        var order = listing.Chips.Select(chip => chip.Tag).ToArray();
+
+        await listing.ChooseTag("vacation");
+        Assert.AreEqual(together.Id, Rows(listing).Single().Tiles.Single().Id);
+        CollectionAssert.AreEqual(order, listing.Chips.Select(chip => chip.Tag).ToArray());
+        await listing.ChooseTag("vacation");
+        Assert.AreEqual("", listing.Query);
+        Assert.AreEqual(Scope.Recent, listing.LitChip);
+
+        await listing.ChooseTag("cat");
+        await listing.ChooseTag("vacation");
+        Assert.AreEqual("cat vacation", listing.Query);
+        CollectionAssert.AreEqual(new[] { "cat", "vacation" }, listing.LitTags.ToArray());
+        Assert.AreEqual(together.Id, Rows(listing).Single().Tiles.Single().Id);
+        CollectionAssert.AreEqual(order, listing.Chips.Select(chip => chip.Tag).ToArray());
+
+        await listing.SetQuery("cat #jo");
+        CollectionAssert.AreEqual(new[] { "cat", "Joy" }, listing.Chips.Select(chip => chip.Tag).ToArray());
+        await listing.ChooseTag("Joy");
+        Assert.AreEqual("cat Joy", listing.Query);
+        CollectionAssert.AreEqual(new[] { "cat", "Joy" }, listing.LitTags.ToArray());
+        Assert.AreEqual(together.Id, Rows(listing).Single().Tiles.Single().Id);
+        Assert.IsEmpty(listed.Failures);
+    }
+
     private static IReadOnlyList<GridRow> Rows(Listing listing) => JustifiedRows.Layout(listing.Items, 460, 100);
 }

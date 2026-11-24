@@ -263,7 +263,8 @@ public sealed class StashWindowPathTests
         listed.Stash.Tag(carrying.Id, "cat");
 
         // (1) With the chip #cat lit, as its click lights it, a drop of one new picture and one the stash already holds.
-        await listed.Listing.SetQuery(ItemSearch.WithWord(listed.Listing.Query, "cat"));
+        await listed.Listing.Refresh();
+        await listed.Listing.ChooseTag("cat");
         CollectionAssert.AreEqual(new[] { "cat" }, listed.Listing.LitTags.ToList(), "the chip is lit");
         var drop = ListedStash.Contents([MediaFixtures.Path("transparent.png"), MediaFixtures.Path("still.png")]);
         Assert.AreEqual("Each picture gets the tag #cat, those already in your stash too.", DropCard.Of(drop, listed.Listing.LitTags).Lines[1], "the drop card says so before release (G11)");

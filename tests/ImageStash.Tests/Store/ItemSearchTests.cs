@@ -258,7 +258,7 @@ public sealed class ItemSearchTests
     [DataRow("cat ", "dog", "cat dog")]
     [DataRow("  cat  zebra ", "dog", "  cat  zebra dog")]
     public void AChipsTagIsAddedAsTheLastWordInItsOwnSpelling(string query, string tag, string expected) =>
-        Assert.AreEqual(expected, ItemSearch.WithWord(query, tag));
+        Assert.AreEqual(expected, ItemSearch.WithWord(query, tag, ["cat", "dog"]));
 
     [TestMethod]
     [DataRow("jo", "joy", "joy")]
@@ -266,27 +266,32 @@ public sealed class ItemSearchTests
     [DataRow("#jo", "joy", "joy")]
     [DataRow("alpha jo", "joyous", "alpha joyous")]
     [DataRow("joy jo", "joyous", "joy joyous")]
-    [DataRow("jo alpha", "joy", "joy alpha")]
-    [DataRow("  alpha   jo ", "JOY", "alpha JOY")]
+    [DataRow("jo alpha", "joy", "jo alpha joy")]
+    [DataRow("  alpha   jo ", "JOY", "  alpha   jo JOY")]
+    [DataRow("#CAT", "vacation", "#CAT vacation")]
+    [DataRow("jo #BLUE", "joy", "jo #BLUE joy")]
+    [DataRow("cat #JO", "Joy", "cat Joy")]
     [DataRow("# jo", "joy", "# joy")]
     [DataRow("ärg", "Ärger", "Ärger")]
-    public void AChipsTagTakesThePlaceOfTheLastWordItContains(string query, string tag, string expected) =>
-        Assert.AreEqual(expected, ItemSearch.WithWord(query, tag));
+    public void AChipsTagCompletesOnlyAnUnfinishedFinalWord(string query, string tag, string expected) =>
+        Assert.AreEqual(expected, ItemSearch.WithWord(query, tag, ["alpha", "blue", "cat", "joy", "joyous", "vacation", "Ärger"]));
 
     [TestMethod]
-    [DataRow("joy", "jo", false)]
-    [DataRow("jo", "joyous", true)]
-    [DataRow("alpha #JO", "joyous", true)]
-    [DataRow("", "joy", false)]
-    [DataRow("#", "joy", false)]
-    public void ATagContainsAWordOfTheQueryWhenOneIsPartOfIt(string query, string tag, bool expected) =>
-        Assert.AreEqual(expected, ItemSearch.ContainsAWord(tag, ItemSearch.Words(query)));
+    [DataRow("joy", null)]
+    [DataRow("jo", "jo")]
+    [DataRow("alpha #JO", "JO")]
+    [DataRow("jo ", null)]
+    [DataRow("jo #Joy", null)]
+    [DataRow("", null)]
+    [DataRow("#", null)]
+    public void OnlyTheFinalFragmentWithoutAFollowingSpaceOrAnExactTagCanBeCompleted(string query, string? expected) =>
+        Assert.AreEqual(expected, ItemSearch.UnfinishedLastWord(query, ["Joy"]));
 
     [TestMethod]
     [DataRow("cat dog", "dog", "cat")]
     [DataRow("dog", "dog", "")]
     [DataRow("DOG #dog zebra", "Dog", "zebra")]
-    [DataRow("  cat   dog  #fun ", "dog", "cat #fun")]
+    [DataRow("  cat   dog  #fun ", "dog", "cat #fun ")]
     [DataRow("doggo", "dog", "doggo")]
     [DataRow("##dog zebra", "dog", "##dog zebra")]
     public void ALitChipTakesOutEveryWordEqualToItsTagAndLeavesTheRestAsTyped(string query, string tag, string expected) =>

@@ -16,8 +16,8 @@ using static ImageStash.Windows.Tests.Support.ShownWindow;
 namespace ImageStash.Windows.Tests.Window;
 
 /// <summary>
-/// The tag list a click opens, on the chip row's last chip in the real stash window: shown only when the row cannot hold
-/// its chips, whole and last (G4); a popup of the window, never a window of its own (F4), listing every tag, the
+/// The tag list a click opens from the chip row's right edge when a tag cannot be picked in the row (G4, G5).
+/// It is a popup of the window, never a window of its own (F4), listing every tag, the
 /// commonest first, the lit ones marked, whatever the query (G4); a pick adding or taking out its word, the list staying
 /// open and focus in the box (G4, G7); Esc closing it and nothing else (G2); a real press outside closing it and acting
 /// as it would have (G7); sixty tags scrolling inside the display (G4); standing as the item menu's Add tag ▸ list does,
@@ -81,11 +81,13 @@ public sealed class TagPickerTests
     }
 
     [TestMethod]
-    public async Task APickAddsItsWordAndThatChipThenLitTheListOpenWithItMarkedAndAgainTakesItOut()
+    public async Task APickAddsAnOffStripTagAndMarksItInTheOpenListWhereItCanBePickedAgainToRemoveIt()
     {
         using var shown = Open();
         var (_, tags) = await TwelveLong(shown);
         var twelfth = tags[^1];
+        var visibleBefore = TrayDesktop.Get(shown.ShownChips);
+        CollectionAssert.DoesNotContain(visibleBefore, "#" + twelfth);
         TrayDesktop.Run(() =>
         {
             shown.Search.Focus();
@@ -100,8 +102,7 @@ public sealed class TagPickerTests
             Assert.AreEqual(twelfth, shown.Search.Text, "G4: the word in the box");
             Assert.AreEqual(twelfth.Length, shown.Search.CaretIndex, "its caret at the end");
             Assert.IsTrue(shown.Search.IsFocused, "focus still in the box");
-            Assert.IsTrue(shown.Lit("#" + twelfth), "that chip lit");
-            Assert.AreEqual("#" + twelfth, shown.ShownChips()[3], "first among the tag chips");
+            CollectionAssert.AreEqual(visibleBefore, shown.ShownChips(), "a pick leaves the visible chips in place (G5)");
             Assert.IsTrue(shown.ChipRow.Picker.IsOpen, "the list still open");
             Assert.IsTrue(shown.ChipRow.Picker.Entries.Single(entry => entry.Tag == twelfth).Marked, "with it marked");
         });
@@ -130,7 +131,7 @@ public sealed class TagPickerTests
 
         TrayDesktop.Run(() =>
         {
-            Assert.AreEqual(EveryTag, shown.ShownChips()[^1], "one lit chip fits, and the row could not hold every tag (G4)");
+            Assert.AreEqual(EveryTag, shown.ShownChips()[^1], "the picker remains at the row's right edge (G4)");
             Assert.IsTrue(shown.ChipRow.Picker.IsOpen, "the list stays until Esc or a press elsewhere (G4)");
             Assert.HasCount(tags.Count + 1, shown.ChipRow.Picker.Entries);
         });

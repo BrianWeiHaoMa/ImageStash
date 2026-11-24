@@ -3,9 +3,6 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
-using Avalonia.Controls.Documents;
-using Avalonia.Media;
-using Avalonia.Media.TextFormatting;
 using Avalonia.Threading;
 using ImageStash.Look;
 using ImageStash.Store;
@@ -26,10 +23,9 @@ public sealed class OwnDrag(IReadOnlyList<StashItem> items)
 
 /// <summary>
 /// The chip row (G4, G5): Recent, Favorites and All, then the listing's tag chips in order, on one line, up to the first
-/// that does not fit whole, none after it, and while the row cannot hold every tag a chip at its right edge opening the
-/// list of them. Recent, Favorites and All clear the search and show that scope; a tag chip adds its tag to the search
-/// box's words, in place of a typed word the tag contains, and a lit one takes its word out, so the box, the grid and the lit chips always agree. The lit chips are the
-/// listing's: All while a query is typed, beside the tags that are words of it. Tiles dragged out of the window and
+/// that does not fit whole, with Every tag at the right edge when a live tag cannot be clicked in the strip.
+/// Recent, Favorites and All clear the search and show that scope; tag choices change the search without moving chips.
+/// All is lit during a search, beside the tags that are words of it. Tiles dragged out of the window and
 /// dropped on a tag chip get the tag, on Favorites the flag (G17); any other drag over a chip is the window's drop, as
 /// anywhere else in it (G11). Chips take no focus, so Tab goes from the box to the grid (G7). Only the tag chips that
 /// could fit are made, however many tags the stash holds, so the summon stays within its second (G1).
@@ -64,11 +60,10 @@ public sealed class ChipRow : Panel
     private readonly Listing listing;
     private readonly Organising organising;
     private readonly Func<OwnDrag?> ownDrag;
-    private readonly Action<string> search;
     private readonly (Button Chip, Scope Scope)[] scopes;
     private readonly List<(Button Chip, string Tag)> tagChips = [];
 
-    /// <summary>The chip that lists every tag: always the row's last child, laid beyond the edge while it is not wanted, so the list open from it outlives its leaving the row (G4).</summary>
+    /// <summary>The chip that lists every tag anchors its popup at the row's right edge.</summary>
     private readonly Button everyTag;
     private readonly TagPicker picker = new();
 
@@ -81,19 +76,15 @@ public sealed class ChipRow : Panel
     private bool makingMore;
     private int fitting;
     private bool everyTagShown;
-    /// <summary>The width of each tag chip's words, measured once.</summary>
-    private readonly Dictionary<string, double> wordWidths = [];
     private IDisposable? ring;
     private Button? ringedChip;
 
     /// <param name="ownDrag">The window's own drag in progress, or null.</param>
-    /// <param name="search">Puts text in the search box, which searches it.</param>
-    public ChipRow(Listing listing, Organising organising, Func<OwnDrag?> ownDrag, Action<string> search)
+    public ChipRow(Listing listing, Organising organising, Func<OwnDrag?> ownDrag)
     {
         this.listing = listing;
         this.organising = organising;
         this.ownDrag = ownDrag;
-        this.search = search;
         // What does not fit is laid beyond the right edge: clipped, it is neither seen nor reached.
         ClipToBounds = true;
         scopes = ScopeFaces.Select(face => (ScopeChip(face.Name, face.Glyph, face.Scope), face.Scope)).ToArray();
@@ -108,6 +99,7 @@ public sealed class ChipRow : Panel
 
         everyTag = EveryTagChip();
         everyTag.Click += (_, _) => ToggleEveryTag();
+        picker.Closed += (_, _) => InvalidateMeasure();
         Children.Add(everyTag);
         LogicalChildren.Add(picker);
         listing.Changed += Show;
@@ -170,60 +162,19 @@ public sealed class ChipRow : Panel
         return finalSize;
     }
 
-    /// <summary>
-    /// Whether <paramref name="width"/> could not hold a chip for each of the stash's tags, the chips shown or not; it stops
-    /// at the first tag past the width, so the cost is bounded by the row and not by the stash (G1, E4).
-    /// </summary>
-    private bool CannotHoldEveryTag(double width)
-    {
-        // Counted as the shown row lays its chips out, the separator and each chip's edge included, so a query whose few
-        // chips fit never hides the last chip while the stash's tags would not fit (G4).
-        var used = scopes.Sum(scope => scope.Chip.DesiredSize.Width + Spacing) + SeparatorWidth + 2 * SeparatorMargin + Spacing;
-        foreach (var count in listing.Tags)
-        {
-            used += TagChipWidth(count.Tag) + Spacing;
-            if (used - Spacing > width)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>A tag chip's width before it is made: its words, its padding and its edge, which Fluent gives every chip alike.</summary>
-    private double TagChipWidth(string tag)
-    {
-        if (!wordWidths.TryGetValue(tag, out var words))
-        {
-            using var layout = new TextLayout("#" + tag, new Typeface(TextElement.GetFontFamily(this)), TextElement.GetFontSize(this), null);
-            words = layout.WidthIncludingTrailingWhitespace;
-            wordWidths[tag] = words;
-        }
-
-        return words + NarrowestChip + everyTag.BorderThickness.Left + everyTag.BorderThickness.Right;
-    }
-
     private bool Shown(Control child) => ReferenceEquals(child, everyTag) ? everyTagShown : Children.IndexOf(child) < fitting;
 
     /// <summary>
-    /// What shows in <paramref name="width"/>: every tag chip when all of them fit; else as many as fit; and beside them,
-    /// ending the row, itself whole, the chip that lists every tag whenever the row cannot hold every tag, under a query
-    /// too, whose few chips may fit while the stash's other tags could not (G4).
+    /// As many whole tag chips as fit, with Every tag when a live tag is hidden or unavailable for filtering.
     /// </summary>
     private void Fit(double width)
     {
         // Reserve the picker even before it first appears, so adding a tag never evicts an existing target.
         var besidePicker = width - Spacing - everyTag.DesiredSize.Width;
         fitting = Fitting(besidePicker);
-        if (!listing.IsSearch)
-        {
-            var visibleTags = tagChips.Take(Math.Max(0, fitting - scopes.Length - 1)).Count(entry => entry.Chip.IsEnabled);
-            everyTagShown = visibleTags < listing.Tags.Count;
-            return;
-        }
-
-        everyTagShown = fitting < Children.Count - 1 || tagChips.Count < chipTags.Count || CannotHoldEveryTag(besidePicker);
+        var selectable = tagChips.Take(Math.Max(0, fitting - scopes.Length - 1))
+            .Count(entry => !entry.Chip.Classes.Contains(LookStyles.FilterUnavailable));
+        everyTagShown = picker.IsOpen || selectable < listing.Tags.Count;
     }
 
     /// <summary>
@@ -276,15 +227,20 @@ public sealed class ChipRow : Panel
 
     private void LightTagChips()
     {
-        var lit = listing.LitTags;
+        var lit = listing.LitTags.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var searching = listing.IsSearch;
         for (var i = 0; i < tagChips.Count; i++)
         {
             var (chip, tag) = tagChips[i];
-            var available = listing.Chips[i].Items > 0;
-            chip.IsEnabled = available;
+            var live = listing.Chips[i].Items > 0;
+            var marked = lit.Contains(tag);
+            var available = listing.CanFilterTag(tag, searching, marked);
+            // A live chip keeps receiving drags even while its filter action is unavailable.
+            chip.IsEnabled = live;
             chip.Opacity = available ? 1 : 0.45;
-            chip.Classes.Set("accent", lit.Contains(tag, StringComparer.OrdinalIgnoreCase));
-            if (!available)
+            chip.Classes.Set(LookStyles.FilterUnavailable, !available);
+            chip.Classes.Set("accent", marked);
+            if (!live)
             {
                 EndRing(chip);
             }
@@ -306,16 +262,7 @@ public sealed class ChipRow : Panel
         }
         else
         {
-            picker.Open(everyTag, EveryTag(), ToggleWord);
-        }
-    }
-
-    /// <summary>A chip's click, or a pick in the list: the tag added to the search as a word, or a lit one's word taken out (G4).</summary>
-    private void ToggleWord(string tag)
-    {
-        if (listing.Tags.FirstOrDefault(count => string.Equals(count.Tag, tag, StringComparison.OrdinalIgnoreCase)) is { } live)
-        {
-            search(listing.LitTags.Contains(live.Tag) ? ItemSearch.WithoutWord(listing.Query, live.Tag) : ItemSearch.WithWord(listing.Query, live.Tag));
+            picker.Open(everyTag, EveryTag(), tag => _ = listing.ChooseTag(tag, fromPicker: true));
         }
     }
 
@@ -402,7 +349,7 @@ public sealed class ChipRow : Panel
     private Button TagChip(string tag)
     {
         var chip = Chip("#" + tag, LookStyles.TagChip, TagChipPadding);
-        chip.Click += (_, _) => ToggleWord(tag);
+        chip.Click += (_, _) => _ = listing.ChooseTag(tag);
         TakesOwnDrag(chip, tag);
         return chip;
     }
