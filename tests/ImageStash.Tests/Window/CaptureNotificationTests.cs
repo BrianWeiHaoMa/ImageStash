@@ -1,3 +1,5 @@
+using ImageStash.Files;
+using ImageStash.Media;
 using ImageStash.Seams;
 using ImageStash.Tests.Support;
 using ImageStash.Window;
@@ -7,7 +9,9 @@ namespace ImageStash.Tests.Window;
 /// <summary>
 /// The capture notification's entry (G16): one notice of the notifications with Undo, its words for each capture (G13:
 /// a stashed clipboard image in the stash with the still-only sentence and nothing of the clipboard; on the clipboard
-/// and a length only when given), an item without a name named by its file; its Edit, Trim for a recording, a click
+/// and a length only when given), an item without a name named by its file; its card's words as one rule, titled by
+/// kind in the stash, one line of a length, the clipboard and Ctrl+V only when on it, and the size measured from the
+/// saved file, a changed picture's own length and size (G24); its Edit, Trim for a recording, a click
 /// elsewhere on it and the name the clicks that take the activation; a click elsewhere showing its item selected on All,
 /// the search cleared, and an item gone meanwhile changing nothing; and its Undo by identity through Store, to the
 /// Recycle Bin, at most once, a renamed item included (G29). A card's Edit, Trim or click elsewhere as the window follows
@@ -31,13 +35,15 @@ public sealed class CaptureNotificationTests
         captured.Raise(cat, CaptureKind.Recording, onClipboard: false, lengthMs: 5000);
         captured.Raise(nameless, CaptureKind.Screenshot, onClipboard: false, lengthMs: null);
 
+        // G16 "says it is in the stash (and on the clipboard when it is)", "for a recording, with its length": the notice's
+        // own words, the notification's title, say what its card says, titled by what was captured.
         CollectionAssert.AreEqual(
             new[]
             {
-                $"Saved “cat” to your stash. {Import.StillOnly}",
-                "Saved “cat” to your stash. It is on the clipboard too.",
-                "Saved “cat” to your stash. It is 5.0 s long.",
-                $"Saved {nameless.FileName} to your stash.",
+                $"Clipboard image stashed: “cat”. {Import.StillOnly}",
+                "Screenshot stashed: “cat”. On the clipboard · Ctrl+V pastes it.",
+                "Recording stashed: “cat”. 5.0 s.",
+                $"Screenshot stashed: {nameless.FileName}.",
             },
             raising.Notifications.Shown.Select(notice => notice.Text).ToList());
         Assert.IsTrue(raising.Notifications.Shown.All(notice => notice.UndoLabel == "Undo"));
@@ -198,6 +204,90 @@ public sealed class CaptureNotificationTests
         Assert.AreEqual("Edit", CaptureNotification.EditLabel(CaptureKind.Screenshot));
         Assert.AreEqual("Edit", CaptureNotification.EditLabel(CaptureKind.StashedClipboardImage));
         Assert.AreEqual("Trim", CaptureNotification.EditLabel(CaptureKind.Recording), "a recording's, of one image too: the card names the act (G16)");
+    }
+
+    [TestMethod]
+    public void EachKindsTitleNamesWhatWasCapturedAndThatItIsInTheStash()
+    {
+        // G16 "says it is in the stash": the title by kind says where, not only that it was saved.
+        Assert.AreEqual("Screenshot stashed", CaptureNotification.Title(CaptureKind.Screenshot));
+        Assert.AreEqual("Recording stashed", CaptureNotification.Title(CaptureKind.Recording));
+        Assert.AreEqual("Clipboard image stashed", CaptureNotification.Title(CaptureKind.StashedClipboardImage));
+    }
+
+    [TestMethod]
+    public void TheLineLeadsWithALengthSaysTheClipboardOnlyWhenOnItAndEndsWithTheSizeLeavingNoSeparatorHanging()
+    {
+        var size = FileSize.Words(1_153_434);
+        // G16 "(and on the clipboard when it is)", "for a recording, with its length and size"; G24 the measured size.
+        Assert.AreEqual($"2.4 s · On the clipboard · Ctrl+V pastes it · {size}", CaptureNotification.Line(2400, onClipboard: true, 1_153_434));
+        Assert.AreEqual($"On the clipboard · Ctrl+V pastes it · {size}", CaptureNotification.Line(null, onClipboard: true, 1_153_434));
+        Assert.AreEqual($"2.4 s · {size}", CaptureNotification.Line(2400, onClipboard: false, 1_153_434), "off the clipboard, no word of it or of Ctrl+V");
+        Assert.AreEqual(size, CaptureNotification.Line(null, onClipboard: false, 1_153_434));
+        Assert.AreEqual("2.4 s · On the clipboard · Ctrl+V pastes it", CaptureNotification.Line(2400, onClipboard: true, fileBytes: null), "before the size is measured");
+        Assert.AreEqual("2.4 s", CaptureNotification.Line(2400, onClipboard: false, fileBytes: null));
+        Assert.AreEqual("", CaptureNotification.Line(null, onClipboard: false, fileBytes: null));
+        // G13 "the result says that an animated image is added by dragging its file in", on lines of its own.
+        Assert.AreEqual(Import.StillOnly, CaptureNotification.Aside(CaptureKind.StashedClipboardImage));
+        Assert.IsNull(CaptureNotification.Aside(CaptureKind.Screenshot));
+        Assert.IsNull(CaptureNotification.Aside(CaptureKind.Recording));
+    }
+
+    [TestMethod]
+    public async Task ACardsLineReadsWholeUntilTheSavedFilesSizeIsMeasuredAndThenEndsWithIt()
+    {
+        using var raising = await ListedStash.Open();
+        var cat = await raising.Stash.ImportFixture("cat", "still.png");
+        var notMeasured = cat with { FilePath = cat.FilePath + ".not there" };
+
+        raising.CaptureNotification.Raise(notMeasured, CaptureKind.Screenshot, onClipboard: true, lengthMs: null);
+        var waiting = raising.CaptureNotification.WordsOf(raising.Notifications.Shown.Single())!;
+        await waiting.Measure(notMeasured.FilePath);
+        Assert.AreEqual(("Screenshot stashed", "On the clipboard · Ctrl+V pastes it", (string?)null), (waiting.Title, waiting.Line, waiting.Size),
+            "no size until one is measured, and no separator left hanging (G24)");
+        Assert.AreEqual("Edit", waiting.EditLabel);
+
+        raising.CaptureNotification.Raise(cat, CaptureKind.Screenshot, onClipboard: true, lengthMs: null);
+        var measured = raising.CaptureNotification.WordsOf(raising.Notifications.Shown[^1])!;
+        await Handing.Eventually(() => measured.Size is not null);
+        Assert.AreEqual($"On the clipboard · Ctrl+V pastes it · {FileSize.Words(new FileInfo(cat.FilePath).Length)}", measured.Line, "the saved file's size, measured from it (G24)");
+        Assert.IsNull(raising.CaptureNotification.WordsOf(raising.Notifications.Raise("Copied · press Ctrl+V")), "a plain notice has no card words");
+    }
+
+    [TestMethod]
+    public async Task APictureChangedWhileTheCardShowsSaysItsOwnLengthAtOnceAndItsOwnSizeOnceMeasured()
+    {
+        using var raising = await ListedStash.Open();
+        using var scratch = new ScratchFolder();
+        var clip = await raising.Stash.ImportFixture("clip", "animated.gif");
+        raising.CaptureNotification.Raise(clip, CaptureKind.Recording, onClipboard: true, lengthMs: 2400);
+        var words = raising.CaptureNotification.WordsOf(raising.Notifications.Shown.Single())!;
+        await Handing.Eventually(() => words.Size is not null);
+        Assert.AreEqual($"2.4 s · On the clipboard · Ctrl+V pastes it · {FileSize.Words(new FileInfo(clip.FilePath).Length)}", words.Line);
+        Assert.AreEqual("Trim", words.EditLabel);
+
+        // A trim saved while the card shows: G16 "for a recording, with its length and size", both the picture's now shown.
+        words.PictureChanged(new MediaFacts(ImageFormat.Gif, 32, 24, true, 3, 1200));
+        Assert.AreEqual("1.2 s · On the clipboard · Ctrl+V pastes it", words.Line, "its own length at once, never beside the size before it");
+        var trimmed = scratch.File("trimmed.gif");
+        File.WriteAllBytes(trimmed, new byte[3000]);
+        await words.Measure(trimmed);
+        Assert.AreEqual($"1.2 s · On the clipboard · Ctrl+V pastes it · {FileSize.Words(3000)}", words.Line);
+
+        // A measure of the picture before, answered after the next change, never shows.
+        var before = words.Measure(clip.FilePath);
+        words.PictureChanged(new MediaFacts(ImageFormat.Gif, 32, 24, false, 1, 0));
+        await before;
+        Assert.AreEqual(("On the clipboard · Ctrl+V pastes it", (string?)null), (words.Line, words.Size), "a still says no length, and no size until its own is measured");
+
+        // A clip recorded as one image is a still to Media: an edit saved while its card shows keeps the length its
+        // recorder closed it at (G16 "for a recording, with its length").
+        var oneImage = await raising.Stash.ImportFixture("one image", "still.gif");
+        Assert.IsFalse(oneImage.Facts.Animated);
+        raising.CaptureNotification.Raise(oneImage, CaptureKind.Recording, onClipboard: false, lengthMs: 100);
+        var oneImageWords = raising.CaptureNotification.WordsOf(raising.Notifications.Shown[^1])!;
+        oneImageWords.PictureChanged(new MediaFacts(ImageFormat.Gif, 32, 24, false, 1, 0));
+        Assert.AreEqual("0.1 s", oneImageWords.Line);
     }
 
     [TestMethod]

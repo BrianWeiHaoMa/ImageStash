@@ -125,10 +125,13 @@ public sealed class CaptureDesk : IDisposable
         return added.Single().Item!;
     }
 
-    /// <summary>Raises the item's capture notification, as a stashed clipboard image's unless <paramref name="kind"/> says otherwise, and waits until its card is placed above the tray.</summary>
-    public async Task<CaptureCard> Raise(StashItem item, CaptureKind kind = CaptureKind.StashedClipboardImage)
+    /// <summary>
+    /// Raises the item's capture notification, as a stashed clipboard image's unless <paramref name="kind"/> says otherwise,
+    /// off the clipboard and without a length unless told, and waits until its card is placed above the tray.
+    /// </summary>
+    public async Task<CaptureCard> Raise(StashItem item, CaptureKind kind = CaptureKind.StashedClipboardImage, bool onClipboard = false, long? lengthMs = null)
     {
-        TrayDesktop.Run(() => Capture.Raise(item, kind, onClipboard: false, lengthMs: null));
+        TrayDesktop.Run(() => Capture.Raise(item, kind, onClipboard, lengthMs));
         var card = await CardShown(item.Name);
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => card.Size is not null));
         return card;

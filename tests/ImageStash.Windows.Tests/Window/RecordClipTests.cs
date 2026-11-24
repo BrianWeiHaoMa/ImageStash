@@ -144,8 +144,8 @@ public sealed class RecordClipTests
         Assert.IsNull(read.DibV5);
         Assert.AreEqual(0L, desk.Shown.Uses(), "the capture records no use (G10)");
         var card = await desk.CardShown(name);
-        var notice = TrayDesktop.Get(() => desk.Notifications.Shown.Single(each => each.Text.StartsWith("Saved")));
-        Assert.AreEqual($"Saved “{name}” to your stash. It is on the clipboard too. It is {ClipLength.Words(item.Facts.DurationMs)} long.", notice.Text, "in the stash, on the clipboard, with its length (G16)");
+        var notice = TrayDesktop.Get(() => desk.Notifications.Shown.Single(each => each.Text.StartsWith("Recording stashed")));
+        Assert.AreEqual($"Recording stashed: “{name}”. {ClipLength.Words(item.Facts.DurationMs)} · On the clipboard · Ctrl+V pastes it.", notice.Text, "G16: \"says it is in the stash (and on the clipboard when it is)\", \"for a recording, with its length\"");
         await Eventually(() => TrayDesktop.Get(() => card.Size) == FileSize.Words(new FileInfo(item.FilePath).Length));
         TrayDesktop.Run(() => Assert.IsNotNull(card.Picture, "the card shows the picture (G16)"));
         CollectionAssert.AreEqual(new[] { RecordingStage.Waiting, RecordingStage.Sampling, RecordingStage.None }, desk.TrayRecording, "the red dot gone at Stop (G15)");
@@ -179,7 +179,7 @@ public sealed class RecordClipTests
         var frames = CaptureDesk.Frames(item.FilePath);
         var drawn = frames.Select((frame, index) => (index, counter.FieldDifferences(frame, region, region))).Where(found => found.Item2.Count > 0).ToList();
         Assert.IsEmpty(drawn, $"no pointer drawn while Settings says so (G15): {string.Join("; ", drawn.Take(3).Select(found => $"frame {found.index}: {string.Join(", ", found.Item2.Take(3))}"))}");
-        Assert.IsTrue(TrayDesktop.Get(() => desk.Notifications.Shown.Any(notice => notice.Text.EndsWith("It is 2.0 s long."))), "announced with its length");
+        Assert.IsTrue(TrayDesktop.Get(() => desk.Notifications.Shown.Any(notice => notice.Text.StartsWith($"Recording stashed: “{item.Name}”. 2.0 s"))), "announced with its length first (G16)");
         desk.ChatKeepsTheKeystrokes("after the cap");
     }
 

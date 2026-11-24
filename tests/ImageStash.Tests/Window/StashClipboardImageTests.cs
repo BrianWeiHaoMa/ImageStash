@@ -38,7 +38,7 @@ public sealed class StashClipboardImageTests
         Assert.IsEmpty(item.Tags);
         Assert.AreEqual(0, (await stashing.Stash.Store!.UseHistory(item.Id)).Value!.Count, "a capture is no use (G10)");
         var notification = stashing.Notifications.Shown.Single();
-        Assert.AreEqual($"Saved “Screenshot 2026-10-16 17.30.00” to your stash. {StillOnly}", notification.Text, "in the stash, nothing of the clipboard (G13, G16)");
+        Assert.AreEqual($"Clipboard image stashed: “Screenshot 2026-10-16 17.30.00”. {StillOnly}", notification.Text, "G16 \"says it is in the stash\", nothing of the clipboard; G13 \"the result says that an animated image is added by dragging its file in\"");
         Assert.AreEqual("Undo", notification.UndoLabel);
         Assert.IsEmpty(stashing.Notices.Shown, "nothing in the window, which the act does not open");
         Assert.AreEqual((1, 0), (stashing.Clipboard.ImageReads, stashing.Clipboard.Reads), "one image-only read, never the paste's (G13, N9)");
@@ -60,7 +60,7 @@ public sealed class StashClipboardImageTests
         Assert.AreEqual("Screenshot 2026-10-16 17.30.00.png", item.FileName);
         Assert.AreEqual(new MediaFacts(ImageFormat.Png, 3, 2, false, 1, 0), item.Facts);
         CollectionAssert.AreEqual(pixels, MediaFixtures.FirstFrame(item.FilePath).Pixels, "the stored PNG holds the bitmap's pixels, alpha included (F3)");
-        Assert.StartsWith("Saved “Screenshot 2026-10-16 17.30.00” to your stash.", stashing.Notifications.Shown.Single().Text);
+        Assert.StartsWith("Clipboard image stashed: “Screenshot 2026-10-16 17.30.00”.", stashing.Notifications.Shown.Single().Text);
     }
 
     [TestMethod]

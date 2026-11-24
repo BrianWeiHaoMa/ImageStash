@@ -57,7 +57,7 @@ public sealed class ScreenshotTests
         CollectionAssert.AreEqual(File.ReadAllBytes(item.FilePath), content.Png, "its PNG bytes, as a copy's (G8)");
         CollectionAssert.AreEqual(RecordingScreen.Cut(painted, Region).Pixels, content.Bitmap!.Pixels, "its bitmap, opaque as grabbed");
         var notification = taking.Notifications.Shown.Single();
-        Assert.AreEqual("Saved “Screenshot 2026-10-16 17.30.07” to your stash. It is on the clipboard too.", notification.Text, "in the stash and on the clipboard (G16)");
+        Assert.AreEqual("Screenshot stashed: “Screenshot 2026-10-16 17.30.07”. On the clipboard · Ctrl+V pastes it.", notification.Text, "G16: \"says it is in the stash (and on the clipboard when it is)\", titled by its kind");
         Assert.AreEqual("Undo", notification.UndoLabel);
         Assert.AreEqual("older", taking.Listing.Query, "the query as it was");
         CollectionAssert.AreEqual(new[] { older.Id }, taking.Listing.Items.Select(each => each.Id).ToList(), "the query's matches, refreshed");
@@ -120,7 +120,7 @@ public sealed class ScreenshotTests
         await taking.Screenshot.Take();
 
         Assert.AreEqual(0, taking.Clipboard.Begun, "the clipboard untouched (G14)");
-        Assert.AreEqual("Saved “Screenshot 2026-10-16 17.30.00” to your stash.", taking.Notifications.Shown.Single().Text, "nothing of the clipboard (G16)");
+        Assert.AreEqual("Screenshot stashed: “Screenshot 2026-10-16 17.30.00”.", taking.Notifications.Shown.Single().Text, "G16: on the clipboard only \"when it is\"");
         Assert.HasCount(1, await taking.Stash.All());
     }
 
@@ -136,7 +136,7 @@ public sealed class ScreenshotTests
             new[]
             {
                 $"Copy failed: Screenshot 2026-10-16 17.30.00, {HeldClipboard.Reason}",
-                "Saved “Screenshot 2026-10-16 17.30.00” to your stash.",
+                "Screenshot stashed: “Screenshot 2026-10-16 17.30.00”.",
             },
             taking.Notifications.Shown.Select(notice => notice.Text).ToList(),
             "the capture stands, and the notification claims nothing of the clipboard (G16, G35)");
@@ -165,7 +165,7 @@ public sealed class ScreenshotTests
         var screenshot = (await taking.Stash.All()).Single(each => each.Id != older.Id);
         CollectionAssert.AreEqual(new[] { older.FilePath, screenshot.FilePath }, taking.Clipboard.Written.Select(write => write.Content.FilePaths.Single()).ToList(), "both, whole, in order");
         Assert.AreEqual(1L, taking.Uses(), "the copy's use alone (G10)");
-        Assert.EndsWith("It is on the clipboard too.", taking.Notifications.Shown.Single().Text);
+        Assert.EndsWith("On the clipboard · Ctrl+V pastes it.", taking.Notifications.Shown.Single().Text);
     }
 
     [TestMethod]

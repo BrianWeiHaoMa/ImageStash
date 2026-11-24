@@ -383,7 +383,7 @@ try {
     $entry = @(Elements $copy 'Stash clipboard image' $menuItem)
     Check ($entry.Count -eq 1) 'the tray menu offers Stash clipboard image (G34)'
     if ($entry.Count -eq 1) { $entry[0].GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke() }
-    Check (WaitFor { [InstallerDesk]::ShowsTitled($copy.Id, "Saved $([char]0x201C)") } 10000) 'its notification says the picture is saved to the stash (G13, G16)'
+    Check (WaitFor { [InstallerDesk]::ShowsTitled($copy.Id, "Clipboard image stashed: $([char]0x201C)") } 10000) 'its notification says the picture is in the stash (G13, G16)'
     $items = @(Get-ChildItem -LiteralPath $stash -Filter '*.png' -File)
     Check ($items.Count -eq 1) "the stash root holds the item's one PNG: $($items.Name -join ', ')"
     $itemBytes = if ($items.Count -eq 1) { HashOf $items[0].FullName } else { '' }

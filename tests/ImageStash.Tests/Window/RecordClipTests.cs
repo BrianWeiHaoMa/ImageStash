@@ -87,7 +87,7 @@ public sealed class RecordClipTests
         Assert.IsNull(content.Png, "an animation goes as a file only (G8)");
         Assert.IsNull(content.Bitmap);
         var notification = recording.Notifications.Shown.Single();
-        Assert.AreEqual($"Saved “{AMinuteLater}” to your stash. It is on the clipboard too. It is 0.3 s long.", notification.Text, "in the stash, on the clipboard, and its length from Record (G16)");
+        Assert.AreEqual($"Recording stashed: “{AMinuteLater}”. 0.3 s · On the clipboard · Ctrl+V pastes it.", notification.Text, "G16: \"for a recording, with its length\", in the stash and on the clipboard \"when it is\"");
         Assert.AreEqual("Undo", notification.UndoLabel);
         Assert.AreEqual("older", recording.Listing.Query, "the query as it was");
         CollectionAssert.AreEqual(new[] { older.Id }, recording.Listing.Selection.ToList(), "the selection kept");
@@ -114,7 +114,7 @@ public sealed class RecordClipTests
         CollectionAssert.AreEqual(new[] { item.FilePath }, content.FilePaths.ToList());
         Assert.IsNotNull(content.Png, "a still goes with its PNG bytes (G8)");
         Assert.AreEqual((32, 24), (content.Bitmap!.Width, content.Bitmap.Height), "and its bitmap");
-        Assert.AreEqual($"Saved “{Clip}” to your stash. It is on the clipboard too. It is 0.1 s long.", recording.Notifications.Shown.Single().Text,
+        Assert.AreEqual($"Recording stashed: “{Clip}”. 0.1 s · On the clipboard · Ctrl+V pastes it.", recording.Notifications.Shown.Single().Text,
             "the length the encoder closed it at, not the facts' none (G16)");
         Assert.AreEqual(0L, recording.Uses());
     }
@@ -128,7 +128,7 @@ public sealed class RecordClipTests
         await Record(recording);
 
         Assert.AreEqual(0, recording.Clipboard.Begun, "the clipboard untouched (G15)");
-        Assert.AreEqual($"Saved “{Clip}” to your stash. It is 0.3 s long.", recording.Notifications.Shown.Single().Text, "nothing of the clipboard (G16)");
+        Assert.AreEqual($"Recording stashed: “{Clip}”. 0.3 s.", recording.Notifications.Shown.Single().Text, "G16: on the clipboard only \"when it is\"");
         Assert.HasCount(1, await recording.Stash.All());
     }
 
@@ -141,7 +141,7 @@ public sealed class RecordClipTests
         await Record(recording);
 
         CollectionAssert.AreEqual(
-            new[] { $"Copy failed: {Clip}, {HeldClipboard.Reason}", $"Saved “{Clip}” to your stash. It is 0.3 s long." },
+            new[] { $"Copy failed: {Clip}, {HeldClipboard.Reason}", $"Recording stashed: “{Clip}”. 0.3 s." },
             recording.Notifications.Shown.Select(notice => notice.Text).ToList(),
             "the capture stands, and the notification claims nothing of the clipboard (G16, G35)");
         Assert.HasCount(1, await recording.Stash.All());
@@ -200,7 +200,7 @@ public sealed class RecordClipTests
         var item = (await recording.Stash.All()).Single();
         Assert.AreEqual("Recording 2026-10-20 17.30.04", item.Name, "started at the second press, as Record starts it (F5, F12)");
         Assert.AreEqual(new MediaFacts(ImageFormat.Gif, 32, 24, true, 3, 210), item.Facts, "ended at the third, as Stop ends it (G15)");
-        Assert.AreEqual($"Saved “{item.Name}” to your stash. It is on the clipboard too. It is 0.2 s long.", recording.Notifications.Shown.Single().Text, "no refusal, only the clip");
+        Assert.AreEqual($"Recording stashed: “{item.Name}”. 0.2 s · On the clipboard · Ctrl+V pastes it.", recording.Notifications.Shown.Single().Text, "no refusal, only the clip");
         CollectionAssert.AreEqual(new[] { CaptureMode.Recording }, recording.Selection.Modes, "no second overlay");
         CollectionAssert.AreEqual(new[] { "hide", "restore Flyout" }, recording.WindowSteps, "not hidden again");
         CollectionAssert.AreEqual(new[] { "show", "record", "saving", "close" }, recording.Frame.Calls.ToList(), "the bar names the saving from the press (G35)");
@@ -263,7 +263,7 @@ public sealed class RecordClipTests
         Assert.AreEqual(1_000L, item.Facts.DurationMs, "the press's one-second cap, counted from Record (G32, G15)");
         Assert.AreEqual("Recording 2026-10-20 17.30.05", item.Name);
         Assert.IsTrue(recording.Screen.PointerAsked.All(asked => !asked), "the press's pointer setting, off (G15)");
-        Assert.AreEqual($"Saved “{item.Name}” to your stash. It is on the clipboard too. It is 1.0 s long.", recording.Notifications.Shown.Single().Text, "its length from Record (G16)");
+        Assert.AreEqual($"Recording stashed: “{item.Name}”. 1.0 s · On the clipboard · Ctrl+V pastes it.", recording.Notifications.Shown.Single().Text, "its length from Record (G16)");
     }
 
     [TestMethod]
@@ -328,7 +328,7 @@ public sealed class RecordClipTests
         Assert.IsEmpty(recording.Notifications.Shown, "the bar is the busy state (G35)");
         await acting.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.HasCount(1, await recording.Stash.All(), "one recording");
-        Assert.AreEqual($"Saved “{Clip}” to your stash. It is on the clipboard too. It is 0.1 s long.", recording.Notifications.Shown.Single().Text);
+        Assert.AreEqual($"Recording stashed: “{Clip}”. 0.1 s · On the clipboard · Ctrl+V pastes it.", recording.Notifications.Shown.Single().Text);
         CollectionAssert.AreEqual(new[] { "hide", "restore Flyout" }, recording.WindowSteps);
     }
 

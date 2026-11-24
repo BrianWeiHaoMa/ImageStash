@@ -75,7 +75,7 @@ public sealed class SettingsWindowLookTests
             TrayDesktop.Run(() =>
             {
                 Application.Current!.RequestedThemeVariant = theme == "Light" ? ThemeVariant.Light : ThemeVariant.Dark;
-                notifications.Raise("Saved to your stash");
+                notifications.Raise(CaptureNotification.Title(CaptureKind.Screenshot));
             });
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => window.IsVisible && notification.Shown is { IsVisible: true }));
             var variant = theme == "Light" ? ThemeVariant.Light : ThemeVariant.Dark;

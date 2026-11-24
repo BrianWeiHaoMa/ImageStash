@@ -62,7 +62,7 @@ public sealed class StashClipboardImageTests
         CollectionAssert.AreEqual(listedBytes, File.ReadAllBytes(listed), "the listed file untouched");
         TrayDesktop.Run(() =>
         {
-            CollectionAssert.AreEqual(Enumerable.Repeat($"Saved “{name}” to your stash. {StillOnly}", 4).ToList(), shown.Notifications.Shown.Select(notice => notice.Text).ToList());
+            CollectionAssert.AreEqual(Enumerable.Repeat($"Clipboard image stashed: “{name}”. {StillOnly}", 4).ToList(), shown.Notifications.Shown.Select(notice => notice.Text).ToList());
             Assert.HasCount(windowNotices, shown.Notices.Shown, "nothing in the window, which the act does not open");
             Assert.IsFalse(shown.Window.IsActive, "the act opens nothing and activates nothing");
         });
@@ -90,7 +90,7 @@ public sealed class StashClipboardImageTests
             Assert.AreEqual("kept", shown.Search.Text);
             Assert.AreEqual("kept", shown.Listing.Query, "a capture resets nothing of the window");
             CollectionAssert.AreEqual(new[] { kept.Id }, shown.Listing.Selection.ToList());
-            Assert.StartsWith("Saved “Screenshot ", shown.Notifications.Shown.Single().Text);
+            Assert.StartsWith("Clipboard image stashed: “Screenshot ", shown.Notifications.Shown.Single().Text);
         });
         Assert.HasCount(2, TrayDesktop.Get(() => shown.Listing.Store!.All()).GetAwaiter().GetResult().Value!);
     }
@@ -202,7 +202,7 @@ public sealed class StashClipboardImageTests
             CollectionAssert.Contains(atThePress, item.Name, "named by the local time at the press (F12)");
             Assert.AreEqual(ImageFormat.Png, item.Facts.Format);
             CollectionAssert.AreEqual(png, File.ReadAllBytes(item.FilePath), "the clipboard's PNG as it is");
-            TrayDesktop.Run(() => Assert.AreEqual($"Saved “{item.Name}” to your stash. {StillOnly}", shown.Notifications.Shown.Single().Text));
+            TrayDesktop.Run(() => Assert.AreEqual($"Clipboard image stashed: “{item.Name}”. {StillOnly}", shown.Notifications.Shown.Single().Text));
             Assert.AreEqual(chat.Window, FrontWindow.GetForegroundWindow(), "nothing took the foreground (G13, G16)");
             CollectionAssert.Contains(chat.Messages().Skip(typedBefore).ToList(), "WM_KEYDOWN:0x41", "the letter typed after the press reaches the app in front");
             TrayDesktop.Run(() => Assert.IsFalse(shown.Window.IsVisible, "the act opens no window (G13)"));

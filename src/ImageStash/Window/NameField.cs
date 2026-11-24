@@ -15,8 +15,9 @@ namespace ImageStash.Window;
 /// The preview's name, edited in place (G17, G19): the item's name with its rename glyph, which a click, or
 /// <see cref="Edit"/>, turns into a text box in the same place holding the name selected, so typing replaces it. Enter
 /// commits what the box shows, any text, none included (G17: nothing requires a name), and Esc cancels; either turns it
-/// back into the name and raises its event. Focus moving elsewhere in the window commits it as Enter would, focus
-/// staying where it went (<see cref="FieldLeaving"/>, G19); a hide moves no focus, so the edit outlasts it (G1). It shows
+/// back into the name and raises its event. Focus moving elsewhere in the window raises <see cref="Left"/>, which the
+/// preview commits as Enter would, focus staying where it went (<see cref="FieldLeaving"/>, G19); a hide moves no focus,
+/// so the edit outlasts it (G1). The capture card's name is one too, drawn boxed (G16), which wires its own ends. It shows
 /// the name it is given and never the typed text, so no new name shows before the store has it (G28, R9); it never
 /// reaches the store itself. Inside the box the keys it uses are its own, and it has no paste of its own and no menu
 /// offering one, as the search box has none: ImageStash reads the clipboard only for its three actions (N9, R5). Never
@@ -25,13 +26,18 @@ namespace ImageStash.Window;
 public sealed class NameField : Panel
 {
     private readonly Button name;
+    private readonly Control nameShown;
     private readonly TextBlock nameText;
     private readonly TextBox box;
 
-    public NameField()
+    /// <param name="boxed">
+    /// Drawn as the field it is, at the words' size in a hairline box across its column with the rename glyph at its end,
+    /// as the capture card shows it (G16); otherwise the preview's name, a heading with the glyph beside it.
+    /// </param>
+    public NameField(bool boxed = false)
     {
         var font = new FontFamily("Segoe UI Variable Display, Segoe UI");
-        nameText = new TextBlock { FontFamily = font, FontSize = 15, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+        nameText = new TextBlock { TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         var glyph = new TextBlock { Text = "", FontFamily = new FontFamily("Segoe Fluent Icons"), FontSize = 12, Opacity = 0.6, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
         Grid.SetColumn(glyph, 1);
         // Not focusable, so Tab's round in the preview is unchanged: the keyboard's way in is F2 (G7).
@@ -41,21 +47,29 @@ public sealed class NameField : Panel
             Focusable = false,
             Background = Brushes.Transparent,
             BorderThickness = default,
-            Padding = new Thickness(6, 4),
-            HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Center,
-            HorizontalContentAlignment = HorizontalAlignment.Left,
+            Padding = boxed ? new Thickness(8, 4) : new Thickness(6, 4),
+            HorizontalAlignment = boxed ? HorizontalAlignment.Stretch : HorizontalAlignment.Left,
+            VerticalAlignment = boxed ? VerticalAlignment.Stretch : VerticalAlignment.Center,
+            HorizontalContentAlignment = boxed ? HorizontalAlignment.Stretch : HorizontalAlignment.Left,
+            VerticalContentAlignment = VerticalAlignment.Center,
         };
         AutomationProperties.SetName(name, "Rename");
         ToolTipRule.Set(name, "Rename (F2)");
         name.Click += (_, _) => Edit();
-        box = new TextBox { PlaceholderText = "Name", FontFamily = font, FontSize = 15, FontWeight = FontWeight.SemiBold, Height = 32, VerticalContentAlignment = VerticalAlignment.Center, IsVisible = false };
+        box = new TextBox { PlaceholderText = "Name", Height = 32, VerticalContentAlignment = VerticalAlignment.Center, IsVisible = false };
+        if (!boxed)
+        {
+            (nameText.FontFamily, nameText.FontSize, nameText.FontWeight) = (font, 15, FontWeight.SemiBold);
+            (box.FontFamily, box.FontSize, box.FontWeight) = (font, 15, FontWeight.SemiBold);
+        }
+
         AutomationProperties.SetName(box, "Name");
         // The text box's own Paste (Ctrl+V, Shift+Insert, its menu) would read the clipboard's text (N9, R5); its menu
         // would then offer a Paste that does nothing (G35). Cut and Copy of its text stay on their keys.
         box.PastingFromClipboard += (_, e) => e.Handled = true;
         box.ContextFlyout = null;
-        Children.Add(name);
+        nameShown = boxed ? Boxed(name, box.Height) : name;
+        Children.Add(nameShown);
         Children.Add(box);
         // Tunnelling, so Enter and Esc reach the field before the text box treats them as its own.
         AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
@@ -103,7 +117,7 @@ public sealed class NameField : Panel
     {
         box.Text = Shown;
         IsEditing = true;
-        name.IsVisible = false;
+        nameShown.IsVisible = false;
         box.IsVisible = true;
         box.Focus();
         box.SelectAll();
@@ -137,7 +151,7 @@ public sealed class NameField : Panel
         // Back to the name first, so focus given back is not taken for focus moving away from an edit.
         IsEditing = false;
         box.IsVisible = false;
-        name.IsVisible = true;
+        nameShown.IsVisible = true;
         Stopped?.Invoke();
     }
 
@@ -173,5 +187,15 @@ public sealed class NameField : Panel
             StopEditing();
             Left?.Invoke(typed);
         }
+    }
+
+    /// <summary>The name in a hairline box as tall as its text box, in the look's field colours, so it reads as the field it is.</summary>
+    private static Border Boxed(Button name, double height)
+    {
+        var field = new Border { Child = name, BorderThickness = new Thickness(1), Height = height };
+        field.Bind(Border.BackgroundProperty, field.GetResourceObservable(LookKeys.ShortcutFieldGround));
+        field.Bind(Border.BorderBrushProperty, field.GetResourceObservable(LookKeys.ShortcutFieldBorder));
+        field.Bind(Border.CornerRadiusProperty, field.GetResourceObservable(LookKeys.ControlRadius));
+        return field;
     }
 }

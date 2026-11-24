@@ -295,11 +295,11 @@ try {
     $screenshotSha = Sha $screenshot
     Check (WaitFor { [CopyReadBack]::Clipboard() -eq "files=$screenshot png=True dibv5=True effect=1" } 3000) "the clipboard holds the screenshot, as Also copy has it (G14): $([CopyReadBack]::Clipboard())"
     $hint = HintAfterClickFrom ([PasteDesk]::Foreground())
-    ClickCard "Saved $([char]0x201C)$name$([char]0x201D) to your stash. It is on the clipboard too." 'Edit'
+    ClickCard "Screenshot stashed: $([char]0x201C)$name$([char]0x201D). On the clipboard $([char]0x00B7) Ctrl+V pastes it." 'Edit'
     $root = Editor 'Crop' "the card's Edit"
     Check (-not [EditorDesk]::Captioned((StashWindow))) 'the window is the flyout, without a title bar, as it was not pinned (G16, G1)'
     # G16: the card goes at its Edit, so it lies over nothing of the flyout its Edit opened.
-    Check (WaitFor { [CaptureDesk]::TitledFrom($running, "Saved $([char]0x201C)$name$([char]0x201D) to your stash.") -eq [IntPtr]::Zero } 3000) "the card went at its Edit, without the script closing it (G16)"
+    Check (WaitFor { [CaptureDesk]::TitledFrom($running, "Screenshot stashed: $([char]0x201C)$name$([char]0x201D).") -eq [IntPtr]::Zero } 3000) "the card went at its Edit, without the script closing it (G16)"
     $text = One (Elements $root 'Text' $button) "the tool row's Text"
     Check ((Toggled $text) -and ((Elements $root 'Trim' $button).Count -eq 0) -and ((Elements $root $name ([Windows.Automation.ControlType]::Text)).Count -ge 1)) "the editor is on '$name' with Text current and no Trim, a still's (G16, G20)"
 
@@ -355,9 +355,9 @@ try {
     $recorded = @(GifDelays $recording)
     Need ($recorded.Count -ge 4) "the recording holds images enough to trim: $($recorded.Count), delays $($recorded -join ' ')"
     $hint = HintAfterClickFrom ([PasteDesk]::Foreground())
-    ClickCard "Saved $([char]0x201C)$clipName$([char]0x201D) to your stash. It is on the clipboard too. It is " 'Trim'
+    ClickCard "Recording stashed: $([char]0x201C)$clipName$([char]0x201D). " 'Trim'
     $root = Editor 'Trim' "the card's Trim"
-    Check (WaitFor { [CaptureDesk]::TitledFrom($running, "Saved $([char]0x201C)$clipName$([char]0x201D) to your stash.") -eq [IntPtr]::Zero } 3000) "the card went at its Trim, without the script closing it (G16)"
+    Check (WaitFor { [CaptureDesk]::TitledFrom($running, "Recording stashed: $([char]0x201C)$clipName$([char]0x201D).") -eq [IntPtr]::Zero } 3000) "the card went at its Trim, without the script closing it (G16)"
     $trim = One (Elements $root 'Trim' $button) "the tool row's Trim"
     Check ((Toggled $trim) -and ((Elements $root $clipName ([Windows.Automation.ControlType]::Text)).Count -ge 1)) "the editor is on '$clipName' with the Trim tool selected (G16, G22)"
 

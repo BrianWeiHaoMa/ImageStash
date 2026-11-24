@@ -1,7 +1,9 @@
 using Avalonia.Input;
 using ImageStash.Capture;
 using ImageStash.Editor;
+using ImageStash.Files;
 using ImageStash.Layers;
+using ImageStash.Media;
 using ImageStash.Seams;
 using ImageStash.Store;
 using ImageStash.Tests.Support;
@@ -23,7 +25,9 @@ namespace ImageStash.Tests.Window;
 /// counting the nameless files as to check, and a text file with no extension is skipped as such (F3, G11, G12).
 /// Capture to paste, over a stash that holds used pictures, with a chat in front as the paste target's seam reports it:
 /// a screenshot's notification's Edit opens the window naming the chat, Save sends nothing to any window, and Enter
-/// pastes the saved finished picture into the chat, recording one use (G8, G16, G26, N3, G10).
+/// pastes the saved finished picture into the chat, recording one use (G8, G16, G26, N3, G10); the screenshot's card,
+/// read before that Edit, is titled as a screenshot and says on one line that it is on the clipboard and its measured
+/// size, and a clip's card leads that line with its length and offers Trim (G16, G24).
 /// </summary>
 [TestClass]
 public sealed class StashWindowPathTests
@@ -346,6 +350,14 @@ public sealed class StashWindowPathTests
         var original = File.ReadAllBytes(shot.FilePath);
         var notice = listed.Notifications.Shown.Single();
         Assert.IsNotNull(notice.Card, "drawn as the capture card, with its Edit");
+
+        // (2) That card, read while it shows, before the Edit's click dismisses it: titled as a screenshot in the stash, and
+        // on one line that it is on the clipboard, that Ctrl+V pastes it, and the saved file's measured size (G16, G24).
+        var card = listed.CaptureNotification.WordsOf(notice)!;
+        await Handing.Eventually(() => card.Size is not null);
+        Assert.AreEqual(("Screenshot stashed", $"On the clipboard · Ctrl+V pastes it · {FileSize.Words(new FileInfo(shot.FilePath).Length)}", "Edit"),
+            (card.Title, card.Line, card.EditLabel));
+
         listed.Target.InFront = new ForegroundReading(true, null);
         listed.Target.BeforeHeld = chat;
         listed.Target.Before = null;
@@ -379,6 +391,26 @@ public sealed class StashWindowPathTests
         CollectionAssert.AreNotEqual(original, handed.Png, "rendered with its Hide box, not the screenshot as taken");
         Assert.AreEqual(usesBefore + 1, listed.Uses(), "one use recorded (G10)");
         Assert.IsEmpty(listed.Failures);
+
+        // (2) A clip's card, the clip recorded with Also copy on, in a stash of its own on the recorder's stepped clock until
+        // the walk records its clip in this stash: its line leads with the clip's length, and it offers Trim (G16).
+        using var recording = await ListedStash.OpenRecording();
+        recording.Selection.Answer = new SelectedRegion(RecordingScreen.Primary, new Avalonia.PixelRect(100, 50, 32, 24));
+        MediaFrame[] pictures = [recording.Screen.Paint(RecordingScreen.Primary, seed: 1), recording.Screen.Paint(RecordingScreen.Primary, seed: 2)];
+        recording.Screen.EachGrab = index => Outcome<MediaFrame>.Of(pictures[index % 2]);
+        var acting = recording.RecordClip.StartOrStop();
+        await recording.RecordFromTheWait();
+        // Four samples, at 0, 70, 140 and 210 ms, then Stop at 280 ms.
+        recording.StepRecording(210);
+        recording.Stepped!.Pass(TimeSpan.FromMilliseconds(70));
+        recording.Frame.PressStop();
+        await acting.WaitAsync(TimeSpan.FromSeconds(10));
+        var clip = (await recording.Stash.All()).Single();
+        var clipCard = recording.CaptureNotification.WordsOf(recording.Notifications.Shown.Single())!;
+        await Handing.Eventually(() => clipCard.Size is not null);
+        Assert.AreEqual(("Recording stashed", $"0.3 s · On the clipboard · Ctrl+V pastes it · {FileSize.Words(new FileInfo(clip.FilePath).Length)}", "Trim"),
+            (clipCard.Title, clipCard.Line, clipCard.EditLabel));
+        Assert.IsEmpty(recording.Failures);
     }
 
     /// <summary>An arrow pressed in the preview as the window takes it; then the item shown, and the grid's one selected item, read.</summary>

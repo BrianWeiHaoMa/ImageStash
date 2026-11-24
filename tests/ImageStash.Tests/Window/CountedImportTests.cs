@@ -204,7 +204,7 @@ public sealed class CountedImportTests
     public async Task ANotificationAboveTheTrayNamesNoKeyOnItsUndoAndGainsNoFirstLine()
     {
         using var importing = await ListedStash.Open();
-        var capture = importing.Notifications.Raise("Saved “cat” to your stash.", "Undo", () => Task.FromResult(Outcome.Done));
+        var capture = importing.Notifications.Raise("Screenshot stashed: “cat”.", "Undo", () => Task.FromResult(Outcome.Done));
 
         ControlThread.Run(() =>
         {

@@ -78,7 +78,7 @@ public static class LookKeys
     /// <summary>The pin's ground while the window is pinned.</summary>
     public const string IconButtonOnGround = Prefix + "IconButtonOnGround";
 
-    // A shortcut field on the Settings page and its key caps.
+    // A field ImageStash draws itself, a shortcut field on the Settings page or the capture card's name, and key caps.
 
     public const string ShortcutFieldGround = Prefix + "ShortcutFieldGround";
     public const string ShortcutFieldBorder = Prefix + "ShortcutFieldBorder";

@@ -359,7 +359,7 @@ try {
     $name = Newest 'name'
     $file = Newest 'finished_file'
     Check (((NamedBetween 'Screenshot' $before $after) -contains $name) -and (FileOf $name 'png' $file) -and ((Newest 'format') -eq 'png') -and ((Newest 'width') -eq "$width") -and ((Newest 'height') -eq "$height")) "it is a $width by $height PNG named like a screenshot at the press's local time (F12, F3, G13): '$name', '$file'"
-    $saved = "Saved $([char]0x201C)$name$([char]0x201D) to your stash."
+    $saved = "Clipboard image stashed: $([char]0x201C)$name$([char]0x201D)."
     $announced = WaitFor { [CaptureDesk]::TitledFrom($running, $saved) -ne [IntPtr]::Zero } 3000
     $took = $clock.ElapsedMilliseconds
     $notification = [CaptureDesk]::TitledFrom($running, $saved)
@@ -384,8 +384,8 @@ try {
     $path = Join-Path $stash $file
     Check (((NamedBetween 'Screenshot' $before $after) -contains $name) -and (FileOf $name 'png' $file) -and ((Newest 'format') -eq 'png') -and ((Newest 'width') -eq "$($region[2])") -and ((Newest 'height') -eq "$($region[3])")) "it is a PNG of the dragged $($region[2]) by $($region[3]) pixels with the auto name (G14, F12, F3): '$name', '$file', $(Newest 'width') by $(Newest 'height')"
     Check (WaitFor { [CopyReadBack]::Clipboard() -eq "files=$path png=True dibv5=True effect=1" } 3000) "the clipboard holds it as a file, ""PNG"" and CF_DIBV5 (G14, G8): $([CopyReadBack]::Clipboard())"
-    $saved = "Saved $([char]0x201C)$name$([char]0x201D) to your stash. It is on the clipboard too."
-    Check (WaitFor { [ScreenshotDesk]::Titled($running, $saved).Count -eq 1 } 3000) "a notification says it is in the stash and on the clipboard (G16): '$saved'"
+    $saved = "Screenshot stashed: $([char]0x201C)$name$([char]0x201D). On the clipboard $([char]0x00B7) Ctrl+V pastes it."
+    Check (WaitFor { [ScreenshotDesk]::Titled($running, $saved).Count -eq 1 } 3000) "a notification titled by its kind says it is in the stash, on the clipboard, and that Ctrl+V pastes it (G16): '$saved'"
     Check ((Count 'SELECT COUNT(*) FROM uses') -eq $uses) 'the screenshot and its copy recorded no use (G10)'
     $items++
 
@@ -413,11 +413,11 @@ try {
     Check $added "the tray's Stop recording ended it: one item added, the frame and the bar gone (G15, G34, F4): $(([CaptureDesk]::Shown($running)) -join ' | ')"
     $clip = CheckClip 'the clip' $before $started $sampled.ElapsedMilliseconds
     Check (WaitFor { [CopyReadBack]::Clipboard() -eq "files=$($clip.Path) png=False dibv5=False effect=1" } 3000) "the clipboard holds the clip as a file only (G15, G8): $([CopyReadBack]::Clipboard())"
-    $saved = "Saved $([char]0x201C)$($clip.Name)$([char]0x201D) to your stash. It is on the clipboard too. It is "
+    $saved = "Recording stashed: $([char]0x201C)$($clip.Name)$([char]0x201D). "
     $announced = WaitFor { [CaptureDesk]::TitledFrom($running, $saved) -ne [IntPtr]::Zero } 3000
     $words = if ($announced) { [CaptureDesk]::TitleOf([CaptureDesk]::TitledFrom($running, $saved)) } else { '' }
     $length = ([long](Newest 'duration_ms') / 1000.0).ToString('0.0', [Globalization.CultureInfo]::InvariantCulture) + ' s'
-    Check ($words -eq "$saved$length long.") "a notification says it is in the stash and on the clipboard, with its length (G15, G16): '$words'"
+    Check ($words -eq "$saved$length $([char]0x00B7) On the clipboard $([char]0x00B7) Ctrl+V pastes it.") "a notification titled by its kind says it is in the stash, its length first, and that it is on the clipboard and Ctrl+V pastes it (G15, G16): '$words'"
     if ($announced) {
         # The window stacks every card still up, each its picture's name, then its Edit or Trim button, then Undo.
         $found = @([Windows.Automation.AutomationElement]::FromHandle([CaptureDesk]::TitledFrom($running, $saved)).FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition))

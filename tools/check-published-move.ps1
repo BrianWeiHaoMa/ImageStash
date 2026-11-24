@@ -492,7 +492,7 @@ try {
     Need (WaitFor { ((Count 'SELECT COUNT(*) FROM items') -eq $items + 1) -and ([ScreenshotDesk]::Titled($running, $frameTitle).Count -eq 0) -and ([ScreenshotDesk]::Titled($running, $barTitle).Count -eq 0) } 15000) "the tray's Stop recording ended the recording with its clip in the stash"
     $clip = [long](Query 'SELECT id FROM items ORDER BY added_at DESC, id DESC LIMIT 1')
     $clipFile = Of $clip 'finished_file'
-    $saved = "Saved $([char]0x201C)$(Of $clip 'name')$([char]0x201D) to your stash."
+    $saved = "Recording stashed: $([char]0x201C)$(Of $clip 'name')$([char]0x201D)."
     Need (WaitFor { [CaptureDesk]::TitledFrom($running, $saved) -ne [IntPtr]::Zero } 5000) "its notification says '$saved'"
     $card = [Windows.Automation.AutomationElement]::FromHandle([CaptureDesk]::TitledFrom($running, $saved))
     ClickOn (One (Elements $card 'Close' $button) "the notification's Close") -Hover

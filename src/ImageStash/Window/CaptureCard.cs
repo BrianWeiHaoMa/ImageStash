@@ -5,7 +5,6 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.VisualTree;
-using ImageStash.Files;
 using ImageStash.Media;
 using ImageStash.Seams;
 using ImageStash.Store;
@@ -14,10 +13,12 @@ using ImageStash.Look;
 namespace ImageStash.Window;
 
 /// <summary>
-/// The capture notification's card above the tray (G16): the item's picture, small, that it is in the stash with what
-/// else its capture says, the saved file's measured size (G24), its name as a field, Edit (Trim for a recording), Undo
-/// and ×. A click on Undo or × leaves the app in front with the keystrokes; a click on the name, on Edit or Trim, or
-/// anywhere else on the card outside its field and buttons activates the notification, the user's act. The name's puts the
+/// The capture notification's card above the tray (G16): the item's picture, small; a title naming what was captured, in
+/// the stash; one line of facts ending in the saved file's measured size (G24), and a stashed clipboard image's sentence
+/// on lines of its own (G13), as <see cref="CaptureCardWords"/> says them; its name as a boxed field; Edit (Trim for a
+/// recording) and Undo on a row of their own; and ×. A click on Undo or × leaves the app in front with the keystrokes; a
+/// click on the name, on Edit or Trim, or anywhere else on the card outside its field and buttons activates the
+/// notification, the user's act. The name's puts the
 /// name in edit, selected so typing replaces it, the notice staying while it has focus. Enter renames the item through the
 /// store and the field shows the item as the store then answers it, Esc leaves the name as recorded, and either, focus
 /// going to another window, or the card leaving, gives the activation back to the window that had it, unless the user
@@ -31,9 +32,8 @@ public sealed class CaptureCard : Border
     /// <summary>The picture's longer edge in pixels: decoded at this size, never kept whole (R7).</summary>
     public const int PictureBound = 256;
 
-    public const string Title = "Saved to your stash";
-
-    public const string NameHint = "Click the name to change it";
+    /// <summary>The words' column: the longest title, and the line with every part, the longest recording's length included, on one line.</summary>
+    private const double WordsWidth = 300;
 
     /// <summary>Why the name could not be put in edit, when the platform did not let the notification take the keystrokes.</summary>
     public const string NotActivated = "the notification could not be brought to the front to type in";
@@ -48,7 +48,8 @@ public sealed class CaptureCard : Border
     private readonly Action<StashItem, bool> show;
     private readonly TimeSpan heldFileRetry;
     private readonly Image picture = new() { Width = 112, Height = 84, Stretch = Stretch.Uniform };
-    private readonly TextBlock size = new() { Opacity = 0.7, IsVisible = false };
+    // One line whatever it holds: should a part not fit, the line ends in an ellipsis rather than wrap into a taller card.
+    private readonly TextBlock line = new() { FontSize = 12, Opacity = 0.7, TextTrimming = TextTrimming.CharacterEllipsis };
     private StashItem item;
     private Avalonia.Controls.Window? shownIn;
     private IDisposable? activation;
@@ -58,15 +59,16 @@ public sealed class CaptureCard : Border
     private bool left;
 
     /// <param name="tookFocus">Run once the name's click has brought the notification in front: ImageStash gained focus.</param>
-    /// <param name="editLabel">The editor's button: Edit, or Trim for a recording.</param>
-    /// <param name="edit">Run with the item as the card has it now when that button is clicked, and whether the click brought the notification in front.</param>
+    /// <param name="edit">Run with the item as the card has it now when its Edit or Trim is clicked, and whether the click brought the notification in front.</param>
     /// <param name="show">Run with the item as the card has it now when the card is clicked outside its field and buttons, and whether the click brought the notification in front.</param>
-    public CaptureCard(Notice notice, Notices notices, StashItem item, string said, Listing listing, Renaming renaming, IQuietWindows quietWindows, TimeSpan heldFileRetry, Action tookFocus,
-        string editLabel, Action<StashItem, bool> edit, Action<StashItem, bool> show)
+    /// <param name="words">What the card says besides the name, kept by the notification while the card shows.</param>
+    public CaptureCard(Notice notice, Notices notices, StashItem item, CaptureCardWords words, Listing listing, Renaming renaming, IQuietWindows quietWindows, TimeSpan heldFileRetry,
+        Action tookFocus, Action<StashItem, bool> edit, Action<StashItem, bool> show)
     {
         this.notice = notice;
         this.notices = notices;
         this.item = item;
+        Words = words;
         this.listing = listing;
         this.renaming = renaming;
         this.quietWindows = quietWindows;
@@ -80,42 +82,37 @@ public sealed class CaptureCard : Border
         Field.Stopped += EditEnded;
         Field.Committed += typed => _ = Rename(typed);
 
-        var words = new StackPanel { Spacing = 2, Width = 250 };
-        words.Children.Add(new TextBlock { Text = Title, FontSize = 14, FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap });
-        if (said.Length > 0)
+        var column = new StackPanel { Spacing = 2, Width = WordsWidth };
+        column.Children.Add(new TextBlock { Text = words.Title, FontSize = 14, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
+        column.Children.Add(line);
+        if (words.Aside is { } aside)
         {
-            words.Children.Add(new TextBlock { Text = said, Opacity = 0.7, TextWrapping = TextWrapping.Wrap });
+            column.Children.Add(new TextBlock { Text = aside, FontSize = 12, Opacity = 0.7, TextWrapping = TextWrapping.Wrap });
         }
 
-        words.Children.Add(size);
-        words.Children.Add(new Border { Child = Field, Margin = new Thickness(-6, 4, 0, 0) });
-        // The buttons first, the hint beside them wrapping where the column has no room.
-        var actions = new DockPanel { Margin = new Thickness(0, 4, 0, 0) };
-        var editButton = new Button { Content = editLabel, Focusable = false, Margin = new Thickness(0, 0, 10, 0) };
+        column.Children.Add(new Border { Child = Field, Margin = new Thickness(0, 4, 0, 0) });
+        // The buttons alone on their row: the boxed name says it is a field, so no hint sits beside them.
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Margin = new Thickness(0, 4, 0, 0) };
+        var editButton = new Button { Content = words.EditLabel, Focusable = false };
         editButton.Click += (_, _) => AskInFront(edit);
         actions.Children.Add(editButton);
         if (notice.UndoLabel is { } label)
         {
-            var undo = new Button { Content = label, Focusable = false, Margin = new Thickness(0, 0, 10, 0) };
+            var undo = new Button { Content = label, Focusable = false };
             undo.Click += (_, _) => _ = notices.Undo(notice);
             actions.Children.Add(undo);
         }
 
-        foreach (var button in actions.Children)
-        {
-            DockPanel.SetDock(button, Dock.Left);
-        }
-
-        actions.Children.Add(new TextBlock { Text = NameHint, FontSize = 11.5, Opacity = 0.6, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap });
-        words.Children.Add(actions);
+        column.Children.Add(actions);
+        ShowLine();
 
         var close = NoticeCard.CloseButton(() => notices.Close(notice));
         close.VerticalAlignment = VerticalAlignment.Top;
         var frame = new Border { Child = picture, ClipToBounds = true, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 12, 0) };
         frame.Bind(Border.CornerRadiusProperty, frame.GetResourceObservable(LookKeys.ControlRadius));
-        Grid.SetColumn(words, 1);
+        Grid.SetColumn(column, 1);
         Grid.SetColumn(close, 2);
-        Child = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Children = { frame, words, close } };
+        Child = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Children = { frame, column, close } };
         Padding = new Thickness(12, 10, 6, 10);
         CardLook.Dress(this);
         // Bubbling: the name's tunnelled press and the buttons' own have already handled theirs.
@@ -131,6 +128,8 @@ public sealed class CaptureCard : Border
             }
 
             listing.Changed += StashChanged;
+            words.Changed += ShowLine;
+            ShowLine();
         };
         DetachedFromVisualTree += (_, _) =>
         {
@@ -142,20 +141,31 @@ public sealed class CaptureCard : Border
 
             shownIn = null;
             listing.Changed -= StashChanged;
+            words.Changed -= ShowLine;
             Field.StopEditing();
             EditEnded();
         };
         _ = ShowPictureAndSize();
     }
 
-    /// <summary>The item's name, edited in place; the field itself, so it has no paste of its own (N9, R5).</summary>
-    public NameField Field { get; } = new();
+    /// <summary>The item's name, edited in place, drawn boxed as a field; the field itself, so it has no paste of its own (N9, R5).</summary>
+    public NameField Field { get; } = new(boxed: true);
+
+    /// <summary>What the card says besides the name: its title, its line and a stashed clipboard image's sentence.</summary>
+    public CaptureCardWords Words { get; }
 
     /// <summary>The picture as shown: decoded once, at most <see cref="PictureBound"/> pixels on its longer edge; null until then or when it could not be read.</summary>
     public IImage? Picture => picture.Source;
 
-    /// <summary>The saved file's size as shown, or null until it has been measured.</summary>
-    public string? Size => size.IsVisible ? size.Text : null;
+    /// <summary>The saved file's size as the line shows it, or null until it has been measured.</summary>
+    public string? Size => Words.Size;
+
+    /// <summary>
+    /// The line as shown, laid out again whenever it changes. While it holds nothing yet it keeps its row, a zero-width
+    /// space holding the line's height: the notification is sized to its cards when they show, so a size joining a row
+    /// that was not there would grow the card under a window placed without it, Edit and Undo cut at its bottom (G16).
+    /// </summary>
+    private void ShowLine() => line.Text = Words.Line is { Length: > 0 } said ? said : "\u200B";
 
     /// <summary>
     /// The name's click, the one click on the card that takes the activation (G16): the notification comes in front with
@@ -278,7 +288,7 @@ public sealed class CaptureCard : Border
         {
             var moved = now.FilePath != item.FilePath;
             Take(now);
-            if (!readingPicture && (pictureChanged || moved && (picture.Source is null || !size.IsVisible)))
+            if (!readingPicture && (pictureChanged || moved && (picture.Source is null || Words.Size is null)))
             {
                 _ = ShowPictureAndSize();
             }
@@ -291,11 +301,17 @@ public sealed class CaptureCard : Border
 
     /// <summary>
     /// The item as the store now answers it, its name in the field. A new rendered revision is another picture (an Open
-    /// with… rewrite adopted or undone, an edit saved or reverted), to be read again; a rename alone moves the same one.
+    /// with… rewrite adopted or undone, an edit saved or reverted), to be read again, the line saying its length at once
+    /// and its size once measured; a rename alone moves the same one.
     /// </summary>
     private void Take(StashItem now)
     {
-        pictureChanged |= now.RenderedRevision != item.RenderedRevision;
+        if (now.RenderedRevision != item.RenderedRevision)
+        {
+            pictureChanged = true;
+            Words.PictureChanged(now.Facts);
+        }
+
         item = now;
         Field.Show(now);
     }
@@ -316,19 +332,10 @@ public sealed class CaptureCard : Border
                 var (path, name) = (item.FilePath, item.FileName);
                 var changed = pictureChanged;
                 pictureChanged = false;
-                if (!size.IsVisible || changed)
+                if (Words.Size is null || changed)
                 {
-                    var bytes = await Task.Run(() => PreviewFacts.FileLength(path));
-                    if (bytes is { } length)
-                    {
-                        size.Text = FileSize.Words(length);
-                        size.IsVisible = true;
-                    }
-                    else if (changed)
-                    {
-                        // Never the size of the picture before it.
-                        size.IsVisible = false;
-                    }
+                    // A changed picture's size was left out when it changed: never the size of the picture before it.
+                    await Words.Measure(path);
                 }
 
                 var decoded = await Task.Run(() =>

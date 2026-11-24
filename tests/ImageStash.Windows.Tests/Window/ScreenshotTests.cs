@@ -78,8 +78,8 @@ public sealed class ScreenshotTests
         Assert.AreEqual(1L, desk.Shown.Uses(), "the capture records no use (G10)");
         CollectionAssert.AreEqual(recent, await RecentIds(desk), "Recent unchanged (G4, G10)");
         var card = await desk.CardShown(name);
-        var notice = TrayDesktop.Get(() => desk.Notifications.Shown.Single(each => each.Text.StartsWith("Saved")));
-        Assert.AreEqual($"Saved “{name}” to your stash. It is on the clipboard too.", notice.Text, "in the stash and on the clipboard (G16)");
+        var notice = TrayDesktop.Get(() => desk.Notifications.Shown.Single(each => each.Text.StartsWith("Screenshot stashed")));
+        Assert.AreEqual($"Screenshot stashed: “{name}”. On the clipboard · Ctrl+V pastes it.", notice.Text, "G16: \"says it is in the stash (and on the clipboard when it is)\"");
         Assert.AreEqual("Undo", notice.UndoLabel);
         await Eventually(() => TrayDesktop.Get(() => card.Size) == FileSize.Words(new FileInfo(item.FilePath).Length));
         TrayDesktop.Run(() => Assert.AreEqual(name, card.Field.Shown, "the name as a field"));
@@ -199,7 +199,7 @@ public sealed class ScreenshotTests
         Assert.AreEqual(0L, desk.Shown.Uses(), "a capture is no use (G10)");
         var card = await desk.CardShown(name);
         var notice = TrayDesktop.Get(() => desk.Notifications.Shown.Single());
-        Assert.AreEqual($"Saved “{name}” to your stash. It is on the clipboard too.", notice.Text, "in the stash and on the clipboard (G16)");
+        Assert.AreEqual($"Screenshot stashed: “{name}”. On the clipboard · Ctrl+V pastes it.", notice.Text, "G16: \"says it is in the stash (and on the clipboard when it is)\"");
         Assert.AreEqual("Undo", notice.UndoLabel);
         await Eventually(() => TrayDesktop.Get(() => card.Size) == FileSize.Words(new FileInfo(item.FilePath).Length));
         TrayDesktop.Run(() =>
@@ -239,7 +239,7 @@ public sealed class ScreenshotTests
         var item = desk.Items().Single();
         Assert.AreEqual(sequence, GetClipboardSequenceNumber(), "the clipboard untouched (G14)");
         await desk.CardShown(item.Name);
-        TrayDesktop.Run(() => Assert.AreEqual($"Saved “{item.Name}” to your stash.", desk.Notifications.Shown.Single().Text, "nothing of the clipboard (G16)"));
+        TrayDesktop.Run(() => Assert.AreEqual($"Screenshot stashed: “{item.Name}”.", desk.Notifications.Shown.Single().Text, "G16: on the clipboard only \"when it is\""));
         desk.ChatKeepsTheKeystrokes("after the capture");
     }
 

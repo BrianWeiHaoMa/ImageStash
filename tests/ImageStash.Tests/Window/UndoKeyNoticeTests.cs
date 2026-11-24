@@ -178,7 +178,7 @@ public sealed class UndoKeyNoticeTests
     {
         using var listed = await ListedStash.Open();
         var ran = false;
-        var capture = listed.Notifications.Raise("Saved “cat” to your stash.", "Undo", () =>
+        var capture = listed.Notifications.Raise("Screenshot stashed: “cat”.", "Undo", () =>
         {
             ran = true;
             return Task.FromResult(Outcome.Done);

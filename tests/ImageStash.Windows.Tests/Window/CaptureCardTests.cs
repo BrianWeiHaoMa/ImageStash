@@ -60,7 +60,10 @@ public sealed class CaptureCardTests
         TrayDesktop.Run(() =>
         {
             Assert.AreEqual(item.Name, card.Field.Shown, "the name as the field");
-            CollectionAssert.IsSubsetOf(new[] { CaptureCard.Title, Import.StillOnly, FileSize.Words(new FileInfo(item.FilePath).Length), CaptureCard.NameHint }, Texts(card));
+            // G16 "says it is in the stash", titled by kind; off the clipboard its line is the measured size alone (G24); G13's
+            // sentence on lines of its own; and no hint beside the buttons, the name drawn as the field it is.
+            CollectionAssert.IsSubsetOf(new[] { CaptureNotification.Title(CaptureKind.StashedClipboardImage), FileSize.Words(new FileInfo(item.FilePath).Length), Import.StillOnly }, Texts(card));
+            Assert.DoesNotContain("Click the name to change it", Texts(card));
             CollectionAssert.AreEqual(new[] { "Edit", "Undo" }, card.GetVisualDescendants().OfType<Button>().Select(button => button.Content).OfType<string>().ToList(), "Edit, then Undo (G16)");
             Assert.AreEqual(new PixelSize(6, 4), ((Bitmap)card.Picture!).PixelSize, "a small picture as it is, never enlarged");
         });
@@ -113,7 +116,7 @@ public sealed class CaptureCardTests
                 Assert.IsEmpty(notifications.Shown, "and the card goes at the press (G16)");
                 Pressed(card.GetVisualDescendants().OfType<Image>().Single());
                 Assert.HasCount(2, asked, "on its picture");
-                Pressed(card.GetVisualDescendants().OfType<TextBlock>().First(text => text.Text == CaptureCard.Title));
+                Pressed(card.GetVisualDescendants().OfType<TextBlock>().First(text => text.Text == card.Words.Title));
                 Assert.HasCount(3, asked, "on its words");
                 Pressed(card, MouseButton.Right);
                 Assert.HasCount(3, asked, "only the left button asks");
@@ -271,9 +274,9 @@ public sealed class CaptureCardTests
             foreach (var (card, words) in new[] { (recorded, "Trim"), (shot, "Edit") })
             {
                 CollectionAssert.AreEqual(new[] { words, "Undo" }, card.GetVisualDescendants().OfType<Button>().Select(button => button.Content).OfType<string>().ToList(), $"{words}, then Undo (G16)");
-                var hint = card.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Text == CaptureCard.NameHint);
+                // The buttons have their row to themselves: the boxed name says it is a field, so no hint sits beside them.
                 var close = CloseButton(card).TranslatePoint(default, card)!.Value.X;
-                foreach (var control in new Control[] { EditButton(card), UndoButton(card), hint })
+                foreach (var control in new Control[] { EditButton(card), UndoButton(card), NameButton(card) })
                 {
                     Assert.IsLessThanOrEqualTo(close + 1e-9, control.TranslatePoint(new Point(control.Bounds.Width, 0), card)!.Value.X, $"{words}'s card: nothing of its row under the ×");
                 }
