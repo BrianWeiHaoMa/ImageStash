@@ -8,8 +8,9 @@ namespace ImageStash.Tests.Window;
 
 /// <summary>
 /// G8's paste target as the window holds it: set at the open shortcut's press to the window in front unless that is
-/// ImageStash itself, and at any other activation to the window that had focus just before, none for the desktop or the
-/// taskbar; and the footer's words for it.
+/// ImageStash itself, at any other activation to the window that had focus just before, none for the desktop or the
+/// taskbar, and at a click on a notification that opens the stash window to the window before the notification, which
+/// that window keeps, a late report read for the notification; and the footer's words for it.
 /// </summary>
 [TestClass]
 public sealed class PasteTargetTests
@@ -125,6 +126,101 @@ public sealed class PasteTargetTests
         seam.ReportLate();
 
         Assert.AreEqual(RecordingTarget.Relay, holder.Current);
+    }
+
+    [TestMethod]
+    public void AClickOnANotificationMakesTheWindowBeforeTheNotificationTheTargetAndTheWindowsShowingKeepsIt()
+    {
+        // G8: "so does the stash window a click on a notification opens (G16): that click sets the paste target as the
+        // notification gains focus, to the window that had focus just before the notification".
+        var holder = new PasteTargetHolder();
+        var seam = new RecordingTarget { BeforeHeld = RecordingTarget.Relay, Before = null, InFront = new ForegroundReading(true, null) };
+
+        holder.FromNotificationClick(seam);
+        holder.Keep();
+
+        Assert.AreEqual(RecordingTarget.Relay, holder.Current, "the window opened keeps it, though the window before it is the notification");
+        CollectionAssert.AreEqual(new[] { "Enter · Paste into Relay", "Ctrl+C · Copy" }, PasteTargetHolder.Hints(holder.Current, 1).ToList());
+    }
+
+    [TestMethod]
+    public void ANotificationsClickHeardOfLateIsNoneUntilTheReportThenTheWindowBeforeTheNotification()
+    {
+        // G8: "while ImageStash has not yet heard from Windows which window had focus just before it, it is none until it
+        // hears, and then that window"; the report comes once the stash window is in front and the card has gone.
+        var holder = new PasteTargetHolder();
+        var seam = new RecordingTarget { BeforeHeld = null, Before = null, InFront = new ForegroundReading(true, null) };
+        holder.FromNotificationClick(seam);
+        holder.Keep();
+        Assert.IsNull(holder.Current, "none until it hears");
+        var changes = 0;
+        holder.Changed += () => changes++;
+
+        seam.BeforeHeld = RecordingTarget.Relay;
+        seam.ReportLate();
+
+        Assert.AreEqual(RecordingTarget.Relay, holder.Current, "read for the notification, not for the stash window now in front, whose window before is the notification");
+        Assert.AreEqual(1, changes, "the footer is told");
+    }
+
+    [TestMethod]
+    public void ANotificationsClickWithImageStashsOwnWindowTheDesktopOrTheTaskbarBeforeItLeavesNone()
+    {
+        // G8 "by the same rule": none when that window was ImageStash itself, the desktop or the taskbar.
+        var holder = new PasteTargetHolder();
+        holder.FromPress(new ForegroundReading(false, RecordingTarget.App("Earlier")));
+        var seam = new RecordingTarget { BeforeHeld = null, Before = RecordingTarget.App("Last other"), InFront = new ForegroundReading(true, null) };
+
+        holder.FromNotificationClick(seam);
+        holder.Keep();
+
+        Assert.IsNull(holder.Current, "neither the last other app nor the earlier target");
+        CollectionAssert.AreEqual(new[] { "Enter · Copy" }, PasteTargetHolder.Hints(holder.Current, 1).ToList());
+    }
+
+    [TestMethod]
+    public void AfterANotificationsClickAnotherActivationOrAPressReadsAfreshAndNoLateReportReadsTheNotificationAgain()
+    {
+        // G8 "whenever ImageStash gains focus any other way"; G34 and Done when 5: the tray's summon, from the taskbar, leaves none.
+        var holder = new PasteTargetHolder();
+        var seam = new RecordingTarget { BeforeHeld = RecordingTarget.Relay, Before = null, InFront = new ForegroundReading(true, null) };
+        holder.FromNotificationClick(seam);
+
+        holder.FromActivation(seam);
+        seam.ReportLate();
+
+        Assert.IsNull(holder.Current, "the tray's summon after the click reads the taskbar, and a late report reads for that activation");
+
+        seam.Before = RecordingTarget.App("Clicked from");
+        holder.FromActivation(seam);
+        seam.Before = RecordingTarget.App("Heard late");
+        seam.ReportLate();
+
+        Assert.AreEqual(RecordingTarget.App("Heard late"), holder.Current, "a click from another app reads afresh, read again as any activation is");
+
+        holder.FromNotificationClick(seam);
+        holder.FromPress(new ForegroundReading(false, RecordingTarget.App("Pressed over")));
+        seam.ReportLate();
+        Assert.AreEqual(RecordingTarget.App("Pressed over"), holder.Current, "set at the press, unchanged by a later report");
+
+        holder.FromNotificationClick(seam);
+        holder.None();
+        seam.ReportLate();
+        Assert.IsNull(holder.Current, "after the tray menu's summon, none stands");
+    }
+
+    [TestMethod]
+    public void ALateReportAfterANotificationsClickOnceAnotherAppIsInFrontChangesNothing()
+    {
+        var holder = new PasteTargetHolder();
+        var seam = new RecordingTarget { BeforeHeld = RecordingTarget.Relay, InFront = new ForegroundReading(true, null) };
+        holder.FromNotificationClick(seam);
+        seam.InFront = new ForegroundReading(false, RecordingTarget.App("Elsewhere"));
+        seam.BeforeHeld = RecordingTarget.App("Later");
+
+        seam.ReportLate();
+
+        Assert.AreEqual(RecordingTarget.Relay, holder.Current, "another app in front: the user's next change, read at the next press or activation");
     }
 
     [TestMethod]

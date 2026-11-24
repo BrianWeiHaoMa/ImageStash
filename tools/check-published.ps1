@@ -546,7 +546,8 @@ Write-Host '     clipboard and copied words each get their notice and add nothin
 Write-Host ' 24. over a chat, its composer focused, Ctrl+PrtScn dims every display and a drag shows its rectangle with its size; on release the'
 Write-Host '     picture is in the stash and on the clipboard, the notification shows it and typing in the chat was not interrupted; a name typed'
 Write-Host '     in the notification with Enter renames the item; a click anywhere else on it, outside its field, buttons and the close button, opens the'
-Write-Host '     stash window with that item selected and no editor, and the notification goes, as it goes after its Edit, the editor open on the item;'
+Write-Host "     stash window with that item selected and no editor, its footer reading ""Enter $([char]0xB7) Paste into"" the chat, and the notification goes, as it"
+Write-Host '     goes after its Edit, the editor open on the item, after whose Save Enter pastes the edited picture into the chat;'
 Write-Host '     the notification has rounded corners;'
 Write-Host '     the tray menu''s and the + menu''s Take a screenshot do the same; Esc and a click without a drag save nothing; the flyout, or the pinned'
 Write-Host '     window, comes back as it was, and a hidden flyout or a pinned window minimised before the press, on either display, stays so'

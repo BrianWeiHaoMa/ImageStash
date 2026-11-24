@@ -10,7 +10,10 @@ namespace ImageStash.Tests.Window;
 /// and a length only when given), an item without a name named by its file; its Edit, Trim for a recording, a click
 /// elsewhere on it and the name the clicks that take the activation; a click elsewhere showing its item selected on All,
 /// the search cleared, and an item gone meanwhile changing nothing; and its Undo by identity through Store, to the
-/// Recycle Bin, at most once, a renamed item included (G29).
+/// Recycle Bin, at most once, a renamed item included (G29). A card's Edit, Trim or click elsewhere as the window follows
+/// it (G8, G16): when it brought the notification in front, the window it opens names the window that had focus just
+/// before the notification, heard of late or at once, none when that was ImageStash's own; when the platform refused
+/// that activation, the window it gained focus from.
 /// </summary>
 [TestClass]
 public sealed class CaptureNotificationTests
@@ -94,6 +97,99 @@ public sealed class CaptureNotificationTests
         CollectionAssert.AreEqual(new[] { dog.Id }, raising.Listing.Selection.ToList(), "and its selection");
         Assert.IsEmpty(raising.Notices.Shown, "nothing refused");
         Assert.IsEmpty(raising.Notifications.Shown);
+    }
+
+    [TestMethod]
+    public async Task EditTrimOrAClickThatBroughtTheNotificationInFrontOpenTheWindowNamingTheAppBeforeTheNotification()
+    {
+        // G8: "so does the stash window a click on a notification opens (G16): that click sets the paste target as the
+        // notification gains focus, to the window that had focus just before the notification".
+        using var listed = await ListedStash.Open();
+        var cat = await listed.Stash.ImportFixture("cat", "still.png");
+        var chat = RecordingTarget.App("Chat");
+        // The stash window comes in front from the notification, so the window before it is the notification.
+        listed.Target.Before = null;
+        listed.Target.BeforeHeld = chat;
+        listed.Target.InFront = new ForegroundReading(true, null);
+
+        foreach (var asked in new[] { new CaptureOpening(cat, new CaptureEdit(cat, Trim: false), true), new CaptureOpening(cat, new CaptureEdit(cat, Trim: true), true), new CaptureOpening(cat, null, true) })
+        {
+            listed.PasteTarget.None();
+            listed.CaptureNotification.Open(asked);
+            await Handing.Eventually(() => asked.Edit is null ? listed.Listing.Selection.SequenceEqual([cat.Id]) : listed.Editing.Session?.Item.Id == cat.Id);
+
+            Assert.AreEqual(chat, listed.PasteTarget.Current, $"{asked.Edit?.Trim switch { true => "Trim", false => "Edit", null => "a click elsewhere" }}: the chat the person came from");
+            CollectionAssert.AreEqual(new[] { "Enter · Paste into Chat", "Ctrl+C · Copy" }, listed.FooterHints.Texts.ToList());
+            listed.Editing.Cancel();
+        }
+
+        Assert.AreEqual(3, listed.Target.Steps.Count(step => step == "hold before mine"), "each read as its notification gained focus");
+        Assert.IsEmpty(listed.Target.Pasted, "nothing is pasted without Enter (N3)");
+    }
+
+    [TestMethod]
+    public async Task AClickWhoseReportIsHeardOnlyOnceTheWindowIsInFrontIsNoneUntilThenTheChat()
+    {
+        // G8: "it is none until it hears, and then that window", heard once the window is in front and the card has gone.
+        using var listed = await ListedStash.Open();
+        var cat = await listed.Stash.ImportFixture("cat", "still.png");
+        listed.CaptureNotification.Raise(cat, CaptureKind.Screenshot, onClipboard: true, lengthMs: null);
+        listed.Target.Before = null;
+        listed.Target.BeforeHeld = null;
+        listed.Target.InFront = new ForegroundReading(true, null);
+
+        listed.CaptureNotification.Open(new CaptureOpening(cat, new CaptureEdit(cat, Trim: false), true));
+        await Handing.Eventually(() => listed.Editing.Session?.Item.Id == cat.Id);
+        listed.Notifications.Close(listed.Notifications.Shown.Single());
+        Assert.IsNull(listed.PasteTarget.Current, "none until it hears");
+
+        listed.Target.BeforeHeld = RecordingTarget.App("Chat");
+        listed.Target.ReportLate();
+
+        Assert.AreEqual(RecordingTarget.App("Chat"), listed.PasteTarget.Current, "then the window before the notification, not before the stash window");
+    }
+
+    [TestMethod]
+    public async Task AClickFromImageStashsOwnWindowLeavesNoneAndOneAfterSwitchingAppsNamesTheSecond()
+    {
+        using var listed = await ListedStash.Open();
+        var cat = await listed.Stash.ImportFixture("cat", "still.png");
+        listed.Target.InFront = new ForegroundReading(true, null);
+        // Captured over one app, the earlier summon's target.
+        listed.PasteTarget.FromPress(new ForegroundReading(false, RecordingTarget.App("First")));
+
+        // G8 "by the same rule": the pinned stash window or Settings in front before the notification.
+        listed.Target.Before = RecordingTarget.App("First");
+        listed.Target.BeforeHeld = null;
+        listed.CaptureNotification.Open(new CaptureOpening(cat, null, true));
+        await Handing.Eventually(() => listed.Listing.Selection.SequenceEqual([cat.Id]));
+
+        Assert.IsNull(listed.PasteTarget.Current, "none: neither the earlier target nor the last other app");
+        CollectionAssert.AreEqual(new[] { "Enter · Copy" }, listed.FooterHints.Texts.ToList());
+
+        // G8 "the window that had focus just before": the person switched to a second app, then clicked Edit.
+        listed.Target.BeforeHeld = RecordingTarget.App("Second");
+        listed.CaptureNotification.Open(new CaptureOpening(cat, new CaptureEdit(cat, Trim: false), true));
+        await Handing.Eventually(() => listed.Editing.IsOpen);
+
+        Assert.AreEqual(RecordingTarget.App("Second"), listed.PasteTarget.Current);
+    }
+
+    [TestMethod]
+    public async Task AClickWhoseActivationThePlatformRefusedStillOpensTheWindowNamingTheAppItGainedFocusFrom()
+    {
+        // G16: the window still opens; G8: its target is then the window it gained focus from, as the tray's summon reads it.
+        using var listed = await ListedStash.Open();
+        var cat = await listed.Stash.ImportFixture("cat", "still.png");
+        listed.Target.InFront = new ForegroundReading(true, null);
+        listed.Target.Before = RecordingTarget.App("Chat");
+        listed.Target.BeforeHeld = RecordingTarget.App("Not read");
+
+        listed.CaptureNotification.Open(new CaptureOpening(cat, new CaptureEdit(cat, Trim: false), false));
+        await Handing.Eventually(() => listed.Editing.IsOpen);
+
+        Assert.AreEqual(RecordingTarget.App("Chat"), listed.PasteTarget.Current);
+        Assert.DoesNotContain("hold before mine", listed.Target.Steps, "no notification gained focus");
     }
 
     [TestMethod]

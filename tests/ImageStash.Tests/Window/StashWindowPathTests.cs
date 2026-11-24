@@ -1,4 +1,5 @@
 using Avalonia.Input;
+using ImageStash.Capture;
 using ImageStash.Editor;
 using ImageStash.Layers;
 using ImageStash.Seams;
@@ -20,6 +21,9 @@ namespace ImageStash.Tests.Window;
 /// person typed a search and moved the selection leaves both, and its notice's Show brings the new picture up (G12); a
 /// JPEG named <c>.jfif</c> and a PNG whose name has no extension come in under <c>.jpg</c> and <c>.png</c>, the card
 /// counting the nameless files as to check, and a text file with no extension is skipped as such (F3, G11, G12).
+/// Capture to paste, over a stash that holds used pictures, with a chat in front as the paste target's seam reports it:
+/// a screenshot's notification's Edit opens the window naming the chat, Save sends nothing to any window, and Enter
+/// pastes the saved finished picture into the chat, recording one use (G8, G16, G26, N3, G10).
 /// </summary>
 [TestClass]
 public sealed class StashWindowPathTests
@@ -319,6 +323,61 @@ public sealed class StashWindowPathTests
         var namedNotice = listed.Notices.Shown[^1];
         Assert.AreEqual(("Added 2 · 1 skipped", "Skipped LICENSE (a file without an extension): ImageStash keeps GIF, PNG, JPG and WebP. Added “from a browser” and “nameless”."),
             (namedNotice.Heading, namedNotice.Text));
+        Assert.IsEmpty(listed.Failures);
+    }
+
+    [TestMethod]
+    public async Task CaptureToPasteAScreenshotEditedFromItsNotificationGoesIntoTheChatItWasMadeOverWithOneEnter()
+    {
+        using var listed = await ListedStash.Open(SetClock.Ahead);
+        var used = await listed.Stash.ImportFixture("used", "still.png");
+        Assert.IsTrue((await listed.Handoff.Copy(null!, [used])).Succeeded);
+        var usesBefore = listed.Uses();
+        listed.Selection.Answer = new SelectedRegion(RecordingScreen.Primary, new Avalonia.PixelRect(100, 50, 30, 20));
+        listed.Screen.Paint(RecordingScreen.Primary, seed: 5);
+        var chat = RecordingTarget.App("Chat");
+        listed.Target.InFront = new ForegroundReading(false, chat);
+        listed.Target.Before = chat;
+
+        // (1) A screenshot over the chat, then its notification's Edit, whose click brings the notification in front: the
+        // window it opens comes in front from the notification, so the window before the stash window is the notification.
+        await listed.Screenshot.Take();
+        var shot = (await listed.Stash.All()).Single(item => item.Id != used.Id);
+        var original = File.ReadAllBytes(shot.FilePath);
+        var notice = listed.Notifications.Shown.Single();
+        Assert.IsNotNull(notice.Card, "drawn as the capture card, with its Edit");
+        listed.Target.InFront = new ForegroundReading(true, null);
+        listed.Target.BeforeHeld = chat;
+        listed.Target.Before = null;
+        listed.CaptureNotification.Open(new CaptureOpening(shot, new CaptureEdit(shot, Trim: false), NotificationInFront: true));
+        listed.Notifications.Close(notice);
+        await Handing.Eventually(() => listed.Editing.Session?.Item.Id == shot.Id);
+
+        Assert.AreEqual(chat, listed.PasteTarget.Current, "the window the notification opened names the chat (G8)");
+        CollectionAssert.AreEqual(new[] { "Enter · Paste into Chat", "Ctrl+C · Copy" }, listed.FooterHints.Texts.ToList());
+
+        var session = listed.Editing.Session!;
+        session.Tool = session.Hide();
+        session.DragThrough((2, 2), (20, 14));
+        Assert.IsTrue((await listed.Editing.Save()).Succeeded);
+
+        Assert.IsEmpty(listed.Target.Pasted, "Save sends nothing to any window (N3)");
+        Assert.IsFalse(listed.Target.Steps.Any(step => step.StartsWith("activate", StringComparison.Ordinal)));
+        CollectionAssert.AreEqual(new[] { shot.Id }, listed.Listing.Selection.ToList(), "the window stays open with the item selected (G26)");
+        Assert.AreEqual(chat, listed.PasteTarget.Current, "still the chat after Save");
+        var saved = listed.Listing.Items.Single(item => item.Id == shot.Id);
+        Assert.AreEqual(1, saved.RenderedRevision, "listed as saved");
+
+        var enter = listed.Press(Key.Enter, KeyModifiers.None, KeyPlace.SearchBox);
+        listed.Keys.Released(Key.Enter);
+        Assert.AreEqual(KeyAction.Handoff, await enter);
+
+        Assert.AreEqual(chat, listed.Target.Pasted.Single().Target, "Enter pastes into the chat (G8)");
+        var handed = listed.Clipboard.Written[^1].Content;
+        CollectionAssert.AreEqual(new[] { saved.FilePath }, handed.FilePaths.ToList(), "the saved finished picture");
+        CollectionAssert.AreEqual(File.ReadAllBytes(saved.FilePath), handed.Png);
+        CollectionAssert.AreNotEqual(original, handed.Png, "rendered with its Hide box, not the screenshot as taken");
+        Assert.AreEqual(usesBefore + 1, listed.Uses(), "one use recorded (G10)");
         Assert.IsEmpty(listed.Failures);
     }
 

@@ -109,6 +109,13 @@ public sealed class WindowActivation
     /// <summary>A summon from the tray, or the first run's pinned one: the target is the window that had focus just before (G8).</summary>
     public void ReadTargetAtSummon() => pasteTarget.FromActivation(targets);
 
+    /// <summary>
+    /// A click on ImageStash's notification has read the target as the notification gained focus, the window about to
+    /// come in front from it (G8, G16): a read of an activation before that click, still waiting for the next idle, is
+    /// older than the click's, and is dropped.
+    /// </summary>
+    public void NotificationClickRead() => activationUnread = false;
+
     /// <summary>A capture starts: its windows are ImageStash's own, so no late report reads the target again across them (G8, G3).</summary>
     public void CaptureStarted() => pasteTarget.Keep();
 

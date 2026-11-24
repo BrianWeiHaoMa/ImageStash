@@ -9,7 +9,8 @@ button dismisses it; a real click on the Text row's Caption bar and one on the p
 saved PNG, decoded by System.Drawing, has the screenshot's width, is taller by a white bar with dark text, and holds
 the screenshot's pixels beneath it; the original in originals\ keeps the screenshot's bytes; the clipboard, which held
 the screenshot's copy, holds the saved file with a "PNG" of its height and pixels; the store keeps the caption bar; the
-window stays in front with the item selected, which Space's preview names, and Esc closes the preview. Then a
+window stays in front with the item selected, which Space's preview names, its footer naming as the paste target the
+window in front before the card's click, and Esc closes the preview. Then a
 recording from the real Ctrl+Shift+PrtScn and a real drag, five seconds long, the flyout still up; a real click on its
 card's Trim shows the editor on it with Trim current; a screenshot and a recording started then, each cancelled with
 Esc, hide the window and bring the edit back as left; the filmstrip's left handle dragged to its middle with real
@@ -237,11 +238,27 @@ function Editor([string] $tool, [string] $act) {
     [Windows.Automation.AutomationElement]::FromHandle((StashWindow))
 }
 
-# After a Save the window a card opened stays in front, back on the grid, its footer reading Copy (G26, G8).
-function StaysOpen($root, [string] $after) {
+# The footer's Enter hint in the window a card's click opens: its paste target is the window in front just before that
+# click (G8), none, so Copy, for ImageStash's own, the desktop or the taskbar (the seam's classes, WindowsTarget.cs); else
+# that app, named by its executable's file description, else its file name. A hosted app (ApplicationFrameHost.exe) is
+# named by the app it hosts, which this does not look up: keep such an app out of the front while the phase runs.
+function HintAfterClickFrom([IntPtr] $front) {
+    $copy = "Enter $([char]0xB7) Copy"
+    if ($front -eq [IntPtr]::Zero) { return $copy }
+    try { $window = [Windows.Automation.AutomationElement]::FromHandle($front).Current } catch { return $copy }
+    if (($window.ProcessId -eq $running) -or (@('Progman', 'WorkerW', 'Shell_TrayWnd', 'Shell_SecondaryTrayWnd', 'TopLevelWindowForOverflowXamlIsland') -contains $window.ClassName)) { return $copy }
+    $path = (Get-Process -Id $window.ProcessId -ErrorAction SilentlyContinue).Path
+    $described = if ($path) { [Diagnostics.FileVersionInfo]::GetVersionInfo($path).FileDescription } else { $null }
+    $app = if (-not $path) { 'the app you came from' } elseif ([string]::IsNullOrWhiteSpace($described)) { [IO.Path]::GetFileNameWithoutExtension($path) } else { $described.Trim() }
+    "Enter $([char]0xB7) Paste into $app"
+}
+
+# After a Save the window a card opened stays in front, back on the grid, its footer's Enter hint <hint>: the paste
+# target the card's click set, which Save leaves as it is (G26, G8).
+function StaysOpen($root, [string] $after, [string] $hint) {
     $back = WaitFor { (InFront) -and ((Elements $root 'Crop' $button).Count -eq 0) } 5000
     Check $back "after $after the window stays in front with the editor closed (G26): in front $(Front)"
-    Check (WaitFor { (Elements $root "Enter $([char]0xB7) Copy" $null).Count -ge 1 } 3000) "its footer reads Enter $([char]0xB7) Copy, no paste target (G8)"
+    Check (WaitFor { (Elements $root $hint $null).Count -ge 1 } 3000) "its footer reads $hint, the paste target the card's click set from the window in front before it (G8)"
 }
 
 if (-not $Store) {
@@ -277,6 +294,7 @@ try {
     $screenshot = Join-Path $stash (Of $shot 'finished_file')
     $screenshotSha = Sha $screenshot
     Check (WaitFor { [CopyReadBack]::Clipboard() -eq "files=$screenshot png=True dibv5=True effect=1" } 3000) "the clipboard holds the screenshot, as Also copy has it (G14): $([CopyReadBack]::Clipboard())"
+    $hint = HintAfterClickFrom ([PasteDesk]::Foreground())
     ClickCard "Saved $([char]0x201C)$name$([char]0x201D) to your stash. It is on the clipboard too." 'Edit'
     $root = Editor 'Crop' "the card's Edit"
     Check (-not [EditorDesk]::Captioned((StashWindow))) 'the window is the flyout, without a title bar, as it was not pinned (G16, G1)'
@@ -309,7 +327,7 @@ try {
     Check $refreshed "the clipboard, which held ImageStash's copy of the screenshot, holds the saved picture: its file, and a ""PNG"" of its size and pixels (G26): $([CopyReadBack]::Clipboard()), PNG width, height, same pixels: $(([EditorDesk]::PngOnClipboard($finished)) -join ' ')"
     $layers = @((Of $shot 'layers') | ConvertFrom-Json | ForEach-Object { $_ })
     Check (($layers.Count -eq 1) -and ($layers[0].kind -eq 'captionBar') -and ($layers[0].text -eq 'hello')) "the store keeps the layer for the next Edit: one caption bar holding the words typed (G26, F7): $(Of $shot 'layers')"
-    StaysOpen $root 'Save'
+    StaysOpen $root 'Save' $hint
     # Space on the grid previews the selected item, which names it (G7, G19).
     $null = [PasteDesk]::Press([uint16[]]@(0x20))
     Check (WaitFor { ((Elements $root 'Edit' $button).Count -eq 1) -and ((Elements $root $name ([Windows.Automation.ControlType]::Text)).Count -ge 1) } 3000) "the item saved is the one selected: Space previews '$name' (G26, G19)"
@@ -336,6 +354,7 @@ try {
     $recordingSha = Sha $recording
     $recorded = @(GifDelays $recording)
     Need ($recorded.Count -ge 4) "the recording holds images enough to trim: $($recorded.Count), delays $($recorded -join ' ')"
+    $hint = HintAfterClickFrom ([PasteDesk]::Foreground())
     ClickCard "Saved $([char]0x201C)$clipName$([char]0x201D) to your stash. It is on the clipboard too. It is " 'Trim'
     $root = Editor 'Trim' "the card's Trim"
     Check (WaitFor { [CaptureDesk]::TitledFrom($running, "Saved $([char]0x201C)$clipName$([char]0x201D) to your stash.") -eq [IntPtr]::Zero } 3000) "the card went at its Trim, without the script closing it (G16)"
@@ -376,7 +395,7 @@ try {
     Check (($trimmed.Count -eq 1) -and ($trimmed[0].kind -eq 'trim') -and ($trimmed[0].range[0] -eq $recorded.Count - $kept.Count) -and ($trimmed[0].range[1] -eq $recorded.Count - 1)) "the store keeps the trim for the next Edit: from the first image kept to the last (G26, G22): $(Of $clip 'layers')"
     $whole = if (Test-Path $original) { @(GifDelays $original) } else { @() }
     Check ((Test-Path $original) -and ((Sha $original) -eq $recordingSha) -and ($whole.Count -eq $recorded.Count)) "the original in originals\ is the recording unchanged, every one of its $($recorded.Count) images kept (G22, G29): $($whole.Count)"
-    StaysOpen $root 'the trim''s Save'
+    StaysOpen $root 'the trim''s Save' $hint
     Check ((Count 'SELECT COUNT(*) FROM uses') -eq $uses) 'no capture, edit or clipboard refresh recorded a use (G10)'
 }
 catch {

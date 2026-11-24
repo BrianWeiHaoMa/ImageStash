@@ -190,6 +190,11 @@ public sealed class PresetTarget : ITarget
 
     public PasteTarget? LastBeforeMine() => Before;
 
+    /// <summary>What was in front before the window held, read on each asking; unset, <see cref="Before"/> as it stands then.</summary>
+    public PasteTarget? BeforeHeld { get; set; }
+
+    public HeldBefore HoldBeforeMine() => new(() => BeforeHeld ?? Before);
+
     public event Action? ReportedLate;
 
     /// <summary>Raises <see cref="ReportedLate"/>, as the platform's seam does on its own thread.</summary>

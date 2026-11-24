@@ -338,7 +338,7 @@ public sealed class CaptureNotificationTests
     }
 
     [TestMethod]
-    public async Task EditOnACardOpensTheFlyoutAboveTheTrayInFrontOnItsItemWithNoPasteTargetTheCardGoneAndAfterSaveItStaysWithTheItemSelected()
+    public async Task EditOnACardOpensTheFlyoutAboveTheTrayInFrontOnItsItemWithTheChatAsPasteTargetTheCardGoneAndAfterSaveItStaysWithTheItemSelected()
     {
         using var targets = new WindowsTarget();
         using var desk = await CaptureDesk.Open(["stash other.png"], platformTarget: targets);
@@ -348,6 +348,7 @@ public sealed class CaptureNotificationTests
         var flyout = desk.Shown.Window;
         var handle = TrayDesktop.Get(() => flyout.TryGetPlatformHandle()!.Handle);
         using var editor = new ShownEditor(desk.Shown);
+        var chat = new PasteTarget(desk.Chat.Window, desk.Chat.AppName);
         var keys = 0;
         TrayDesktop.Run(() => flyout.AddHandler(Avalonia.Input.InputElement.KeyDownEvent, (_, _) => keys++, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true));
 
@@ -363,7 +364,8 @@ public sealed class CaptureNotificationTests
             Assert.IsFalse(flyout.ShowInTaskbar, "a flyout, the window not having been pinned (G16)");
             Assert.AreEqual(expected.Position, flyout.Position, "placed as from the tray, here with no icon to stand above (G1)");
             Assert.AreEqual(EditOrigin.Notification, desk.Shown.Editing.Origin);
-            Assert.IsNull(flyout.PasteTarget.Current, "the window before it was ImageStash's own notification, so no paste target and Enter copies (G8)");
+            // G8: “that click sets the paste target as the notification gains focus, to the window that had focus just before the notification”.
+            Assert.AreEqual(chat, flyout.PasteTarget.Current, "the chat was in front before the Edit click (G8)");
             Assert.IsTrue(desk.Shown.Focused is Visual focused && focused.GetSelfAndVisualAncestors().Contains(editor.Overlay), "keyboard focus in the editor");
         });
         Assert.IsEmpty(desk.Cards(), "the card gone at its Edit, so it lies over nothing (G16)");
@@ -392,6 +394,8 @@ public sealed class CaptureNotificationTests
             Assert.IsTrue(flyout.IsVisible, "G26: a window a notification opened stays open after Save");
             CollectionAssert.AreEqual(new[] { edited.Id }, desk.Shown.Listing.Selection.ToList(), "with the item selected");
             Assert.AreEqual(1, desk.Shown.Listing.Items.Single(item => item.Id == edited.Id).RenderedRevision, "saved");
+            // G8: “to the window that had focus just before the notification, by the same rule”.
+            CollectionAssert.AreEqual(new[] { $"Enter · Paste into {chat.AppName}", "Ctrl+C · Copy" }, desk.Shown.FooterHints(), "the footer names the chat's app once the editor closes (G8)");
         });
     }
 
@@ -460,7 +464,8 @@ public sealed class CaptureNotificationTests
     [TestMethod]
     public async Task TrimBringsThePinnedWindowBackWhereItWasOnTheTrimToolEachCardGoingAtItsEditAndACardsUndoClosesItsItemsEditOpenedFromTheWindow()
     {
-        using var desk = await CaptureDesk.Open(["stash still edited.png"]);
+        using var targets = new WindowsTarget();
+        using var desk = await CaptureDesk.Open(["stash still edited.png"], platformTarget: targets);
         var shown = desk.Shown;
         var still = desk.Items().Single();
         var clip = await desk.Import(shown.Fixture("animated.gif", "stash clip.gif"));
@@ -477,10 +482,13 @@ public sealed class CaptureNotificationTests
         var handle = TrayDesktop.Get(() => shown.Window.TryGetPlatformHandle()!.Handle);
         TrayDesktop.Run(() => shown.Window.WindowState = WindowState.Minimized);
         await Task.Delay(500);
+        desk.Chat.ClickTitleBar();
 
         TrayDesktop.Run(() => Assert.AreEqual("Trim", EditButton(clipCard).Content, "a recording's card offers Trim (G16)"));
         TestMouse.Click(Centre(TrayDesktop.Get(() => EditButton(clipCard))));
         await Eventually(() => TrayDesktop.Get(() => shown.Editing.Session?.Item.Id == clip.Id) && FrontWindow.GetForegroundWindow() == handle);
+        var chat = new PasteTarget(desk.Chat.Window, desk.Chat.AppName);
+        await Eventually(() => shown.Window.PasteTarget.Current == chat);
         TrayDesktop.Run(() =>
         {
             Assert.AreEqual(WindowState.Normal, shown.Window.WindowState, "restored");
@@ -488,6 +496,8 @@ public sealed class CaptureNotificationTests
             Assert.AreEqual(where, shown.Window.Position, "brought forward where it was (G1)");
             Assert.IsInstanceOfType<TrimTool>(shown.Editing.Session!.Tool, "with the Trim tool selected (G16)");
             Assert.IsTrue(editor.Button("Trim") is Avalonia.Controls.Primitives.ToggleButton { IsChecked: true }, "shown as the current tool");
+            // G8: “that click sets the paste target as the notification gains focus, to the window that had focus just before the notification”.
+            Assert.AreEqual(chat, shown.Window.PasteTarget.Current, "the chat was in front before the Trim click (G8)");
         });
         CollectionAssert.AreEqual(new[] { stillCard }, desk.Cards(), "the clip's card gone at its Trim, the other staying (G16)");
 
@@ -497,6 +507,8 @@ public sealed class CaptureNotificationTests
         TrayDesktop.Run(() =>
         {
             Assert.IsInstanceOfType<TextTool>(shown.Editing.Session!.Tool, "Edit opens on Text");
+            // G8: “it is none when that window was ImageStash itself”.
+            Assert.IsNull(shown.Window.PasteTarget.Current, "the pinned stash was in front before the second card's Edit click (G8)");
             CollectionAssert.AreEqual(new[] { "Discarded the edit of “stash clip”." }, shown.Notices.Shown.Select(notice => notice.Text).ToList());
         });
         Assert.IsEmpty(desk.Cards(), "that card gone too");

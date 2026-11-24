@@ -6,6 +6,7 @@ using ImageStash.Seams;
 using ImageStash.Windows.Seams;
 using ImageStash.Window;
 using ImageStash.Windows.Tests.Support;
+using static ImageStash.Windows.Tests.Support.HeldThread;
 
 namespace ImageStash.Windows.Tests.Seams;
 
@@ -493,34 +494,6 @@ public sealed class WindowsTargetTests
         }
 
         Eventually(() => seam.LastBeforeMine() is null);
-    }
-
-    /// <summary>Holds <paramref name="thread"/> until disposed, so what it would answer or report comes late.</summary>
-    private static IDisposable Suspended(uint thread)
-    {
-        var handle = OpenThread(ThreadSuspendResume, false, thread);
-        Assert.AreNotEqual(nint.Zero, handle);
-        if (SuspendThread(handle) == uint.MaxValue)
-        {
-            CloseHandle(handle);
-            Assert.Fail("the thread could not be held");
-        }
-
-        return new Resumes(handle);
-    }
-
-    private sealed class Resumes(nint handle) : IDisposable
-    {
-        private int done;
-
-        public void Dispose()
-        {
-            if (Interlocked.Exchange(ref done, 1) == 0)
-            {
-                ResumeThread(handle);
-                CloseHandle(handle);
-            }
-        }
     }
 
     [TestMethod]

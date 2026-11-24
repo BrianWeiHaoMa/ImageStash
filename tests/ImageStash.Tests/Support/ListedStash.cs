@@ -57,6 +57,20 @@ public sealed class ListedStash : IDisposable
         PreviewStepping = new PreviewStepping(Listing, () => PreviewOpen ? PreviewItem : null, item => PreviewItem = item);
         PreviewStepClicks = new PreviewStepClicks(PreviewStepping, () => PreviewOpen ? PreviewItem : null, () => PreviewClosing, Editing);
         CaptureNotification = new CaptureNotification(Notifications, Listing, Handoff, new NoWindowShown(), TestStash.ShortRetry);
+        // The summon as the window's activation treats the target: its own showing keeps it, the tray's reads the window it gained focus from.
+        _ = new NotificationOpening(CaptureNotification, PasteTarget, Target, keepsTarget =>
+        {
+            if (keepsTarget)
+            {
+                PasteTarget.Keep();
+            }
+            else
+            {
+                PasteTarget.FromActivation(Target);
+            }
+
+            _ = Summon();
+        }, Editing, () => PreviewOpen = false);
         StashClipboardImage = new StashClipboardImage(Listing, Notifications, CaptureNotification, Clipboard, stash.Clock, TestStash.ShortRetry, TestStash.ShortRetry);
         Capture = new CaptureSession(Screen, Selection, Frame, opener ?? GifEncoder.Opener(TestStash.ShortRetry), captureClock, failure => Notifications.Raise(failure));
         Settings = MovingStash.Keeper(stash, Failures);
@@ -265,7 +279,9 @@ public sealed class ListedStash : IDisposable
 
     /// <summary>
     /// A key pressed at <paramref name="place"/> as the window takes it: routed by <see cref="StashKeys.Route"/>, held to
-    /// one act per press by <see cref="Keys"/>, and its action's act run as the window's case runs it (Del and
+    /// one act per press by <see cref="Keys"/>, and its action's act run as the window's case runs it (Enter's handoff
+    /// into the target <see cref="PasteTarget"/> names as it is pressed, the preview's item while it is open, else the
+    /// selection once the matches have arrived, the paste waiting for Enter to be let go; Del and
     /// <c>Ctrl+D</c> as they run with no preview open, the arrows' steps over <see cref="PreviewItem"/>, <c>Ctrl+E</c> on the
     /// preview's item while it is open, Space opening <see cref="PreviewOpen"/> on the focused item or closing it,
     /// <c>Ctrl+V</c> into <see cref="LayerTextCaret"/> or, without one, as from a place
@@ -276,6 +292,17 @@ public sealed class ListedStash : IDisposable
         var action = Keys.Acting(key, StashKeys.Route(key, modifiers, place));
         switch (action)
         {
+            case KeyAction.Handoff:
+                var target = PasteTarget.Current;
+                if (PreviewOpen && PreviewItem is { } shown)
+                {
+                    await Handoff.HandOver(null!, [shown], target, new PasteHide(() => PasteHidesFlyout, Keys));
+                    break;
+                }
+
+                await Listing.Settle();
+                await Handoff.HandOver(null!, Listing.SelectedItems, target, new PasteHide(() => PasteHidesFlyout, Keys));
+                break;
             case KeyAction.Edit:
                 await Editing.OpenOnSelection(PreviewOpen ? PreviewItem : null);
                 break;

@@ -27,6 +27,15 @@ public interface ITarget
     PasteTarget? LastBeforeMine();
 
     /// <summary>
+    /// <see cref="LastBeforeMine"/> held to the window of ImageStash's in front now: the reading answers at once, and again
+    /// whenever asked, for that window, whichever window is in front by then, so a report the seam hears late still names
+    /// the window that had focus just before it, though ImageStash has put another of its windows in front since (G8: the
+    /// stash window a click on a notification opens keeps the target that click set as the notification gained focus).
+    /// With no window of ImageStash's in front, it answers as <see cref="LastBeforeMine"/> did. Read from any thread.
+    /// </summary>
+    HeldBefore HoldBeforeMine();
+
+    /// <summary>
     /// Raised, on a thread of the seam's own, when the platform reports a change of the window in front that happened
     /// before <see cref="LastBeforeMine"/> last answered but reached the seam only after it, so that answer may have
     /// missed it and asking again may answer differently (G8). A platform whose answers never miss a change raises
@@ -68,6 +77,12 @@ public interface ITarget
 /// the app's name as the footer and the menu show it (What crosses every boundary).
 /// </summary>
 public sealed record PasteTarget(nint Handle, string AppName);
+
+/// <summary>The window that had focus just before one window of ImageStash's, as <see cref="ITarget.HoldBeforeMine"/> held it: <see cref="Read"/> asks again for that window.</summary>
+public sealed class HeldBefore(Func<PasteTarget?> read)
+{
+    public PasteTarget? Read() => read();
+}
 
 /// <summary>What is in front at one instant under G8's rule: ImageStash's own window, or else the target, null for the desktop and the taskbar.</summary>
 public readonly record struct ForegroundReading(bool IsMine, PasteTarget? Target);

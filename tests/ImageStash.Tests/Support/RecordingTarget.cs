@@ -52,6 +52,15 @@ public sealed class RecordingTarget(List<string> steps) : ITarget
 
     public PasteTarget? LastBeforeMine() => Before;
 
+    /// <summary>What was in front before the window of ImageStash's that was in front when a reading was held, read on each asking (<see cref="ITarget.HoldBeforeMine"/>).</summary>
+    public PasteTarget? BeforeHeld { get; set; }
+
+    public HeldBefore HoldBeforeMine()
+    {
+        Steps.Add("hold before mine");
+        return new(() => BeforeHeld);
+    }
+
     public event Action? ReportedLate;
 
     /// <summary>Raises <see cref="ReportedLate"/>, as the platform's seam does on its own thread.</summary>

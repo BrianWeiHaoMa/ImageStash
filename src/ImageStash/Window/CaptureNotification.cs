@@ -16,6 +16,13 @@ public enum CaptureKind
 public sealed record CaptureEdit(StashItem Item, bool Trim);
 
 /// <summary>
+/// A card's click that opens the stash window on its item (G16): its Edit or Trim, the editor asked for, or a click
+/// elsewhere on it, <see cref="Edit"/> null; and whether that click brought the notification in front, which the
+/// platform may refuse.
+/// </summary>
+public sealed record CaptureOpening(StashItem Item, CaptureEdit? Edit, bool NotificationInFront);
+
+/// <summary>
 /// The capture notification (G16), every capture's one entry: a notice of the notifications above the tray, so its six
 /// seconds, its hover, its × and its Undo at most once are the notices' own. It is raised only for an item Store has
 /// committed and placed (R9); a capture that failed before or after its commit is named by its caller as a plain
@@ -39,11 +46,11 @@ public sealed class CaptureNotification(Notices notifications, Listing listing, 
     /// <summary>A click into a card's name field brought the notification in front: ImageStash gained focus (G8).</summary>
     public event Action? FieldTookFocus;
 
-    /// <summary>A card's Edit or Trim was clicked, the notification brought in front by that click (G16).</summary>
-    public event Action<CaptureEdit>? EditRequested;
+    /// <summary>A card's Edit or Trim was clicked, or the card outside its field and buttons (G16).</summary>
+    public event Action<CaptureOpening>? OpenRequested;
 
-    /// <summary>A card was clicked outside its field and buttons, the notification brought in front by that click (G16).</summary>
-    public event Action<StashItem>? ShowRequested;
+    /// <summary>A card's click that opens the stash window, as the card asks it (G16).</summary>
+    public void Open(CaptureOpening asked) => OpenRequested?.Invoke(asked);
 
     /// <summary>
     /// The card's button for the editor (G16): Trim for a recording, a recording of one image included, since the card
@@ -74,7 +81,8 @@ public sealed class CaptureNotification(Notices notifications, Listing listing, 
         var trim = kind == CaptureKind.Recording;
         notifications.Raise(text, "Undo", () => Undo(item.Id),
             card: (notice, notices) => new CaptureCard(notice, notices, item, string.Join(" ", said), listing, renaming, quietWindows, heldFileRetry,
-                () => FieldTookFocus?.Invoke(), EditLabel(kind), shown => EditRequested?.Invoke(new CaptureEdit(shown, trim)), shown => ShowRequested?.Invoke(shown)));
+                () => FieldTookFocus?.Invoke(), EditLabel(kind), (shown, inFront) => Open(new CaptureOpening(shown, new CaptureEdit(shown, trim), inFront)),
+                (shown, inFront) => Open(new CaptureOpening(shown, null, inFront))));
     }
 
     /// <summary>

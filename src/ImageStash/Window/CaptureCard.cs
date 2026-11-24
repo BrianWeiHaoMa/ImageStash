@@ -44,8 +44,8 @@ public sealed class CaptureCard : Border
     private readonly Renaming renaming;
     private readonly IQuietWindows quietWindows;
     private readonly Action tookFocus;
-    private readonly Action<StashItem> edit;
-    private readonly Action<StashItem> show;
+    private readonly Action<StashItem, bool> edit;
+    private readonly Action<StashItem, bool> show;
     private readonly TimeSpan heldFileRetry;
     private readonly Image picture = new() { Width = 112, Height = 84, Stretch = Stretch.Uniform };
     private readonly TextBlock size = new() { Opacity = 0.7, IsVisible = false };
@@ -59,10 +59,10 @@ public sealed class CaptureCard : Border
 
     /// <param name="tookFocus">Run once the name's click has brought the notification in front: ImageStash gained focus.</param>
     /// <param name="editLabel">The editor's button: Edit, or Trim for a recording.</param>
-    /// <param name="edit">Run with the item as the card has it now when that button is clicked, the notification in front.</param>
-    /// <param name="show">Run with the item as the card has it now when the card is clicked outside its field and buttons, the notification in front.</param>
+    /// <param name="edit">Run with the item as the card has it now when that button is clicked, and whether the click brought the notification in front.</param>
+    /// <param name="show">Run with the item as the card has it now when the card is clicked outside its field and buttons, and whether the click brought the notification in front.</param>
     public CaptureCard(Notice notice, Notices notices, StashItem item, string said, Listing listing, Renaming renaming, IQuietWindows quietWindows, TimeSpan heldFileRetry, Action tookFocus,
-        string editLabel, Action<StashItem> edit, Action<StashItem> show)
+        string editLabel, Action<StashItem, bool> edit, Action<StashItem, bool> show)
     {
         this.notice = notice;
         this.notices = notices;
@@ -203,18 +203,18 @@ public sealed class CaptureCard : Border
 
     /// <summary>
     /// Edit, Trim, or a click elsewhere on the card (G16): the card's other clicks that take the activation, the user's
-    /// act, so the stash window asked for comes in front from ImageStash's own notification, which leaves no paste target
-    /// (G8). The hold ends once the ask has been handled, with the window then in front, which keeps the activation; an
-    /// activation the platform refuses still asks, since the window's summon brings it forward itself. Then the card goes,
-    /// whether the editor opened, the Edit was refused by name, or the window came forward with another edit as it was
-    /// left (G16, G1).
+    /// act, so the stash window asked for comes in front from ImageStash's own notification, the ask told so, since the
+    /// target is then read as the notification gained focus and kept by that window (G8). The hold ends once the ask has
+    /// been handled, with the window then in front, which keeps the activation; an activation the platform refuses still
+    /// asks, told so, since the window's summon brings it forward itself. Then the card goes, whether the editor opened,
+    /// the Edit was refused by name, or the window came forward with another edit as it was left (G16, G1).
     /// </summary>
-    private void AskInFront(Action<StashItem> ask)
+    private void AskInFront(Action<StashItem, bool> ask)
     {
         var taken = shownIn is null ? null : quietWindows.TakeActivation(shownIn);
         using (taken is { Succeeded: true } ? taken.Value : null)
         {
-            ask(item);
+            ask(item, taken is { Succeeded: true });
         }
 
         // Only now: were it the last card, the notifications' window closing before the stash window was in front would

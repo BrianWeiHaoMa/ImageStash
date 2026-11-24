@@ -32,6 +32,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
     private readonly Notices notices;
     private readonly SettingsKeeper settings;
     private readonly IQuietWindows quietWindows;
+    private readonly ITarget targets;
     private readonly IDialogsAndExplorer dialogs;
     private readonly IClipboardAndDrops drops;
     private readonly PasteTargetHolder pasteTarget = new();
@@ -79,6 +80,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
         this.import = import;
         this.handoff = handoff;
         quietWindows = seams.QuietWindows;
+        targets = seams.Target;
         dialogs = seams.DialogsAndExplorer;
         drops = seams.ClipboardAndDrops;
         deletion = new Deletion(listing, notices);
@@ -218,8 +220,11 @@ public sealed class StashWindow : Avalonia.Controls.Window
     {
         CaptureHiding.Forget();
         activation.ReadTargetAtSummon();
-        SummonFlyoutAt(() => Summon.AboveTrayIcon(quietWindows.TrayIconRectangle(), chrome.Displays(), settings.Current.FlyoutSize.UsableOr(WindowSize.FlyoutDefault)));
+        SummonFlyoutAt(AboveTrayIcon);
     }
+
+    /// <summary>The flyout's place above the tray icon, at its remembered size (G1).</summary>
+    private PixelRect AboveTrayIcon() => Summon.AboveTrayIcon(quietWindows.TrayIconRectangle(), chrome.Displays(), settings.Current.FlyoutSize.UsableOr(WindowSize.FlyoutDefault));
 
     /// <summary>
     /// Once the tray menu that ran Open ImageStash has closed, a window of its own whose going, or the shell's hidden icons
@@ -758,30 +763,33 @@ public sealed class StashWindow : Avalonia.Controls.Window
 
     /// <summary>
     /// ImageStash's notifications above the tray, whose focus the window's hide rule and paste target follow: a click on
-    /// one takes no focus, and a click into a card's field takes it as the user's act (G2, G8, G16); a card's Edit or
-    /// Trim summons the window as the tray does, coming in front from that notification, while the click's activation is
-    /// still held, then opens the editor on the card's item (G16, G1); and a click elsewhere on a card summons it the same
-    /// way, then shows the card's item selected, an open preview closed first, while an open edit stays as it was left;
-    /// the card goes at each of these clicks (G16).
+    /// one takes no focus, and a click into a card's field takes it as the user's act (G2, G8, G16); a card's Edit, Trim
+    /// or click elsewhere opens the window on the card's item as <see cref="NotificationOpening"/> says, while the click's
+    /// activation is still held, and the card goes at each of these clicks (G16).
     /// </summary>
     public void Follow(Notification notification, CaptureNotification captured)
     {
         notification.Deactivated += activation.NotificationLostFocus;
         notification.StayAbove(this);
         captured.FieldTookFocus += activation.NotificationTookFocus;
-        captured.EditRequested += asked =>
+        _ = new NotificationOpening(captured, pasteTarget, targets, SummonFromNotification, editing, preview.Close);
+    }
+
+    /// <summary>
+    /// The summon a click on a notification makes (G16): as from the tray; when that click brought the notification in
+    /// front, the window comes in front from it as its own showing, keeping the target the click read (G8).
+    /// </summary>
+    private void SummonFromNotification(bool keepsTarget)
+    {
+        if (!keepsTarget)
         {
             SummonFromTray();
-            _ = editing.OpenFromNotification(asked);
-        };
-        captured.ShowRequested += item =>
-        {
-            SummonFromTray();
-            if (!editing.IsOpen)
-            {
-                _ = captured.ShowOnAll(item, preview.Close);
-            }
-        };
+            return;
+        }
+
+        CaptureHiding.Forget();
+        activation.NotificationClickRead();
+        activation.WithOwnActivation(() => SummonFlyoutAt(AboveTrayIcon));
     }
 
     /// <summary>

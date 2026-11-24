@@ -84,7 +84,13 @@ public sealed class CaptureCardTests
         var asked = new List<long>();
         var host = TrayDesktop.Get(() =>
         {
-            capture.ShowRequested += shownItem => asked.Add(shownItem.Id);
+            capture.OpenRequested += opening =>
+            {
+                if (opening.Edit is null)
+                {
+                    asked.Add(opening.Item.Id);
+                }
+            };
             capture.Raise(item, CaptureKind.Screenshot, onClipboard: false, lengthMs: null);
             var notice = notifications.Shown.Single();
             var window = new Avalonia.Controls.Window { Width = 460, Height = 220, ShowActivated = false, Position = new PixelPoint(-8000, 300), Content = notice.Card!(notice, notifications) };
@@ -157,6 +163,8 @@ public sealed class CaptureCardTests
         using var desk = await CaptureDesk.Open(["stash shown.png", "stash beside.png"], platformTarget: targets);
         var shown = desk.Items()[0];
         var window = desk.Shown.Window;
+        var chat = new PasteTarget(desk.Chat.Window, desk.Chat.AppName);
+        string[] pasteHints = [$"Enter · Paste into {chat.AppName}", "Ctrl+C · Copy"];
 
         foreach (var what in new[] { "its blank area", "its picture" })
         {
@@ -176,8 +184,9 @@ public sealed class CaptureCardTests
                 Assert.AreEqual("", desk.Shown.Search.Text, "the search cleared");
                 Assert.AreEqual(shown.Id, desk.Shown.Listing.Focused);
                 Assert.IsFalse(desk.Shown.Editing.IsOpen, "no editor (G16)");
-                Assert.IsNull(window.PasteTarget.Current, "the window before it was ImageStash's own notification, so no paste target (G8)");
-                CollectionAssert.AreEqual(new[] { "Enter · Copy" }, desk.Shown.FooterHints(), "Enter copies");
+                // G8: “that click sets the paste target as the notification gains focus, to the window that had focus just before the notification”.
+                Assert.AreEqual(chat, window.PasteTarget.Current, "the chat was in front before the card click (G8)");
+                CollectionAssert.AreEqual(pasteHints, desk.Shown.FooterHints(), "the footer names the chat's app (G8)");
                 Assert.IsFalse(desk.Notification.Shown?.GetVisualDescendants().OfType<CaptureCard>().Contains(clicked) ?? false, $"after a click on {what} the card goes, since the window shows the item (G16)");
                 Assert.IsEmpty(desk.Notifications.Shown);
             });
@@ -201,8 +210,9 @@ public sealed class CaptureCardTests
         {
             Assert.IsEmpty(desk.Notifications.Shown);
             desk.Shown.Editing.Cancel();
-            Assert.IsNull(window.PasteTarget.Current, "the window before it was the notification, so no paste target (G8)");
-            CollectionAssert.AreEqual(new[] { "Enter · Copy" }, desk.Shown.FooterHints(), "Enter copies once the edit is closed");
+            // G8: “The stash window shown again at the end of a capture (G3) keeps the paste target it had, and so does the stash window a click on a notification opens (G16)”.
+            Assert.AreEqual(chat, window.PasteTarget.Current, "the chat remains the target after Cancel (G8)");
+            CollectionAssert.AreEqual(pasteHints, desk.Shown.FooterHints(), "the footer names the chat's app after Cancel (G8)");
         });
     }
 

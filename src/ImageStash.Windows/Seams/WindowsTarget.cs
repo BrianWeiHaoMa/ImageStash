@@ -130,8 +130,7 @@ public sealed class WindowsTarget : ITarget, IDisposable
     /// </summary>
     public PasteTarget? LastBeforeMine()
     {
-        Volatile.Write(ref lastAnswered, Environment.TickCount);
-        answered = true;
+        Answering();
         var now = GetForegroundWindow();
         if (Read(now) is { IsMine: false } other)
         {
@@ -147,15 +146,68 @@ public sealed class WindowsTarget : ITarget, IDisposable
         {
             // Past the switcher's reports the shell makes again once a switch is over, then the reports of the window in
             // front, when they have come, then the switcher it came through.
-            var at = PassingOver(reported.Count - 1);
-            while (at >= 0 && reported[at].Window == now)
+            return ReportedBefore(PassingOver(reported.Count - 1), now);
+        }
+    }
+
+    /// <summary>
+    /// The window in front now, held: while it is one of ImageStash's, each reading answers for it as
+    /// <see cref="LastBeforeMine"/> answers while it is in front, from the reports of its coming in front, whichever window
+    /// is in front by then and though it has closed since; else as <see cref="LastBeforeMine"/> answers now.
+    /// </summary>
+    public HeldBefore HoldBeforeMine()
+    {
+        var held = GetForegroundWindow();
+        if (Read(held) is not { IsMine: true })
+        {
+            var answer = LastBeforeMine();
+            return new HeldBefore(() => answer);
+        }
+
+        return new HeldBefore(() => LastBefore(held));
+    }
+
+    // The window reported in front just before the latest report of mine, passing over the shell's task switcher, as
+    // LastBeforeMine walks the history; none until mine's report has come, the late report then raising ReportedLate.
+    private PasteTarget? LastBefore(nint mine)
+    {
+        Answering();
+        if (!CaughtUp())
+        {
+            return null;
+        }
+
+        lock (reported)
+        {
+            // Mine's latest report: never one of the switcher's, whose window may have taken a closed window's handle.
+            var at = reported.Count - 1;
+            while (at >= 0 && (reported[at].Window != mine || reported[at].Reading is null))
             {
                 at--;
             }
 
-            at = PassingOver(at);
-            return at < 0 ? null : reported[at].Reading!.Value.Target;
+            return at < 0 ? null : ReportedBefore(at, mine);
         }
+    }
+
+    // An answer about the window before ImageStash's is being made now: a report of an earlier change heard after it is late.
+    private void Answering()
+    {
+        Volatile.Write(ref lastAnswered, Environment.TickCount);
+        answered = true;
+    }
+
+    // The target of the report before window's reports that end at at, passing over the shell's task switcher; none
+    // when there is none. Called under the lock.
+    private PasteTarget? ReportedBefore(int at, nint window)
+    {
+        while (at >= 0 && reported[at].Window == window)
+        {
+            at--;
+        }
+
+        at = PassingOver(at);
+        return at < 0 ? null : reported[at].Reading!.Value.Target;
     }
 
     public Outcome Confirm(PasteTarget target)

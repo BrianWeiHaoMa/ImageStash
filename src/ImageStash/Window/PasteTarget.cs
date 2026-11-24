@@ -3,12 +3,14 @@ using ImageStash.Seams;
 namespace ImageStash.Window;
 
 /// <summary>
-/// The paste target the footer and the item menu name and Enter pastes into (G8): set in exactly two ways, at the open
-/// shortcut's press to the window in front then, unless that was ImageStash itself; and whenever the stash window is
-/// activated any other way, to the window that had focus just before it, passing over the shell's task switcher, none
-/// when that was ImageStash's own (a dialog or a notification), the desktop, the taskbar or nothing. A target once set
-/// stands until the next press or activation, but for a change before that activation which the seam hears of only after
-/// it was read: the target is then read again, while ImageStash's window is still in front. Set on the UI thread;
+/// The paste target the footer and the item menu name and Enter pastes into (G8): set at the open shortcut's press to
+/// the window in front then, unless that was ImageStash itself; whenever the stash window is activated any other way, to
+/// the window that had focus just before it, passing over the shell's task switcher, none when that was ImageStash's own
+/// (a dialog or a notification), the desktop, the taskbar or nothing; and at a click on a notification that opens the
+/// stash window, as the notification gains focus, to the window that had focus just before the notification, by the
+/// same rule, which the stash window it opens keeps. A target once set stands until the next press or activation, but
+/// for a change before that read which the seam hears of only after it: the target is then read again, while
+/// ImageStash's window is still in front, for the window the read was made for. Set on the UI thread;
 /// <see cref="Current"/> is read from any thread, as the shortcut's press reads it.
 /// </summary>
 public sealed class PasteTargetHolder
@@ -17,6 +19,8 @@ public sealed class PasteTargetHolder
 
     // The seam whose answer at the latest activation set the target, while no press or other setting has replaced it.
     private volatile ITarget? following;
+    // That answer held to the notification a click brought in front, when that click set it.
+    private volatile HeldBefore? held;
     private ITarget? listeningTo;
     private SynchronizationContext? setOn;
 
@@ -45,6 +49,7 @@ public sealed class PasteTargetHolder
     public void FromPress(ForegroundReading reading)
     {
         following = null;
+        held = null;
         if (!reading.IsMine)
         {
             Set(reading.Target);
@@ -53,14 +58,22 @@ public sealed class PasteTargetHolder
 
     /// <summary>
     /// The stash window activated itself (its summon, a pin, its showing again after a capture): the target stands as it
-    /// is, and no late report reads it again, since the windows in front since then are ImageStash's own doing (G8).
+    /// is, and no late report reads it again, since the windows in front since then are ImageStash's own doing (G8); but
+    /// for a notification's click, whose read is held to that notification, which they do not change.
     /// </summary>
-    public void Keep() => following = null;
+    public void Keep()
+    {
+        if (held is null)
+        {
+            following = null;
+        }
+    }
 
     /// <summary>The window that had focus just before was ImageStash's own: Enter copies (G8).</summary>
     public void None()
     {
         following = null;
+        held = null;
         Set(null);
     }
 
@@ -69,6 +82,25 @@ public sealed class PasteTargetHolder
     /// before it, read again whenever the seam hears late of a change that came before this read (G8).
     /// </summary>
     public void FromActivation(ITarget target)
+    {
+        Follow(target, heldTo: null);
+        Set(target.LastBeforeMine());
+    }
+
+    /// <summary>
+    /// A click on ImageStash's notification brought it in front to open the stash window (G16): the window that had focus
+    /// just before the notification, by the same rule (G8), read again for the notification whenever the seam hears late
+    /// of a change before this read, whatever ImageStash has put in front since; the stash window's coming in front from
+    /// the notification is its own doing, which <see cref="Keep"/> leaves to this read.
+    /// </summary>
+    public void FromNotificationClick(ITarget target)
+    {
+        var before = target.HoldBeforeMine();
+        Follow(target, before);
+        Set(before.Read());
+    }
+
+    private void Follow(ITarget target, HeldBefore? heldTo)
     {
         if (listeningTo != target)
         {
@@ -82,8 +114,8 @@ public sealed class PasteTargetHolder
         }
 
         setOn = SynchronizationContext.Current;
+        held = heldTo;
         following = target;
-        Set(target.LastBeforeMine());
     }
 
     // On the seam's thread: the read again is made where the target is set, or here when nothing posts there (checks).
@@ -104,7 +136,7 @@ public sealed class PasteTargetHolder
         // Once another app is in front, the change is the user's next one, which the next press or activation reads.
         if (following is { } target && target.Foreground().IsMine)
         {
-            Set(target.LastBeforeMine());
+            Set(held is { } before ? before.Read() : target.LastBeforeMine());
         }
     }
 
