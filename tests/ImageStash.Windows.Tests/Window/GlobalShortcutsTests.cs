@@ -21,13 +21,13 @@ public sealed class GlobalShortcutsTests
     private static readonly Shortcut Open = Shortcut.Parse("Ctrl+Alt+Space").Value!;
     private static readonly Shortcut TakeScreenshot = Shortcut.Parse("Ctrl+PrtScn").Value!;
     private static readonly Shortcut RecordClip = Shortcut.Parse("Ctrl+Shift+PrtScn").Value!;
-    private static readonly Shortcut StashClipboardImage = Shortcut.Parse("Ctrl+Alt+V").Value!;
+    private static readonly Shortcut StashClipboardImage = Shortcut.Parse("Win+Alt+V").Value!;
 
     [TestMethod]
     [DataRow("Ctrl+Alt+Space", "Register the open shortcut failed: Ctrl+Alt+Space, another program holds it", DisplayName = "the open shortcut held")]
     [DataRow("Ctrl+PrtScn", "Register the screenshot shortcut failed: Ctrl+PrtScn, another program holds it", DisplayName = "the screenshot shortcut held")]
     [DataRow("Ctrl+Shift+PrtScn", "Register the record shortcut failed: Ctrl+Shift+PrtScn, another program holds it", DisplayName = "the record shortcut held")]
-    [DataRow("Ctrl+Alt+V", "Register the Stash clipboard image shortcut failed: Ctrl+Alt+V, another program holds it", DisplayName = "Stash clipboard image's held")]
+    [DataRow("Win+Alt+V", "Register the Stash clipboard image shortcut failed: Win+Alt+V, another program holds it", DisplayName = "Stash clipboard image's held")]
     public void ACombinationAnotherProgramHoldsAtStartIsNamedAndStaysUnregisteredThroughPauseWhileTheOthersFire(string heldText, string sentence)
     {
         var heldShortcut = Shortcut.Parse(heldText).Value!;

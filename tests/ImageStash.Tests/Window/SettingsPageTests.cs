@@ -52,7 +52,7 @@ public sealed class SettingsPageTests
             },
             page.Rows.Select(row => (row.Group, row.Title)).ToList(),
             "G32's rows in its order, the four shortcuts first, Export stash… and Import stash… after the stash location, the thumbnail size after Theme");
-        CollectionAssert.AreEqual(new[] { "Ctrl+Alt+Space", "Ctrl+PrtScn", "Ctrl+Shift+PrtScn", "Ctrl+Alt+V" }, page.ShortcutFields.Select(field => field.Text).ToList(), "F5's defaults, each in its field");
+        CollectionAssert.AreEqual(new[] { "Ctrl+Alt+Space", "Ctrl+PrtScn", "Ctrl+Shift+PrtScn", "Win+Alt+V" }, page.ShortcutFields.Select(field => field.Text).ToList(), "F5's defaults, each in its field");
         Assert.IsFalse(page.ShortcutFields.Any(field => field.IsRecording), "none recording");
         Assert.AreEqual((true, 30, true, DefaultStash, true, Theme.System), (page.AlsoCopyCapture, page.RecordingMaxSeconds, page.RecordPointer, page.StashFolder, page.StartWithWindows, page.Theme),
             "G32's defaults: on, 30 seconds, on, the default folder (F6), on, the system's theme");

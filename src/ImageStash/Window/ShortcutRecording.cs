@@ -38,7 +38,7 @@ public sealed class ShortcutRecording
     public bool IsRecording => suspension is not null;
 
     /// <summary>The shortcut as the settings spell it: its text in F5's spelling, or the setting as written when it is not one.</summary>
-    public string Text => shortcuts.TextOf(Act);
+    public string Text => shortcuts.ShortcutOf(Act)?.Text ?? shortcuts.TextOf(Act);
 
     /// <summary>The field's last refusal since the page opened, else why its shortcut is unavailable, else null.</summary>
     public Failure? Warning => refusal ?? shortcuts.UnavailableReason(Act);

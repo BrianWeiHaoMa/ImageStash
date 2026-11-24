@@ -164,9 +164,11 @@ public sealed class StashWindowPathTests
     /// A first run through the window's parts over a real, empty store with default settings, the empty stash read from
     /// its view as the window draws it: (1) the listing is the empty stash, whose view lists the ways in, in order, each
     /// with its shortcut as the settings read it, then the line naming the open shortcut, the tray and that closing the
-    /// window keeps ImageStash running, and nothing has read the clipboard (G2, G3, N9); (4) with a picture on the
-    /// clipboard, a click on the Paste row adds one item, and the grid takes the empty stash's place (G13, G2). The
-    /// paste stays the walk's last act.
+    /// window keeps ImageStash running, and nothing has read the clipboard (G2, G3, N9); (2) the Stash clipboard image row
+    /// reads F5's default, Win+Alt+V, the tray's tooltip names the open shortcut, and once the open shortcut is remapped
+    /// as a Settings field remaps it, the tooltip and the empty stash's line, drawn again, both read the new one (F5,
+    /// G33, G34); (4) with a picture on the clipboard, a click on the Paste row adds one item, and the grid takes the
+    /// empty stash's place (G13, G2). The paste stays the walk's last act.
     /// </summary>
     [TestMethod]
     public async Task AFirstRunsEmptyStashNamesTheOpenShortcutAndItsPasteRowAddsTheClipboardsPicture()
@@ -187,6 +189,22 @@ public sealed class StashWindowPathTests
         StringAssert.Contains(line, "from its icon in the tray", "and the tray (G34)");
         StringAssert.Contains(line, "Closing this window keeps it running", "and that closing keeps ImageStash running (G3)");
         Assert.AreEqual((0, 0), (listed.Clipboard.Reads, listed.Clipboard.ImageReads), "nothing has read the clipboard (N9)");
+
+        // (2) The new default on its row; the tray's tooltip, over the shortcuts started, names the open shortcut; a remap
+        // written through the settings' keeper reaches the tooltip and the line at once.
+        Assert.AreEqual("Win+Alt+V", string.Join("+", rows[3].Caps), "Stash the clipboard image reads F5's default");
+        var tray = new RecordingTray();
+        new TrayMenu(tray, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }).Show(listed.Shortcuts);
+        Assert.AreEqual("ImageStash · Ctrl+Alt+Space", tray.ToolTip, "pointing at the icon names the open shortcut");
+        using (listed.Shortcuts.Suspend())
+        {
+            Assert.IsTrue(listed.Shortcuts.Rebind(ShortcutAct.Open, Shortcut.Parse("Ctrl+Alt+F9").Value!).Succeeded);
+        }
+
+        Assert.AreEqual("Ctrl+Alt+F9", listed.Settings.Current.Shortcuts.Open, "remapped through the settings' keeper");
+        Assert.AreEqual("ImageStash · Ctrl+Alt+F9", tray.ToolTip, "the tooltip reads the new one at once");
+        StringAssert.Contains(shown.ReadLines()[^1], "from any app with Ctrl+Alt+F9", "and so does the empty stash's line, drawn again as the window draws it");
+        Assert.AreEqual((0, 0), (listed.Clipboard.Reads, listed.Clipboard.ImageReads), "still nothing has read the clipboard (N9)");
 
         // (4) A picture on the clipboard; a click on the Paste row.
         listed.Clipboard.Reading = Outcome<ClipboardReading>.Of(new ClipboardReading([], MediaFixtures.Bytes("transparent.png"), null, false));

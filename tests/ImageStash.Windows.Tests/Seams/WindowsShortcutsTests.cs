@@ -150,7 +150,8 @@ public sealed class WindowsShortcutsTests
 
         Assert.IsFalse(WindowsShortcuts.TypesACharacter(WindowsShortcuts.CombinationOf(Open), layout));
         Assert.IsFalse(WindowsShortcuts.TypesACharacter(WindowsShortcuts.CombinationOf(Shortcut.Parse("Ctrl+PrtScn").Value!), layout));
-        Assert.IsFalse(WindowsShortcuts.TypesACharacter(WindowsShortcuts.CombinationOf(Shortcut.Parse("Ctrl+Alt+V").Value!), layout));
+        Assert.IsFalse(WindowsShortcuts.TypesACharacter(WindowsShortcuts.CombinationOf(Shortcut.Parse("Ctrl+Shift+PrtScn").Value!), layout));
+        Assert.IsFalse(WindowsShortcuts.TypesACharacter(WindowsShortcuts.CombinationOf(Shortcut.Parse("Win+Alt+V").Value!), layout));
         Assert.IsFalse(WindowsShortcuts.TypesACharacter(WindowsShortcuts.CombinationOf(Shortcut.Parse("Ctrl+A").Value!), layout), "a control character types nothing");
         Assert.IsTrue(WindowsShortcuts.TypesACharacter(WindowsShortcuts.CombinationOf(ShiftA), layout));
         Assert.IsTrue(WindowsShortcuts.TypesACharacter(WindowsShortcuts.CombinationOf(Shortcut.Parse("A").Value!), layout));

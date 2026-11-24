@@ -16,7 +16,7 @@ namespace ImageStash.Tests.Window;
 public sealed class ShortcutRecordingTests
 {
     private static readonly Shortcut Open = Shortcut.Parse("Ctrl+Alt+Space").Value!;
-    private static readonly Shortcut[] Defaults = [Open, Shortcut.Parse("Ctrl+PrtScn").Value!, Shortcut.Parse("Ctrl+Shift+PrtScn").Value!, Shortcut.Parse("Ctrl+Alt+V").Value!];
+    private static readonly Shortcut[] Defaults = [Open, Shortcut.Parse("Ctrl+PrtScn").Value!, Shortcut.Parse("Ctrl+Shift+PrtScn").Value!, Shortcut.Parse("Win+Alt+V").Value!];
 
     [TestMethod]
     public void TheOpenShortcutPressedIntoTheScreenshotFieldSummonsNothingAndIsRefusedAsTheOpenShortcuts()
@@ -135,8 +135,8 @@ public sealed class ShortcutRecordingTests
         field.PressSeenComingUp(Key.V, [KeyModifiers.Control, KeyModifiers.None], letGoFirst: true);
         Assert.AreEqual($"Register the screenshot shortcut failed: Ctrl+V, {GlobalShortcuts.PasteKeystrokeReason}", page.WarningOf(SettingsPage.TakeScreenshotTitle)?.Sentence);
         field.Begin();
-        field.PressSeenComingUp(Key.V, [KeyModifiers.Control | KeyModifiers.Alt, KeyModifiers.None], letGoFirst: true);
-        Assert.AreEqual("Register the screenshot shortcut failed: Ctrl+Alt+V, the Stash clipboard image shortcut uses it too", page.WarningOf(SettingsPage.TakeScreenshotTitle)?.Sentence);
+        field.PressSeenComingUp(Key.V, [KeyModifiers.Meta | KeyModifiers.Alt, KeyModifiers.None], letGoFirst: true);
+        Assert.AreEqual("Register the screenshot shortcut failed: Win+Alt+V, the Stash clipboard image shortcut uses it too", page.WarningOf(SettingsPage.TakeScreenshotTitle)?.Sentence);
         field.Begin();
         field.PressSeenComingUp(Key.PrintScreen, [KeyModifiers.Control, KeyModifiers.None], letGoFirst: true);
         Assert.IsNull(page.WarningOf(SettingsPage.TakeScreenshotTitle), "its own shortcut changes nothing, as pressed whole");
@@ -224,7 +224,7 @@ public sealed class ShortcutRecordingTests
         field.Press(Key.PrintScreen, KeyModifiers.Control);
         Assert.IsNull(page.WarningOf(SettingsPage.TakeScreenshotTitle), "free again, recorded there, it registers");
         Assert.IsNull(started.Shortcuts.FirstUnavailable);
-        Assert.AreEqual("ImageStash", started.Tray.ToolTip);
+        Assert.AreEqual("ImageStash · Ctrl+Alt+Space", started.Tray.ToolTip, "nothing named, Pause off: the open shortcut beside the name");
         CollectionAssert.AreEquivalent(Defaults, started.Seam.Registered.ToList());
         Assert.AreEqual("Ctrl+PrtScn", started.Settings.Current.Shortcuts.Screenshot);
     }
@@ -344,7 +344,7 @@ public sealed class ShortcutRecordingTests
 
         Assert.IsNull(page.WarningOf(SettingsPage.OpenTitle));
         Assert.IsNull(started.Shortcuts.FirstUnavailable, "Settings opens at the top again");
-        Assert.AreEqual("ImageStash", started.Tray.ToolTip, "the tooltip's line gone (G33)");
+        Assert.AreEqual("ImageStash · Ctrl+Shift+F9", started.Tray.ToolTip, "the tooltip's line gone (G33), the open shortcut named as now recorded the moment it registers");
         Assert.IsTrue(started.Seam.Press(Shortcut.Parse("Ctrl+Shift+F9").Value!));
         Assert.AreEqual(1, started.Summoned);
     }

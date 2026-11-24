@@ -187,7 +187,7 @@ public sealed class StashClipboardImageTests
         {
             var before = DateTimeOffset.Now;
             var clock = Stopwatch.StartNew();
-            TestHotKeys.Press(Shortcut.Parse("Ctrl+Alt+V").Value!);
+            TestHotKeys.Press(Shortcut.Parse("Win+Alt+V").Value!);
             await Eventually(() => TrayDesktop.Get(() => shown.Notifications.Shown.Count == 1 && notification.Shown is not null));
             var took = clock.ElapsedMilliseconds;
             var after = DateTimeOffset.Now;

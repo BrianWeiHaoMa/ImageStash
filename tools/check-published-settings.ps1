@@ -14,10 +14,10 @@ first refusal and after the third. With the holder gone the real Ctrl+Shift+F8 i
 and settings.json hold it. Start with Windows switched off removes the Run value and writes false, on writes the Run
 value naming the copy's executable and true; Theme set to Dark and back to Use system setting, and Thumbnail size to Huge
 and back to Medium, are written each time; Open
-folder opens a File Explorer window on the stash folder, which the phase closes. Another PowerShell takes Ctrl+Alt+V
+folder opens a File Explorer window on the stash folder, which the phase closes. Another PowerShell takes Win+Alt+V
 while the Stash clipboard image field records, so registering it again at the recording's end is refused and its row
 says why; the tray menu then shows Ctrl+Shift+F8 beside Take a screenshot, and its Settings opens the page on that
-field with the reason; with that holder gone, the keyboard alone records Ctrl+Alt+V there and ImageStash holds it
+field with the reason; with that holder gone, the keyboard alone records Win+Alt+V there and ImageStash holds it
 again. Once the page is closed, the real Ctrl+Shift+F8 shows the overlay, adding nothing, while Ctrl+PrtScn is free for
 another program, whose hot key then takes the press, and shows none (G32, G33, G34, F1, F5, F10, G35, Done when 5).
 Exits with the number of checks that failed.
@@ -25,7 +25,7 @@ Exits with the number of checks that failed.
 With -Store, the stash and its settings are the check's own and every step runs; without it they are the user's, and
 the phase is skipped, since it changes the user's shortcuts, Run value and theme.
 
-Sends real keystrokes (Ctrl+Shift+F8, Shift+A, Ctrl+V, Ctrl+PrtScn, Ctrl+Alt+V, Enter, Esc), clicks the page's
+Sends real keystrokes (Ctrl+Shift+F8, Shift+A, Ctrl+V, Ctrl+PrtScn, Win+Alt+V, Enter, Esc), clicks the page's
 shortcut fields, posts right-clicks to the tray icon, hides the stash window, starts PowerShells without a window that
 hold a hot key for a moment, shows the screenshot's overlay and closes it, closes any File Explorer window on the
 check's own stash folder, opens one there and closes it, changes the Run value ImageStash (check-published.ps1 puts back what it found), puts the pointer
@@ -48,7 +48,7 @@ $rows = "Open ImageStash | Take a screenshot | Record a clip | Stash clipboard i
 $held = 'Register the screenshot shortcut failed: Ctrl+Shift+F8, another program holds it'
 $typesACharacter = 'Register the screenshot shortcut failed: Shift+A, it would type a character'
 $pasteKeystroke = 'Register the screenshot shortcut failed: Ctrl+V, it is the paste keystroke the handoff sends'
-$grabbed = 'Register the Stash clipboard image shortcut failed: Ctrl+Alt+V, another program holds it'
+$grabbed = 'Register the Stash clipboard image shortcut failed: Win+Alt+V, another program holds it'
 
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 
@@ -352,11 +352,12 @@ try {
     Check (WaitFor { @(ExplorerOn $stash).Count -eq 1 } 10000) "Open folder opened a File Explorer window on $stash (G32): $(@(ExplorerOn $stash | ForEach-Object { $_.LocationName }) -join ', ')"
     foreach ($window in @(ExplorerOn $stash)) { $window.Quit() }
 
-    # G33: another program takes Ctrl+Alt+V while the field records, so registering it again at the recording's end is
+    # G33: another program takes Win+Alt+V, F5's default, while the field records, so registering it again at the recording's end is
     # refused; its row says why, and the tray's Settings then opens on that field.
     Record 'Stash clipboard image'
-    $grab = Hold 'grab' 0x0003 0x56
-    Need ($grab.First -eq 'registered') "while the field records ImageStash's shortcuts are released, and another program registered Ctrl+Alt+V: $($grab.First)"
+    # MOD_ALT | MOD_WIN, and V.
+    $grab = Hold 'grab' 0x0009 0x56
+    Need ($grab.First -eq 'registered') "while the field records ImageStash's shortcuts are released, and another program registered Win+Alt+V: $($grab.First)"
     Need (Recording 'Stash clipboard image') 'the field still records'
     $null = [PasteDesk]::Press([uint16[]]@(0x1B))
     Check (WaitFor { (-not (Recording 'Stash clipboard image')) -and (WarnedUnder 'Stash clipboard image' 'After a screenshot or a recording' $grabbed) } 2000) "Esc ended the recording alone, the page staying, and the row reads '$grabbed' (G33, G35, G2)"
@@ -371,10 +372,11 @@ try {
     Stop $grab
     $null = [PasteDesk]::Press([uint16[]]@(0x0D))
     Need (WaitFor { Recording 'Stash clipboard image' } 2000) 'Enter on the focused field began recording'
-    $null = [PasteDesk]::Press([uint16[]]@(0x11, 0x12, 0x56))
-    Check (WaitFor { ((WordsFrom 'Register the Stash clipboard image shortcut failed').Count -eq 0) -and ((KeysOf 'Stash clipboard image') -eq 'Ctrl+Alt+V') } 1000) 'changed there with the keyboard alone to Ctrl+Alt+V once the other program let it go, the row no longer names it (G33, G7)'
-    $taken = Hold 'taken' 0x0003 0x56
-    Check ($taken.First -eq 'refused 1409') "ImageStash holds Ctrl+Alt+V again, so another program's registration is refused: $($taken.First)"
+    # The left Windows key, Alt and V.
+    $null = [PasteDesk]::Press([uint16[]]@(0x5B, 0x12, 0x56))
+    Check (WaitFor { ((WordsFrom 'Register the Stash clipboard image shortcut failed').Count -eq 0) -and ((KeysOf 'Stash clipboard image') -eq 'Win+Alt+V') } 1000) 'changed there with the keyboard alone to Win+Alt+V once the other program let it go, the row no longer names it (G33, G7)'
+    $taken = Hold 'taken' 0x0009 0x56
+    Check ($taken.First -eq 'refused 1409') "ImageStash holds Win+Alt+V again, so another program's registration is refused: $($taken.First)"
     Stop $taken
 
     # G32, G33, F5: the page closed, the recorded shortcut takes a screenshot and the old one is free.

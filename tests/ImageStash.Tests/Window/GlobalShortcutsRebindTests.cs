@@ -22,7 +22,7 @@ public sealed class GlobalShortcutsRebindTests
     private static readonly Shortcut Open = Shortcut.Parse("Ctrl+Alt+Space").Value!;
     private static readonly Shortcut TakeScreenshot = Shortcut.Parse("Ctrl+PrtScn").Value!;
     private static readonly Shortcut RecordClip = Shortcut.Parse("Ctrl+Shift+PrtScn").Value!;
-    private static readonly Shortcut StashClipboardImage = Shortcut.Parse("Ctrl+Alt+V").Value!;
+    private static readonly Shortcut StashClipboardImage = Shortcut.Parse("Win+Alt+V").Value!;
     private static readonly Shortcut Free = Shortcut.Parse("Ctrl+Shift+F8").Value!;
     private static readonly Shortcut[] Defaults = [Open, TakeScreenshot, RecordClip, StashClipboardImage];
 
@@ -68,7 +68,7 @@ public sealed class GlobalShortcutsRebindTests
         Assert.AreEqual(TakeScreenshot, started.Shortcuts.ShortcutOf(ShortcutAct.Screenshot));
         Assert.AreEqual(TakeScreenshot.Gesture, started.Tray.Entries[Screenshot].Gesture);
         Assert.IsNull(started.Shortcuts.UnavailableReason(ShortcutAct.Screenshot), "a refusal makes nothing unavailable");
-        Assert.AreEqual("ImageStash", started.Tray.ToolTip, "and names nothing in the tooltip: the field says it");
+        Assert.AreEqual("ImageStash · Ctrl+Alt+Space", started.Tray.ToolTip, "and names nothing in the tooltip: the field says it");
         started.Settings.Flush().Wait();
         Assert.AreEqual(file, started.SavedText, "the file unchanged");
     }
@@ -168,7 +168,7 @@ public sealed class GlobalShortcutsRebindTests
         started.RunPosted();
         Assert.AreEqual((1, 0, 0, 0), (started.Screenshots, started.Summoned, started.Recorded, started.Stashed), "the screenshot, once");
         await Handing.Eventually(() => started.Saved.Screenshot == "Ctrl+Shift+F8");
-        Assert.AreEqual(("Ctrl+Alt+Space", "Ctrl+Shift+PrtScn", "Ctrl+Alt+V"), (started.Saved.Open, started.Saved.Record, started.Saved.StashClipboardImage), "the others as they were");
+        Assert.AreEqual(("Ctrl+Alt+Space", "Ctrl+Shift+PrtScn", "Win+Alt+V"), (started.Saved.Open, started.Saved.Record, started.Saved.StashClipboardImage), "the others as they were");
     }
 
     [TestMethod]
@@ -253,7 +253,7 @@ public sealed class GlobalShortcutsRebindTests
         CollectionAssert.AreEquivalent(Defaults, started.Seam.Registered.ToList());
         Assert.IsNull(started.Shortcuts.UnavailableReason(ShortcutAct.Open));
         Assert.IsNull(started.Shortcuts.FirstUnavailable);
-        Assert.AreEqual("ImageStash", started.Tray.ToolTip, "its line gone");
+        Assert.AreEqual("ImageStash · Ctrl+Alt+Space", started.Tray.ToolTip, "its line gone, and the open shortcut named the moment it is registered again");
         Assert.IsTrue(started.Seam.Press(Open));
         Assert.AreEqual(1, started.Summoned);
     }
@@ -304,7 +304,7 @@ public sealed class GlobalShortcutsRebindTests
 
         CollectionAssert.AreEquivalent(new[] { Open, TakeScreenshot, Free, StashClipboardImage }, started.Seam.Registered.ToList());
         Assert.IsNull(started.Shortcuts.UnavailableReason(ShortcutAct.Record));
-        Assert.AreEqual("ImageStash", started.Tray.ToolTip);
+        Assert.AreEqual("ImageStash · Ctrl+Alt+Space", started.Tray.ToolTip);
     }
 
     [TestMethod]
@@ -348,7 +348,7 @@ public sealed class GlobalShortcutsRebindTests
 
         started.RunPosted();
 
-        Assert.AreEqual("ImageStash", started.Tray.ToolTip, "the release no longer says which shortcut is unavailable (G33)");
+        Assert.AreEqual("ImageStash · Ctrl+Alt+Space", started.Tray.ToolTip, "the release no longer says which shortcut is unavailable (G33)");
         Assert.IsNull(started.Shortcuts.UnavailableReason(ShortcutAct.Record));
         CollectionAssert.Contains(started.Seam.Registered.ToList(), Free);
     }
@@ -448,7 +448,7 @@ public sealed class GlobalShortcutsRebindTests
 
         Assert.AreEqual("Ctrl+Shift+F8", started.Shortcuts.TextOf(ShortcutAct.Record));
         Assert.AreEqual(Free.Gesture, started.Tray.Entries[Record].Gesture);
-        Assert.AreEqual("ImageStash", started.Tray.ToolTip);
+        Assert.AreEqual("ImageStash · Ctrl+Alt+Space", started.Tray.ToolTip);
         Assert.IsTrue(started.Seam.Press(Free));
         started.RunPosted();
         Assert.AreEqual(1, started.Recorded);

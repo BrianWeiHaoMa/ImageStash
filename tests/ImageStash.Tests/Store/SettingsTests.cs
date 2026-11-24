@@ -28,7 +28,7 @@ public sealed class SettingsTests
         Assert.AreEqual("Ctrl+Alt+Space", shortcuts.GetProperty("open").GetString());
         Assert.AreEqual("Ctrl+PrtScn", shortcuts.GetProperty("screenshot").GetString());
         Assert.AreEqual("Ctrl+Shift+PrtScn", shortcuts.GetProperty("record").GetString());
-        Assert.AreEqual("Ctrl+Alt+V", shortcuts.GetProperty("stashClipboardImage").GetString());
+        Assert.AreEqual("Win+Alt+V", shortcuts.GetProperty("stashClipboardImage").GetString());
         Assert.IsTrue(root.GetProperty("alsoCopyCapture").GetBoolean());
         Assert.AreEqual(30, root.GetProperty("recordingMaxSeconds").GetInt32());
         Assert.IsTrue(root.GetProperty("recordPointer").GetBoolean());
@@ -142,9 +142,24 @@ public sealed class SettingsTests
 
         Assert.AreEqual("Ctrl+Alt+S", settings.Shortcuts.Open);
         Assert.AreEqual("Ctrl+PrtScn", settings.Shortcuts.Screenshot);
+        Assert.AreEqual("Win+Alt+V", settings.Shortcuts.StashClipboardImage, "a missing value takes today's default (F5)");
         Assert.AreEqual(Theme.Dark, settings.Theme);
         Assert.IsFalse(settings.StartWithWindows);
         Assert.AreEqual(30, settings.RecordingMaxSeconds);
+    }
+
+    [TestMethod]
+    public void AFileHoldingTheEarlierDefaultForStashClipboardImageKeepsItAndWritesItBack()
+    {
+        using var scratch = new ScratchFolder();
+        File.WriteAllText(scratch.File(Settings.FileName), """{"version":1,"shortcuts":{"open":"Ctrl+Alt+Space","screenshot":"Ctrl+PrtScn","record":"Ctrl+Shift+PrtScn","stashClipboardImage":"Ctrl+Alt+V"}}""");
+
+        var load = Settings.Load(scratch.Path, ShortRetry);
+        Assert.IsTrue(Settings.Write(scratch.Path, load.Settings with { Theme = Theme.Dark }, ShortRetry).Succeeded);
+
+        Assert.IsNull(load.Failure);
+        Assert.AreEqual("Ctrl+Alt+V", load.Settings.Shortcuts.StashClipboardImage, "no migration to today's default (G31)");
+        Assert.AreEqual("Ctrl+Alt+V", Settings.Load(scratch.Path, ShortRetry).Settings.Shortcuts.StashClipboardImage, "and written back as held");
     }
 
     [TestMethod]

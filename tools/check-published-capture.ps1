@@ -5,7 +5,7 @@ The captures on the published copy, run by check-published.ps1 inside its sessio
 check-published-screenshot.ps1's ScreenshotDesk and stash-windows.ps1's StashWindows and check-published.ps1's CopyReadBack): Record a clip
 from the tray menu, listed third, from the flyout's + menu, listed after Take a screenshot, and from the real
 Ctrl+Shift+PrtScn, each showing the overlay in record mode, closed again, so it adds nothing. Then, over the check's own
-stash: a picture on the clipboard as a browser's Copy image places it and the real Ctrl+Alt+V add one "Screenshot
+stash: a picture on the clipboard as a browser's Copy image places it and the real Win+Alt+V add one "Screenshot
 YYYY-MM-DD HH.MM.SS" PNG of its size, announced; the real Ctrl+PrtScn and a real drag add one PNG of the dragged size,
 on the clipboard as a file, "PNG" and CF_DIBV5, announced; the real Ctrl+Shift+PrtScn and a real drag select a region
 waiting under the frame and the bar with Record, .work\ empty and the tray menu reading Start recording. After a wait,
@@ -26,7 +26,7 @@ An overlay shown without real input is in front of nothing: Windows does not bri
 made through UI Automation. The cancelled ones are closed with WM_CLOSE, which cancels as Esc does; the recorded one
 takes a real drag, which reaches the topmost window under the pointer in front or not.
 
-Sends real keystrokes (Ctrl+Alt+V, Ctrl+PrtScn, Ctrl+Shift+PrtScn, Ctrl+Alt+Space, Esc), moves the pointer and drags across the primary
+Sends real keystrokes (Win+Alt+V, Ctrl+PrtScn, Ctrl+Shift+PrtScn, Ctrl+Alt+Space, Esc), moves the pointer and drags across the primary
 display's middle and puts the pointer back, posts clicks to the tray icon, replaces the clipboard, records a few seconds
 of the screen, and leaves the copy running for check-published.ps1 to stop.
 #>
@@ -351,10 +351,11 @@ try {
     Check ([PasteInClipboard]::Put($png, [PasteInClipboard]::DibV5($width, $height, $pixels))) 'a picture on the clipboard as a browser''s Copy image places it: "PNG", then CF_DIBV5, no file list'
     $before = Get-Date
     $clock = [Diagnostics.Stopwatch]::StartNew()
-    $null = [PasteDesk]::Press([uint16[]]@(0x11, 0x12, 0x56))
+    # F5's default for Stash clipboard image: the left Windows key, Alt and V.
+    $null = [PasteDesk]::Press([uint16[]]@(0x5B, 0x12, 0x56))
     $added = WaitFor { (Count 'SELECT COUNT(*) FROM items') -eq $items + 1 } 10000
     $after = Get-Date
-    Check $added "the real Ctrl+Alt+V added one item to the stash of $items (F5, G13)"
+    Check $added "the real Win+Alt+V added one item to the stash of $items (F5, G13)"
     $name = Newest 'name'
     $file = Newest 'finished_file'
     Check (((NamedBetween 'Screenshot' $before $after) -contains $name) -and (FileOf $name 'png' $file) -and ((Newest 'format') -eq 'png') -and ((Newest 'width') -eq "$width") -and ((Newest 'height') -eq "$height")) "it is a $width by $height PNG named like a screenshot at the press's local time (F12, F3, G13): '$name', '$file'"

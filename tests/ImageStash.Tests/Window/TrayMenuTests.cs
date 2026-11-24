@@ -116,12 +116,113 @@ public sealed class TrayMenuTests
     }
 
     [TestMethod]
-    public void WithNothingToNameTheTooltipReadsImageStash()
+    [DataRow("Ctrl+Alt+Space", "ImageStash · Ctrl+Alt+Space")]
+    [DataRow("space+alt+CTRL", "ImageStash · Ctrl+Alt+Space")]
+    [DataRow("Shift+Win+F1", "ImageStash · Win+Shift+F1")]
+    public void WithNothingNamedTheTooltipReadsImageStashBesideTheOpenShortcutAsTheSettingsHoldIt(string open, string expected)
+    {
+        var started = StartedShortcuts.Start(open: open);
+
+        Assert.AreEqual(expected, started.Tray.ToolTip, "pointing at the icon teaches the gesture, in the words the settings' combination is shown in everywhere");
+    }
+
+    [TestMethod]
+    public void UnderPauseTheTooltipNamesNoShortcutAndToggledBackItNamesTheOpenShortcutAtOnce()
+    {
+        var started = StartedShortcuts.Start();
+
+        started.Tray.Entries[4].Chosen();
+        Assert.IsTrue(started.Shortcuts.Paused);
+        Assert.AreEqual("ImageStash", started.Tray.ToolTip, "Pause releases all four, so the tooltip offers no key that does nothing (G33)");
+
+        started.Tray.Entries[4].Chosen();
+        Assert.AreEqual("ImageStash · Ctrl+Alt+Space", started.Tray.ToolTip, "toggled back, at that moment");
+    }
+
+    [TestMethod]
+    public void AfterTheOpenShortcutIsRemappedTheTooltipReadsTheNewCombinationAtOnceAndUnderPauseOnlyAtTheToggleBack()
+    {
+        var started = StartedShortcuts.Start();
+        using (started.Shortcuts.Suspend())
+        {
+            Assert.IsTrue(started.Shortcuts.Rebind(ShortcutAct.Open, Shortcut.Parse("ctrl+shift+f9").Value!).Succeeded);
+        }
+
+        Assert.AreEqual("ImageStash · Ctrl+Shift+F9", started.Tray.ToolTip, "as the menu's entries follow a remap, not composed once when the icon was shown");
+
+        started.Shortcuts.TogglePause();
+        using (started.Shortcuts.Suspend())
+        {
+            Assert.IsTrue(started.Shortcuts.Rebind(ShortcutAct.Open, Shortcut.Parse("Alt+F9").Value!).Succeeded);
+        }
+
+        Assert.AreEqual("ImageStash", started.Tray.ToolTip, "remapped under Pause, still released");
+        started.Shortcuts.TogglePause();
+        Assert.AreEqual("ImageStash · Alt+F9", started.Tray.ToolTip);
+    }
+
+    [TestMethod]
+    [DataRow(ShortcutReasons.HeldByAnotherProgram)]
+    [DataRow(ShortcutReasons.TypesACharacter)]
+    public void WhileTheOpenShortcutIsUnavailableTheTooltipNamesOnlyWhyAndOnceItIsRegisteredAgainItNamesItAtOnce(string reason)
+    {
+        var open = Shortcut.Parse("Ctrl+Alt+Space").Value!;
+        var started = reason == ShortcutReasons.HeldByAnotherProgram ? StartedShortcuts.Start(held: open) : StartedShortcuts.Start();
+        if (reason == ShortcutReasons.TypesACharacter)
+        {
+            started.Seam.Release(open, reason);
+            started.RunPosted();
+        }
+
+        Assert.AreEqual($"Register the open shortcut failed: Ctrl+Alt+Space, {reason}", started.Tray.ToolTip, "the failure alone, as before, and no key that does nothing (G33)");
+
+        started.Seam.Free(open);
+        using (started.Shortcuts.Suspend())
+        {
+            Assert.IsTrue(started.Shortcuts.Rebind(ShortcutAct.Open, open).Succeeded);
+        }
+
+        Assert.AreEqual("ImageStash · Ctrl+Alt+Space", started.Tray.ToolTip, "registered again, at that moment and not at a later remap");
+    }
+
+    [TestMethod]
+    [DataRow("nonsense")]
+    [DataRow("")]
+    public void WhileTheOpenSettingIsNoShortcutTheTooltipNamesOnlyThatAndNoCombination(string open)
+    {
+        var started = StartedShortcuts.Start(open: open);
+
+        Assert.AreEqual($"Register the open shortcut failed: {(open.Length == 0 ? "(empty)" : open)}, {ShortcutReasons.NotAShortcut}", started.Tray.ToolTip);
+    }
+
+    [TestMethod]
+    public void AnUnavailableOpenShortcutIsNeverOfferedEvenWhenItsFailureIsNamedElsewhere()
     {
         var tray = new RecordingTray();
-        new TrayMenu(tray, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }).Show(Shortcuts());
+        var seam = new RecordingShortcuts();
+        seam.Refuse(Shortcut.Parse("Ctrl+Alt+Space").Value!, ShortcutReasons.HeldByAnotherProgram);
+        var shortcuts = new GlobalShortcuts(StartedShortcuts.SettingsInMemory(), GlobalShortcuts.Bindings(() => { }, () => { }, () => { }, () => { }), seam, _ => { }, action => action());
+        new TrayMenu(tray, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }).Show(shortcuts);
+        shortcuts.Start();
+        shortcuts.TogglePause();
+        shortcuts.TogglePause();
 
-        Assert.AreEqual("ImageStash", tray.ToolTip);
+        Assert.IsNotNull(shortcuts.UnavailableReason(ShortcutAct.Open));
+        Assert.AreEqual("ImageStash", tray.ToolTip, "the tooltip names the open shortcut only while a press of it would summon (G33)");
+    }
+
+    [TestMethod]
+    public void WithAFailureNamedTheTooltipReadsTheFailuresAloneThoughTheOpenShortcutIsRegistered()
+    {
+        var started = StartedShortcuts.Start(held: Shortcut.Parse("Ctrl+PrtScn").Value!);
+
+        Assert.IsNull(started.Shortcuts.UnavailableReason(ShortcutAct.Open), "the open shortcut is registered");
+        Assert.AreEqual($"Register the screenshot shortcut failed: Ctrl+PrtScn, {ShortcutReasons.HeldByAnotherProgram}", started.Tray.ToolTip,
+            "exactly what it read before: the open shortcut's words never take room from a failure's why (G33)");
+
+        started.Menu.Name(new Failure("Save settings", "settings.json", "refused"));
+        CollectionAssert.AreEqual(new[] { "Save settings failed: settings.json, refused", $"Register the screenshot shortcut failed: Ctrl+PrtScn, {ShortcutReasons.HeldByAnotherProgram}" },
+            started.Tray.ToolTip!.Split('\n'));
     }
 
     [TestMethod]
@@ -284,7 +385,7 @@ public sealed class TrayMenuTests
             "the oldest other failure leaves, and every unavailable shortcut is still named (G33)");
     }
 
-    private static GlobalShortcuts Shortcuts(string openText = "Ctrl+Alt+Space", string stashText = "Ctrl+Alt+V", string screenshotText = "Ctrl+PrtScn", string recordText = "Ctrl+Shift+PrtScn") =>
+    private static GlobalShortcuts Shortcuts(string openText = "Ctrl+Alt+Space", string stashText = "Win+Alt+V", string screenshotText = "Ctrl+PrtScn", string recordText = "Ctrl+Shift+PrtScn") =>
         new(StartedShortcuts.SettingsInMemory(new Shortcuts { Open = openText, Screenshot = screenshotText, Record = recordText, StashClipboardImage = stashText }),
             GlobalShortcuts.Bindings(() => { }, () => { }, () => { }, () => { }), new RecordingShortcuts(), _ => { }, action => action());
 }

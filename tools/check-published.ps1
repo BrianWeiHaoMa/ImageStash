@@ -261,7 +261,7 @@ try {
         $settings = Get-Content -Raw -Path $settingsFile | ConvertFrom-Json
         $defaults = ($settings.version -eq 1) -and
             ($settings.shortcuts.open -eq 'Ctrl+Alt+Space') -and ($settings.shortcuts.screenshot -eq 'Ctrl+PrtScn') -and
-            ($settings.shortcuts.record -eq 'Ctrl+Shift+PrtScn') -and ($settings.shortcuts.stashClipboardImage -eq 'Ctrl+Alt+V') -and
+            ($settings.shortcuts.record -eq 'Ctrl+Shift+PrtScn') -and ($settings.shortcuts.stashClipboardImage -eq 'Win+Alt+V') -and
             ($settings.alsoCopyCapture -eq $true) -and ($settings.recordingMaxSeconds -eq 30) -and ($settings.recordPointer -eq $true) -and
             ($null -eq $settings.stashFolder) -and ($settings.startWithWindows -eq $true) -and ($settings.theme -eq 'system')
         Check $defaults "$settingsFile holds G32's defaults"
@@ -447,10 +447,11 @@ finally {
 
 Write-Host ''
 Write-Host 'A person observes, with a published copy running:'
-Write-Host '  1. the ImageStash icon is in the notification area, among the hidden icons as a new icon is;'
-Write-Host '  2. a right-click on it opens a menu holding Open ImageStash beside Ctrl+Alt+Space, Take a screenshot beside Ctrl+PrtScn, Record a clip beside Ctrl+Shift+PrtScn, Stash clipboard image beside Ctrl+Alt+V, Pause shortcuts, Settings and Quit ImageStash; Quit ImageStash ends the process and removes the icon (G34);'
+Write-Host "  1. the ImageStash icon is in the notification area, among the hidden icons as a new icon is; pointing at it reads ""ImageStash $([char]0xB7) Ctrl+Alt+Space"","
+Write-Host '     and only "ImageStash" while Pause shortcuts is checked, the shortcut back the moment it is unchecked (G33, G34);'
+Write-Host '  2. a right-click on it opens a menu holding Open ImageStash beside Ctrl+Alt+Space, Take a screenshot beside Ctrl+PrtScn, Record a clip beside Ctrl+Shift+PrtScn, Stash clipboard image beside the Win, Alt and V keys, Pause shortcuts, Settings and Quit ImageStash; Quit ImageStash ends the process and removes the icon (G34);'
 Write-Host '  3. on a first run the window opens pinned with "Your stash is empty" and the line about dropping files, then rows, each with its shortcut in key caps:'
-Write-Host '     Paste a copied image Ctrl+V, Take a screenshot Ctrl+PrtScn, Record a clip Ctrl+Shift+PrtScn, Stash the clipboard image Ctrl+Alt+V and Import files'
+Write-Host '     Paste a copied image Ctrl+V, Take a screenshot Ctrl+PrtScn, Record a clip Ctrl+Shift+PrtScn, Stash the clipboard image Win+Alt+V and Import files'
 Write-Host '     Ctrl+O, a click on a row doing it, as its shortcut does, the search box keeping the focus; under them a line saying ImageStash opens from any'
 Write-Host '     app with Ctrl+Alt+Space or from its icon in the tray, and that closing this window keeps it running; it takes a drop, on a row too;'
 Write-Host '     the look is Paper, Fluent with Segoe UI Variable text and the system''s accent, in the system''s theme, light and dark; a focused'
@@ -538,7 +539,7 @@ Write-Host '     the GIF is named Recording YYYY-MM-DD HH.MM.SS at Record in loc
 Write-Host '     and nothing of the frame, bar or notification in it; its notification shows a frame, length and size, and it pastes into a chat as a GIF;'
 Write-Host '     the tray''s and + menu''s Record a clip also select a waiting region; the window comes back as it was, and one hidden or minimised before'
 Write-Host '     the press, or restored and minimised again by you meanwhile, stays so (G15, G34, F5, F12, F4, G3, E3, G16, In use);'
-Write-Host ' 26. with a picture copied in a browser, Ctrl+Alt+V over a chat adds a "Screenshot YYYY-MM-DD HH.MM.SS" PNG without opening a window;'
+Write-Host ' 26. with a picture copied in a browser, Win+Alt+V over a chat adds a "Screenshot YYYY-MM-DD HH.MM.SS" PNG without opening a window;'
 Write-Host '     its notification shows the picture, its size and that an animated picture is added by dragging its file in, the chat keeps'
 Write-Host '     its keystrokes, and a name typed in the notification with Enter renames the item; with words or nothing on the clipboard a'
 Write-Host '     notification says there is no image (G13, G16, In use);'
@@ -569,7 +570,7 @@ Write-Host " 32. a click on a shortcut field reads ""Press a new shortcut$([char
 Write-Host '     Shift+A and Ctrl+V each get an amber line under the row saying why, the field unchanged; with a second keyboard layout on which'
 Write-Host '     Ctrl+Alt+E types a character, that combination is refused as typing one; a free combination shows in the field, the tray menu, the'
 Write-Host '     + menu and the empty stash, and works at once (G32, G33, G34, F5, G2);'
-Write-Host ' 33. with another program holding Ctrl+Alt+V when ImageStash starts, the icon''s tooltip names it with why; Settings opens on that row'
+Write-Host ' 33. with another program holding Win+Alt+V when ImageStash starts, the icon''s tooltip names it with why; Settings opens on that row'
 Write-Host '     with the same words, and once the other program lets it go, recording it there registers it and the tooltip''s line is gone (G33);'
 Write-Host ' 34. Theme set to Dark turns the page and the stash window dark at once, and they are dark after Quit and a new start; Also copy off: a'
 Write-Host '     screenshot is in the stash and not on the clipboard; Maximum length 10 seconds: a recording stops itself at 0:10; Show the mouse'

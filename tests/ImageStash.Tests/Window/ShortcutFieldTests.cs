@@ -222,7 +222,7 @@ public sealed class ShortcutFieldTests
         Assert.AreEqual("Ctrl+PrtScn", recording.Text, "nothing bound");
         Assert.AreEqual("Ctrl+PrtScn", started.Settings.Current.Shortcuts.Screenshot, "nothing written");
         CollectionAssert.AreEquivalent(
-            new[] { "Ctrl+Alt+Space", "Ctrl+PrtScn", "Ctrl+Shift+PrtScn", "Ctrl+Alt+V" }.Select(text => Shortcut.Parse(text).Value!).ToList(),
+            new[] { "Ctrl+Alt+Space", "Ctrl+PrtScn", "Ctrl+Shift+PrtScn", "Win+Alt+V" }.Select(text => Shortcut.Parse(text).Value!).ToList(),
             started.Seam.Registered.ToList(), "the four registered again, nothing else");
     }
 

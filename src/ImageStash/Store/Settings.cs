@@ -161,13 +161,16 @@ public sealed record TravellingSettings(Shortcuts Shortcuts, bool AlsoCopyCaptur
 /// </summary>
 public sealed record ImportPending(string ExtractedFolder, string ReplacedFolder, string Marker, TravellingSettings Settings);
 
-/// <summary>F5's default shortcuts, each as the text F5 writes it.</summary>
+/// <summary>
+/// F5's default shortcuts, each as the text F5 writes it. A file an earlier build wrote keeps the combination it holds, an
+/// earlier default included, until it is changed in Settings (G31): only a missing value takes the default here.
+/// </summary>
 public sealed record Shortcuts
 {
     public string Open { get; init; } = "Ctrl+Alt+Space";
     public string Screenshot { get; init; } = "Ctrl+PrtScn";
     public string Record { get; init; } = "Ctrl+Shift+PrtScn";
-    public string StashClipboardImage { get; init; } = "Ctrl+Alt+V";
+    public string StashClipboardImage { get; init; } = "Win+Alt+V";
 }
 
 public enum Theme

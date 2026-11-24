@@ -44,8 +44,9 @@ public static class ShortcutReasons
 /// </summary>
 public sealed record Shortcut(KeyGesture Gesture, string Text)
 {
+    // The order the text writes them in: Win first, as F5 writes Win+Alt+V and Windows writes its own Win+Shift+S.
     private static readonly (string Name, KeyModifiers Modifier)[] Modifiers =
-        [("Ctrl", KeyModifiers.Control), ("Alt", KeyModifiers.Alt), ("Shift", KeyModifiers.Shift), ("Win", KeyModifiers.Meta)];
+        [("Win", KeyModifiers.Meta), ("Ctrl", KeyModifiers.Control), ("Alt", KeyModifiers.Alt), ("Shift", KeyModifiers.Shift)];
 
     // F5's spellings and the digits, which Avalonia's key names spell D0 to D9; Enter and PageUp also share their
     // numbers with Return and Prior, so these keys are written by name, not by Enum.GetName.

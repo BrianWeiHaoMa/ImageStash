@@ -25,10 +25,15 @@ public sealed class StartedShortcuts
 
     /// <param name="settingsFolder">Where the settings are written, after a quiet spell of <paramref name="quiet"/>; held in memory when null.</param>
     /// <param name="held">Combinations the seam refuses as another program's from the start.</param>
-    public static StartedShortcuts Start(string open = "Ctrl+Alt+Space", string stash = "Ctrl+Alt+V", string screenshot = "Ctrl+PrtScn", string record = "Ctrl+Shift+PrtScn",
+    /// <param name="open">The open shortcut's text, F5's default when null; so too the other three.</param>
+    public static StartedShortcuts Start(string? open = null, string? stash = null, string? screenshot = null, string? record = null,
         string? settingsFolder = null, TimeSpan? quiet = null, params Shortcut[] held)
     {
-        var settings = new SettingsFile { Shortcuts = new Shortcuts { Open = open, Screenshot = screenshot, Record = record, StashClipboardImage = stash } };
+        var defaults = new Shortcuts();
+        var settings = new SettingsFile
+        {
+            Shortcuts = new Shortcuts { Open = open ?? defaults.Open, Screenshot = screenshot ?? defaults.Screenshot, Record = record ?? defaults.Record, StashClipboardImage = stash ?? defaults.StashClipboardImage },
+        };
         if (settingsFolder is not null)
         {
             Assert.IsTrue(SettingsFile.Write(settingsFolder, settings, ShortRetry).Succeeded);

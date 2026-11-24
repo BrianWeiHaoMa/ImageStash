@@ -6,15 +6,17 @@ namespace ImageStash.Window;
 /// <summary>
 /// The tray menu's actions and the icon's left click (G34), and the tooltip, which names every failure since start
 /// (G35), the one place a failure at start can be named before the window is shown (F4), a shortcut that cannot be
-/// registered among them (G33), until Settings registers it. When the platform's tooltip cannot hold every failure
-/// whole, the oldest lines are shortened first, to action and subject and then to the action alone, so none drops out
-/// and the newest keeps its reason longest; an unavailable shortcut's line is shortened only after every other, since
-/// the tooltip is where the tray icon says which shortcut is unavailable and why (G33), and of several such lines the
-/// older is cut to its action before the newer loses its reason. Only when the actions alone do not fit together do
-/// lines leave: the oldest other failures first, so the platform never cuts away which shortcut is unavailable; and
-/// when the shortcuts' lines cut to their actions still do not fit together, as with all four held, each, oldest first,
-/// names its combination alone, or, when even those do not fit, as with four long combinations remapped in Settings,
-/// its entry's words.
+/// registered among them (G33), until Settings registers it. While it names none, it reads ImageStash with the open
+/// shortcut beside it, so pointing at the icon teaches the gesture, but only while that shortcut would summon: never
+/// under Pause, nor while its setting is no shortcut or it is unavailable. When the platform's tooltip cannot hold
+/// every failure whole, the oldest lines are shortened first, to action and subject and then to the action alone, so
+/// none drops out and the newest keeps its reason longest; an unavailable shortcut's line is shortened only after every
+/// other, since the tooltip is where the tray icon says which shortcut is unavailable and why (G33), and of several
+/// such lines the older is cut to its action before the newer loses its reason. Only when the actions alone do not fit
+/// together do lines leave: the oldest other failures first, so the platform never cuts away which shortcut is
+/// unavailable; and when the shortcuts' lines cut to their actions still do not fit together, as with all four held,
+/// each, oldest first, names its combination alone, or, when even those do not fit, as with four long combinations
+/// remapped in Settings, its entry's words.
 /// </summary>
 public sealed class TrayMenu
 {
@@ -36,7 +38,7 @@ public sealed class TrayMenu
     private readonly Action openSettings;
     private readonly Action quit;
     private readonly List<(Failure Failure, bool ShortcutUnavailable)> named = [];
-    private bool shown;
+    private GlobalShortcuts? shortcuts;
 
     /// <param name="open">Shows the stash window, from Open ImageStash and from a left-click on the icon alike.</param>
     /// <param name="takeScreenshot">Takes a screenshot, as its shortcut does (G14).</param>
@@ -65,10 +67,12 @@ public sealed class TrayMenu
     /// shortcut as the settings read it, whether or not it could be registered (the tooltip says when not), Pause
     /// shortcuts as a toggle, Settings, which has no shortcut of its own, and Quit ImageStash, in G34's order (G33, G34).
     /// From then on the entries follow the shortcuts: Pause's check mark, each act's shortcut once Settings changed it,
-    /// and the tooltip, which names an unavailable shortcut only while that is still why it is unavailable (G33).
+    /// and the tooltip, which names an unavailable shortcut only while that is still why it is unavailable (G33), and the
+    /// open shortcut as it now reads, or not at all, the moment Pause, a remap or a registration changes it.
     /// </summary>
     public void Show(GlobalShortcuts shortcuts)
     {
+        this.shortcuts = shortcuts;
         tray.Show(
             [
                 .. ShortcutEntries.Select(entry => new TrayMenuEntry(entry.Header, ChosenOf(entry.Act), shortcuts.ShortcutOf(entry.Act)?.Gesture, MenuClosed: entry.Act == ShortcutAct.Open ? OpenedMenuClosed : null)),
@@ -79,7 +83,6 @@ public sealed class TrayMenu
             ToolTip(),
             open);
         shortcuts.Changed += () => Follow(shortcuts);
-        shown = true;
     }
 
     /// <summary>The entries of the acts F5's shortcuts run, in G34's order.</summary>
@@ -110,10 +113,8 @@ public sealed class TrayMenu
         }
 
         // A shortcut registered since, or unavailable for another reason now, is no longer what its line says.
-        if (named.RemoveAll(line => line.ShortcutUnavailable && !reasons.Contains(line.Failure)) > 0)
-        {
-            tray.SetToolTip(ToolTip());
-        }
+        named.RemoveAll(line => line.ShortcutUnavailable && !reasons.Contains(line.Failure));
+        tray.SetToolTip(ToolTip());
     }
 
     /// <summary>
@@ -143,7 +144,7 @@ public sealed class TrayMenu
     private void Add(Failure failure, bool shortcutUnavailable)
     {
         named.Insert(0, (failure, shortcutUnavailable));
-        if (shown)
+        if (shortcuts is not null)
         {
             tray.SetToolTip(ToolTip());
         }
@@ -160,7 +161,7 @@ public sealed class TrayMenu
     {
         if (named.Count == 0)
         {
-            return "ImageStash";
+            return OpenShortcutSummoning() is { } open ? $"ImageStash · {open.Text}" : "ImageStash";
         }
 
         // The lines shown, newest first, by their index in named; how far each is shortened, an index into Lines, or for
@@ -219,6 +220,13 @@ public sealed class TrayMenu
         return Text();
     }
 
+    /// <summary>
+    /// The open shortcut while a press of it would summon the window: its setting a shortcut, Pause off, and the policy
+    /// giving no reason it is unavailable (G33); null otherwise, so the tooltip never offers a key that does nothing.
+    /// </summary>
+    private Shortcut? OpenShortcutSummoning() =>
+        shortcuts is not null && !shortcuts.Paused && shortcuts.UnavailableReason(ShortcutAct.Open) is null ? shortcuts.ShortcutOf(ShortcutAct.Open) : null;
+
     /// <summary>An unavailable shortcut named by the words of its entry in the menu, or by its shortest line when it has none.</summary>
     private static string ByEntry(Failure unavailable) =>
         ShortcutEntries.FirstOrDefault(entry => GlobalShortcuts.RegistrationAction(entry.Act) == unavailable.Action) is { Header: { } header }
@@ -226,8 +234,8 @@ public sealed class TrayMenu
             : Shortest(unavailable);
 
     /// <summary>
-    /// An unavailable shortcut's shortest line, which still says which shortcut: its combination as the settings spell it,
-    /// or its action when that is the shorter.
+    /// An unavailable shortcut's shortest line, which still says which shortcut: its combination as its Settings field
+    /// shows it, or its action when that is the shorter.
     /// </summary>
     private static string Shortest(Failure unavailable) =>
         new[] { $"{unavailable.Subject} is unavailable", Lines[^1](unavailable) }.MinBy(line => line.Length)!;

@@ -587,9 +587,10 @@ public sealed class GlobalShortcuts
     /// <summary>On the UI thread: the act's shortcut is unavailable for this reason until it is changed in Settings, and is named.</summary>
     private void MakeUnavailable(Bound each, string reason)
     {
-        // The tooltip's line says which shortcut, and names it as the settings spell it, an empty setting as such (G33,
-        // G35); its action alone still says which, should the tooltip have to shorten the line to it.
-        var failure = new Failure(RegistrationAction(each.Binding.Act), string.IsNullOrWhiteSpace(each.Text) ? "(empty)" : each.Text, reason);
+        // The tooltip's line says which shortcut, in the words its Settings field shows: the shortcut's text, or the setting
+        // as written when it is no shortcut, an empty setting as such (G33, G35); its action alone still says which, should
+        // the tooltip have to shorten the line to it.
+        var failure = new Failure(RegistrationAction(each.Binding.Act), each.Shortcut?.Text ?? (string.IsNullOrWhiteSpace(each.Text) ? "(empty)" : each.Text), reason);
         lock (gate)
         {
             each.Unavailable = failure;

@@ -234,6 +234,19 @@ public sealed class WindowsTrayTests
     });
 
     [TestMethod]
+    public void TheTooltipNamingTheOpenShortcutReachesTheIconWholeAndAChangeOfItShowsAtOnce() => TrayDesktop.Run(() =>
+    {
+        using var tray = new WindowsTray();
+        tray.Show([], "ImageStash · Ctrl+Alt+Space", () => { });
+
+        Assert.AreEqual("ImageStash · Ctrl+Alt+Space", tray.Icon!.ToolTipText, "the middle dot and the combination whole");
+        tray.SetToolTip("ImageStash · Ctrl+Shift+F9");
+        Assert.AreEqual("ImageStash · Ctrl+Shift+F9", tray.Icon.ToolTipText, "live, as after a remap (S10)");
+        tray.SetToolTip("ImageStash");
+        Assert.AreEqual("ImageStash", tray.Icon.ToolTipText, "and with no shortcut, as under Pause");
+    });
+
+    [TestMethod]
     public void ATooltipWithinTheLimitIsKeptWhole()
     {
         var text = new string('a', WindowsTray.ToolTipLimit);
