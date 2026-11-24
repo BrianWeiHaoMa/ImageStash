@@ -10,7 +10,9 @@ namespace ImageStash.Window;
 /// Whoever moves focus, the edit is kept: a click, Tab, a click on the preview's name putting focus in its box, a summon
 /// putting it in the search box. Only focus moving inside the window reaches a field: a hide, or another app taking
 /// focus, moves none, so the edit outlasts it (G1). Esc, and the window closing a field itself (the preview closing,
-/// an import replacing the stash), end the edit before focus moves, so that move meets no edit and commits nothing.
+/// an import replacing the stash), end the edit before focus moves, so that move meets no edit and commits nothing;
+/// the preview closing to show an import's result commits its edit first, as its ‹ and › do
+/// (<see cref="Preview.CommitDraft"/>).
 /// </summary>
 public static class FieldLeaving
 {

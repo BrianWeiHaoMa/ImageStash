@@ -275,6 +275,32 @@ public sealed class ImportEndTests
         Assert.AreNotEqual(older.Id, listed.Listing.Focused);
     }
 
+    [TestMethod]
+    public async Task ANameCommittedAsTheEndClosesThePreviewIsKeptAndTheEndStillSelectsTheNewItems()
+    {
+        using var listed = await ListedStash.Open();
+        var older = await listed.Stash.ImportFixture("older", "still.png");
+        await listed.Listing.SetQuery("older");
+        await listed.Press(Key.Space, KeyModifiers.None, KeyPlace.Grid);
+        Assert.IsTrue(listed.PreviewOpen, "opened before the drop: no change since the import began");
+        // The preview's close commits the name typed in it while the import ran, as focus leaving for the grid commits
+        // it (G19): the rename and its refresh run while the end's All loads.
+        Task<Outcome>? commit = null;
+        listed.Import.Finishing += () => commit ??= listed.Renaming.Rename(older, "typed name");
+        var (one, two) = (new HeldBackFile(MediaFixtures.Path("transparent.png")), new HeldBackFile(MediaFixtures.Path("photo.jpg")));
+        var running = listed.Import.Drop(new([one.Item, two.Item], false, false, []));
+        one.Release();
+        two.Release();
+        var added = (await running).Select(file => file.Item!.Id).ToList();
+
+        Assert.IsTrue((await commit!).Succeeded);
+        Assert.AreEqual("typed name", (await listed.Stash.Store!.Item(older.Id)).Value!.Name, "the name typed is kept (G19)");
+        Assert.IsFalse(listed.PreviewOpen);
+        AssertShown(listed, added, "the commit's refresh leaves the end's result as the end shows it (G12)");
+        Assert.IsNull(listed.Notices.Shown.Single().Button);
+        Assert.IsEmpty(listed.Failures);
+    }
+
     /// <summary>The import's result as shown: no search, All lit, exactly <paramref name="items"/> selected, the first of them in order focused.</summary>
     internal static void AssertShown(ListedStash listed, IReadOnlyList<long> items, string because)
     {

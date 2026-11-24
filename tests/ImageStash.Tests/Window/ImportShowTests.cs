@@ -46,6 +46,32 @@ public sealed class ImportShowTests
     }
 
     [TestMethod]
+    public async Task ANameCommittedAsShowClosesThePreviewIsKeptAndShowStillSelectsTheNewItems()
+    {
+        using var listed = await ListedStash.Open();
+        var older = await listed.Stash.ImportFixture("older", "still.png");
+        await listed.Listing.ShowScope(Scope.All);
+        var (one, two) = (new HeldBackFile(MediaFixtures.Path("transparent.png")), new HeldBackFile(MediaFixtures.Path("photo.jpg")));
+        var running = listed.Import.Drop(new([one.Item, two.Item], false, false, []));
+        await listed.Press(Key.Space, KeyModifiers.None, KeyPlace.Grid);
+        one.Release();
+        two.Release();
+        var added = (await running).Select(file => file.Item!.Id).ToList();
+        Assert.IsTrue(listed.PreviewOpen, "kept at the end");
+        // The preview's close commits the name typed in it, as focus leaving for the grid commits it (G19): the rename
+        // and its refresh run while Show's All loads.
+        Task<Outcome>? commit = null;
+        listed.Import.Finishing += () => commit ??= listed.Renaming.Rename(older, "typed name");
+
+        await Show(listed);
+
+        Assert.IsTrue((await commit!).Succeeded);
+        Assert.AreEqual("typed name", (await listed.Stash.Store!.Item(older.Id)).Value!.Name, "the name typed is kept (G19)");
+        ImportEndTests.AssertShown(listed, added, "the commit's refresh leaves Show's result as Show shows it (G12)");
+        Assert.IsEmpty(listed.Failures);
+    }
+
+    [TestMethod]
     public async Task ShowLeavesOutAnItemDeletedSinceActsPastTheNoticesTimeAndNothingOnceItsGone()
     {
         using var listed = await ListedStash.Open();

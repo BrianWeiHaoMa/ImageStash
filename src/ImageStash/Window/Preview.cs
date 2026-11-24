@@ -330,9 +330,9 @@ public sealed class Preview : Border
     public bool HoldsTypedText => (name.IsEditing && name.Text != name.Shown) || !string.IsNullOrWhiteSpace(tags.Field.Text);
 
     /// <summary>
-    /// A click on ‹ or ›, which takes no focus (G19): its name in edit, else the words typed in its tag field, committed
-    /// through that field's own Enter, as Enter would commit them there, a chosen suggestion included; the commit with the
-    /// read of its answer, or null when neither holds an edit.
+    /// A click on ‹ or ›, which takes no focus, and the window closing it to show an import's result (G19, G12): its name
+    /// in edit, else the words typed in its tag field, committed through that field's own Enter, as Enter would commit
+    /// them there, a chosen suggestion included; the commit with the read of its answer, or null when neither holds an edit.
     /// </summary>
     public Task<Outcome>? CommitDraft()
     {
@@ -376,9 +376,9 @@ public sealed class Preview : Border
     }
 
     /// <summary>
-    /// Esc, Space and its back arrow: closes it once a commit of its name or tags in flight has been answered and read,
-    /// so the grid it uncovers lists the item where the store put its file, and a handoff from there hands that file over
-    /// (G8, P1).
+    /// Esc, Space, its back arrow and an import's result: closes it once a commit of its name or tags in flight has been
+    /// answered and read, so the grid it uncovers lists the item where the store put its file, and a handoff from there
+    /// hands that file over (G8, P1).
     /// </summary>
     public void Dismiss()
     {

@@ -409,6 +409,9 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
         var loading = listing.ShowScope(Scope.All, byPerson);
         var loadAsked = ImportBegan.In(listing);
         await loading;
+        // A change's refresh asked meanwhile, as a name's commit the preview's close made (G19), replaces All's load
+        // before it applies: the items are selected in the list the latest load applies.
+        await listing.Settle();
         if (loadAsked.MovedOn(listing))
         {
             return false;

@@ -372,13 +372,16 @@ public sealed class StashWindow : Avalonia.Controls.Window
             item => Dispatcher.UIThread.Post(() => preview.Open(item), DispatcherPriority.Background),
             item => Dispatcher.UIThread.Post(() => preview.Open(item, editingName: true), DispatcherPriority.Background),
             item => Dispatcher.UIThread.Post(() => _ = editing.Open(item, EditOrigin.Grid), DispatcherPriority.Background));
-        // An import's end shows All with the new items selected, which the preview would hide (G12); one an edit covers
-        // stays, for the edit to return to (G26).
+        // An import's end shows All with the new items selected, which the preview would hide (G12), a name or tags typed
+        // in it committed first, as focus leaving for the grid commits them (G19), and the preview closed once that commit
+        // has been answered, as Esc closes it, so nothing on the grid acts before it (G20, G8); one an edit covers stays,
+        // for the edit to return to (G26).
         import.Finishing += () =>
         {
             if (!editing.IsOpen)
             {
-                preview.Close();
+                _ = preview.CommitDraft();
+                preview.Dismiss();
             }
         };
         // The preview's buttons are Enter's and Ctrl+C's own path on its item (G19, G8, G9).

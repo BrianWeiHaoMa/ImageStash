@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using ImageStash.Seams;
@@ -14,8 +15,9 @@ namespace ImageStash.Windows.Tests.Window;
 /// An import's notice on the real window (G12, G16): its card shows the counts semi-bold above the files that were not
 /// added, and its Undo names the key that runs it; with a tag chip lit, the tags it gave show whole inside the window at
 /// its minimum size (G11, L2); after a search typed while it ran, its Show beside the Undo, inside the window at its
-/// minimum size, brings the new picture up on a click that leaves the keyboard's focus where it was (G12, G7). These
-/// checks show the stash window.
+/// minimum size, brings the new picture up on a click that leaves the keyboard's focus where it was (G12, G7); a name or
+/// tags typed in the preview that Show, or the end, closes are committed as Enter would, and nothing after Esc (G19, G17).
+/// These checks show the stash window.
 /// </summary>
 [TestClass]
 public sealed class ImportNoticeCardTests
@@ -156,6 +158,99 @@ public sealed class ImportNoticeCardTests
             CollectionAssert.AreEqual(new[] { added.Id }, shown.Listing.Selection.ToList(), "the new picture selected");
             Assert.AreSame(focusedBefore, shown.Focused, "the click on Show took no focus (G7)");
         });
+    }
+
+    [TestMethod]
+    [DataRow("name", true)]
+    [DataRow("tags", true)]
+    [DataRow("name, then Esc", true)]
+    [DataRow("name", false)]
+    [DataRow("tags", false)]
+    public async Task ShowOrTheEndClosingThePreviewCommitsANameOrTagsTypedInItAndAfterEscNothing(string typed, bool byShow)
+    {
+        using var pointer = TestMouse.PutBackAfterwards();
+        using var shown = ShownWindow.Open();
+        var older = (await shown.OpenStash(shown.Picture("older.png"))).Single();
+        TransferredStash.CloseNotices(shown);
+        // Opened while the import runs, the preview keeps the window at its end, whose notice offers Show; opened before
+        // the drop, the end closes it itself (G12).
+        if (!byShow)
+        {
+            await OpenPreview(shown, older);
+        }
+
+        var released = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var newcomer = shown.Picture("newcomer.png");
+        var running = TrayDesktop.Get(() => shown.Import.Drop(new DropContents(
+            [new DroppedItem("newcomer.png", null, async () =>
+            {
+                await released.Task;
+                return File.OpenRead(newcomer);
+            }, IsFolder: false)], false, false, [])));
+        if (byShow)
+        {
+            await OpenPreview(shown, older);
+        }
+
+        // The words typed in its name or tag field without Enter.
+        TrayDesktop.Run(() =>
+        {
+            if (typed == "tags")
+            {
+                Tap(shown.PreviewPicture, Key.T, KeyModifiers.Control);
+                Assert.AreSame(shown.PreviewTagBox, shown.Focused);
+                Type(shown.PreviewTagBox, "bright sunny");
+                return;
+            }
+
+            Tap(shown.PreviewPicture, Key.F2);
+            shown.Window.UpdateLayout();
+            Assert.AreSame(shown.NameBox, shown.Focused);
+            Type(shown.NameBox, "typed name");
+            if (typed == "name, then Esc")
+            {
+                Tap(shown.NameBox, Key.Escape);
+            }
+        });
+        released.SetResult();
+        var added = (await running).Single().Item!;
+        await Eventually(() => TrayDesktop.Get(() => NoticeCards(shown).Count == 1));
+        if (byShow)
+        {
+            var show = TrayDesktop.Get(() =>
+            {
+                shown.Window.UpdateLayout();
+                Assert.IsTrue(shown.Preview.IsOpen, "the preview kept at the end");
+                return ShowButton(NoticeCards(shown).Single());
+            });
+            await Eventually(() => TrayDesktop.Get(() =>
+                show.TranslatePoint(new Point(show.Bounds.Width / 2, show.Bounds.Height / 2), shown.Window) is { } centre
+                && shown.Window.InputHitTest(centre) is Visual hit && hit.GetSelfAndVisualAncestors().Contains(show)));
+            TestMouse.Click(TestMouse.Centre(show));
+        }
+        else
+        {
+            TrayDesktop.Run(() => Assert.IsFalse(NoticeCards(shown).Single().GetVisualDescendants().OfType<Button>().Any(button => Equals(button.Content, ImportEnd.Show)),
+                "the end showed its result: no Show"));
+        }
+
+        // The preview closes once the commit has been answered.
+        await Eventually(() => TrayDesktop.Get(() => !shown.Preview.IsOpen && shown.Listing.Settled && shown.Listing.Query == "" && shown.Listing.Selection.Contains(added.Id)));
+        var stored = await shown.Listing.Store!.Item(older.Id);
+        Assert.IsTrue(stored.Succeeded, stored.Failure?.Sentence);
+        Assert.AreEqual(typed == "name" ? "typed name" : "older", stored.Value!.Name, "a name typed is committed as Enter would, one cancelled with Esc is not (G19)");
+        CollectionAssert.AreEquivalent(typed == "tags" ? new[] { "bright", "sunny" } : Array.Empty<string>(), shown.TagsOf(older.Id), "words typed in the tag field are added as Enter would (G17)");
+        TrayDesktop.Run(() =>
+        {
+            Assert.AreEqual(Scope.All, shown.Listing.LitChip, "All shown");
+            CollectionAssert.AreEqual(new[] { added.Id }, shown.Listing.Selection.ToList(), "with the import's picture selected (G12)");
+        });
+    }
+
+    private static async Task OpenPreview(ShownWindow shown, StashItem item)
+    {
+        TrayDesktop.Run(() => shown.OpenPreview(item));
+        await Eventually(() => TrayDesktop.Get(() => shown.Preview.Facts.Count > 0));
     }
 
     private static double Top(Visual text, Visual card) => text.TranslatePoint(default, card)!.Value.Y;
