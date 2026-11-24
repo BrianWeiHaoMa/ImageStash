@@ -12,8 +12,9 @@ namespace ImageStash.Windows.Tests.Window;
 /// <summary>
 /// The Settings page's transfers on the desktop: Move… beside Open folder waits, saying why, with the page disabled, and
 /// the stash window then lists from the new folder (G30); Export stash… and Import stash… follow the stash location's
-/// row, and the import's offer of a chosen file shows inside the page with no window of its own, its Cancel changing
-/// nothing (G32, G36, F4).
+/// row, and the import's offer of a chosen file shows inside the page with no window of its own, its three buttons plain and
+/// none the default, its Export current stash first… writing the stash and coming back to the offer, its Cancel changing
+/// nothing (G32, G36, F4, F10).
 /// </summary>
 [TestClass]
 public sealed class SettingsWindowTransferTests
@@ -90,6 +91,7 @@ public sealed class SettingsWindowTransferTests
             TransferredStash.CloseNotices(shown);
             archive = await TransferredStash.ExportOf(shown, ("one", SkiaSharp.SKColors.Blue), ("two", SkiaSharp.SKColors.Green));
             settings.Dialogs.PickedFile = archive;
+            var saved = settings.Dialogs.Saves = Path.Combine(Path.GetDirectoryName(archive)!, "before replacing.zip");
             var transferring = TrayDesktop.Get(() => new Transferring(shown.Listing, shown.Notices, shown.Settings, settings.Dialogs, new WindowsRecycleBin(), shown.Handoff,
                 shown.OpenWith, shown.Moving, _ => Outcome.Done, TimeProvider.System, HeldFileRetry.Duration));
             var opened = window = TrayDesktop.Get(() => SettingsWindow.Open(null, () => settings.Page(moving: shown.Moving, transferring: transferring)));
@@ -110,12 +112,27 @@ public sealed class SettingsWindowTransferTests
             TrayDesktop.Run(() =>
             {
                 CollectionAssert.AreEqual(new[] { Transferring.ImportPickerTitle }, settings.Dialogs.FilePickers, "the one-file picker, once");
-                var offer = opened.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Text?.StartsWith("export.zip holds 2 items.") == true);
-                Assert.IsTrue(offer.IsEffectivelyVisible, "the count and what it replaces, inside the page (G36, F4)");
+                var offer = opened.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Text?.StartsWith("Replace your 1 item with the 2 items in export.zip?") == true);
+                Assert.IsTrue(offer.IsEffectivelyVisible, "both counts and what it replaces, inside the page (G36, F4)");
                 var importRow = Control(opened, SettingsPage.ImportWords).GetVisualAncestors().OfType<Grid>().First();
                 Assert.IsTrue(offer.GetVisualAncestors().Contains(importRow), "under the Import row's words");
-                Assert.IsTrue(Control(opened, SettingsPage.CancelImportWords).IsEffectivelyVisible, "with Import and Cancel");
+                var buttons = new[] { SettingsPage.ExportFirstWords, SettingsPage.ConfirmImportWords, SettingsPage.CancelImportWords }.Select(words => (Button)Control(opened, words)).ToList();
+                Assert.IsTrue(buttons.All(button => button.IsEffectivelyVisible), "with Export current stash first…, Replace and Cancel");
+                var row = (Panel)buttons[0].GetVisualParent()!;
+                CollectionAssert.AreEqual(buttons, row.Children.ToList(), "in one row, Export current stash first… first, Replace, then Cancel");
+                // F10: Replace is not the invited choice, by its look or by Enter.
+                Assert.IsFalse(buttons.Any(button => button.Classes.Contains("accent") || button.IsDefault), "no accent and no default");
+                Assert.IsFalse(buttons[1].IsFocused, "Replace not focused as the offer appears");
                 Assert.AreEqual(StashState.Open, shown.Listing.State, "nothing replaced before the confirmation");
+                ShownWindow.RaiseClick(buttons[0]);
+            });
+            await ShownWindow.Eventually(() => TrayDesktop.Get(() => opened.Page.ExportLine == Transferring.ExportedWords(saved)), TimeSpan.FromSeconds(20));
+            TrayDesktop.Run(() =>
+            {
+                Assert.AreEqual(1, StashImport.Summary(saved, HeldFileRetry.Duration).Value!.Items, "Export current stash first… wrote the stash");
+                Assert.IsTrue(Control(opened, SettingsPage.ConfirmImportWords).IsEffectivelyVisible, "and came back to the offer");
+                StringAssert.StartsWith(opened.Page.ImportOffer, "Replace your 1 item with the 2 items in export.zip?", "the same offer");
+                Assert.AreEqual("offer check", shown.Listing.Items.Single().Name, "nothing replaced");
                 ShownWindow.RaiseClick((Button)Control(opened, SettingsPage.CancelImportWords));
             });
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => !Control(opened, SettingsPage.ConfirmImportWords).IsEffectivelyVisible));

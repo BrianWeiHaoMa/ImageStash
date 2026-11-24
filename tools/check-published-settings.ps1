@@ -5,7 +5,8 @@ check-published-open-with.ps1 (it uses check-published-paste.ps1's PasteDesk, ch
 ScreenshotDesk and stash-windows.ps1's StashWindows and check-published.ps1's CopyReadBack), over the check's own stash and settings. The
 tray menu, opened with a posted right-click, lists Settings between Pause shortcuts and Quit ImageStash, and its
 Settings, chosen through UI Automation, brings a window titled "ImageStash settings" to the front with G32's rows named
-in order and the stash folder in use. A PowerShell of the phase's own holds Ctrl+Shift+F8: the Take a screenshot field,
+in order (the shortcuts first, the export and the import last), the stash folder in use and, at its foot, the
+copy's version. A PowerShell of the phase's own holds Ctrl+Shift+F8: the Take a screenshot field,
 clicked with real input, refuses the real Ctrl+Shift+F8 on the spot, its row reading "Ctrl+Shift+F8 is already used by
 another app. Press a different combination.", and keeps recording, so the real Shift+A ("Add Ctrl, Alt or Win: Shift+A
 is needed by every app.") and Ctrl+V ("Ctrl+V is the paste key ImageStash presses, so it can't be a
@@ -44,10 +45,12 @@ $pageTitle = 'ImageStash settings'
 $overlayTitle = 'ImageStash screenshot'
 $settingsFile = Join-Path $env:LOCALAPPDATA 'ImageStash\settings.json'
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
-# The rows' controls as G32 orders them, each named by its row's title, the stash location's with its Open folder, the
-# export's and the import's by their buttons' words.
-$rows = "Open ImageStash | Take a screenshot | Record a clip | Stash clipboard image | Also copy it to the clipboard | Maximum length | Show the mouse pointer | " +
-    "Where your stash is stored | Open folder | Export stash$([char]0x2026) | Import stash$([char]0x2026) | Start with Windows | Theme | Thumbnail size"
+# The rows' controls in the page's order, each named by its row's title, the stash location's with its Open folder, the
+# export's and the import's by their buttons' words: the shortcuts first, the stash's replacement last.
+$rows = "Open ImageStash | Take a screenshot | Record a clip | Stash clipboard image | Also copy it to the clipboard | Maximum length | Record the mouse pointer | " +
+    "Theme | Thumbnail size | Start with Windows | Where your stash is stored | Open folder | Export stash$([char]0x2026) | Import stash$([char]0x2026)"
+# The heading after the shortcuts, which bounds a shortcut row's warning.
+$afterShortcuts = 'Screenshots and recordings'
 $held = 'Ctrl+Shift+F8 is already used by another app. Press a different combination.'
 # A letter with Shift and none of Ctrl, Alt and Win: a key every app needs, refused before the layout is asked (G32).
 $plainKey = 'Add Ctrl, Alt or Win: Shift+A is needed by every app.'
@@ -273,7 +276,10 @@ try {
     $named = (@((PageElement).FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition)) |
         Where-Object { ($_.Current.ControlType -ne $text) -and ($rows.Split('|').Trim() -contains $_.Current.Name) } | ForEach-Object { $_.Current.Name }) -join ' | '
     Check ($named -eq $rows) "the page's controls carry G32's rows in order (G32): $named"
-    $folder = (One (Elements (PageElement) 'Where your stash is stored' ([Windows.Automation.ControlType]::Edit)) 'the stash location').GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value
+    # The copy's own version, as Directory.Build.props gave it, without the "+<commit>" the build appends.
+    $version = "ImageStash $(((Get-Item $Exe).VersionInfo.ProductVersion -split '\+')[0])"
+    Check (@(Elements (PageElement) $version $text).Count -eq 1) "the page's foot names the running build, '$version' (N8)"
+    $folder =(One (Elements (PageElement) 'Where your stash is stored' ([Windows.Automation.ControlType]::Edit)) 'the stash location').GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value
     Check ($folder -eq $stash) "Where your stash is stored shows the stash folder in use (G32): $folder"
     Check ((KeysOf 'Take a screenshot') -eq 'Ctrl+PrtScn') "the Take a screenshot field reads Ctrl+PrtScn (F5): $(KeysOf 'Take a screenshot')"
 
@@ -358,7 +364,7 @@ try {
     Need ($grab.First -eq 'registered') "while the field records ImageStash's shortcuts are released, and another program registered Win+Alt+V: $($grab.First)"
     Need (Recording 'Stash clipboard image') 'the field still records'
     $null = [PasteDesk]::Press([uint16[]]@(0x1B))
-    Check (WaitFor { (-not (Recording 'Stash clipboard image')) -and (WarnedUnder 'Stash clipboard image' 'After a screenshot or a recording' $grabbed) } 2000) "Esc ended the recording alone, the page staying, and the row reads '$grabbed' (G33, G35, G2)"
+    Check (WaitFor { (-not (Recording 'Stash clipboard image')) -and (WarnedUnder 'Stash clipboard image' $afterShortcuts $grabbed) } 2000) "Esc ended the recording alone, the page staying, and the row reads '$grabbed' (G33, G35, G2)"
     $null = [PasteDesk]::Press([uint16[]]@(0x1B))
     Need (WaitFor { (Page) -eq [IntPtr]::Zero } 2000) 'a second Esc closed the page'
     # G33, G16: the shortcut that became unavailable is said at once above the tray, its Choose another leading to its row.
@@ -378,7 +384,7 @@ try {
     Check (@($entries | Where-Object { $_.Current.Name -eq 'Stash clipboard image (shortcut unavailable)' }).Count -eq 1) "the tray menu's Stash clipboard image says its shortcut is unavailable (G33, G34)"
     Choose (One ($entries | Where-Object { $_.Current.Name -eq 'Settings' }) "the tray menu's Settings")
     $onRow = WaitFor { (InFront) -and ([Windows.Automation.AutomationElement]::FocusedElement.Current.Name -eq 'Stash clipboard image') -and ([Windows.Automation.AutomationElement]::FocusedElement.Current.ProcessId -eq $running) } 3000
-    Check ($onRow -and (WarnedUnder 'Stash clipboard image' 'After a screenshot or a recording' $grabbed)) "Settings opened on the unavailable shortcut's field, its row saying why (G33)"
+    Check ($onRow -and (WarnedUnder 'Stash clipboard image' $afterShortcuts $grabbed)) "Settings opened on the unavailable shortcut's field, its row saying why (G33)"
     Stop $grab
     $null = [PasteDesk]::Press([uint16[]]@(0x0D))
     Need (WaitFor { Recording 'Stash clipboard image' } 2000) 'Enter on the focused field began recording'

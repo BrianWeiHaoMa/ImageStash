@@ -57,7 +57,7 @@ internal static class StashArchive
     public sealed record Manifest(string Format, int FormatVersion, long StoreVersion, string Build, int Items);
 
     /// <summary>This build, as a manifest names it.</summary>
-    public static string Build => typeof(StashArchive).Assembly.GetName().Version?.ToString() ?? "unknown";
+    public static string Build => RunningBuild.AssemblyVersion;
 
     /// <summary>An archive is named by its file name, or by the path as given when it has none.</summary>
     public static string Subject(string path)

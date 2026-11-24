@@ -28,11 +28,14 @@ public sealed class SettingsPageTests
     private readonly List<Failure> failures = [];
 
     [TestMethod]
-    public void AtTheDefaultsTheRowsAreG32sInOrderEachInItsGroupAndEachShowsItsDefault()
+    public void AtTheDefaultsTheRowsAreG32sShortcutsFirstAndTheStashsReplacementLastEachShowingItsDefault()
     {
         using var scratch = new ScratchFolder();
         var page = Page(Keeper(scratch, TimeSpan.FromSeconds(30)));
 
+        // G32 lists what the page holds ("It holds: the four shortcuts …; Also copy …; the recording's maximum length …
+        // and whether the pointer is recorded; the stash location …; Export stash… and Import stash…; Start with Windows;
+        // Theme; the thumbnail size"), not an order: one group for what a capture does, the act that replaces the stash last.
         CollectionAssert.AreEqual(
             new[]
             {
@@ -40,18 +43,21 @@ public sealed class SettingsPageTests
                 ("Shortcuts", "Take a screenshot"),
                 ("Shortcuts", "Record a clip"),
                 ("Shortcuts", "Stash clipboard image"),
-                ("After a screenshot or a recording", "Also copy it to the clipboard"),
-                ("Recording", "Maximum length"),
-                ("Recording", "Show the mouse pointer"),
-                ("Library", "Where your stash is stored"),
-                ("Library", "Export your stash"),
-                ("Library", "Import a stash"),
-                ("General", "Start with Windows"),
-                ("General", "Theme"),
-                ("General", "Thumbnail size"),
+                ("Screenshots and recordings", "Also copy it to the clipboard"),
+                ("Screenshots and recordings", "Maximum length"),
+                ("Screenshots and recordings", "Record the mouse pointer"),
+                ("Appearance and startup", "Theme"),
+                ("Appearance and startup", "Thumbnail size"),
+                ("Appearance and startup", "Start with Windows"),
+                ("Your stash", "Where your stash is stored"),
+                ("Move to another PC", "Export your stash"),
+                ("Move to another PC", "Import a stash"),
             },
             page.Rows.Select(row => (row.Group, row.Title)).ToList(),
-            "G32's rows in its order, the four shortcuts first, Export stash… and Import stash… after the stash location, the thumbnail size after Theme");
+            "G32's rows once each: the four shortcuts first, the capture options together, Export stash… and Import stash… last");
+        CollectionAssert.AreEqual(page.Rows.Select(row => row.Group).Distinct().ToList(), page.Rows.Select(row => row.Group).Where((group, i) => i == 0 || page.Rows[i - 1].Group != group).ToList(),
+            "each heading once, its rows together");
+        Assert.AreEqual("Start ImageStash when you sign in, so its shortcuts always work", page.Rows.Single(row => row.Title == SettingsPage.StartWithWindowsTitle).Description);
         CollectionAssert.AreEqual(new[] { "Ctrl+Alt+Space", "Ctrl+PrtScn", "Ctrl+Shift+PrtScn", "Win+Alt+V" }, page.ShortcutFields.Select(field => field.Text).ToList(), "F5's defaults, each in its field");
         Assert.IsFalse(page.ShortcutFields.Any(field => field.IsRecording), "none recording");
         Assert.AreEqual((true, 30, true, DefaultStash, true, Theme.System), (page.AlsoCopyCapture, page.RecordingMaxSeconds, page.RecordPointer, page.StashFolder, page.StartWithWindows, page.Theme),

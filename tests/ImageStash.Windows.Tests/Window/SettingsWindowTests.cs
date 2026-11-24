@@ -143,7 +143,18 @@ public sealed class SettingsWindowTests
             TrayDesktop.Run(() =>
             {
                 Assert.AreEqual("ImageStash settings", first.Title);
-                CollectionAssert.AreEqual(Titles, Named(first), "each row's control named by its title, in G32's order");
+                CollectionAssert.AreEqual(Titles, Named(first), "each row's control named by its title, the shortcuts first and Export stash… and Import stash… last");
+                var lastGroup = Heading(first, "Move to another PC").TranslatePoint(default, first)!.Value.Y;
+                foreach (var title in new[] { SettingsPage.ThemeTitle, SettingsPage.ThumbnailSizeTitle })
+                {
+                    Assert.IsLessThan(lastGroup, Control(first, title).TranslatePoint(default, first)!.Value.Y, $"{title} reached before the last group, not past it");
+                }
+
+                var version = first.GetVisualDescendants().OfType<SelectableTextBlock>().Single(text => text.Text == SettingsPage.VersionLine);
+                Assert.IsGreaterThan(lastGroup, version.TranslatePoint(default, first)!.Value.Y, "the running build at the page's foot");
+                Assert.IsTrue(version.IsEffectivelyVisible, "a line of text that can be selected and copied (N8: no link, no check)");
+                version.SelectAll();
+                Assert.AreEqual(SettingsPage.VersionLine, version.SelectedText, "its words selected whole");
                 CollectionAssert.DoesNotContain(first.GetVisualDescendants().OfType<Control>().Select(AutomationProperties.GetName).ToList(), "Look", "one look: no row chooses a take of it (G32)");
                 var area = first.Screens.Primary!.WorkingArea;
                 var outer = CaptureDesk.Outer(first);
@@ -151,7 +162,7 @@ public sealed class SettingsWindowTests
             });
             Assert.AreEqual(before + 1, ProcessWindows.Visible(), "one window");
 
-            TestMouse.Click(TestMouse.Centre(TrayDesktop.Get(() => Heading(first, "Recording"))));
+            TestMouse.Click(TestMouse.Centre(TrayDesktop.Get(() => Heading(first, "Screenshots and recordings"))));
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => first.IsActive));
             TrayDesktop.Run(() => first.WindowState = WindowState.Minimized);
             var second = open = TrayDesktop.Get(() => SettingsWindow.Open(open, () => settings.Page()));
@@ -259,7 +270,7 @@ public sealed class SettingsWindowTests
                 CollectionAssert.AreEqual(new[] { "10 seconds", "15 seconds", "30 seconds", "60 seconds" }, lengths.Items.OfType<ComboBoxItem>().Select(item => item.Content).ToList());
                 Assert.AreEqual("30 seconds", ((ComboBoxItem)lengths.SelectedItem!).Content, "G32's default shown");
                 lengths.SelectedIndex = 3;
-                Control(window, SettingsPage.ShowPointerTitle).SetValue(ToggleSwitch.IsCheckedProperty, false);
+                Control(window, SettingsPage.RecordPointerTitle).SetValue(ToggleSwitch.IsCheckedProperty, false);
                 Assert.AreEqual((false, 60, false), (settings.Keeper.Current.AlsoCopyCapture, settings.Keeper.Current.RecordingMaxSeconds, settings.Keeper.Current.RecordPointer), "each in effect at once (G32)");
                 Assert.AreEqual(settings.DefaultStash, ((TextBox)Control(window, SettingsPage.StashFolderTitle)).Text, "the folder in use");
 
@@ -346,7 +357,7 @@ public sealed class SettingsWindowTests
                 var refused = new Failure("Save settings", Store.Settings.FileName, HeldFileRetry.HeldReason);
                 window.Page.WriteFailed(refused);
                 Assert.AreEqual(refused.Sentence, Top(window), "the keeper's refusal named at the top of the page (G35)");
-                Control(window, SettingsPage.ShowPointerTitle).SetValue(ToggleSwitch.IsCheckedProperty, false);
+                Control(window, SettingsPage.RecordPointerTitle).SetValue(ToggleSwitch.IsCheckedProperty, false);
                 Assert.AreEqual("Shortcuts", Top(window), "gone once the next change writes again: the first group's heading is the top");
             });
         }

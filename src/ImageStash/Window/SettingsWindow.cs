@@ -16,7 +16,9 @@ namespace ImageStash.Window;
 /// title, a shortcut row's Reset beside its field (<see cref="ShortcutResetButton"/>), a failed act's sentence under
 /// its row, and the start's read failure and a refused write at the top (G35); while
 /// a Move is asked, its busy state under the stash folder's path, and while an export or an import is, its busy state
-/// under its row, every control disabled until it has ended; an import's offer inside the Import row (F4). One
+/// under its row, every control disabled until it has ended; an import's offer inside the Import row (F4,
+/// <see cref="ImportOfferPanel"/>); and at its foot, the running build as one quiet line of text that can be selected and
+/// copied (<see cref="SettingsPage.VersionLine"/>). One
 /// is open at a time, brought forward when asked again (<see cref="Open"/>), on the row of a shortcut that is
 /// unavailable when asked so (G33); it opens centred on the primary display, wholly inside its working area at any
 /// scaling (E1), its size and place not remembered; Esc and Close close it, and it is then gone, Esc ending a shortcut
@@ -44,8 +46,7 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
     private readonly TextBlock moveLine = Line();
     private readonly TextBlock exportLine = Line();
     private readonly TextBlock importLine = Line();
-    private readonly TextBlock offerWords = new() { TextWrapping = TextWrapping.Wrap, FontSize = 12.5 };
-    private readonly StackPanel offer = new() { Spacing = 8, Margin = new Thickness(0, 8, 0, 0), IsVisible = false };
+    private readonly ImportOfferPanel offer;
     private readonly StackPanel content;
     private readonly ToggleSwitch startWithWindows;
     private readonly ComboBox theme;
@@ -74,7 +75,7 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
 
         alsoCopy = Toggle(SettingsPage.AlsoCopyTitle, on => page.SetAlsoCopyCapture(on));
         lengths = Choices(SettingsPage.MaximumLengthTitle, [], value => page.SetRecordingMaxSeconds((int)value));
-        pointer = Toggle(SettingsPage.ShowPointerTitle, on => page.SetRecordPointer(on));
+        pointer = Toggle(SettingsPage.RecordPointerTitle, on => page.SetRecordPointer(on));
         // The path in the page's own family, as every word of it (F10).
         folder = new TextBox
         {
@@ -87,6 +88,7 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
         startWithWindows = Toggle(SettingsPage.StartWithWindowsTitle, on => page.SetStartWithWindows(on));
         theme = Choices(SettingsPage.ThemeTitle, SettingsPage.Themes.Select(choice => ((object)choice.Theme, choice.Words)), value => page.SetTheme((Theme)value));
         thumbnailSize = Choices(SettingsPage.ThumbnailSizeTitle, SettingsPage.ThumbnailSizes.Select(choice => ((object)choice.Size, choice.Words)), value => page.SetThumbnailSize((ThumbnailSize)value));
+        offer = new ImportOfferPanel(page, this);
 
         readFailure = TopWarning(readFailureWords);
         writeFailure = TopWarning(writeFailureWords);
@@ -112,6 +114,7 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
             card.Children.Add(warning);
         }
 
+        content.Children.Add(new SelectableTextBlock { Text = SettingsPage.VersionLine, FontSize = 12, Opacity = 0.6, Margin = new Thickness(0, 20, 0, 0) });
         Content = new ScrollViewer
         {
             Content = content,
@@ -243,8 +246,7 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
             Show(moveLine, page.MoveLine);
             Show(exportLine, page.ExportLine);
             Show(importLine, page.ImportLine);
-            offerWords.Text = page.ImportOffer;
-            offer.IsVisible = page.ImportOffer is not null;
+            offer.Show();
             // The window's own Close stays: a Move, an export or an import goes on without the page, its outcome said in
             // the stash window's notices.
             content.IsEnabled = !page.WholeStashActAsked;
@@ -293,10 +295,10 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
         {
             SettingsPage.AlsoCopyTitle => alsoCopy,
             SettingsPage.MaximumLengthTitle => lengths,
-            SettingsPage.ShowPointerTitle => pointer,
+            SettingsPage.RecordPointerTitle => pointer,
             SettingsPage.StashFolderTitle => StashFolderButtons(),
-            SettingsPage.ExportTitle => Act(SettingsPage.ExportWords, () => _ = page.Export(this)),
-            SettingsPage.ImportTitle => Act(SettingsPage.ImportWords, () => _ = page.Import(this)),
+            SettingsPage.ExportTitle => NamedButton.Of(SettingsPage.ExportWords, () => _ = page.Export(this)),
+            SettingsPage.ImportTitle => NamedButton.Of(SettingsPage.ImportWords, () => _ = page.Import(this)),
             SettingsPage.StartWithWindowsTitle => startWithWindows,
             SettingsPage.ThemeTitle => (Control)theme,
             SettingsPage.ThumbnailSizeTitle => thumbnailSize,
@@ -315,7 +317,7 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
         else if (row.Title == SettingsPage.ImportTitle)
         {
             words.Children.Add(importLine);
-            words.Children.Add(Offer());
+            words.Children.Add(offer);
         }
 
         control.VerticalAlignment = VerticalAlignment.Center;
@@ -344,36 +346,8 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
     {
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         buttons.Children.Add(OpenFolderButton());
-        var move = new Button { Content = SettingsPage.MoveWords };
-        AutomationProperties.SetName(move, SettingsPage.MoveWords);
-        move.Click += (_, _) => _ = page.Move(this);
-        buttons.Children.Add(move);
+        buttons.Children.Add(NamedButton.Of(SettingsPage.MoveWords, () => _ = page.Move(this)));
         return buttons;
-    }
-
-    /// <summary>A row's one button, its words its automation name.</summary>
-    private static Button Act(string words, Action clicked)
-    {
-        var button = new Button { Content = words };
-        AutomationProperties.SetName(button, words);
-        button.Click += (_, _) => clicked();
-        return button;
-    }
-
-    /// <summary>
-    /// The import's offer under the Import row's words, inside this page, since F4 admits no other window: the file's
-    /// count and what it replaces, then Import and Cancel; shown only while a chosen file waits for confirmation (G36).
-    /// </summary>
-    private StackPanel Offer()
-    {
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        var confirm = Act(SettingsPage.ConfirmImportWords, () => _ = page.ConfirmImport());
-        confirm.Classes.Add("accent");
-        buttons.Children.Add(confirm);
-        buttons.Children.Add(Act(SettingsPage.CancelImportWords, page.CancelImport));
-        offer.Children.Add(offerWords);
-        offer.Children.Add(buttons);
-        return offer;
     }
 
     /// <summary>A line under a row's words, hidden while it has none.</summary>

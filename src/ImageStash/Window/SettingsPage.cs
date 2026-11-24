@@ -4,7 +4,8 @@ using ImageStash.Store;
 namespace ImageStash.Window;
 
 /// <summary>
-/// The Settings page's model, F4's one separate page (G32): its rows in G32's order, each value read from the settings
+/// The Settings page's model, F4's one separate page (G32): G32's rows, the shortcuts first and the whole stash's export
+/// and import last, with the running build at its foot (<see cref="VersionLine"/>), each value read from the settings
 /// in effect whenever it is asked, so a page opened again later shows what holds then; the four shortcuts as
 /// press-to-record fields (<see cref="ShortcutRecording"/>), one recording at a time, each remap registered and written
 /// by the shortcuts (G33) and each row off F5's default offering Reset, which sets the default as a remap would; each
@@ -30,7 +31,7 @@ public sealed class SettingsPage
     public const string StashClipboardImageTitle = TrayMenu.StashClipboardImageHeader;
     public const string AlsoCopyTitle = "Also copy it to the clipboard";
     public const string MaximumLengthTitle = "Maximum length";
-    public const string ShowPointerTitle = "Show the mouse pointer";
+    public const string RecordPointerTitle = "Record the mouse pointer";
     public const string StashFolderTitle = "Where your stash is stored";
     public const string ExportTitle = "Export your stash";
     public const string ImportTitle = "Import a stash";
@@ -47,8 +48,11 @@ public sealed class SettingsPage
     /// <summary>The Import row's button and its automation name, G32's title (G12, G36).</summary>
     public const string ImportWords = "Import stash…";
 
-    /// <summary>The offer's confirming button, inside the Import row, and its automation name (G36, F4).</summary>
-    public const string ConfirmImportWords = "Import";
+    /// <summary>The offer's first button, which runs Export stash… and comes back to the offer, and its automation name (G36).</summary>
+    public const string ExportFirstWords = "Export current stash first…";
+
+    /// <summary>The offer's confirming button, inside the Import row, and its automation name (G36, F4); never the invited choice.</summary>
+    public const string ConfirmImportWords = "Replace";
 
     /// <summary>The offer's cancelling button, inside the Import row, and its automation name.</summary>
     public const string CancelImportWords = "Cancel";
@@ -66,21 +70,23 @@ public sealed class SettingsPage
     public static readonly IReadOnlyList<(ThumbnailSize Size, string Words)> ThumbnailSizes =
         [(ThumbnailSize.Small, "Small"), (ThumbnailSize.Medium, "Medium"), (ThumbnailSize.Large, "Large"), (ThumbnailSize.ExtraLarge, "Extra large"), (ThumbnailSize.Huge, "Huge")];
 
+    // G32 lists what the page holds and no order: the everyday rows first, one group for what a capture does, and the act
+    // that replaces the whole stash last, away from them.
     private static readonly IReadOnlyList<SettingRow> OptionRows =
     [
         new("Shortcuts", OpenTitle, "From any app. Opens at your text cursor."),
         new("Shortcuts", TakeScreenshotTitle, "Drag over a region; it is saved to the stash when you release"),
         new("Shortcuts", RecordClipTitle, "Drag over a region, then Record; the same shortcut starts and stops it"),
         new("Shortcuts", StashClipboardImageTitle, "Save the image you just copied, without opening anything"),
-        new("After a screenshot or a recording", AlsoCopyTitle, "So you can paste it right away with Ctrl+V"),
-        new("Recording", MaximumLengthTitle, "Recording stops on its own after this"),
-        new("Recording", ShowPointerTitle, null),
-        new("Library", StashFolderTitle, "A plain folder you can open. If it sits in a folder synced between PCs, use it from one PC at a time."),
-        new("Library", ExportTitle, "One file with every item and the settings that travel, to take your stash to another PC"),
-        new("Library", ImportTitle, "Replaces your stash and those settings with an export's; what it replaces goes to the Recycle Bin"),
-        new("General", StartWithWindowsTitle, "ImageStash lives in the tray; it has no window until you summon it"),
-        new("General", ThemeTitle, null),
-        new("General", ThumbnailSizeTitle, "Ctrl and the mouse wheel, or Ctrl with + or -, change it over the pictures too"),
+        new("Screenshots and recordings", AlsoCopyTitle, "So you can paste it right away with Ctrl+V"),
+        new("Screenshots and recordings", MaximumLengthTitle, "Recording stops on its own after this"),
+        new("Screenshots and recordings", RecordPointerTitle, null),
+        new("Appearance and startup", ThemeTitle, null),
+        new("Appearance and startup", ThumbnailSizeTitle, "Ctrl and the mouse wheel, or Ctrl with + or -, change it over the pictures too"),
+        new("Appearance and startup", StartWithWindowsTitle, "Start ImageStash when you sign in, so its shortcuts always work"),
+        new("Your stash", StashFolderTitle, "A plain folder you can open. If it sits in a folder synced between PCs, use it from one PC at a time."),
+        new("Move to another PC", ExportTitle, "One file with every item and the settings that travel, to take your stash to another PC"),
+        new("Move to another PC", ImportTitle, "Replaces your stash and those settings with an export's. " + Window.ImportOffer.ReplacedFilesWords),
     ];
 
     private readonly SettingsKeeper keeper;
@@ -134,8 +140,11 @@ public sealed class SettingsPage
     /// <summary>Raised after a row's value or warning changed, on the thread that changed it, the UI thread.</summary>
     public event Action? Changed;
 
-    /// <summary>The rows in G32's order, each with its group; a row's title is its control's automation name.</summary>
+    /// <summary>G32's rows in the page's order, each with its group; a row's title is its control's automation name.</summary>
     public IReadOnlyList<SettingRow> Rows => OptionRows;
+
+    /// <summary>The quiet line at the page's foot naming the running build, as its release is named, and nothing else (N2, N8).</summary>
+    public static string VersionLine => $"ImageStash {RunningBuild.Version}";
 
     /// <summary>The four shortcut fields, in F5's order, each named by its row's title.</summary>
     public IReadOnlyList<ShortcutRecording> ShortcutFields { get; }
@@ -190,8 +199,8 @@ public sealed class SettingsPage
     /// <summary>The line under the Import row: the import's busy state while one is asked, else what the last one said on success, or null (G36).</summary>
     public string? ImportLine => transferring.ImportLine;
 
-    /// <summary>The offer's sentence inside the Import row, with Import and Cancel beside it, while a chosen file waits for confirmation; else null (G36, F4).</summary>
-    public string? ImportOffer => transferring.Offer is { } offer ? Transferring.OfferWords(offer) : null;
+    /// <summary>The offer's words inside the Import row, with Export current stash first…, Replace and Cancel under them, while a chosen file waits for confirmation; else null (G36, F4).</summary>
+    public string? ImportOffer => transferring.Offer?.Words;
 
     public bool StartWithWindows => keeper.Current.StartWithWindows;
 
@@ -321,7 +330,7 @@ public sealed class SettingsPage
         return outcome;
     }
 
-    /// <summary>The offer's Import: the replacement, its success said under the row, a failure on the row (G36, G35).</summary>
+    /// <summary>The offer's Replace: the replacement, its success said under the row, a failure on the row (G36, G35).</summary>
     public async Task<Outcome> ConfirmImport()
     {
         var outcome = await transferring.ConfirmImport();

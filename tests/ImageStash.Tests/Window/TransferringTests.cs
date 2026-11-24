@@ -195,9 +195,10 @@ public sealed class TransferringTests
 
         Assert.IsTrue((await page.Import(null!)).Succeeded);
 
-        StringAssert.StartsWith(page.ImportOffer, "export.zip holds 7 items. ");
-        StringAssert.Contains(page.ImportOffer, "replaces your stash and these settings");
-        StringAssert.Contains(page.ImportOffer, "the four shortcuts, Also copy, the recording's maximum length and pointer, Start with Windows and Theme");
+        // G36: "says how many items it holds and that the current stash and those settings will be replaced by it", now
+        // with the current stash's count beside the file's.
+        StringAssert.StartsWith(page.ImportOffer, "Replace your 1 item with the 7 items in export.zip? ");
+        StringAssert.Contains(page.ImportOffer, "The file's settings replace yours: the four shortcuts, Also copy, the recording's maximum length and pointer, Start with Windows and Theme");
         Assert.IsFalse(page.WholeStashActAsked, "asked only at the confirmation");
         Assert.IsNull(listed.Listing.CannotStartReason, "nothing blocked while the offer shows");
         Assert.IsTrue((await listed.Organising.AddTag([cat], "funny")).Succeeded, "a tag change still runs");

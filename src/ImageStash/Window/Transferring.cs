@@ -12,7 +12,10 @@ namespace ImageStash.Window;
 /// state naming the export and the path; where the file is said, on the row and in a notice, only once Store has renamed
 /// it into place (R9). Import: the one-file picker; the file's summary read off the UI thread, a file that is not an
 /// export or a newer build's refused by name; then, blocking nothing, the confirmation offered inside the Import row (F4):
-/// its count and that the stash and the settings that travel will be replaced. From the confirmation nothing else starts;
+/// the file's count and the whole stash's, read from the store, and that the stash and the settings that travel will be
+/// replaced, an export asked meanwhile (Export first) leaving it standing and refused over the very file it offers, and a
+/// confirmation turned away, or made under a count the stash no longer holds, leaving it standing. From the confirmation
+/// nothing else starts;
 /// the wait; the listing withdrawn, so nothing of the stash is listed and no file of it is held open (a held file would
 /// stop the folder's rename); Store's import; then, once its record has been written, what the window remembered of the
 /// replaced items by identity forgotten, the imported settings put in effect at once, and the stash at the same folder
@@ -33,6 +36,9 @@ public sealed class Transferring
 
     /// <summary>Why an export or an import is refused while a file is still being chosen for one.</summary>
     private const string ChoosingReason = "a file is still being chosen for an export or an import";
+
+    /// <summary>Why an export over the file the import's offer waits on is refused: Replace would import what the offer does not describe.</summary>
+    public const string OfferedFileReason = "it is the export waiting to be imported; choose another name";
 
     /// <summary>The export's one file type, in both pickers (G36).</summary>
     public static readonly PickerFilter FileType = new("ImageStash export", ["*" + StashExport.Extension]);
@@ -136,6 +142,11 @@ public sealed class Transferring
             return Outcome.Done;
         }
 
+        if (Offer is { } offer && SameFile(chosen, offer.Path))
+        {
+            return Named(new Failure(StashExport.Action, Path.GetFileName(chosen), OfferedFileReason));
+        }
+
         // The stash may have stopped taking changes while the picker was up.
         if (listing.CannotStartReason is not null || listing.Store is not { } store)
         {
@@ -164,6 +175,8 @@ public sealed class Transferring
             End();
             // Whatever was put off meanwhile asks again, Open with…'s copies among them.
             _ = listing.Refresh();
+            // An offer left standing (Export first) shows the stash as it is now, a capture made while the picker was up counted.
+            _ = RecountOffer();
         }
     }
 
@@ -207,7 +220,19 @@ public sealed class Transferring
                 return Named(summary.Failure);
             }
 
-            Offer = new ImportOffer(chosen, summary.Value!);
+            // The whole stash, as the store holds it now, never what the window's search or scope leaves.
+            if (listing.Store is not { } store)
+            {
+                return Named(new Failure(StashImport.Action, Path.GetFileName(chosen), listing.CannotStartReason!));
+            }
+
+            var current = await store.Count();
+            if (!current.Succeeded)
+            {
+                return Named(new Failure(StashImport.Action, Path.GetFileName(chosen), current.Failure.Reason));
+            }
+
+            Offer = new ImportOffer(chosen, summary.Value!, current.Value);
             return Outcome.Done;
         }
         finally
@@ -225,9 +250,12 @@ public sealed class Transferring
     }
 
     /// <summary>
-    /// The offer's Import, the user's confirmation, from which nothing else starts until the import has ended (G36):
-    /// the wait, the listing withdrawn, Store's import, and the stash listed again, as the type's summary says. Answers
-    /// the outcome for the page's row; every failure is also named in the notices.
+    /// The offer's Replace, the user's confirmation, from which nothing else starts until the import has ended (G36):
+    /// the stash counted and the file read again, at the press and once more after the wait, and while either no longer
+    /// holds what the offer says, the offer said again as they are and nothing replaced; then the listing withdrawn, Store's
+    /// import, and the stash listed again, as the type's summary says. A confirmation refused before it begins (an export
+    /// running, a file being chosen) leaves the offer standing. Answers the outcome for the page's row; every failure is
+    /// also named in the notices.
     /// </summary>
     public async Task<Outcome> ConfirmImport()
     {
@@ -237,7 +265,6 @@ public sealed class Transferring
             return Outcome.Done;
         }
 
-        Offer = null;
         var subject = Path.GetFileName(offer.Path);
         if (CannotBeginReason is not null || listing.Store is not { } store)
         {
@@ -245,10 +272,28 @@ public sealed class Transferring
         }
 
         Begin(StashImport.InProgress, export: false, ImportingWords(subject));
+        var begun = false;
         try
         {
-            await moving.WaitUntilNothingIsInTheWay(words => SetBusy($"Waiting for {words} before importing {subject}…"));
+            // Replace never runs under counts the offer does not show (G36: "says how many items it holds"): checked at the
+            // press, and again once nothing else can start, since an Undo or a capture waited for may change the stash.
+            if (await Recounted(store, offer) is { } turnedAway)
+            {
+                return turnedAway;
+            }
+
+            Offer = null;
+            void Waiting(string words) => SetBusy($"Waiting for {words} before importing {subject}…");
+            await moving.WaitUntilNothingIsInTheWay(Waiting);
+            // Before the copy begins, so a handoff meanwhile still runs (G36); the wait again for one begun meanwhile.
+            if (await Recounted(store, offer) is { } changedMeanwhile)
+            {
+                return changedMeanwhile;
+            }
+
+            await moving.WaitUntilNothingIsInTheWay(Waiting);
             listing.WholeStashActBegun = true;
+            begun = true;
             SetBusy(ImportingWords(subject));
             await listing.Withdraw();
             var replaced = await Reporting(progress => store.Import(keeper, offer.Path, progress), told => ImportProgress(subject, told));
@@ -287,6 +332,11 @@ public sealed class Transferring
         finally
         {
             End();
+            if (!begun)
+            {
+                // Turned away before the import began: whatever was put off meanwhile asks again, as after an export.
+                _ = listing.Refresh();
+            }
         }
     }
 
@@ -296,11 +346,55 @@ public sealed class Transferring
     /// <summary>What an import that has ended in success says, once the imported stash is listed (R9).</summary>
     public static string ImportedWords(string archiveName) => $"Imported your stash from {archiveName}.";
 
-    /// <summary>The offer's sentence: the file's count, and that the stash and the settings that travel will be replaced by it (G36).</summary>
-    public static string OfferWords(ImportOffer offer) =>
-        $"{Path.GetFileName(offer.Path)} holds {(offer.Summary.Items == 1 ? "1 item" : $"{offer.Summary.Items} items")}. "
-        + "Importing it replaces your stash and these settings with its own: the four shortcuts, Also copy, the recording's maximum length "
-        + "and pointer, Start with Windows and Theme. What it replaces goes to the Recycle Bin.";
+    /// <summary>The same file, as Windows compares paths, ignoring case.</summary>
+    private static bool SameFile(string one, string other) =>
+        string.Equals(Path.GetFullPath(one), Path.GetFullPath(other), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The whole stash counted and the offered file read again: while either holds another number of items than the offer
+    /// says, the offer said again as they are and Done answered, nothing replaced; a file no longer an export refused by
+    /// name, the offer gone with it; a stash that cannot be counted named, the offer standing; null while both hold.
+    /// </summary>
+    private async Task<Outcome?> Recounted(StashStore store, ImportOffer offer)
+    {
+        var current = await store.Count();
+        if (!current.Succeeded)
+        {
+            Offer = offer;
+            return Named(new Failure(StashImport.Action, Path.GetFileName(offer.Path), current.Failure.Reason));
+        }
+
+        var summary = await Task.Run(() => StashImport.Summary(offer.Path, heldFileRetry));
+        if (!summary.Succeeded)
+        {
+            Offer = null;
+            return Named(summary.Failure);
+        }
+
+        if (current.Value == offer.CurrentItems && summary.Value!.Items == offer.Summary.Items)
+        {
+            return null;
+        }
+
+        Offer = new ImportOffer(offer.Path, summary.Value!, current.Value);
+        return Outcome.Done;
+    }
+
+    /// <summary>A standing offer takes the whole stash's count as it is now; one confirmed, cancelled or replaced meanwhile is left alone.</summary>
+    private async Task RecountOffer()
+    {
+        if (Offer is not { } offer || listing.Store is not { } store)
+        {
+            return;
+        }
+
+        var current = await store.Count();
+        if (current.Succeeded && ReferenceEquals(Offer, offer) && current.Value != offer.CurrentItems)
+        {
+            Offer = offer with { CurrentItems = current.Value };
+            Changed?.Invoke();
+        }
+    }
 
     /// <summary>Why neither may begin now: one is asked or being chosen, or the stash cannot take a change; null when one may.</summary>
     private string? CannotBeginReason => asked ?? (picking ? ChoosingReason : null) ?? listing.CannotStartReason;
@@ -397,6 +491,3 @@ public sealed class Transferring
         Changed?.Invoke();
     }
 }
-
-/// <summary>An import offered for confirmation: the chosen file, and what its manifest says it holds (G36).</summary>
-public sealed record ImportOffer(string Path, ExportSummary Summary);

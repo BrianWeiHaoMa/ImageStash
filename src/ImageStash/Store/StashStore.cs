@@ -195,6 +195,9 @@ public sealed class StashStore : IDisposable
     /// <summary>Every tag the stash's items carry, with how many carry it, the most carried first (G4).</summary>
     public Task<Outcome<IReadOnlyList<TagCount>>> TagCounts() => thread.Read(() => ItemTags.Counts(store));
 
+    /// <summary>How many items the whole stash holds, counted as an export's manifest counts them, whatever the window shows (G36).</summary>
+    public Task<Outcome<int>> Count() => thread.Read(() => store.Read("Count the stash", () => StashItem.CountListed(store)));
+
     /// <summary>
     /// Gives each item the tags <paramref name="text"/> commits, one per word (G17); one outcome per item, in order, an
     /// item no longer in the stash named as it was handed in.

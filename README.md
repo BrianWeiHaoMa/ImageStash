@@ -64,8 +64,9 @@ can be changed) and Quit.
 - **Your pictures stay on your PC,** as ordinary files in `%LOCALAPPDATA%\ImageStash\stash`, which Settings can move.
   Uninstalling keeps them. Back that folder up, or use Export stash… in Settings to carry everything to another PC.
 - **Nothing leaves your PC.** There is no account, cloud, sync or telemetry, and a link is never fetched.
-- **There is no updater.** A new version is a new download from the releases page; installing it over the old one
-  keeps your pictures, tags, edits and settings, and starts the new version in place of the one it closed.
+- **There is no updater.** A new version is a new download from the releases page; the foot of Settings says which
+  version you have. Installing a new one over the old one keeps your pictures, tags, edits and settings, and starts
+  the new version in place of the one it closed.
 - **Edits never touch the original.** Text, crops, trims, blurs and drawings stay layers you can change or remove at
   the next Edit; Revert to original takes them all off.
 - **Nothing claims delivery.** ImageStash puts the picture on the clipboard and presses `Ctrl+V` in the app you came

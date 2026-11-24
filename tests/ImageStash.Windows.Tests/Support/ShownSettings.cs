@@ -20,9 +20,8 @@ public static class ShownSettings
     public static readonly string[] Titles =
     [
         SettingsPage.OpenTitle, SettingsPage.TakeScreenshotTitle, SettingsPage.RecordClipTitle, SettingsPage.StashClipboardImageTitle,
-        SettingsPage.AlsoCopyTitle, SettingsPage.MaximumLengthTitle, SettingsPage.ShowPointerTitle, SettingsPage.StashFolderTitle,
-        "Open folder", SettingsPage.MoveWords, SettingsPage.ExportWords, SettingsPage.ImportWords, SettingsPage.StartWithWindowsTitle, SettingsPage.ThemeTitle,
-        SettingsPage.ThumbnailSizeTitle,
+        SettingsPage.AlsoCopyTitle, SettingsPage.MaximumLengthTitle, SettingsPage.RecordPointerTitle, SettingsPage.ThemeTitle, SettingsPage.ThumbnailSizeTitle,
+        SettingsPage.StartWithWindowsTitle, SettingsPage.StashFolderTitle, "Open folder", SettingsPage.MoveWords, SettingsPage.ExportWords, SettingsPage.ImportWords,
     ];
 
     /// <summary>The names among <see cref="Titles"/> that the page's controls carry, in the order the page shows them.</summary>

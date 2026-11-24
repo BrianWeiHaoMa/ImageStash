@@ -594,8 +594,10 @@ Write-Host '     instead; saved again in Paint while the item is open in the edi
 Write-Host ' 30. with Paint still open on that picture, Quit ImageStash, save in Paint and start ImageStash again: the saved picture is the item''s'
 Write-Host '     when the stash shows, with the notification and its Undo; once the item is deleted and its notice has gone, its folder under'
 Write-Host '     %LOCALAPPDATA%\ImageStash\open-with\ is gone too (G27, G28, G18);'
-Write-Host ' 31. the tray menu''s Settings, and the Settings button beside the + button, open "ImageStash settings" centred on the display: Shortcuts with the four fields, After a screenshot or a recording,'
-Write-Host "     Recording, Library with the stash folder, Open folder and Move$([char]0x2026), then Export stash$([char]0x2026) and Import stash$([char]0x2026), General with Start with Windows, Theme and Thumbnail size; light and dark; made"
+Write-Host ' 31. the tray menu''s Settings, and the Settings button beside the + button, open "ImageStash settings" centred on the display: Shortcuts with the four fields,'
+Write-Host '     Screenshots and recordings with Also copy, Maximum length and Record the mouse pointer, Appearance and startup with Theme, Thumbnail size and Start with Windows,'
+Write-Host "     Your stash with the stash folder, Open folder and Move$([char]0x2026), and last Move to another PC with Export stash$([char]0x2026) and Import stash$([char]0x2026); at its foot a faint"
+Write-Host '     "ImageStash <version>", the version this copy''s release is named by, which can be selected and copied; Theme and Thumbnail size show without scrolling; light and dark; made'
 Write-Host '     as small as it goes, its rows wrap and it scrolls with nothing cut; Esc closes it, and asked again while open, from either, it comes forward (G32, F4, F10, L2);'
 Write-Host " 32. a click on a shortcut field reads ""Press a new shortcut$([char]0x2026)"" with its $([char]0xD7), and the shortcuts do nothing until it ends; a combination another app holds,"
 Write-Host '     Delete alone, Shift+A and Ctrl+V each get an amber line under the row saying why (Delete and Shift+A: add Ctrl, Alt or Win), the field'
@@ -609,7 +611,7 @@ Write-Host '     Stash clipboard image and the empty stash''s row still show Win
 Write-Host '     tooltip names it with why; Settings opens on that row with the same words, and once the other program lets it go, recording it'
 Write-Host '     there registers it, and the tooltip''s line, the notification and the marks are gone (G33, G16, G2, G34, G3);'
 Write-Host ' 34. Theme set to Dark turns the page and the stash window dark at once, and they are dark after Quit and a new start; Also copy off: a'
-Write-Host '     screenshot is in the stash and not on the clipboard; Maximum length 10 seconds: a recording stops itself at 0:10; Show the mouse'
+Write-Host '     screenshot is in the stash and not on the clipboard; Maximum length 10 seconds: a recording stops itself at 0:10; Record the mouse'
 Write-Host '     pointer off: the recording has no pointer in it; Start with Windows off: no ImageStash after signing in again (G32, F1, F10, G14, G15);'
 Write-Host " 35. on your own stash, Settings' Move$([char]0x2026) beside Open folder opens a folder picker; choose an empty folder, on another drive too, and one a sync"
 Write-Host '     service mirrors, used from this PC alone: while a recording runs, an edit is open or a notice''s Undo stands, the line under the path'
@@ -626,9 +628,13 @@ Write-Host '     opens them, the thumbnails at their size, the pinned window at 
 Write-Host " 39. Settings' Export stash$([char]0x2026) opens a save picker suggesting ""ImageStash export <date and time>.zip""; while it writes, the line under the row"
 Write-Host "     names the export and the path with the page greyed, then says ""Exported your stash to <path>."" there and in the stash window, the stash as"
 Write-Host '     it was. Signed in as a second Windows account (on a PC with one account, into a fresh stash with default settings standing in for'
-Write-Host "     that account's, F6), Import stash$([char]0x2026) with that file: the row says how many items it holds and that your stash and"
-Write-Host '     the shortcuts, Also copy, the recording''s length and pointer, Start with Windows and Theme will be replaced, with Import and Cancel; Cancel'
-Write-Host '     changes nothing; Import with an edit open waits saying so under the row, then the stash window lists every exported item with its tags,'
+Write-Host "     that account's, F6), Import stash$([char]0x2026) with that file: the row asks ""Replace your <n> items with the <m> in <file>?"" (on an empty stash,"
+Write-Host '     "Replace your empty stash with the <m> items in <file>?"), <n> counting the whole stash whatever the grid shows, says your pictures, tags and'
+Write-Host '     edits leave ImageStash (when the stash holds any), that the shortcuts, Also copy, the recording''s length and pointer, Start with Windows and'
+Write-Host "     Theme are replaced, and that the Recycle Bin may not keep a large stash, with Export current stash first$([char]0x2026), Replace and Cancel,"
+Write-Host "     none in the accent colour and Enter, until you Tab to one, pressing none of them; Export current stash first$([char]0x2026) runs Export stash$([char]0x2026) and comes"
+Write-Host '     back to the same offer with nothing replaced, and refuses the offered file itself as its destination; Cancel changes nothing; Replace with'
+Write-Host '     an edit open waits saying so under the row, then the stash window lists every exported item with its tags,'
 Write-Host '     favorite, uses and edits, the exported Theme and shortcuts work at once, and the replaced folder is in the Recycle Bin; a picture chosen'
 Write-Host '     instead is refused on the row as not an export. Back on the first account (or the first stash), importing the same file leaves the'
 Write-Host '     stash as it was in content, its replaced files in the Recycle Bin (G36, G32, G29, G33, R9, Done when 4).'

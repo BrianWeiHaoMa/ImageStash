@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using ImageStash.Seams;
+using ImageStash.Store;
 using ImageStash.Tests.Support;
 using ImageStash.Window;
 
@@ -95,6 +96,50 @@ public sealed class ShortcutsAndSettingsPathTests
         Assert.IsFalse(field.ResetOffered, "Reset offered no more");
         Assert.IsNull(page.WarningOf(SettingsPage.TakeScreenshotTitle));
         Assert.HasCount(4, listed.ShortcutsSeam.Registered, "every shortcut registered, no field recording");
+
+        // (4) With pictures in the stash, the page reads from Shortcuts to the group holding Export stash… and Import
+        // stash…, every row of G32's list once, the running version at its foot. A chosen export is offered with the whole
+        // stash's count, a search narrowing the grid notwithstanding, and the file's; Export first writes the current stash
+        // to the file named and leaves the offer standing, nothing replaced; Replace then replaces the stash.
+        foreach (var name in new[] { "cat", "dog", "owl" })
+        {
+            await listed.Stash.Import(name);
+        }
+
+        var groups = page.Rows.Select(row => row.Group).Distinct().ToList();
+        Assert.AreEqual("Shortcuts", groups[0], "Shortcuts first");
+        CollectionAssert.AreEqual(new[] { SettingsPage.ExportTitle, SettingsPage.ImportTitle }, page.Rows.Where(row => row.Group == groups[^1]).Select(row => row.Title).ToList(), "the stash's replacement last");
+        CollectionAssert.AreEquivalent(
+            new[]
+            {
+                SettingsPage.OpenTitle, SettingsPage.TakeScreenshotTitle, SettingsPage.RecordClipTitle, SettingsPage.StashClipboardImageTitle, SettingsPage.AlsoCopyTitle,
+                SettingsPage.MaximumLengthTitle, SettingsPage.RecordPointerTitle, SettingsPage.StashFolderTitle, SettingsPage.ExportTitle, SettingsPage.ImportTitle,
+                SettingsPage.StartWithWindowsTitle, SettingsPage.ThemeTitle, SettingsPage.ThumbnailSizeTitle,
+            },
+            page.Rows.Select(row => row.Title).ToList(), "every row of G32's list, once");
+        Assert.AreEqual($"ImageStash {RunningBuild.Version}", SettingsPage.VersionLine, "the running version at its foot");
+
+        await listed.Listing.SetQuery("owl");
+        Assert.HasCount(1, listed.Listing.Items, "the search narrows the grid");
+        var archive = await ExportedStash.Of(listed.Stash.Outside("export.zip"), null, "one", "two");
+        listed.Dialogs.OpenFileAnswer = () => Task.FromResult<string?>(archive);
+        Assert.IsTrue((await page.Import(null!)).Succeeded);
+        var offered = page.ImportOffer;
+        StringAssert.StartsWith(offered, "Replace your 3 items with the 2 in export.zip? ", "the whole stash's count and the file's (G36)");
+
+        var before = listed.Stash.Outside("before replacing.zip");
+        listed.Dialogs.SaveAnswer = () => Task.FromResult<string?>(before);
+        var exported = await page.Export(null!);
+
+        Assert.IsTrue(exported.Succeeded, exported.Failure?.Sentence);
+        Assert.AreEqual(3, StashImport.Summary(before, TestStash.ShortRetry).Value!.Items, "Export first wrote the current stash to the file named");
+        Assert.AreEqual(offered, page.ImportOffer, "the offer stands");
+        Assert.HasCount(3, await listed.Stash.All(), "nothing replaced");
+
+        var replaced = await page.ConfirmImport();
+
+        Assert.IsTrue(replaced.Succeeded, replaced.Failure?.Sentence);
+        CollectionAssert.AreEquivalent(new[] { "one", "two" }, (await listed.Stash.All()).Select(item => item.Name).ToList(), "Replace replaced the stash");
     }
 
     /// <summary>The <c>+</c> menu's Take a screenshot as the window makes the menu over these shortcuts, at an opening.</summary>
