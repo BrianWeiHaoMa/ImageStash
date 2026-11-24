@@ -140,6 +140,20 @@ public sealed class ShortcutsAndSettingsPathTests
 
         Assert.IsTrue(replaced.Succeeded, replaced.Failure?.Sentence);
         CollectionAssert.AreEquivalent(new[] { "one", "two" }, (await listed.Stash.All()).Select(item => item.Name).ToList(), "Replace replaced the stash");
+
+        // (5) Pause from the tray then Resume from the window. The open Settings page shares both transitions.
+        walked.Tray.Entries.Single(entry => entry.Header == TrayMenu.PauseHeader).Chosen();
+        Assert.AreEqual("ImageStash · shortcuts paused", walked.Tray.ToolTip);
+        Assert.AreEqual("Shortcuts are paused", empty.ReadPausedShortcuts());
+        Assert.IsTrue(page.ShortcutsPaused);
+        Assert.IsEmpty(listed.ShortcutsSeam.Registered);
+
+        empty.ResumeShortcuts();
+        Assert.HasCount(4, listed.ShortcutsSeam.Registered);
+        Assert.IsFalse(walked.Tray.Entries.Single(entry => entry.Header == TrayMenu.PauseHeader).Checked ?? true);
+        Assert.AreEqual("ImageStash · Ctrl+Alt+Space", walked.Tray.ToolTip);
+        Assert.IsNull(empty.ReadPausedShortcuts());
+        Assert.IsFalse(page.ShortcutsPaused);
     }
 
     /// <summary>The <c>+</c> menu's Take a screenshot as the window makes the menu over these shortcuts, at an opening.</summary>

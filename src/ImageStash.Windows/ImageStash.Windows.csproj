@@ -11,6 +11,8 @@
   <ItemGroup>
     <EmbeddedResource Include="ImageStash.ico" LogicalName="ImageStash.ico" />
     <EmbeddedResource Include="ImageStash-recording.ico" LogicalName="ImageStash-recording.ico" />
+    <EmbeddedResource Include="ImageStash-paused.ico" LogicalName="ImageStash-paused.ico" />
+    <EmbeddedResource Include="ImageStash-unavailable.ico" LogicalName="ImageStash-unavailable.ico" />
     <InternalsVisibleTo Include="ImageStash.Windows.Tests" />
   </ItemGroup>
 

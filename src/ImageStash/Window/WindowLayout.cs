@@ -98,16 +98,17 @@ public static class WindowLayout
     /// <summary>
     /// The footer: the paste hints on the left; the busy state, while something runs, and the count on the right, the
     /// count in a column of its own; so a long hint or a long name in a copy's confirmation is cut short with an ellipsis
-    /// in what the busy state and the count leave, never drawn over them (G35).
+    /// in what the busy state and the count leave, never drawn over them (G35). The paused line uses the space left over.
     /// </summary>
-    public static Border Footer(Control hints, StackPanel busy, TextBlock busyText, TextBlock count)
+    internal static Border Footer(Control hints, StackPanel busy, TextBlock busyText, TextBlock count, FooterPauseSlot pausedShortcuts)
     {
         busy.Children.Add(new ProgressBar { IsIndeterminate = true, Width = 48, MinWidth = 48, VerticalAlignment = VerticalAlignment.Center });
         busy.Children.Add(busyText);
         // The busy state measured first, whole; the hints then within what is left, which their trimming needs.
-        var left = new DockPanel { LastChildFill = false, ClipToBounds = true, Children = { busy, hints } };
+        var left = new DockPanel { LastChildFill = false, ClipToBounds = true, Children = { busy, hints, pausedShortcuts } };
         DockPanel.SetDock(busy, Dock.Right);
         DockPanel.SetDock(hints, Dock.Left);
+        DockPanel.SetDock(pausedShortcuts, Dock.Left);
         Grid.SetColumn(count, 1);
         count.Margin = new Thickness(12, 0, 0, 0);
         var footer = new Border

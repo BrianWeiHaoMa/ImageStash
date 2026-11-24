@@ -149,6 +149,10 @@ public sealed class SettingsPage
     /// <summary>The four shortcut fields, in F5's order, each named by its row's title.</summary>
     public IReadOnlyList<ShortcutRecording> ShortcutFields { get; }
 
+    internal bool ShortcutsPaused => shortcuts.Paused;
+
+    internal void ResumeShortcuts() => shortcuts.ResumePaused();
+
     /// <summary>The field of the row titled <paramref name="title"/>, or null for a row of another kind.</summary>
     public ShortcutRecording? ShortcutField(string title) => ShortcutFields.FirstOrDefault(field => field.Title == title);
 

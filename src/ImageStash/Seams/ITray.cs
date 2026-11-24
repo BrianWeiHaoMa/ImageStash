@@ -32,9 +32,11 @@ public interface ITray
     /// </summary>
     void SetGesture(string header, KeyGesture? gesture);
 
-    /// <summary>The icon with a red dot while <paramref name="recording"/>, and the plain icon otherwise (G15).</summary>
-    void SetRecording(bool recording);
+    /// <summary>Sets the icon's single mark, or restores the plain icon.</summary>
+    void SetIcon(TrayIconState state);
 }
+
+public enum TrayIconState { Plain, Recording, Paused, Unavailable }
 
 /// <summary>
 /// A tray menu entry; <paramref name="Chosen"/> runs on the UI thread when the user picks it. <paramref name="Gesture"/>

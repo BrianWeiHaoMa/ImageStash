@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using ImageStash.Window;
 
 namespace ImageStash.Tests.Support;
@@ -39,8 +40,32 @@ public sealed class EmptyStashShown
             status = new WindowStatus(listed.Listing, listed.Notices, listed.Settings, listed.FooterHints, new ScrollViewer(), () => false, () => { }, acts ?? listed.WaysIn);
             status.FollowShortcuts(listed.Shortcuts);
         });
-        listed.Shortcuts.Changed += () => ControlThread.Run(status!.ShortcutsChanged);
+        listed.Shortcuts.Changed += () =>
+        {
+            if (Dispatcher.UIThread.CheckAccess())
+            {
+                status!.ShortcutsChanged();
+            }
+            else
+            {
+                ControlThread.Run(status!.ShortcutsChanged);
+            }
+        };
         return new EmptyStashShown(status!);
+    }
+
+    /// <summary>The paused words in the normal footer, when shown.</summary>
+    public string? ReadPausedShortcuts() => Get(() =>
+        PauseLine() is { IsVisible: true } line ? line.Children.OfType<TextBlock>().First().Text : null);
+
+    public void ResumeShortcuts() => ControlThread.Run(() =>
+        PauseLine().Resume.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)));
+
+    private PausedShortcutsLine PauseLine()
+    {
+        var footer = (Grid)Status.Footer.Child!;
+        var onLeft = footer.Children.OfType<DockPanel>().Single();
+        return (PausedShortcutsLine)onLeft.Children.OfType<FooterPauseSlot>().Single().Child!;
     }
 
     /// <summary>The listing shown again, as the window shows it after each change.</summary>

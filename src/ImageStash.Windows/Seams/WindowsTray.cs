@@ -9,8 +9,8 @@ namespace ImageStash.Windows.Seams;
 /// <summary>
 /// Avalonia's tray icon, which opens its menu on a right-click and updates its icon and tooltip live (S10). Avalonia
 /// 12.1.4's tray popup is built afresh at every right-click and binds each entry's header, gesture, toggle and check
-/// mark into its menu items, so a header, a gesture or a check mark changed here shows at the menu's next opening. The icon with
-/// the red dot is the plain one's generated sibling, both resources of this assembly.
+/// mark into its menu items, so a header, a gesture or a check mark changed here shows at the menu's next opening. The
+/// plain icon and its marked variants are generated resources of this assembly.
 /// </summary>
 public sealed class WindowsTray : ITray, IDisposable
 {
@@ -19,9 +19,9 @@ public sealed class WindowsTray : ITray, IDisposable
 
     private readonly Dictionary<string, NativeMenuItem> items = [];
     // Loaded at Show, once Avalonia's platform is up: the seam is made before it starts.
-    private (WindowIcon Plain, WindowIcon Recording)? icons;
+    private IReadOnlyDictionary<TrayIconState, WindowIcon> icons = null!;
     private TrayIcon? icon;
-    private bool recording;
+    private TrayIconState state;
 
     internal TrayIcon? Icon => icon;
 
@@ -52,8 +52,14 @@ public sealed class WindowsTray : ITray, IDisposable
             items[entry.Header] = item;
         }
 
-        icons = (Resource("ImageStash.ico"), Resource("ImageStash-recording.ico"));
-        icon = new TrayIcon { Icon = IconShown(), Menu = menu, ToolTipText = Cut(toolTip) };
+        icons = new Dictionary<TrayIconState, WindowIcon>
+        {
+            [TrayIconState.Plain] = Resource("ImageStash.ico"),
+            [TrayIconState.Recording] = Resource("ImageStash-recording.ico"),
+            [TrayIconState.Paused] = Resource("ImageStash-paused.ico"),
+            [TrayIconState.Unavailable] = Resource("ImageStash-unavailable.ico"),
+        };
+        icon = new TrayIcon { Icon = icons[state], Menu = menu, ToolTipText = Cut(toolTip) };
         icon.Clicked += (_, _) => clicked();
         // Registered with the application so the icon leaves the notification area when ImageStash exits.
         TrayIcon.SetIcons(Application.Current!, [icon]);
@@ -91,16 +97,19 @@ public sealed class WindowsTray : ITray, IDisposable
         }
     }
 
-    public void SetRecording(bool recording)
+    public void SetIcon(TrayIconState state)
     {
-        this.recording = recording;
+        if (this.state == state)
+        {
+            return;
+        }
+
+        this.state = state;
         if (icon is not null)
         {
-            icon.Icon = IconShown();
+            icon.Icon = icons[state];
         }
     }
-
-    private WindowIcon IconShown() => recording ? icons!.Value.Recording : icons!.Value.Plain;
 
     private static WindowIcon Resource(string name)
     {

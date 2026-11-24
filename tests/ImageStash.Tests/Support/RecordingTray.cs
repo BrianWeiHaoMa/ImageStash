@@ -31,7 +31,9 @@ public sealed class RecordingTray(int toolTipLength = 127) : ITray
     public List<(string Header, string Text)> HeaderChanges { get; } = [];
 
     /// <summary>Whether the icon shows its red dot.</summary>
-    public bool Recording { get; private set; }
+    public bool Recording => Icon == TrayIconState.Recording;
+
+    public TrayIconState Icon { get; private set; }
 
     /// <summary>Keeps the toggle's state on the entry, as the menu shows it at its next opening.</summary>
     public void SetChecked(string header, bool isChecked) =>
@@ -46,5 +48,5 @@ public sealed class RecordingTray(int toolTipLength = 127) : ITray
     public void SetGesture(string header, KeyGesture? gesture) =>
         Entries = Entries.Select(entry => entry.Header == header ? entry with { Gesture = gesture } : entry).ToList();
 
-    public void SetRecording(bool recording) => Recording = recording;
+    public void SetIcon(TrayIconState state) => Icon = state;
 }

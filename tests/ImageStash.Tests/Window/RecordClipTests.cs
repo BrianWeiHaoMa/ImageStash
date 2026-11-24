@@ -266,7 +266,9 @@ public sealed class RecordClipTests
     }
 
     [TestMethod]
-    public async Task TheTraysRecordAClipBeginsTheRecordingReadsStartRecordingWhileItWaitsAndStopRecordingWhileItSamplesEachChosenInTurn()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task TheTraysRecordAClipBeginsTheRecordingReadsStartRecordingWhileItWaitsAndStopRecordingWhileItSamplesEachChosenInTurn(bool paused)
     {
         using var recording = await ClipRecording.Open();
         var tray = new RecordingTray();
@@ -276,13 +278,24 @@ public sealed class RecordClipTests
         // Bound as ImageStash binds them: the entry runs the act, and the act tells the menu of the sampling.
         act = new RecordClip(recording.Listing, recording.Notifications, recording.CaptureNotification, recording.Handoff, recording.Capture, recording.Settings, recording.Hiding, null!,
             menu.SetRecording, TestStash.ShortRetry);
-        menu.Show(new GlobalShortcuts(recording.Settings, GlobalShortcuts.Bindings(() => { }, () => { }, () => { }, () => { }), new RecordingShortcuts(), _ => { }, action => action()));
+        var shortcuts = new GlobalShortcuts(recording.Settings, GlobalShortcuts.Bindings(() => { }, () => { }, () => { }, () => { }),
+            new RecordingShortcuts(), _ => { }, action => action());
+        menu.Show(shortcuts);
+        shortcuts.Start();
+        act.FollowShortcuts(shortcuts);
+        if (paused)
+        {
+            tray.Entries.Single(each => each.Header == TrayMenu.PauseHeader).Chosen();
+        }
+
+        var idleIcon = paused ? TrayIconState.Paused : TrayIconState.Plain;
         var entry = tray.Entries.Single(each => each.Header == TrayMenu.RecordClipHeader);
 
         entry.Chosen();
         await recording.WhileWaiting();
         CollectionAssert.AreEqual(new[] { (TrayMenu.RecordClipHeader, TrayMenu.StartRecordingHeader) }, tray.HeaderChanges, "the entry reads Start recording while the region waits (G34)");
-        Assert.IsFalse(tray.Recording, "no red dot before the recording runs (G15)");
+        Assert.AreEqual(idleIcon, tray.Icon, "no red dot before the recording runs (G15)");
+        Assert.AreEqual(paused ? null : "Ctrl+Shift+PrtScn", recording.Frame.ShortcutsNamed.Last(), "the bar advertises the shortcut only while it can act");
         entry.Chosen();
         await recording.WhileSampling();
         await Handing.Eventually(() => tray.Recording);
@@ -297,7 +310,7 @@ public sealed class RecordClipTests
         CollectionAssert.AreEqual(
             new[] { (TrayMenu.RecordClipHeader, TrayMenu.StartRecordingHeader), (TrayMenu.RecordClipHeader, TrayMenu.StopRecordingHeader), (TrayMenu.RecordClipHeader, TrayMenu.RecordClipHeader) },
             tray.HeaderChanges, "and Record a clip again");
-        Assert.IsFalse(tray.Recording, "the red dot gone");
+        Assert.AreEqual(idleIcon, tray.Icon, "the red dot gone and the pause mark restored if paused");
     }
 
     [TestMethod]

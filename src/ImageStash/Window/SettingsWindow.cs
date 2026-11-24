@@ -14,9 +14,9 @@ namespace ImageStash.Window;
 /// Settings, F4's one separate page: a normal window titled "ImageStash settings" that draws its
 /// <see cref="SettingsPage"/> as one scrolling page of grouped rows (L2), each control named by its row's
 /// title, a shortcut row's Reset beside its field (<see cref="ShortcutResetButton"/>), a failed act's sentence under
-/// its row, and the start's read failure and a refused write at the top (G35); while
+/// its row, and the start's read failure, a refused write and the paused shortcuts line at the top (G33, G35); while
 /// a Move is asked, its busy state under the stash folder's path, and while an export or an import is, its busy state
-/// under its row, every control disabled until it has ended; an import's offer inside the Import row (F4,
+/// under its row, the option rows disabled until it has ended; an import's offer inside the Import row (F4,
 /// <see cref="ImportOfferPanel"/>); and at its foot, the running build as one quiet line of text that can be selected and
 /// copied (<see cref="SettingsPage.VersionLine"/>). One
 /// is open at a time, brought forward when asked again (<see cref="Open"/>), on the row of a shortcut that is
@@ -48,6 +48,7 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
     private readonly TextBlock importLine = Line();
     private readonly ImportOfferPanel offer;
     private readonly StackPanel content;
+    private readonly PausedShortcutsLine pausedShortcuts;
     private readonly ToggleSwitch startWithWindows;
     private readonly ComboBox theme;
     private readonly ComboBox thumbnailSize;
@@ -92,9 +93,8 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
 
         readFailure = TopWarning(readFailureWords);
         writeFailure = TopWarning(writeFailureWords);
-        content = new StackPanel { Margin = new Thickness(20, 4, 20, 20) };
-        content.Children.Add(readFailure);
-        content.Children.Add(writeFailure);
+        pausedShortcuts = PausedShortcutsLine.ForSettings(page);
+        content = new StackPanel();
         string? group = null;
         StackPanel? card = null;
         foreach (var row in page.Rows)
@@ -117,7 +117,11 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
         content.Children.Add(new SelectableTextBlock { Text = SettingsPage.VersionLine, FontSize = 12, Opacity = 0.6, Margin = new Thickness(0, 20, 0, 0) });
         Content = new ScrollViewer
         {
-            Content = content,
+            Content = new StackPanel
+            {
+                Margin = new Thickness(20, 4, 20, 20),
+                Children = { readFailure, writeFailure, pausedShortcuts, content },
+            },
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
         };
@@ -274,6 +278,13 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
             readFailure.IsVisible = page.ReadFailure is not null;
             writeFailureWords.Text = page.WriteFailure?.Sentence;
             writeFailure.IsVisible = page.WriteFailure is not null;
+            if (!page.ShortcutsPaused && pausedShortcuts.Resume.IsFocused && content.IsEnabled)
+            {
+                // The focused Resume button is about to go away. Keep the keyboard on the first Settings row.
+                FocusShortcutRow(ShortcutAct.Open);
+            }
+
+            pausedShortcuts.IsVisible = page.ShortcutsPaused;
         }
         finally
         {

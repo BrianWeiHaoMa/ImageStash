@@ -459,7 +459,7 @@ finally {
 Write-Host ''
 Write-Host 'A person observes, with a published copy running:'
 Write-Host "  1. the ImageStash icon is in the notification area, among the hidden icons as a new icon is; pointing at it reads ""ImageStash $([char]0xB7) Ctrl+Alt+Space"","
-Write-Host '     and only "ImageStash" while Pause shortcuts is checked, the shortcut back the moment it is unchecked (G33, G34);'
+Write-Host "     and ""ImageStash $([char]0xB7) shortcuts paused"" while Pause shortcuts is checked and no failures are named, the shortcut back when resumed (G33, G34);"
 Write-Host '  2. a right-click on it opens a menu holding Open ImageStash beside Ctrl+Alt+Space, Take a screenshot beside Ctrl+PrtScn, Record a clip beside Ctrl+Shift+PrtScn, Stash clipboard image beside the Win, Alt and V keys, Pause shortcuts, Settings and Quit ImageStash; Quit ImageStash ends the process and removes the icon (G34);'
 Write-Host '  3. on a first run the window opens pinned with "Your stash is empty" and the line about dropping files, then rows, each with its shortcut in key caps:'
 Write-Host '     Paste a copied image Ctrl+V, Take a screenshot Ctrl+PrtScn, Record a clip Ctrl+Shift+PrtScn, Stash the clipboard image Win+Alt+V and Import files'
@@ -534,9 +534,13 @@ Write-Host '     composer shows and whether the flyout opened beside the caret o
 Write-Host " 20. over Notepad started as administrator, and over a window whose process is suspended, Enter copies and ""Copied $([char]0xB7) press Ctrl+V"" shows"
 Write-Host '     above the tray without taking focus, six seconds, longer while hovered, the flyout hidden so that app is in front for its Ctrl+V, a pinned'
 Write-Host '     window staying; the suspended one, resumed, shows no paste (G8, G2, G16, E6);'
-Write-Host ' 21. Pause shortcuts in the tray menu (checked): Ctrl+Alt+Space does nothing; toggled back, it opens the window; with a second keyboard layout'
-Write-Host '     on which Ctrl+Alt+Space types a character, switching to it names the shortcut in the tooltip and in a notification above the tray'
-Write-Host '     within a second (G33, G34, F5, G16);'
+Write-Host ' 21. Pause shortcuts in the tray menu (checked). Ctrl+Alt+Space does nothing. The tray shows pause bars. Open the stash'
+Write-Host '     from the tray and open Settings. Both say "Shortcuts are paused" with Resume. In a 460-DIP flyout at 100% and 150%,'
+Write-Host '     the hints, busy words and count keep their places. Click Resume in the footer, then pause again and use Tab and Space'
+Write-Host '     on Resume in Settings. Each time the tray check clears, both lines go and Ctrl+Alt+Space opens the window again.'
+Write-Host '     With a layout on which Ctrl+Alt+Space types a character, switching to it shows the warning badge and names the'
+Write-Host '     shortcut in the tooltip and a notification within a second. Check both badges on light and dark taskbars. Start'
+Write-Host '     recording from the tray while paused. During recording its red dot takes precedence, then the pause badge returns (G15, G33, G34);'
 Write-Host ' 22. from a real click on the tray to a double-click on a tile with the pointer alone, and from the shortcut to Enter with the keyboard'
 Write-Host '     alone, the paste path runs with visible focus (G7);'
 Write-Host ' 23. a picture copied with Copy image in the browser you use, then Ctrl+V in the search box, in the grid and the + menu''s Paste image'

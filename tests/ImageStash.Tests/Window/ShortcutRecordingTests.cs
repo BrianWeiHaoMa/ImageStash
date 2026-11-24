@@ -230,7 +230,7 @@ public sealed class ShortcutRecordingTests
             Assert.IsTrue(field.IsRecording, "the field still records, so the next press is the retry (G32)");
             Assert.IsEmpty(started.Seam.Registered, "Pause still holds all four off (G33)");
             Assert.AreEqual(ShortcutAct.Screenshot, started.Shortcuts.FirstUnavailable, "refused at that registration, so unavailable, Settings opening on its row (G33)");
-            Assert.AreEqual(line, started.Tray.ToolTip, "the tray icon says which and why (G33)");
+        Assert.AreEqual($"ImageStash · shortcuts paused\n{line}", started.Tray.ToolTip, "Pause is named beside G33's whole reason when there is room");
         }
 
         field.Cancel();

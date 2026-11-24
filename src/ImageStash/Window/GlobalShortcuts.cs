@@ -154,12 +154,11 @@ public sealed class GlobalShortcuts
         {
             release = TakeRegistered();
             var texts = settings.Current.Shortcuts;
+            holdOff = paused || suspended;
             foreach (var each in bound)
             {
-                each.Bind(TextIn(texts, each.Binding.Act));
+                each.Bind(TextIn(texts, each.Binding.Act), holdOff);
             }
-
-            holdOff = paused || suspended;
         }
 
         foreach (var shortcut in release)
@@ -182,8 +181,12 @@ public sealed class GlobalShortcuts
             var each = bound[i];
             var reason = (each.Parsed.Succeeded ? null : ShortcutReason.NotAShortcut)
                 // Two settings spelling one combination: the seam would take the second for another program's hold.
-                ?? (bound.Take(i).FirstOrDefault(earlier => earlier.Shortcut == each.Shortcut) is { } earlier ? ShortcutReason.UsedBy(earlier.Binding.Act) : null)
-                ?? (holdOff ? MarkDue(each) : Register(each) is { } refused ? ShortcutReason.Of(refused) : null);
+                ?? (bound.Take(i).FirstOrDefault(earlier => earlier.Shortcut == each.Shortcut) is { } earlier ? ShortcutReason.UsedBy(earlier.Binding.Act) : null);
+            if (reason is null && each.Unavailable is null)
+            {
+                reason = holdOff ? MarkDue(each) : Register(each) is { } refused ? ShortcutReason.Of(refused) : null;
+            }
+
             if (reason is not null)
             {
                 MakeUnavailable(each, reason);
@@ -227,6 +230,15 @@ public sealed class GlobalShortcuts
 
         RegisterAgain(again);
         Changed?.Invoke();
+    }
+
+    /// <summary>Ends Pause through the tray toggle, on the UI thread. A second Resume leaves shortcuts active.</summary>
+    internal void ResumePaused()
+    {
+        if (Paused)
+        {
+            TogglePause();
+        }
     }
 
     /// <summary>
@@ -670,8 +682,16 @@ public sealed class GlobalShortcuts
 
         public void Restore(Bindings before) => (Text, Parsed, Due, Unavailable) = (before.Text, before.Parsed, before.Due, before.Unavailable);
 
-        /// <summary>Bound afresh to <paramref name="text"/>, as at start: not yet due, and not unavailable until judged.</summary>
-        public void Bind(string text) => (Text, Parsed, Due, Unavailable) = (text, Shortcut.Parse(text), false, null);
+        public void Bind(string text, bool holdOff)
+        {
+            var parsed = Shortcut.Parse(text);
+            // A paused or suspended registration cannot rejudge the same combination. Local conflicts are checked afresh.
+            var knownRefusal = holdOff && parsed.Value == Shortcut && Unavailable is
+                { Reason.Kind: not (ShortcutReasonKind.UsedByAnother or ShortcutReasonKind.NotAShortcut) } refusal
+                ? refusal
+                : null;
+            (Text, Parsed, Due, Unavailable) = (text, parsed, false, knownRefusal);
+        }
 
         /// <summary>What a binding held before a rebind, put back should the seam refuse the candidate.</summary>
         public readonly record struct Bindings(string Text, Outcome<Shortcut> Parsed, bool Due, ShortcutProblem? Unavailable);

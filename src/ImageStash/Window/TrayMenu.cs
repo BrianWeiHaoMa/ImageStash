@@ -19,6 +19,7 @@ namespace ImageStash.Window;
 /// </summary>
 public sealed class TrayMenu
 {
+    private const string PausedToolTip = "ImageStash · shortcuts paused";
     public const string OpenHeader = "Open ImageStash";
     public const string TakeScreenshotHeader = "Take a screenshot";
     public const string RecordClipHeader = "Record a clip";
@@ -79,6 +80,7 @@ public sealed class TrayMenu
     public void Show(GlobalShortcuts shortcuts)
     {
         this.shortcuts = shortcuts;
+        ShowIcon();
         tray.Show(
             [
                 .. ShortcutEntries.Select(entry => new TrayMenuEntry(entry.Header, ChosenOf(entry.Act), shortcuts.ShortcutOf(entry.Act)?.Gesture, MenuClosed: entry.Act == ShortcutAct.Open ? OpenedMenuClosed : null)),
@@ -122,6 +124,7 @@ public sealed class TrayMenu
         // A shortcut registered since, or unavailable for another reason now, is no longer what its line says.
         named.RemoveAll(line => line.Unavailable is { } unavailable && !reasons.Contains(unavailable));
         ShowHeaders();
+        ShowIcon();
         tray.SetToolTip(ToolTip());
     }
 
@@ -154,15 +157,22 @@ public sealed class TrayMenu
     }
 
     /// <summary>
-    /// While a recording's region waits, the plain icon and Record a clip reading Start recording; while it samples, the
-    /// icon with its red dot and the entry reading Stop recording; otherwise the plain icon and Record a clip (G15, G34).
+    /// The icon's red dot and Stop recording while sampling, Start recording while the region waits (G15, G34).
     /// </summary>
     public void SetRecording(RecordingStage stage)
     {
         recording = stage;
         ShowHeaders();
-        tray.SetRecording(stage == RecordingStage.Sampling);
+        ShowIcon();
     }
+
+    private void ShowIcon() => tray.SetIcon(recording switch
+    {
+        RecordingStage.Sampling => TrayIconState.Recording,
+        _ when shortcuts?.Paused == true => TrayIconState.Paused,
+        _ when shortcuts?.FirstUnavailable is not null => TrayIconState.Unavailable,
+        _ => TrayIconState.Plain,
+    });
 
     /// <summary>Adds a failure to the tooltip, newest first, until the next start.</summary>
     public void Name(Failure failure) => Add((failure, null));
@@ -186,6 +196,8 @@ public sealed class TrayMenu
     {
         named.RemoveAll(line => line.Unavailable?.Act == unavailable.Act);
         Add((null, unavailable));
+        // At startup a refused registration is named without raising Changed.
+        ShowIcon();
     }
 
     private void Add((Failure? Failure, ShortcutProblem? Unavailable) line)
@@ -216,11 +228,33 @@ public sealed class TrayMenu
 
     private string ToolTip()
     {
+        if (shortcuts?.Paused == true)
+        {
+            if (named.Count == 0)
+            {
+                return PausedToolTip;
+            }
+
+            // Give up the paused line before any failure's words need shortening (G33).
+            var whole = string.Join("\n", named.Select(line => line.Unavailable is { } problem
+                ? ShortcutWords.ToolTipLine(problem)
+                : line.Failure!.Sentence));
+            if (PausedToolTip.Length + 1 + whole.Length <= tray.ToolTipLength)
+            {
+                return $"{PausedToolTip}\n{whole}";
+            }
+        }
+
         if (named.Count == 0)
         {
             return OpenShortcutSummoning() is { } open ? $"ImageStash · {open.Text}" : "ImageStash";
         }
 
+        return NamedToolTip();
+    }
+
+    private string NamedToolTip()
+    {
         // The lines shown, newest first, by their index in named; how far each is shortened, an index into its forms.
         var kept = Enumerable.Range(0, named.Count).ToList();
         var shortened = new int[named.Count];

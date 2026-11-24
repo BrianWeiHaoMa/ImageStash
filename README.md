@@ -52,8 +52,9 @@ window, as a click on its tray icon does, whether or not it was already running.
 A new screenshot, recording or stashed clipboard image is in Recent, by when you made it, before you use it. Drop files
 or a folder onto the window to add them, and tag pictures to find them by a word. `Ctrl+D` makes the
 selected pictures favorites, or takes them off: a favorite's tile carries a small star, and so does its preview, where a
-click on the star does the same. The tray icon's right-click menu holds the captures, Settings (where each shortcut
-can be changed) and Quit.
+click on the star does the same. The tray icon's right-click menu holds the captures, Pause shortcuts, Settings
+(where each shortcut can be changed) and Quit. While shortcuts are paused, the icon shows a pause badge and the
+stash footer and Settings offer Resume. The tray also marks unavailable shortcuts and names them in its tooltip.
 
 | The grid, with tags as chips | A picture's preview | The editor, edits kept as layers |
 |---|---|---|

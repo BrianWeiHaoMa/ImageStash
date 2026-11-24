@@ -30,6 +30,7 @@ public sealed class WindowStatus
     private readonly DockPanel hints;
     private readonly StackPanel busy;
     private readonly TextBlock busyText;
+    private readonly PausedShortcutsLine pausedShortcuts;
     private string? shownState;
     private IReadOnlyList<string> shownHints = [];
 
@@ -58,7 +59,8 @@ public sealed class WindowStatus
         // G35: the running import's, copy's, delete's or rename's busy state, naming it, until it has finished.
         busyText = new TextBlock { FontSize = 11.5, VerticalAlignment = VerticalAlignment.Center };
         busy = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, IsVisible = false };
-        Footer = WindowLayout.Footer(hints, busy, busyText, count);
+        pausedShortcuts = new PausedShortcutsLine(() => shortcuts?.ResumePaused(), focusable: false);
+        Footer = WindowLayout.Footer(hints, busy, busyText, count, new FooterPauseSlot(pausedShortcuts));
     }
 
     /// <summary>The empty stash's or the no-match state's view, shown in the grid's place.</summary>
@@ -83,6 +85,7 @@ public sealed class WindowStatus
     /// <summary>A shortcut remapped in Settings, or one unavailable or working again: the empty stash's rows and its line say so from now on (G2).</summary>
     public void ShortcutsChanged()
     {
+        pausedShortcuts.IsVisible = shortcuts?.Paused == true;
         shownState = null;
         ShowListing();
     }

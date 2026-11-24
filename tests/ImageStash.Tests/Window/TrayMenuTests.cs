@@ -98,10 +98,12 @@ public sealed class TrayMenuTests
         Assert.AreEqual(new KeyGesture(Key.PrintScreen, KeyModifiers.Shift), tray.Entries[1].Gesture, "Take a screenshot beside its own shortcut, registered or not (G34)");
         Assert.AreEqual(new KeyGesture(Key.PrintScreen, KeyModifiers.Alt), tray.Entries[2].Gesture, "Record a clip beside its own shortcut, registered or not (G34)");
         Assert.AreEqual(new KeyGesture(Key.V, KeyModifiers.Control | KeyModifiers.Shift), tray.Entries[3].Gesture, "Stash clipboard image beside its own shortcut, registered or not (G34)");
+        var gestures = tray.Entries.Select(entry => entry.Gesture).ToList();
         Assert.IsFalse(tray.Entries[4].Checked!.Value);
         tray.Entries[4].Chosen();
         Assert.IsTrue(shortcuts.Paused);
         Assert.IsTrue(tray.Entries[4].Checked!.Value);
+        CollectionAssert.AreEqual(gestures, tray.Entries.Select(entry => entry.Gesture).ToList(), "Pause releases shortcuts and leaves their menu labels visible (G34)");
         shortcuts.TogglePause();
         Assert.IsFalse(tray.Entries[4].Checked!.Value);
     }
@@ -149,7 +151,7 @@ public sealed class TrayMenuTests
 
         started.Tray.Entries[4].Chosen();
         Assert.IsTrue(started.Shortcuts.Paused);
-        Assert.AreEqual("ImageStash", started.Tray.ToolTip, "Pause releases all four, so the tooltip offers no key that does nothing (G33)");
+        Assert.AreEqual("ImageStash · shortcuts paused", started.Tray.ToolTip, "while Pause releases all four, the tooltip says so and offers no key that does nothing (G33)");
 
         started.Tray.Entries[4].Chosen();
         Assert.AreEqual("ImageStash · Ctrl+Alt+Space", started.Tray.ToolTip, "toggled back, at that moment");
@@ -172,7 +174,7 @@ public sealed class TrayMenuTests
             Assert.IsNull(started.Shortcuts.Rebind(ShortcutAct.Open, Shortcut.Parse("Alt+F9").Value!));
         }
 
-        Assert.AreEqual("ImageStash", started.Tray.ToolTip, "remapped under Pause, still released");
+        Assert.AreEqual("ImageStash · shortcuts paused", started.Tray.ToolTip, "remapped under Pause, still released");
         started.Shortcuts.TogglePause();
         Assert.AreEqual("ImageStash · Alt+F9", started.Tray.ToolTip);
     }

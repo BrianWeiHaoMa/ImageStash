@@ -77,16 +77,47 @@ public sealed class WindowsTrayTests
         var plain = tray.Icon.Icon;
 
         tray.SetHeader("Record a clip", "Stop recording");
-        tray.SetRecording(true);
+        tray.SetIcon(TrayIconState.Recording);
         Assert.AreEqual("Stop recording", items[1].Header, "the menu reads it at its next opening (G34)");
         Assert.AreEqual("Open", items[0].Header, "no other entry changed");
         Assert.IsNotNull(tray.Icon.Icon);
         Assert.AreNotSame(plain, tray.Icon.Icon, "the icon with its red dot (G15)");
 
         tray.SetHeader("Record a clip", "Record a clip");
-        tray.SetRecording(false);
+        tray.SetIcon(TrayIconState.Plain);
         Assert.AreEqual("Record a clip", items[1].Header, "still found by the header it was shown with");
         Assert.AreSame(plain, tray.Icon.Icon, "the plain icon again");
+    });
+
+    [TestMethod]
+    public void EachMarkReplacesTheCurrentIconWhileTheTooltipKeepsItsWords() => TrayDesktop.Run(() =>
+    {
+        using var tray = new WindowsTray();
+        const string unavailable = "Ctrl+PrtScn is used by another app, so Take a screenshot has no shortcut.";
+        const string paused = "ImageStash · shortcuts paused";
+        tray.SetIcon(TrayIconState.Unavailable);
+        tray.Show([], unavailable, () => { });
+        var warning = tray.Icon!.Icon;
+        Assert.AreEqual(unavailable, tray.Icon.ToolTipText);
+
+        tray.SetIcon(TrayIconState.Paused);
+        tray.SetToolTip($"{paused}\n{unavailable}");
+        var bars = tray.Icon.Icon;
+        tray.SetIcon(TrayIconState.Recording);
+        var redDot = tray.Icon.Icon;
+        Assert.AreEqual($"{paused}\n{unavailable}", tray.Icon.ToolTipText, "the red dot leaves the whole tooltip available");
+
+        tray.SetIcon(TrayIconState.Plain);
+        var plain = tray.Icon.Icon;
+        Assert.HasCount(4, new[] { plain, warning, bars, redDot }.OfType<WindowIcon>().Distinct());
+        tray.SetIcon(TrayIconState.Paused);
+        Assert.AreSame(bars, tray.Icon.Icon);
+        tray.SetIcon(TrayIconState.Unavailable);
+        Assert.AreSame(warning, tray.Icon.Icon);
+        tray.SetIcon(TrayIconState.Recording);
+        Assert.AreSame(redDot, tray.Icon.Icon);
+        tray.SetIcon(TrayIconState.Plain);
+        Assert.AreSame(plain, tray.Icon.Icon);
     });
 
     [TestMethod]
