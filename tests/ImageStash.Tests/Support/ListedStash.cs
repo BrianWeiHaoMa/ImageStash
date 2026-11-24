@@ -29,7 +29,10 @@ public sealed class ListedStash : IDisposable
     private bool handedOn;
     private StashItem? previewItem;
 
-    private ListedStash(TestStash stash, TimeProvider captureClock, ClipOpener? opener, TimeSpan? editRetry = null, TimeSpan? saveACopyRetry = null)
+    /// <param name="tray">The tray menu following these shortcuts, told what becomes unavailable, as the app wires it; none when null.</param>
+    /// <param name="held">Combinations another program already holds when the shortcuts start.</param>
+    private ListedStash(TestStash stash, TimeProvider captureClock, ClipOpener? opener, TimeSpan? editRetry = null, TimeSpan? saveACopyRetry = null,
+        Func<ListedStash, TrayMenu>? tray = null, IReadOnlyList<Shortcut>? held = null)
     {
         Stash = stash;
         Notices = Notices.InWindow(stash.Clock);
@@ -100,7 +103,20 @@ public sealed class ListedStash : IDisposable
         }, Turns.Next);
         Moving.WaitForWindow(Paste, Import, Handoff, Deletion, Renaming, Organising, Editing, ItemMenu, Notices);
         Moving.WaitForTray(Screenshot, RecordClip, StashClipboardImage, CaptureNotification, OpenWith, Notifications);
-        Shortcuts = new GlobalShortcuts(Settings, GlobalShortcuts.Bindings(() => { }, () => { }, () => { }, () => { }), ShortcutsSeam, Unavailable.Add, action => action());
+        var menu = tray?.Invoke(this);
+        Shortcuts = new GlobalShortcuts(Settings,
+            GlobalShortcuts.Bindings(() => ShortcutActsRun.Add(ShortcutAct.Open), () => ShortcutActsRun.Add(ShortcutAct.Screenshot), () => ShortcutActsRun.Add(ShortcutAct.Record), () => ShortcutActsRun.Add(ShortcutAct.StashClipboardImage)),
+            ShortcutsSeam, problem =>
+            {
+                Unavailable.Add(problem);
+                menu?.NameUnavailableShortcut(problem);
+            }, action => action());
+        menu?.Show(Shortcuts);
+        foreach (var shortcut in held ?? [])
+        {
+            ShortcutsSeam.Refuse(shortcut, ShortcutRefusal.HeldByAnotherProgram);
+        }
+
         Shortcuts.Start();
         RecordClip.FollowShortcuts(Shortcuts);
         Transferring = new Transferring(Listing, Notices, Settings, Dialogs, stash.RecycleBin, Handoff, OpenWith, Moving, ApplyTravelling, stash.Clock, TestStash.ShortRetry);
@@ -126,8 +142,11 @@ public sealed class ListedStash : IDisposable
 
     public RecordingShortcuts ShortcutsSeam { get; } = new();
 
-    /// <summary>Every shortcut named unavailable, as the tray's tooltip would name it (G33).</summary>
-    public List<Failure> Unavailable { get; } = [];
+    /// <summary>Every shortcut told unavailable, as the tray's tooltip is told (G33).</summary>
+    public List<ShortcutProblem> Unavailable { get; } = [];
+
+    /// <summary>The acts a press of their global shortcut ran, in order.</summary>
+    public List<ShortcutAct> ShortcutActsRun { get; } = [];
 
     /// <summary>The Run entry's seam, which the imported Start with Windows sets or clears.</summary>
     public RecordingStartWithWindows StartWithWindows { get; } = new();
@@ -436,6 +455,18 @@ public sealed class ListedStash : IDisposable
     {
         await Stash.OpenCleanly();
         await Listing.StashOpened(Stash.Store!);
+    }
+
+    /// <summary>
+    /// Opens it as <see cref="Open(TimeSpan?, TimeSpan?, TimeSpan?)"/> does, with the tray menu <paramref name="tray"/> makes
+    /// following its shortcuts, and <paramref name="held"/> another program's from before the shortcuts start.
+    /// </summary>
+    public static async Task<ListedStash> OpenWithTray(Func<ListedStash, TrayMenu> tray, IReadOnlyList<Shortcut> held)
+    {
+        var stash = new TestStash { Retry = TestStash.ShortRetry };
+        var listed = new ListedStash(stash, stash.Clock, opener: null, tray: tray, held: held);
+        await listed.OpenStash();
+        return listed;
     }
 
     /// <summary>Opens it as <see cref="Open(TimeSpan?, TimeSpan?)"/> does, its clock reading local time in <paramref name="zone"/>.</summary>

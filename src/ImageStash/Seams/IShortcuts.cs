@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia.Input;
 
 namespace ImageStash.Seams;
@@ -10,11 +11,11 @@ public interface IShortcuts
 {
     /// <summary>
     /// Registers <paramref name="shortcut"/> system-wide, unless another program holds it or it would type a character
-    /// on the keyboard layout in use (<see cref="ShortcutReasons"/>); a combination that would type one is not left
-    /// registered. <paramref name="pressed"/> runs on the seam's thread at each press that passed the layout check
-    /// made before acting, and returns quickly. Called on the UI thread; returns once the registration is done or refused.
+    /// on the keyboard layout in use; a combination that would type one is not left registered. Returns null once it is
+    /// registered, else why not. <paramref name="pressed"/> runs on the seam's thread at each press that passed the layout
+    /// check made before acting, and returns quickly. Called on the UI thread; returns once the registration is done or refused.
     /// </summary>
-    Outcome Register(Shortcut shortcut, Action pressed);
+    ShortcutRefusal? Register(Shortcut shortcut, Action pressed);
 
     /// <summary>Releases <paramref name="shortcut"/>; nothing happens when it is not registered.</summary>
     void Release(Shortcut shortcut);
@@ -24,18 +25,44 @@ public interface IShortcuts
     /// registered shortcut because the keyboard layout in use makes it type a character: judged at least once a second
     /// and once more at a press, before it acts, whose press is then swallowed (G33).
     /// </summary>
-    void ListenForReleases(Action<Shortcut, string> released);
+    void ListenForReleases(Action<Shortcut, ShortcutRefusal> released);
 }
 
-/// <summary>Why a shortcut is not registered, in the words the tray's tooltip shows (G33, G35).</summary>
-public static class ShortcutReasons
+/// <summary>The kinds of reason the seam gives for not registering a shortcut, or for letting one go (G33).</summary>
+public enum ShortcutRefusalKind
 {
-    public const string HeldByAnotherProgram = "another program holds it";
-    // Short enough that the tooltip, 127 characters on Windows, keeps it beside two other failures cut to their action.
-    public const string TypesACharacter = "it would type a character";
-    public const string NotAShortcut = "not a shortcut ImageStash understands";
+    HeldByAnotherProgram,
+    TypesACharacter,
+    NotAKey,
+    /// <summary>A reason the platform words itself, such as an error's text, kept whole in <see cref="ShortcutRefusal.Words"/>.</summary>
+    Stated,
+}
 
-    public static string NotAKey(Key key) => $"{key} is not a key this PC can register";
+/// <summary>
+/// Why the seam did not register a shortcut, or let one go: its kind, and apart from it the detail a sentence names,
+/// the character a combination types on the layout judged, or the platform's own words. Callers read the kind, never
+/// the words, to tell reasons apart; the detail never makes a new reason.
+/// </summary>
+public sealed record ShortcutRefusal(ShortcutRefusalKind Kind, string? Character = null, string? Words = null)
+{
+    public static readonly ShortcutRefusal HeldByAnotherProgram = new(ShortcutRefusalKind.HeldByAnotherProgram);
+
+    /// <summary>
+    /// The combination types a character on the layout judged: <paramref name="character"/>, what its press types there,
+    /// kept only when every one of its characters shows as a glyph; a dead key, a control code, white space or a mark
+    /// that shows nothing on its own is kept as none, so a sentence then names no character.
+    /// </summary>
+    public static ShortcutRefusal TypesACharacter(string? character) =>
+        new(ShortcutRefusalKind.TypesACharacter, character is { Length: > 0 } && character.All(Shows) ? character : null);
+
+    public static ShortcutRefusal NotAKey(Key key) => new(ShortcutRefusalKind.NotAKey, Words: key.ToString());
+
+    public static ShortcutRefusal Stated(string words) => new(ShortcutRefusalKind.Stated, Words: words);
+
+    private static bool Shows(char character) =>
+        !char.IsControl(character) && !char.IsWhiteSpace(character)
+        && char.GetUnicodeCategory(character) is not (UnicodeCategory.Format or UnicodeCategory.NonSpacingMark or UnicodeCategory.EnclosingMark
+            or UnicodeCategory.SpacingCombiningMark or UnicodeCategory.PrivateUse or UnicodeCategory.OtherNotAssigned);
 }
 
 /// <summary>
@@ -44,6 +71,8 @@ public static class ShortcutReasons
 /// </summary>
 public sealed record Shortcut(KeyGesture Gesture, string Text)
 {
+    private const string NotAShortcut = "not a shortcut ImageStash understands";
+
     // The order the text writes them in: Win first, as F5 writes Win+Alt+V and Windows writes its own Win+Shift+S.
     private static readonly (string Name, KeyModifiers Modifier)[] Modifiers =
         [("Win", KeyModifiers.Meta), ("Ctrl", KeyModifiers.Control), ("Alt", KeyModifiers.Alt), ("Shift", KeyModifiers.Shift)];
@@ -78,13 +107,13 @@ public sealed record Shortcut(KeyGesture Gesture, string Text)
             }
             else
             {
-                return new Failure("Read a shortcut", text, ShortcutReasons.NotAShortcut);
+                return new Failure("Read a shortcut", text, NotAShortcut);
             }
         }
 
         if (key is not { } found)
         {
-            return new Failure("Read a shortcut", text, ShortcutReasons.NotAShortcut);
+            return new Failure("Read a shortcut", text, NotAShortcut);
         }
 
         return Outcome<Shortcut>.Of(Of(new KeyGesture(found, modifiers)));

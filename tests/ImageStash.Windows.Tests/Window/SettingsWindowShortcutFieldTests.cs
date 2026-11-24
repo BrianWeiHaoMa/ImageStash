@@ -43,10 +43,18 @@ public sealed class SettingsWindowShortcutFieldTests
             await Record(window, SettingsPage.TakeScreenshotTitle);
             TestHotKeys.Press(open);
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => WarningUnder(window, SettingsPage.TakeScreenshotTitle)) is not null);
-            Assert.AreEqual("Register the screenshot shortcut failed: Ctrl+Alt+Space, the open shortcut uses it too", TrayDesktop.Get(() => WarningUnder(window, SettingsPage.TakeScreenshotTitle)),
-                "the press reached the field and was refused on the spot (G32)");
+            Assert.AreEqual("Open ImageStash already uses Ctrl+Alt+Space.", TrayDesktop.Get(() => WarningUnder(window, SettingsPage.TakeScreenshotTitle)),
+                "the press reached the field and was refused on the spot, in words of guidance (G32, G35)");
             Assert.AreEqual(0, settings.Pressed(ShortcutAct.Open), "and summoned nothing");
             Assert.IsFalse(SystemMenuShown(), "no window menu opened by the press");
+            Assert.IsTrue(TrayDesktop.Get(() => window.Page.ShortcutField(SettingsPage.TakeScreenshotTitle)!.IsRecording), "the field still records: the next press is the retry (G32)");
+            TestHotKeys.Press(open);
+            await Task.Delay(300);
+            Assert.AreEqual(0, settings.Pressed(ShortcutAct.Open), "the retry of the open shortcut is refused again, never run");
+            Assert.AreEqual("Open ImageStash already uses Ctrl+Alt+Space.", TrayDesktop.Get(() => WarningUnder(window, SettingsPage.TakeScreenshotTitle)));
+            TestHotKeys.Tap(VkEscape);
+            await ShownWindow.Eventually(() => TrayDesktop.Get(() => !window.Page.ShortcutField(SettingsPage.TakeScreenshotTitle)!.IsRecording));
+            Assert.IsNull(TrayDesktop.Get(() => WarningUnder(window, SettingsPage.TakeScreenshotTitle)), "after Esc the row says only what is still true");
             TestHotKeys.Press(open);
             await ShownWindow.Eventually(() => settings.Pressed(ShortcutAct.Open) == 1);
             await Task.Delay(300);
@@ -56,7 +64,7 @@ public sealed class SettingsWindowShortcutFieldTests
             await Record(window, SettingsPage.RecordClipTitle);
             TestHotKeys.Press(Shortcut.Parse("Ctrl+PrtScn").Value!);
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => WarningUnder(window, SettingsPage.RecordClipTitle)) is not null);
-            Assert.AreEqual("Register the record shortcut failed: Ctrl+PrtScn, the screenshot shortcut uses it too", TrayDesktop.Get(() => WarningUnder(window, SettingsPage.RecordClipTitle)),
+            Assert.AreEqual("Take a screenshot already uses Ctrl+PrtScn.", TrayDesktop.Get(() => WarningUnder(window, SettingsPage.RecordClipTitle)),
                 "PrtScn, which Windows delivers no KeyDown for, records (F5)");
             Assert.AreEqual(0, settings.Pressed(ShortcutAct.Screenshot));
 
@@ -66,15 +74,15 @@ public sealed class SettingsWindowShortcutFieldTests
                 await Record(window, SettingsPage.TakeScreenshotTitle);
                 TestHotKeys.Press(held);
                 await ShownWindow.Eventually(() => TrayDesktop.Get(() => WarningUnder(window, SettingsPage.TakeScreenshotTitle))?.Contains("F9") == true);
-                Assert.AreEqual("Register the screenshot shortcut failed: Ctrl+Shift+F9, another program holds it", TrayDesktop.Get(() => WarningUnder(window, SettingsPage.TakeScreenshotTitle)),
+                Assert.AreEqual("Ctrl+Shift+F9 is already used by another app. Press a different combination.", TrayDesktop.Get(() => WarningUnder(window, SettingsPage.TakeScreenshotTitle)),
                     "a combination another app holds is refused and said so (Done when 5)");
 
                 await Record(window, SettingsPage.RecordClipTitle);
                 TestHotKeys.PressReleasingModifiersFirst(held);
                 await ShownWindow.Eventually(() => TrayDesktop.Get(() => WarningUnder(window, SettingsPage.RecordClipTitle))?.Contains("F9") == true);
-                Assert.AreEqual("Register the record shortcut failed: Ctrl+Shift+F9, another program holds it", TrayDesktop.Get(() => WarningUnder(window, SettingsPage.RecordClipTitle)),
+                Assert.AreEqual("Ctrl+Shift+F9 is already used by another app. Press a different combination.", TrayDesktop.Get(() => WarningUnder(window, SettingsPage.RecordClipTitle)),
                     "let go modifiers first, the held combination is still refused on the spot (G32)");
-                Assert.IsFalse(TrayDesktop.Get(() => window.Page.ShortcutField(SettingsPage.RecordClipTitle)!.IsRecording));
+                Assert.IsTrue(TrayDesktop.Get(() => window.Page.ShortcutField(SettingsPage.RecordClipTitle)!.IsRecording), "and the field still records");
                 Assert.AreEqual(Shortcut.Parse("Ctrl+Shift+PrtScn").Value, TrayDesktop.Get(() => settings.Shortcuts.ShortcutOf(ShortcutAct.Record)), "never plain F9, which nobody pressed (G32, F5)");
             }
 
@@ -86,7 +94,7 @@ public sealed class SettingsWindowShortcutFieldTests
                 TestHotKeys.Tap(VkShift);
                 TestHotKeys.Press(heldWithoutShift);
                 await ShownWindow.Eventually(() => TrayDesktop.Get(() => WarningUnder(window, SettingsPage.StashClipboardImageTitle)) is not null);
-                Assert.AreEqual("Register the Stash clipboard image shortcut failed: Ctrl+F9, another program holds it", TrayDesktop.Get(() => WarningUnder(window, SettingsPage.StashClipboardImageTitle)),
+                Assert.AreEqual("Ctrl+F9 is already used by another app. Press a different combination.", TrayDesktop.Get(() => WarningUnder(window, SettingsPage.StashClipboardImageTitle)),
                     "a Shift tapped and let go before the combination is no part of it (G32)");
 
                 // Ctrl held from before the click that begins the recording, so its KeyDown never reaches the field, and let go before F9.
@@ -97,9 +105,9 @@ public sealed class SettingsWindowShortcutFieldTests
                     ctrl.Dispose();
                 }
 
-                await ShownWindow.Eventually(() => TrayDesktop.Get(() => !window.Page.ShortcutField(SettingsPage.TakeScreenshotTitle)!.IsRecording));
+                await ShownWindow.Eventually(() => TrayDesktop.Get(() => WarningUnder(window, SettingsPage.TakeScreenshotTitle)) is not null);
                 await Task.Delay(300);
-                Assert.AreEqual("Register the screenshot shortcut failed: Ctrl+F9, another program holds it", TrayDesktop.Get(() => WarningUnder(window, SettingsPage.TakeScreenshotTitle)),
+                Assert.AreEqual("Ctrl+F9 is already used by another app. Press a different combination.", TrayDesktop.Get(() => WarningUnder(window, SettingsPage.TakeScreenshotTitle)),
                     "Ctrl held through the click is part of the press (G32)");
                 Assert.AreEqual(Shortcut.Parse("Ctrl+PrtScn").Value, TrayDesktop.Get(() => settings.Shortcuts.ShortcutOf(ShortcutAct.Screenshot)), "never plain F9, which nobody pressed (F5)");
             }
@@ -109,8 +117,10 @@ public sealed class SettingsWindowShortcutFieldTests
             {
                 await Record(window, SettingsPage.OpenTitle);
                 TestHotKeys.Tap(key);
-                await ShownWindow.Eventually(() => TrayDesktop.Get(() => WarningUnder(window, SettingsPage.OpenTitle)) is not null && !TrayDesktop.Get(() => window.Page.ShortcutField(SettingsPage.OpenTitle)!.IsRecording));
-                Assert.AreEqual($"Register the open shortcut failed: {name}, {ShortcutReasons.TypesACharacter}", TrayDesktop.Get(() => WarningUnder(window, SettingsPage.OpenTitle)));
+                await ShownWindow.Eventually(() => TrayDesktop.Get(() => WarningUnder(window, SettingsPage.OpenTitle))?.StartsWith(name + " ") == true);
+                Assert.AreEqual($"{name} types a character on your keyboard layout, so it can't be a shortcut.", TrayDesktop.Get(() => WarningUnder(window, SettingsPage.OpenTitle)),
+                    "its control code shown as no character");
+                Assert.IsTrue(TrayDesktop.Get(() => window.Page.ShortcutField(SettingsPage.OpenTitle)!.IsRecording), "the field still records");
                 Assert.AreEqual(open, TrayDesktop.Get(() => settings.Shortcuts.ShortcutOf(ShortcutAct.Open)));
             }
 
@@ -167,12 +177,12 @@ public sealed class SettingsWindowShortcutFieldTests
         try
         {
             var unavailable = TrayDesktop.Get(() => settings.Shortcuts.UnavailableReason(ShortcutAct.Open));
-            Assert.AreEqual("Register the open shortcut failed: Ctrl+Alt+Space, another program holds it", unavailable?.Sentence);
+            Assert.AreEqual(new ShortcutProblem(ShortcutAct.Open, "Ctrl+Alt+Space", ShortcutReason.Of(ShortcutRefusal.HeldByAnotherProgram)), unavailable);
             window = TrayDesktop.Get(() => SettingsWindow.Open(null, () => settings.Page(), settings.Shortcuts.FirstUnavailable));
             var field = TrayDesktop.Get(() => Control(window, SettingsPage.OpenTitle));
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => window.IsActive && field.IsFocused));
 
-            Assert.AreEqual(unavailable!.Sentence, TrayDesktop.Get(() => WarningUnder(window, SettingsPage.OpenTitle)), "Settings opens on that row with why (G33)");
+            Assert.AreEqual("Ctrl+Alt+Space is already used by another app. Press a different combination.", TrayDesktop.Get(() => WarningUnder(window, SettingsPage.OpenTitle)), "Settings opens on that row with why (G33)");
             Assert.IsFalse(TrayDesktop.Get(() => window.Page.ShortcutField(SettingsPage.OpenTitle)!.IsRecording), "focused, not yet recording");
             TestHotKeys.Tap(VkReturn);
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => window.Page.ShortcutField(SettingsPage.OpenTitle)!.IsRecording));

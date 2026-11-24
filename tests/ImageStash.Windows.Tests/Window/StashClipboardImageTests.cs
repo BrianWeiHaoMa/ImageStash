@@ -174,7 +174,7 @@ public sealed class StashClipboardImageTests
                 _ = act.Stash();
             }),
             seam,
-            failure => named.Add(failure.Sentence),
+            failure => named.Add(ShortcutWords.ToolTipLine(failure)),
             action => Dispatcher.UIThread.Post(action)));
         TrayDesktop.Run(shortcuts.Start);
         Assert.IsEmpty(named, "all four registered; another program, or a running ImageStash, holds none");

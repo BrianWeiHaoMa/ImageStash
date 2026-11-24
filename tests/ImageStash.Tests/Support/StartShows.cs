@@ -32,7 +32,7 @@ public sealed class StartShows
     public static async Task<StartShows> Run(IReadOnlyList<string> args, SettingsLoad settings, SettingsKeeper keeper, TestStash stash, Func<string, Task<StoreOpening>>? openStore = null)
     {
         var trayMenu = new TrayMenu(new RecordingTray(toolTipLength: 1000), () => { }, () => { }, () => { }, () => { }, () => { }, () => { });
-        trayMenu.Show(new GlobalShortcuts(StartedShortcuts.SettingsInMemory(), GlobalShortcuts.Bindings(() => { }, () => { }, () => { }, () => { }), new RecordingShortcuts(), trayMenu.Name, action => action()));
+        trayMenu.Show(new GlobalShortcuts(StartedShortcuts.SettingsInMemory(), GlobalShortcuts.Bindings(() => { }, () => { }, () => { }, () => { }), new RecordingShortcuts(), trayMenu.NameUnavailableShortcut, action => action()));
         var shows = new StartShows(new Listing(_ => { }));
         var start = new StartOpening(trayMenu, shows.Listing, new TestLocations(stash.Folder.Root, stash.Outside("settings")), stash.RecycleBin, stash.Retry,
             openStore ?? stash.OpenAt, _ => Outcome.Done,

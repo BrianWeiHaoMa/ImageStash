@@ -30,17 +30,12 @@ public sealed record ShortcutBinding(ShortcutAct Act, Action Pressed, bool AtThe
 /// </summary>
 public sealed class GlobalShortcuts
 {
-    /// <summary>Why a Settings field refuses the plain <c>Ctrl+V</c>: registered, it would swallow G8's own paste keystroke.</summary>
-    public const string PasteKeystrokeReason = "it is the paste keystroke the handoff sends";
-
-    /// <summary>Why a Settings field records no combination whose modifiers came up before its key, when nothing else refuses it.</summary>
-    public const string ModifiersLetGoFirstReason = "its modifiers came up before the key, so it was not recorded; hold them until the key is up";
-
+    // Registered, it would swallow G8's own paste keystroke, so a Settings field refuses it.
     private static readonly KeyGesture PasteKeystroke = new(Key.V, KeyModifiers.Control);
 
     private readonly SettingsKeeper settings;
     private readonly IShortcuts seam;
-    private readonly Action<Failure> name;
+    private readonly Action<ShortcutProblem> name;
     private readonly Action<Action> onUiThread;
     private readonly IReadOnlyList<Bound> bound;
     // Read on the seam's thread at a press or a release, changed on the UI thread; both under this lock. The seam is
@@ -52,9 +47,9 @@ public sealed class GlobalShortcuts
 
     /// <param name="settings">The settings in effect, whose shortcuts' texts are bound now and which a rebind writes.</param>
     /// <param name="bindings">The acts whose shortcuts are built, in the order they are registered at start.</param>
-    /// <param name="name">Names a shortcut that is unavailable, and why, in the tray's tooltip; called on the UI thread.</param>
+    /// <param name="name">Told each time a shortcut becomes unavailable, with the act, its combination and why; called on the UI thread.</param>
     /// <param name="onUiThread">Runs an action on the UI thread later, for a press and for what the seam reports on its own thread.</param>
-    public GlobalShortcuts(SettingsKeeper settings, IReadOnlyList<ShortcutBinding> bindings, IShortcuts seam, Action<Failure> name, Action<Action> onUiThread)
+    public GlobalShortcuts(SettingsKeeper settings, IReadOnlyList<ShortcutBinding> bindings, IShortcuts seam, Action<ShortcutProblem> name, Action<Action> onUiThread)
     {
         this.settings = settings;
         this.seam = seam;
@@ -100,7 +95,7 @@ public sealed class GlobalShortcuts
     /// the seam for the layout, or refused at Pause's toggle back; null while it is registered or held off only by Pause or
     /// a recording, and from its next successful <see cref="Rebind"/>.
     /// </summary>
-    public Failure? UnavailableReason(ShortcutAct act)
+    public ShortcutProblem? UnavailableReason(ShortcutAct act)
     {
         lock (gate)
         {
@@ -119,9 +114,6 @@ public sealed class GlobalShortcuts
             }
         }
     }
-
-    /// <summary>The action every failure to register <paramref name="act"/>'s shortcut names.</summary>
-    public static string RegistrationAction(ShortcutAct act) => $"Register {ShortName(act)}";
 
     public bool Paused
     {
@@ -188,10 +180,10 @@ public sealed class GlobalShortcuts
         for (var i = 0; i < bound.Count; i++)
         {
             var each = bound[i];
-            var reason = each.Parsed.Failure?.Reason
+            var reason = (each.Parsed.Succeeded ? null : ShortcutReason.NotAShortcut)
                 // Two settings spelling one combination: the seam would take the second for another program's hold.
-                ?? (bound.Take(i).FirstOrDefault(earlier => earlier.Shortcut == each.Shortcut) is { } earlier ? UsesItToo(earlier) : null)
-                ?? (holdOff ? MarkDue(each) : Register(each).Failure?.Reason);
+                ?? (bound.Take(i).FirstOrDefault(earlier => earlier.Shortcut == each.Shortcut) is { } earlier ? ShortcutReason.UsedBy(earlier.Binding.Act) : null)
+                ?? (holdOff ? MarkDue(each) : Register(each) is { } refused ? ShortcutReason.Of(refused) : null);
             if (reason is not null)
             {
                 MakeUnavailable(each, reason);
@@ -200,7 +192,7 @@ public sealed class GlobalShortcuts
     }
 
     /// <summary>Due without registering, while Pause or a recording holds the shortcuts off; nothing refuses it now.</summary>
-    private string? MarkDue(Bound each)
+    private ShortcutReason? MarkDue(Bound each)
     {
         lock (gate)
         {
@@ -268,12 +260,12 @@ public sealed class GlobalShortcuts
     /// A Settings field's candidate for <paramref name="act"/>, while it records (G32, G33): the act's own shortcut while
     /// it is due changes nothing, under Pause once the seam has judged it (refused then, it is unavailable as at any registration);
     /// refused, in this order, the plain <c>Ctrl+V</c>, the combination of another of the four
-    /// whether registered or not, and whatever the seam refuses (held by another program, typing a character), each named
-    /// with the act, the candidate and why, nothing changed; otherwise the candidate is the act's shortcut from now on,
-    /// registered in place of the old (released again at once under Pause, until its toggle back), written to the
-    /// settings, the act no longer unavailable, and <see cref="Changed"/> raised.
+    /// whether registered or not, and whatever the seam refuses (held by another program, typing a character), each
+    /// returned with the act, the candidate and why, nothing changed; otherwise the candidate is the act's shortcut from
+    /// now on, registered in place of the old (released again at once under Pause, until its toggle back), written to the
+    /// settings, the act no longer unavailable, and <see cref="Changed"/> raised. Null when nothing was refused.
     /// </summary>
-    public Outcome Rebind(ShortcutAct act, Shortcut candidate)
+    public ShortcutProblem? Rebind(ShortcutAct act, Shortcut candidate)
     {
         var each = Of(act);
         bool own;
@@ -287,13 +279,13 @@ public sealed class GlobalShortcuts
             own = OwnAndDue(each, candidate);
             if (own && !paused)
             {
-                return Outcome.Done;
+                return null;
             }
         }
 
         if (Refusal(each, candidate) is { } refused)
         {
-            return new Failure(RegistrationAction(act), candidate.Text, refused);
+            return new ShortcutProblem(act, candidate.Text, refused);
         }
 
         // The old one is already released by the suspension, so the seam judges the candidate alone (G33). It is bound,
@@ -311,8 +303,7 @@ public sealed class GlobalShortcuts
             }
         }
 
-        var judged = seam.Register(candidate, () => Pressed(each, candidate));
-        if (!judged.Succeeded)
+        if (seam.Register(candidate, () => Pressed(each, candidate)) is { } judged)
         {
             lock (gate)
             {
@@ -320,12 +311,13 @@ public sealed class GlobalShortcuts
                 each.Restore(before);
             }
 
+            var reason = ShortcutReason.Of(judged);
             if (own)
             {
-                OwnRefused(each, judged.Failure.Reason);
+                OwnRefused(each, reason);
             }
 
-            return new Failure(RegistrationAction(act), candidate.Text, judged.Failure.Reason);
+            return new ShortcutProblem(act, candidate.Text, reason);
         }
 
         if (heldOff)
@@ -335,12 +327,12 @@ public sealed class GlobalShortcuts
 
         if (own)
         {
-            return Outcome.Done;
+            return null;
         }
 
         settings.Change(s => s with { Shortcuts = WithText(s.Shortcuts, act, candidate.Text) });
         Changed?.Invoke();
-        return Outcome.Done;
+        return null;
     }
 
     /// <summary>
@@ -351,10 +343,10 @@ public sealed class GlobalShortcuts
     /// takes the plain <c>Ctrl+V</c>, which is never asked of the seam; each the seam takes is let go at once. Otherwise the
     /// likeliest is a press, as <see cref="Rebind"/> takes one, unless <paramref name="letGoFirst"/>, one of its modifiers
     /// having come up before the key: then it is judged as <see cref="Rebind"/> judges one but never bound, since nobody
-    /// may have pressed it, and when nothing refuses it it is refused with <see cref="ModifiersLetGoFirstReason"/>, unless
-    /// it is the act's own, which changes nothing. The act's own shortcut, while due, refused by the seam here is unavailable.
+    /// may have pressed it, and when nothing refuses it it is refused as let go first, unless it is the act's own, which
+    /// changes nothing. The act's own shortcut, while due, refused by the seam here is unavailable. Null when nothing was refused.
     /// </summary>
-    public Outcome JudgeSeenComingUp(ShortcutAct act, IReadOnlyList<Shortcut> candidates, bool letGoFirst)
+    public ShortcutProblem? JudgeSeenComingUp(ShortcutAct act, IReadOnlyList<Shortcut> candidates, bool letGoFirst)
     {
         var each = Of(act);
         var likeliest = candidates[0];
@@ -366,22 +358,22 @@ public sealed class GlobalShortcuts
             }
         }
 
-        Failure? likeliestRefused = null;
+        ShortcutReason? likeliestRefused = null;
         foreach (var candidate in candidates.Distinct().Where(candidate => !candidate.Gesture.Equals(PasteKeystroke)))
         {
             // Asked of the seam only for its judgement: bound to no act, and let go at once when it is free.
             var judged = seam.Register(candidate, () => { });
-            if (judged.Succeeded)
+            if (judged is null)
             {
                 seam.Release(candidate);
             }
-            else if (judged.Failure.Reason == ShortcutReasons.HeldByAnotherProgram)
+            else if (judged.Kind == ShortcutRefusalKind.HeldByAnotherProgram)
             {
-                return Refused(candidate, judged.Failure.Reason);
+                return Refused(candidate, ShortcutReason.Of(judged));
             }
             else if (candidate == likeliest)
             {
-                likeliestRefused = judged.Failure;
+                likeliestRefused = ShortcutReason.Of(judged);
             }
         }
 
@@ -398,19 +390,19 @@ public sealed class GlobalShortcuts
 
         if (own && likeliestRefused is null)
         {
-            return Outcome.Done;
+            return null;
         }
 
         if (Refusal(each, likeliest) is { } refused)
         {
-            return new Failure(RegistrationAction(act), likeliest.Text, refused);
+            return new ShortcutProblem(act, likeliest.Text, refused);
         }
 
         return likeliestRefused is null
-            ? new Failure(RegistrationAction(act), likeliest.Text, ModifiersLetGoFirstReason)
-            : Refused(likeliest, likeliestRefused.Reason);
+            ? new ShortcutProblem(act, likeliest.Text, ShortcutReason.ModifiersLetGoFirst)
+            : Refused(likeliest, likeliestRefused);
 
-        Failure Refused(Shortcut candidate, string reason)
+        ShortcutProblem Refused(Shortcut candidate, ShortcutReason reason)
         {
             bool ownRefused;
             lock (gate)
@@ -423,7 +415,7 @@ public sealed class GlobalShortcuts
                 OwnRefused(each, reason);
             }
 
-            return new Failure(RegistrationAction(act), candidate.Text, reason);
+            return new ShortcutProblem(act, candidate.Text, reason);
         }
     }
 
@@ -432,7 +424,7 @@ public sealed class GlobalShortcuts
     /// press the field saw only coming up), which registers it: unavailable until it is changed in Settings, and named, as
     /// at any other registration (G33).
     /// </summary>
-    private void OwnRefused(Bound each, string reason)
+    private void OwnRefused(Bound each, ShortcutReason reason)
     {
         lock (gate)
         {
@@ -451,9 +443,9 @@ public sealed class GlobalShortcuts
     private static bool OwnAndDue(Bound each, Shortcut candidate) => candidate == each.Shortcut && each.Due;
 
     /// <summary>What a field's candidate is refused for before the seam is asked: the plain <c>Ctrl+V</c>, then another of the four's combination, registered or not.</summary>
-    private string? Refusal(Bound each, Shortcut candidate) =>
-        candidate.Gesture.Equals(PasteKeystroke) ? PasteKeystrokeReason
-        : bound.FirstOrDefault(other => other != each && other.Shortcut == candidate) is { } other ? UsesItToo(other)
+    private ShortcutReason? Refusal(Bound each, Shortcut candidate) =>
+        candidate.Gesture.Equals(PasteKeystroke) ? ShortcutReason.PasteKeystroke
+        : bound.FirstOrDefault(other => other != each && other.Shortcut == candidate) is { } other ? ShortcutReason.UsedBy(other.Binding.Act)
         : null;
 
     private void Resume()
@@ -491,9 +483,9 @@ public sealed class GlobalShortcuts
         var anyRefused = false;
         foreach (var each in again)
         {
-            if (Register(each).Failure is { } failure)
+            if (Register(each) is { } refused)
             {
-                MakeUnavailable(each, failure.Reason);
+                MakeUnavailable(each, ShortcutReason.Of(refused));
                 anyRefused = true;
             }
         }
@@ -501,7 +493,8 @@ public sealed class GlobalShortcuts
         return anyRefused;
     }
 
-    private Outcome Register(Bound each)
+    /// <summary>Registers <paramref name="each"/>'s shortcut; null once registered, else the seam's reason.</summary>
+    private ShortcutRefusal? Register(Bound each)
     {
         Shortcut shortcut;
         // Counted as registered before the seam's call, so a press at once after it is not taken for a released shortcut.
@@ -513,7 +506,7 @@ public sealed class GlobalShortcuts
         }
 
         var outcome = seam.Register(shortcut, () => Pressed(each, shortcut));
-        if (!outcome.Succeeded)
+        if (outcome is not null)
         {
             lock (gate)
             {
@@ -553,7 +546,7 @@ public sealed class GlobalShortcuts
     /// included, even when the report arrives while either is letting it go, until it is changed in Settings; the other
     /// shortcuts are untouched.
     /// </summary>
-    private void Released(Shortcut shortcut, string reason)
+    private void Released(Shortcut shortcut, ShortcutRefusal reason)
     {
         Bound? each;
         lock (gate)
@@ -579,38 +572,26 @@ public sealed class GlobalShortcuts
                 }
             }
 
-            MakeUnavailable(each, reason);
+            MakeUnavailable(each, ShortcutReason.Of(reason));
             Changed?.Invoke();
         });
     }
 
-    /// <summary>On the UI thread: the act's shortcut is unavailable for this reason until it is changed in Settings, and is named.</summary>
-    private void MakeUnavailable(Bound each, string reason)
+    /// <summary>On the UI thread: the act's shortcut is unavailable for this reason until it is changed in Settings, and is told.</summary>
+    private void MakeUnavailable(Bound each, ShortcutReason reason)
     {
-        // The tooltip's line says which shortcut, in the words its Settings field shows: the shortcut's text, or the setting
-        // as written when it is no shortcut, an empty setting as such (G33, G35); its action alone still says which, should
-        // the tooltip have to shorten the line to it.
-        var failure = new Failure(RegistrationAction(each.Binding.Act), each.Shortcut?.Text ?? (string.IsNullOrWhiteSpace(each.Text) ? "(empty)" : each.Text), reason);
+        // Which shortcut, in the words its Settings field shows: the shortcut's text, or the setting as written when it
+        // is no shortcut (G33, G35).
+        var problem = new ShortcutProblem(each.Binding.Act, each.Shortcut?.Text ?? each.Text.Trim(), reason);
         lock (gate)
         {
-            each.Unavailable = failure;
+            each.Unavailable = problem;
         }
 
-        name(failure);
+        name(problem);
     }
 
     private Bound Of(ShortcutAct act) => bound.Single(each => each.Binding.Act == act);
-
-    private static string UsesItToo(Bound other) => $"{ShortName(other.Binding.Act)} uses it too";
-
-    private static string ShortName(ShortcutAct act) => act switch
-    {
-        ShortcutAct.Open => "the open shortcut",
-        ShortcutAct.Screenshot => "the screenshot shortcut",
-        ShortcutAct.Record => "the record shortcut",
-        ShortcutAct.StashClipboardImage => "the Stash clipboard image shortcut",
-        _ => throw new ArgumentOutOfRangeException(nameof(act)),
-    };
 
     private static string TextIn(Shortcuts texts, ShortcutAct act) => act switch
     {
@@ -645,7 +626,7 @@ public sealed class GlobalShortcuts
         /// <summary>Registered, or released only while Pause or a recording holds it off, and registered again after.</summary>
         public bool Due { get; set; }
 
-        public Failure? Unavailable { get; set; }
+        public ShortcutProblem? Unavailable { get; set; }
 
         /// <summary>Bound to <paramref name="candidate"/>, due and no longer unavailable; returns what was bound before.</summary>
         public Bindings Rebind(Shortcut candidate)
@@ -661,7 +642,7 @@ public sealed class GlobalShortcuts
         public void Bind(string text) => (Text, Parsed, Due, Unavailable) = (text, Shortcut.Parse(text), false, null);
 
         /// <summary>What a binding held before a rebind, put back should the seam refuse the candidate.</summary>
-        public readonly record struct Bindings(string Text, Outcome<Shortcut> Parsed, bool Due, Failure? Unavailable);
+        public readonly record struct Bindings(string Text, Outcome<Shortcut> Parsed, bool Due, ShortcutProblem? Unavailable);
     }
 
     /// <summary>A recording's hold on the shortcuts, ended once.</summary>

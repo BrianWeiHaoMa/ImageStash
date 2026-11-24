@@ -103,7 +103,7 @@ public sealed class MovingTests
 
         var refused = new Failure(StashMove.Action, "new", MoveReasons.NotEmpty);
         Assert.AreEqual(refused, moved.Failure);
-        Assert.AreEqual(refused, page.WarningOf(SettingsPage.StashFolderTitle), "on the row (G35)");
+        Assert.AreEqual(refused.Sentence, page.WarningOf(SettingsPage.StashFolderTitle), "on the row (G35)");
         CollectionAssert.AreEqual(new[] { refused.Sentence }, listed.Notices.Shown.Select(notice => notice.Text).ToList());
         Assert.IsFalse(listed.Moving.Asked, "a failed Move ends, so changes may begin again");
         Assert.IsNull(listed.Listing.WholeStashActAsked);
@@ -173,7 +173,7 @@ public sealed class MovingTests
 
         Assert.IsFalse(moved.Succeeded);
         Assert.AreEqual(StashMove.Action, moved.Failure.Action);
-        Assert.AreEqual(moved.Failure, page.WarningOf(SettingsPage.StashFolderTitle), "named on the row (G35)");
+        Assert.AreEqual(moved.Failure!.Sentence, page.WarningOf(SettingsPage.StashFolderTitle), "named on the row (G35)");
         CollectionAssert.Contains(listed.Notices.Shown.Select(notice => notice.Text).ToList(), moved.Failure.Sentence, "and in a notice");
         Assert.IsFalse(listed.Notices.Shown.Any(notice => notice.Text.StartsWith("Moved")), "never shown as done (G35)");
         Assert.AreEqual(chosen, listed.Settings.Current.StashFolder);

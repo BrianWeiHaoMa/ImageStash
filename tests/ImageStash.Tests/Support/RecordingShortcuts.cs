@@ -10,9 +10,9 @@ namespace ImageStash.Tests.Support;
 public sealed class RecordingShortcuts : IShortcuts
 {
     private readonly Dictionary<Shortcut, Action> registered = [];
-    private readonly Dictionary<Shortcut, string> refused = [];
-    private string? refuseNext;
-    private Action<Shortcut, string>? released;
+    private readonly Dictionary<Shortcut, ShortcutRefusal> refused = [];
+    private ShortcutRefusal? refuseNext;
+    private Action<Shortcut, ShortcutRefusal>? released;
 
     public IReadOnlyCollection<Shortcut> Registered => registered.Keys;
 
@@ -23,31 +23,31 @@ public sealed class RecordingShortcuts : IShortcuts
     public int Registrations => Asked.Count;
 
     /// <summary>The next registration fails with this reason.</summary>
-    public void RefuseNext(string reason) => refuseNext = reason;
+    public void RefuseNext(ShortcutRefusal reason) => refuseNext = reason;
 
     /// <summary>Every registration of <paramref name="shortcut"/> fails with this reason, as while another program holds it.</summary>
-    public void Refuse(Shortcut shortcut, string reason) => refused[shortcut] = reason;
+    public void Refuse(Shortcut shortcut, ShortcutRefusal reason) => refused[shortcut] = reason;
 
     /// <summary>Registrations of <paramref name="shortcut"/> succeed again, as once the program holding it has let go.</summary>
     public void Free(Shortcut shortcut) => refused.Remove(shortcut);
 
-    public Outcome Register(Shortcut shortcut, Action pressed)
+    public ShortcutRefusal? Register(Shortcut shortcut, Action pressed)
     {
         Asked.Add(shortcut);
         if (refuseNext is { } reason)
         {
             refuseNext = null;
-            return new Failure("Register the shortcut", shortcut.Text, reason);
+            return reason;
         }
 
         if (refused.TryGetValue(shortcut, out var held))
         {
-            return new Failure("Register the shortcut", shortcut.Text, held);
+            return held;
         }
 
         registered[shortcut] = pressed;
         AfterRegistering?.Invoke(shortcut);
-        return Outcome.Done;
+        return null;
     }
 
     /// <summary>Runs after each registration succeeds and before it returns, as the seam's own thread may act at once.</summary>
@@ -62,7 +62,7 @@ public sealed class RecordingShortcuts : IShortcuts
         registered.Remove(shortcut);
     }
 
-    public void ListenForReleases(Action<Shortcut, string> released) => this.released = released;
+    public void ListenForReleases(Action<Shortcut, ShortcutRefusal> released) => this.released = released;
 
     /// <summary>A press as a person makes it; a shortcut not registered is pressed in vain, as the platform would deliver nothing.</summary>
     public bool Press(Shortcut shortcut)
@@ -77,7 +77,7 @@ public sealed class RecordingShortcuts : IShortcuts
     }
 
     /// <summary>The seam lets go of <paramref name="shortcut"/> on its own, as a layout that makes it type a character does.</summary>
-    public void Release(Shortcut shortcut, string reason)
+    public void Release(Shortcut shortcut, ShortcutRefusal reason)
     {
         registered.Remove(shortcut);
         released!(shortcut, reason);

@@ -38,10 +38,21 @@ public sealed class ShortcutRecordingTests
         field.Press(Key.Space, KeyModifiers.Control | KeyModifiers.Alt);
 
         Assert.AreEqual(0, started.Summoned);
-        Assert.IsFalse(field.IsRecording);
-        Assert.AreEqual("Register the screenshot shortcut failed: Ctrl+Alt+Space, the open shortcut uses it too", page.WarningOf(SettingsPage.TakeScreenshotTitle)?.Sentence,
-            "on the spot, under its row (G32, G35)");
+        Assert.IsTrue(field.IsRecording, "the field still records: the next press is the retry (G32)");
+        Assert.AreEqual("Open ImageStash already uses Ctrl+Alt+Space.", page.WarningOf(SettingsPage.TakeScreenshotTitle),
+            "on the spot, under its row, while the field still records (G32, G35)");
         Assert.AreEqual("Ctrl+PrtScn", field.Text, "the field shows its shortcut as it was");
+        Assert.IsEmpty(started.Seam.Registered, "the four still released");
+
+        // The retry of the same combination: refused again in its words, and the window is not summoned.
+        Assert.IsFalse(started.Seam.Press(Open), "the open shortcut is still not there to summon");
+        field.Press(Key.Space, KeyModifiers.Control | KeyModifiers.Alt);
+        Assert.AreEqual(0, started.Summoned);
+        Assert.AreEqual("Open ImageStash already uses Ctrl+Alt+Space.", page.WarningOf(SettingsPage.TakeScreenshotTitle));
+        Assert.IsTrue(field.IsRecording);
+
+        field.Cancel();
+        Assert.IsNull(page.WarningOf(SettingsPage.TakeScreenshotTitle), "after Esc the row says only what is still true");
         CollectionAssert.AreEquivalent(Defaults, started.Seam.Registered.ToList(), "all four registered again");
         started.Settings.Flush().Wait();
         Assert.AreEqual(file, started.SavedText, "the file unchanged");
@@ -58,16 +69,18 @@ public sealed class ShortcutRecordingTests
         var field = page.ShortcutField(ShortcutAct.Screenshot);
         field.Begin();
         field.Press(Key.V, KeyModifiers.Control);
-        Assert.AreEqual($"Register the screenshot shortcut failed: Ctrl+V, {GlobalShortcuts.PasteKeystrokeReason}", page.WarningOf(SettingsPage.TakeScreenshotTitle)?.Sentence);
+        Assert.AreEqual("Ctrl+V is the paste key ImageStash presses, so it can't be a shortcut.", page.WarningOf(SettingsPage.TakeScreenshotTitle));
+        Assert.IsTrue(field.IsRecording, "still recording: the next press is the retry (G32)");
 
-        field.Begin();
         field.Press(Key.F8, KeyModifiers.Control | KeyModifiers.Shift);
 
+        Assert.IsFalse(field.IsRecording, "a combination taken ends the recording");
         Assert.AreEqual("Ctrl+Shift+F8", field.Text);
-        Assert.IsNull(page.WarningOf(SettingsPage.TakeScreenshotTitle), "a rebind clears the row's warning");
+        Assert.IsNull(page.WarningOf(SettingsPage.TakeScreenshotTitle), "a combination taken after a refusal clears the row's warning");
         Assert.AreEqual(new KeyGesture(Key.F8, KeyModifiers.Control | KeyModifiers.Shift), started.Tray.Entries[1].Gesture);
         Assert.AreEqual("Ctrl+Shift+F8", started.Settings.Current.Shortcuts.Screenshot);
-        Assert.IsGreaterThanOrEqualTo(5, redrawn, "each begin, end and change of the shortcuts redraws the page");
+        CollectionAssert.AreEquivalent(new[] { Defaults[0], Shortcut.Parse("Ctrl+Shift+F8").Value!, Defaults[2], Defaults[3] }, started.Seam.Registered.ToList(), "every shortcut due registered");
+        Assert.IsGreaterThanOrEqualTo(4, redrawn, "the begin, the refusal, the end and the change of the shortcuts each redraw the page");
     }
 
     [TestMethod]
@@ -101,10 +114,12 @@ public sealed class ShortcutRecordingTests
         field.Begin();
         field.PressSeenComingUp(Key.F9, [KeyModifiers.Control | KeyModifiers.Shift, KeyModifiers.None], letGoFirst: true);
 
-        Assert.IsFalse(field.IsRecording);
-        Assert.AreEqual("Register the screenshot shortcut failed: Ctrl+Shift+F9, another program holds it", page.WarningOf(SettingsPage.TakeScreenshotTitle)?.Sentence,
+        Assert.IsTrue(field.IsRecording, "a press seen only coming up keeps the field recording after its refusal, as one seen going down does (G32)");
+        Assert.AreEqual("Ctrl+Shift+F9 is already used by another app. Press a different combination.", page.WarningOf(SettingsPage.TakeScreenshotTitle),
             "with a warning on the spot, whatever order the keys came up in (G32)");
         Assert.AreEqual("Ctrl+PrtScn", field.Text);
+        Assert.IsEmpty(started.Seam.Registered, "the four still released while it records");
+        field.Cancel();
         CollectionAssert.AreEquivalent(Defaults, started.Seam.Registered.ToList(), "the four registered again");
         started.Settings.Flush().Wait();
         Assert.AreEqual(file, started.SavedText, "the file unchanged");
@@ -123,20 +138,20 @@ public sealed class ShortcutRecordingTests
         field.Begin();
         field.PressSeenComingUp(Key.F8, [KeyModifiers.Control | KeyModifiers.Shift, KeyModifiers.None], letGoFirst: true);
 
-        Assert.IsFalse(field.IsRecording);
-        Assert.AreEqual($"Register the screenshot shortcut failed: Ctrl+Shift+F8, {GlobalShortcuts.ModifiersLetGoFirstReason}", page.WarningOf(SettingsPage.TakeScreenshotTitle)?.Sentence);
+        Assert.IsTrue(field.IsRecording, "still recording for the retry (G32)");
+        Assert.AreEqual("Ctrl+Shift+F8 wasn't recorded because a modifier came up first. Hold Ctrl, Alt or Shift until the key is up.", page.WarningOf(SettingsPage.TakeScreenshotTitle));
         CollectionAssert.Contains(started.Seam.Asked, free, "asked, so another program's hold would have been named");
-        CollectionAssert.AreEquivalent(Defaults, started.Seam.Registered.ToList(), "let go at once: nobody may have pressed it");
+        Assert.IsEmpty(started.Seam.Registered, "let go at once: nobody may have pressed it; the four still released while it records");
         Assert.AreEqual(("Ctrl+PrtScn", new KeyGesture(Key.PrintScreen, KeyModifiers.Control)), (field.Text, started.Tray.Entries[1].Gesture));
         started.Settings.Flush().Wait();
         Assert.AreEqual(file, started.SavedText, "the file unchanged");
 
         field.Begin();
         field.PressSeenComingUp(Key.V, [KeyModifiers.Control, KeyModifiers.None], letGoFirst: true);
-        Assert.AreEqual($"Register the screenshot shortcut failed: Ctrl+V, {GlobalShortcuts.PasteKeystrokeReason}", page.WarningOf(SettingsPage.TakeScreenshotTitle)?.Sentence);
+        Assert.AreEqual("Ctrl+V is the paste key ImageStash presses, so it can't be a shortcut.", page.WarningOf(SettingsPage.TakeScreenshotTitle));
         field.Begin();
         field.PressSeenComingUp(Key.V, [KeyModifiers.Meta | KeyModifiers.Alt, KeyModifiers.None], letGoFirst: true);
-        Assert.AreEqual("Register the screenshot shortcut failed: Win+Alt+V, the Stash clipboard image shortcut uses it too", page.WarningOf(SettingsPage.TakeScreenshotTitle)?.Sentence);
+        Assert.AreEqual("Stash clipboard image already uses Win+Alt+V.", page.WarningOf(SettingsPage.TakeScreenshotTitle));
         field.Begin();
         field.PressSeenComingUp(Key.PrintScreen, [KeyModifiers.Control, KeyModifiers.None], letGoFirst: true);
         Assert.IsNull(page.WarningOf(SettingsPage.TakeScreenshotTitle), "its own shortcut changes nothing, as pressed whole");
@@ -157,13 +172,13 @@ public sealed class ShortcutRecordingTests
         field.Begin();
         field.PressSeenComingUp(Key.F9, [KeyModifiers.Control | KeyModifiers.Shift, KeyModifiers.Control], letGoFirst: true);
 
-        Assert.AreEqual("Register the screenshot shortcut failed: Ctrl+F9, another program holds it", page.WarningOf(SettingsPage.TakeScreenshotTitle)?.Sentence, "G32");
-        CollectionAssert.AreEquivalent(Defaults, started.Seam.Registered.ToList());
+        Assert.AreEqual("Ctrl+F9 is already used by another app. Press a different combination.", page.WarningOf(SettingsPage.TakeScreenshotTitle), "G32");
+        Assert.IsEmpty(started.Seam.Registered, "the four still released while the field records");
 
         // Neither held: the likelier is named as not recorded, never another reason the other would be refused for.
-        field.Begin();
         field.PressSeenComingUp(Key.A, [KeyModifiers.Control | KeyModifiers.Shift, KeyModifiers.None], letGoFirst: true);
-        Assert.AreEqual($"Register the screenshot shortcut failed: Ctrl+Shift+A, {GlobalShortcuts.ModifiersLetGoFirstReason}", page.WarningOf(SettingsPage.TakeScreenshotTitle)?.Sentence);
+        Assert.AreEqual("Ctrl+Shift+A wasn't recorded because a modifier came up first. Hold Ctrl, Alt or Shift until the key is up.", page.WarningOf(SettingsPage.TakeScreenshotTitle));
+        field.Cancel();
         CollectionAssert.AreEquivalent(Defaults, started.Seam.Registered.ToList());
     }
 
@@ -183,39 +198,43 @@ public sealed class ShortcutRecordingTests
             field.Begin();
             field.PressSeenComingUp(Key.F9, [KeyModifiers.Control | KeyModifiers.Shift, KeyModifiers.Control], letGoFirst: true);
 
-            Assert.IsFalse(field.IsRecording);
-            Assert.AreEqual($"Register the {name} shortcut failed: Ctrl+F9, another program holds it", page.WarningOf(title)?.Sentence, "with a warning on the spot (G32)");
+            Assert.IsTrue(field.IsRecording, "still recording for the retry (G32)");
+            Assert.AreEqual("Ctrl+F9 is already used by another app. Press a different combination.", page.WarningOf(title), $"{name}: with a warning on the spot (G32)");
         }
+
+        page.CancelRecording();
 
         Assert.AreEqual((screenshot.Text, "Ctrl+Shift+PrtScn"), (started.Settings.Current.Shortcuts.Screenshot, started.Settings.Current.Shortcuts.Record), "nothing bound");
         CollectionAssert.AreEquivalent(new[] { Open, screenshot, Defaults[2], Defaults[3] }, started.Seam.Registered.ToList(), "the four registered again");
     }
 
     [TestMethod]
-    [DataRow(ShortcutReasons.HeldByAnotherProgram)]
-    [DataRow(ShortcutReasons.TypesACharacter)]
-    public void UnderPauseAFieldsOwnCombinationIsJudgedAfreshAndRefusedOnTheSpot(string reason)
+    [DataRow(ShortcutRefusalKind.HeldByAnotherProgram, "Ctrl+PrtScn is already used by another app. Press a different combination.", "Ctrl+PrtScn is used by another app, so Take a screenshot has no shortcut.")]
+    [DataRow(ShortcutRefusalKind.TypesACharacter, "Ctrl+PrtScn types a character on your keyboard layout, so it can't be a shortcut.", "Ctrl+PrtScn types a character, so Take a screenshot has no shortcut.")]
+    public void UnderPauseAFieldsOwnCombinationIsJudgedAfreshAndRefusedOnTheSpot(ShortcutRefusalKind reason, string sentence, string line)
     {
         var started = StartedShortcuts.Start();
         var screenshot = Defaults[1];
         started.Shortcuts.TogglePause();
         // Released by Pause, then taken by another program, or come to type a character under the layout, meanwhile.
-        started.Seam.Refuse(screenshot, reason);
+        started.Seam.Refuse(screenshot, new ShortcutRefusal(reason));
         var page = started.Page();
         var field = page.ShortcutField(ShortcutAct.Screenshot);
 
-        var sentence = $"Register the screenshot shortcut failed: Ctrl+PrtScn, {reason}";
         foreach (var press in new Action[] { () => field.Press(Key.PrintScreen, KeyModifiers.Control), () => field.PressSeenComingUp(Key.PrintScreen, [KeyModifiers.Control, KeyModifiers.None], letGoFirst: true) })
         {
             field.Begin();
             press();
 
-            Assert.AreEqual(sentence, page.WarningOf(SettingsPage.TakeScreenshotTitle)?.Sentence, "on the spot (G32)");
+            Assert.AreEqual(sentence, page.WarningOf(SettingsPage.TakeScreenshotTitle), "on the spot (G32)");
+            Assert.IsTrue(field.IsRecording, "the field still records, so the next press is the retry (G32)");
             Assert.IsEmpty(started.Seam.Registered, "Pause still holds all four off (G33)");
             Assert.AreEqual(ShortcutAct.Screenshot, started.Shortcuts.FirstUnavailable, "refused at that registration, so unavailable, Settings opening on its row (G33)");
-            Assert.AreEqual(sentence, started.Tray.ToolTip, "the tray icon says which and why (G33)");
+            Assert.AreEqual(line, started.Tray.ToolTip, "the tray icon says which and why (G33)");
         }
 
+        field.Cancel();
+        Assert.AreEqual(sentence, page.WarningOf(SettingsPage.TakeScreenshotTitle), "after Esc the row says what is still true: why its shortcut is unavailable");
         started.Seam.Free(screenshot);
         started.Shortcuts.TogglePause();
         CollectionAssert.AreEquivalent(Defaults.Where(each => each != screenshot).ToList(), started.Seam.Registered.ToList(), "left unregistered until it is changed in Settings (G33)");
@@ -274,28 +293,41 @@ public sealed class ShortcutRecordingTests
         var open = page.ShortcutField(ShortcutAct.Open);
         var record = page.ShortcutField(ShortcutAct.Record);
 
-        // Esc, the ×, and focus leaving the field: each the field's Cancel.
+        // Each after a refusal, which leaves the field recording: Esc, the ×, and focus leaving the field (each the
+        // field's Cancel), another field beginning, the window deactivated and the window closed.
         open.Begin();
+        Refused(open);
         open.Cancel();
         AssertEnded("Cancel");
 
         open.Begin();
+        Refused(open);
         record.Begin();
         Assert.IsFalse(open.IsRecording, "a second field beginning ends the first's (one at a time)");
         Assert.IsTrue(record.IsRecording);
         Assert.IsEmpty(started.Seam.Registered, "still released for the second field");
+        Refused(record);
         record.Cancel();
         AssertEnded("a second field");
 
         record.Begin();
+        Refused(record);
         page.CancelRecording();
         AssertEnded("the window deactivated");
 
         record.Begin();
+        Refused(record);
         page.Close();
         AssertEnded("the window closed");
         started.Settings.Flush().Wait();
         Assert.AreEqual(file, started.SavedText, "nothing written");
+
+        void Refused(ShortcutRecording field)
+        {
+            field.Press(Key.V, KeyModifiers.Control);
+            Assert.IsTrue(field.IsRecording, "refused, it still records");
+            Assert.IsEmpty(started.Seam.Registered, "the four still released");
+        }
 
         void AssertEnded(string by)
         {
@@ -328,16 +360,16 @@ public sealed class ShortcutRecordingTests
         var unavailable = started.Shortcuts.UnavailableReason(ShortcutAct.Open)!;
 
         Assert.AreEqual(ShortcutAct.Open, started.Shortcuts.FirstUnavailable, "Settings opens on that row (G33)");
-        Assert.AreEqual(unavailable, page.WarningOf(SettingsPage.OpenTitle), "with the tooltip's sentence under it");
-        Assert.AreEqual(unavailable.Sentence, started.Tray.ToolTip);
+        Assert.AreEqual(ShortcutWords.Row(unavailable), page.WarningOf(SettingsPage.OpenTitle), "with its reason under it");
+        Assert.AreEqual(ShortcutWords.ToolTipLine(unavailable!), started.Tray.ToolTip);
         Assert.IsTrue(page.Rows.Where(row => row.Title != SettingsPage.OpenTitle).All(row => page.WarningOf(row.Title) is null), "on no other row");
 
         var field = page.ShortcutField(ShortcutAct.Open);
         field.Begin();
         field.Press(Key.V, KeyModifiers.Control);
-        Assert.AreEqual($"Register the open shortcut failed: Ctrl+V, {GlobalShortcuts.PasteKeystrokeReason}", page.WarningOf(SettingsPage.OpenTitle)?.Sentence,
+        Assert.AreEqual("Ctrl+V is the paste key ImageStash presses, so it can't be a shortcut.", page.WarningOf(SettingsPage.OpenTitle),
             "the field's last refusal shows in place of the reason");
-        Assert.AreEqual(unavailable, started.Page().WarningOf(SettingsPage.OpenTitle), "a page opened afresh shows the reason again");
+        Assert.AreEqual(ShortcutWords.Row(unavailable), started.Page().WarningOf(SettingsPage.OpenTitle), "a page opened afresh shows the reason again");
 
         field.Begin();
         field.Press(Key.F9, KeyModifiers.Control | KeyModifiers.Shift);
@@ -357,11 +389,11 @@ public sealed class ShortcutRecordingTests
         var redrawn = 0;
         page.Changed += () => redrawn++;
 
-        started.Seam.Release(Defaults[2], ShortcutReasons.TypesACharacter);
+        started.Seam.Release(Defaults[2], ShortcutRefusal.TypesACharacter(null));
         started.RunPosted();
 
         Assert.AreEqual(1, redrawn);
-        Assert.AreEqual("Register the record shortcut failed: Ctrl+Shift+PrtScn, it would type a character", page.WarningOf(SettingsPage.RecordClipTitle)?.Sentence, "G33");
+        Assert.AreEqual("Ctrl+Shift+PrtScn types a character on your keyboard layout, so it can't be a shortcut.", page.WarningOf(SettingsPage.RecordClipTitle), "G33");
         var field = page.ShortcutField(ShortcutAct.Record);
         field.Begin();
         field.Press(Key.F8, KeyModifiers.Control | KeyModifiers.Shift);

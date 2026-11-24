@@ -43,7 +43,7 @@ public sealed class PasteMomentTests
             anchor => Dispatcher.UIThread.Post(() => flyout.SummonFromShortcut(anchor)));
         var open = Shortcut.Parse("Ctrl+Alt+Space").Value!;
         var registered = shortcuts.Register(open, summon.Pressed);
-        Assert.IsTrue(registered.Succeeded, registered.Failure?.Sentence);
+        Assert.IsNull(registered, $"refused: {registered?.Kind}");
 
         var handle = TrayDesktop.Get(() => flyout.TryGetPlatformHandle()!.Handle);
         TestHotKeys.Press(open);

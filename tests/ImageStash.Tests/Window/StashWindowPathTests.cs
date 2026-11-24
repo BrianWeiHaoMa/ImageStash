@@ -217,7 +217,7 @@ public sealed class StashWindowPathTests
         Assert.AreEqual("ImageStash · Ctrl+Alt+Space", tray.ToolTip, "pointing at the icon names the open shortcut");
         using (listed.Shortcuts.Suspend())
         {
-            Assert.IsTrue(listed.Shortcuts.Rebind(ShortcutAct.Open, Shortcut.Parse("Ctrl+Alt+F9").Value!).Succeeded);
+            Assert.IsNull(listed.Shortcuts.Rebind(ShortcutAct.Open, Shortcut.Parse("Ctrl+Alt+F9").Value!));
         }
 
         Assert.AreEqual("Ctrl+Alt+F9", listed.Settings.Current.Shortcuts.Open, "remapped through the settings' keeper");

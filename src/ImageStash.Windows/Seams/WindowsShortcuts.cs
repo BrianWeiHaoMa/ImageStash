@@ -17,7 +17,6 @@ namespace ImageStash.Windows.Seams;
 /// </summary>
 public sealed class WindowsShortcuts : IShortcuts, IDisposable
 {
-    private const string Action = "Register the shortcut";
     private const uint WmQuit = 0x0012;
     private const uint WmTimer = 0x0113;
     private const uint WmHotkey = 0x0312;
@@ -41,7 +40,7 @@ public sealed class WindowsShortcuts : IShortcuts, IDisposable
     private const int VkLeftControl = 0xA2;
     private const int VkLeftMenu = 0xA4;
 
-    private readonly Func<Combination, nint, bool> typesACharacter;
+    private readonly Func<Combination, nint, ShortcutRefusal?> typing;
     private readonly Thread thread;
     private readonly ConcurrentQueue<Action> work = new();
     // Touched only on the seam's thread.
@@ -49,33 +48,33 @@ public sealed class WindowsShortcuts : IShortcuts, IDisposable
     private int nextId = 1;
     private uint threadId;
     private volatile bool ended;
-    private volatile Action<Shortcut, string>? released;
+    private volatile Action<Shortcut, ShortcutRefusal>? released;
 
     public WindowsShortcuts()
-        : this(TypesACharacter)
+        : this(Typing)
     {
     }
 
-    /// <param name="typesACharacter">The layout judgement; checks give one of their own to change what the layout in use types.</param>
-    internal WindowsShortcuts(Func<Combination, nint, bool> typesACharacter)
+    /// <param name="typing">The layout judgement, with the character typed; checks give one of their own to change what the layout in use types.</param>
+    internal WindowsShortcuts(Func<Combination, nint, ShortcutRefusal?> typing)
     {
-        this.typesACharacter = typesACharacter;
+        this.typing = typing;
         using var ready = new ManualResetEventSlim();
         thread = new Thread(() => Loop(ready)) { IsBackground = true, Name = "Shortcuts" };
         thread.Start();
         ready.Wait();
     }
 
-    public Outcome Register(Shortcut shortcut, Action pressed)
+    public ShortcutRefusal? Register(Shortcut shortcut, Action pressed)
     {
         var combination = CombinationOf(shortcut);
         if (combination.Key == 0)
         {
-            return new Failure(Action, shortcut.Text, ShortcutReasons.NotAKey(shortcut.Gesture.Key));
+            return ShortcutRefusal.NotAKey(shortcut.Gesture.Key);
         }
 
         var registration = new Registration(shortcut, combination, pressed);
-        return OnThread(() => RegisterHere(registration), () => new Failure(Action, shortcut.Text, "ImageStash's shortcuts have stopped"));
+        return OnThread(() => RegisterHere(registration), () => ShortcutRefusal.Stated("ImageStash's shortcuts have stopped"));
     }
 
     public void Release(Shortcut shortcut) => OnThread(() =>
@@ -89,13 +88,20 @@ public sealed class WindowsShortcuts : IShortcuts, IDisposable
         return true;
     }, () => false);
 
-    public void ListenForReleases(Action<Shortcut, string> released) => this.released = released;
+    public void ListenForReleases(Action<Shortcut, ShortcutRefusal> released) => this.released = released;
 
     /// <summary>
     /// Whether pressing <paramref name="combination"/> would type a character under <paramref name="layout"/>, judged
     /// from its translation made without touching the keyboard state (S5).
     /// </summary>
-    internal static bool TypesACharacter(Combination combination, nint layout)
+    internal static bool TypesACharacter(Combination combination, nint layout) => Typing(combination, layout) is not null;
+
+    /// <summary>
+    /// Why <paramref name="combination"/> cannot be a shortcut under <paramref name="layout"/>, when it would type a
+    /// character there, with the character its one translation yields (none for a dead key, whose translation is the
+    /// accent waiting for the next key); null when it types none. Judged as <see cref="TypesACharacter(uint, int, ReadOnlySpan{char})"/> judges.
+    /// </summary>
+    internal static ShortcutRefusal? Typing(Combination combination, nint layout)
     {
         var state = new byte[256];
         void Down(params int[] keys)
@@ -129,8 +135,17 @@ public sealed class WindowsShortcuts : IShortcuts, IDisposable
         var buffer = new char[8];
         var scanCode = MapVirtualKeyExW(combination.Key, MapVkToScanCode, layout);
         var count = ToUnicodeEx(combination.Key, scanCode, state, buffer, buffer.Length, KeepKeyboardState, layout);
-        return TypesACharacter(combination.Modifiers, count, buffer);
+        return Typing(combination.Modifiers, count, buffer);
     }
+
+    /// <summary>
+    /// Why a combination of <paramref name="modifiers"/> cannot be a shortcut, given its translation, when
+    /// <see cref="TypesACharacter(uint, int, ReadOnlySpan{char})"/> judges that it types: with the characters the translation
+    /// counts, none for a dead key; null when it types none.
+    /// </summary>
+    internal static ShortcutRefusal? Typing(uint modifiers, int count, ReadOnlySpan<char> translation) =>
+        !TypesACharacter(modifiers, count, translation) ? null
+        : ShortcutRefusal.TypesACharacter(count > 0 ? new string(translation[..Math.Min(count, translation.Length)]) : null);
 
     /// <summary>
     /// Whether a combination of <paramref name="modifiers"/> types a character, given its translation: ToUnicodeEx's
@@ -178,23 +193,22 @@ public sealed class WindowsShortcuts : IShortcuts, IDisposable
         | (modifiers.HasFlag(KeyModifiers.Shift) ? ModShift : 0)
         | (modifiers.HasFlag(KeyModifiers.Meta) ? ModWin : 0);
 
-    private Outcome RegisterHere(Registration registration)
+    private ShortcutRefusal? RegisterHere(Registration registration)
     {
-        var shortcut = registration.Shortcut;
-        if (typesACharacter(registration.Combination, ForegroundLayout()))
+        if (typing(registration.Combination, ForegroundLayout()) is { } types)
         {
-            return new Failure(Action, shortcut.Text, ShortcutReasons.TypesACharacter);
+            return types;
         }
 
         var id = nextId++;
         if (!RegisterHotKey(0, id, registration.Combination.Modifiers | ModNoRepeat, registration.Combination.Key))
         {
             var error = Marshal.GetLastPInvokeError();
-            return new Failure(Action, shortcut.Text, error == ErrorHotkeyAlreadyRegistered ? ShortcutReasons.HeldByAnotherProgram : new Win32Exception(error).Message);
+            return error == ErrorHotkeyAlreadyRegistered ? ShortcutRefusal.HeldByAnotherProgram : ShortcutRefusal.Stated(new Win32Exception(error).Message);
         }
 
         registered[id] = registration;
-        return Outcome.Done;
+        return null;
     }
 
     private void Loop(ManualResetEventSlim ready)
@@ -239,9 +253,9 @@ public sealed class WindowsShortcuts : IShortcuts, IDisposable
         var layout = ForegroundLayout();
         foreach (var (id, registration) in registered.ToList())
         {
-            if (typesACharacter(registration.Combination, layout))
+            if (typing(registration.Combination, layout) is { } types)
             {
-                ReleaseHere(id, registration);
+                ReleaseHere(id, registration, types);
             }
         }
     }
@@ -254,20 +268,20 @@ public sealed class WindowsShortcuts : IShortcuts, IDisposable
             return;
         }
 
-        if (typesACharacter(registration.Combination, ForegroundLayout()))
+        if (typing(registration.Combination, ForegroundLayout()) is { } types)
         {
-            ReleaseHere(id, registration);
+            ReleaseHere(id, registration, types);
             return;
         }
 
         registration.Pressed();
     }
 
-    private void ReleaseHere(int id, Registration registration)
+    private void ReleaseHere(int id, Registration registration, ShortcutRefusal types)
     {
         UnregisterHotKey(0, id);
         registered.Remove(id);
-        released?.Invoke(registration.Shortcut, ShortcutReasons.TypesACharacter);
+        released?.Invoke(registration.Shortcut, types);
     }
 
     /// <summary>Runs <paramref name="job"/> on the seam's thread and waits for it; <paramref name="whenEnded"/> once that thread has stopped.</summary>

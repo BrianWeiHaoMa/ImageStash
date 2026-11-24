@@ -204,7 +204,7 @@ public sealed class SettingsWindowTests
                 window.Page.WriteFailed(heldWrite);
                 window.Width = 1;
                 window.Height = 1;
-                return field.Warning!.Sentence;
+                return field.WarningWords!;
             });
             var minimum = new Size(SettingsWindow.MinimumSize.Width, SettingsWindow.MinimumSize.Height);
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => window.ClientSize == minimum));
@@ -216,7 +216,7 @@ public sealed class SettingsWindowTests
                 Assert.AreEqual(new Rect(minimum), new Rect(viewer.TranslatePoint(default, window)!.Value, viewer.Bounds.Size), "the scroller fills the page");
                 StringAssert.StartsWith(Top(window), "Read settings failed: settings.json, ");
                 Assert.AreEqual("Stop starting with Windows failed: Run entry ImageStash, Windows refused the change", WarningUnder(window, SettingsPage.StartWithWindowsTitle));
-                Assert.AreEqual("Register the Stash clipboard image shortcut failed: Ctrl+V, it is the paste keystroke the handoff sends", refusedShortcut);
+                Assert.AreEqual("Ctrl+V is the paste key ImageStash presses, so it can't be a shortcut.", refusedShortcut);
                 Assert.AreEqual(refusedShortcut, WarningUnder(window, SettingsPage.StashClipboardImageTitle), "every kind of warning the page draws, showing at once");
             });
             var parts = TrayDesktop.Get(() => window.GetVisualDescendants().OfType<Control>()

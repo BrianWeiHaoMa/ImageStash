@@ -111,7 +111,7 @@ public sealed class TransferringTests
 
         Assert.AreEqual(StashExport.Action, refused.Failure?.Action, refused.Failure?.Sentence);
         Assert.AreEqual("mine.zip", refused.Failure!.Subject);
-        Assert.AreEqual(refused.Failure, page.WarningOf(SettingsPage.ExportTitle), "on the row (G35)");
+        Assert.AreEqual(refused.Failure!.Sentence, page.WarningOf(SettingsPage.ExportTitle), "on the row (G35)");
         CollectionAssert.Contains(listed.Notices.Shown.Select(notice => notice.Text).ToList(), refused.Failure.Sentence, "and in a notice");
         CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, File.ReadAllBytes(archive), "the file there replaced only whole");
         CollectionAssert.AreEqual(before, MovingStash.Tree(listed.Stash.Folder.Root), "nothing in the stash changed (G36)");
@@ -170,7 +170,7 @@ public sealed class TransferringTests
         var refused = await page.Import(null!);
 
         Assert.AreEqual(new Failure(StashImport.Action, "bad.zip", reason), refused.Failure);
-        Assert.AreEqual(refused.Failure, page.WarningOf(SettingsPage.ImportTitle), "on the row (G35)");
+        Assert.AreEqual(refused.Failure!.Sentence, page.WarningOf(SettingsPage.ImportTitle), "on the row (G35)");
         CollectionAssert.AreEqual(new[] { refused.Failure!.Sentence }, listed.Notices.Shown.Select(notice => notice.Text).ToList(), "and in a notice");
         Assert.IsNull(page.ImportOffer, "nothing offered for confirmation");
         Assert.IsNull(listed.Listing.CannotStartReason, "nothing blocked");
@@ -264,16 +264,16 @@ public sealed class TransferringTests
     {
         using var listed = await ListedStash.Open();
         var archive = await Archive(listed, s => s with { Shortcuts = Imported }, "one");
-        listed.ShortcutsSeam.Refuse(Shortcut.Parse("Ctrl+Alt+F2").Value!, "another program holds it");
+        listed.ShortcutsSeam.Refuse(Shortcut.Parse("Ctrl+Alt+F2").Value!, ShortcutRefusal.HeldByAnotherProgram);
         var told = 0;
         listed.Shortcuts.Changed += () => told++;
 
         var imported = await listed.ImportStash(archive);
 
         Assert.IsTrue(imported.Succeeded, imported.Failure?.Sentence);
-        Assert.AreEqual(new Failure(GlobalShortcuts.RegistrationAction(ShortcutAct.Open), "Ctrl+Alt+F2", "another program holds it"), listed.Shortcuts.UnavailableReason(ShortcutAct.Open),
+        Assert.AreEqual(new ShortcutProblem(ShortcutAct.Open, "Ctrl+Alt+F2", ShortcutReason.Of(ShortcutRefusal.HeldByAnotherProgram)), listed.Shortcuts.UnavailableReason(ShortcutAct.Open),
             "unavailable, and why (G33)");
-        Assert.AreEqual(listed.Shortcuts.UnavailableReason(ShortcutAct.Open), listed.Unavailable.Last(), "named as the tooltip names it");
+        Assert.AreEqual(listed.Shortcuts.UnavailableReason(ShortcutAct.Open), listed.Unavailable.Last(), "told as the tooltip is told");
         CollectionAssert.AreEquivalent(new[] { "Ctrl+Shift+F6", "Ctrl+Shift+F7", "Ctrl+Alt+F3" }, listed.ShortcutsSeam.Registered.Select(shortcut => shortcut.Text).ToList(), "the other three registered");
         Assert.IsGreaterThan(0, told, "the tray and the window's + menu read the shortcuts again (G34)");
     }
@@ -348,7 +348,7 @@ public sealed class TransferringTests
 
         Assert.AreEqual(StashImport.Action, refused.Failure?.Action, refused.Failure?.Sentence);
         Assert.AreEqual(TransferReasons.NotAnExport, refused.Failure!.Reason);
-        Assert.AreEqual(refused.Failure, page.WarningOf(SettingsPage.ImportTitle), "on the row (G35)");
+        Assert.AreEqual(refused.Failure!.Sentence, page.WarningOf(SettingsPage.ImportTitle), "on the row (G35)");
         CollectionAssert.Contains(listed.Notices.Shown.Select(notice => notice.Text).ToList(), refused.Failure.Sentence, "and in a notice");
         Assert.AreEqual(StashState.Open, listed.Listing.State);
         CollectionAssert.AreEquivalent(new[] { "cat", "dog" }, listed.Listing.Items.Select(item => item.Name).ToList(), "the same stash listed again");

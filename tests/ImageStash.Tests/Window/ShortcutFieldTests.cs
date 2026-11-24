@@ -13,9 +13,9 @@ namespace ImageStash.Tests.Window;
 /// A Settings shortcut field given its key events in the orders a person may press and let go of keys, a press whose
 /// KeyDown never reaches it coming only as its KeyUp, as Windows withholds PrtScn's and another program's hot key takes
 /// the combination it holds: whatever modifiers changed around that press, a combination another program holds is
-/// refused on the spot and nothing else is bound (G32, F5), and a combination pressed with its modifiers held first is
-/// still recorded, a modifier let go before they went down no part of it. Esc alone, Tab and Shift+Tab are never read
-/// as a press, by either event.
+/// refused on the spot and nothing else is bound (G32, F5), the field still recording for the retry, and a combination
+/// pressed with its modifiers held first is still recorded, a modifier let go before they went down no part of it. Esc
+/// alone, Tab and Shift+Tab are never read as a press, by either event, before a refusal or after one.
 /// </summary>
 // One at a time: a real control's first properties write Avalonia's metadata cache, which takes one writer at a time.
 [DoNotParallelize]
@@ -25,7 +25,7 @@ public sealed class ShortcutFieldTests
     private const KeyModifiers Ctrl = KeyModifiers.Control;
     private const KeyModifiers Shift = KeyModifiers.Shift;
     private const KeyModifiers Alt = KeyModifiers.Alt;
-    private const string HeldCtrlF9 = "Register the screenshot shortcut failed: Ctrl+F9, another program holds it";
+    private const string HeldCtrlF9 = "Ctrl+F9 is already used by another app. Press a different combination.";
 
     [TestMethod]
     public void CtrlHeldThroughTheClickIsPartOfTheHeldCombinationPressedAfterIt()
@@ -36,8 +36,8 @@ public sealed class ShortcutFieldTests
         Up(field, Key.LeftCtrl, KeyModifiers.None);
         Up(field, Key.F9, KeyModifiers.None);
 
-        Assert.AreEqual(HeldCtrlF9, recording.Warning?.Sentence, "on the spot (G32)");
-        Unchanged(started, recording);
+        Assert.AreEqual(HeldCtrlF9, recording.WarningWords, "on the spot (G32)");
+        RefusedStillRecording(started, recording, field);
     }
 
     [TestMethod]
@@ -50,8 +50,8 @@ public sealed class ShortcutFieldTests
         Down(field, Key.LeftShift, Shift);
         Up(field, Key.F9, Shift);
 
-        Assert.AreEqual(HeldCtrlF9, recording.Warning?.Sentence, "Ctrl+F9 was pressed, never Shift+F9 (G32, F5)");
-        Unchanged(started, recording);
+        Assert.AreEqual(HeldCtrlF9, recording.WarningWords, "Ctrl+F9 was pressed, never Shift+F9 (G32, F5)");
+        RefusedStillRecording(started, recording, field);
     }
 
     [TestMethod]
@@ -64,8 +64,8 @@ public sealed class ShortcutFieldTests
         Click(field);
         Up(field, Key.F9, KeyModifiers.None);
 
-        Assert.AreEqual(HeldCtrlF9, recording.Warning?.Sentence, "never plain F9 (G32, F5)");
-        Unchanged(started, recording);
+        Assert.AreEqual(HeldCtrlF9, recording.WarningWords, "never plain F9 (G32, F5)");
+        RefusedStillRecording(started, recording, field);
     }
 
     [TestMethod]
@@ -79,8 +79,8 @@ public sealed class ShortcutFieldTests
         Up(field, Key.LeftCtrl, KeyModifiers.None);
         Up(field, Key.F9, KeyModifiers.None);
 
-        Assert.AreEqual(HeldCtrlF9, recording.Warning?.Sentence, "the combination pressed, held by another program, is named (G32, G35)");
-        Unchanged(started, recording);
+        Assert.AreEqual(HeldCtrlF9, recording.WarningWords, "the combination pressed, held by another program, is named (G32, G35)");
+        RefusedStillRecording(started, recording, field);
     }
 
     [TestMethod]
@@ -92,12 +92,12 @@ public sealed class ShortcutFieldTests
         // Released for the recording, then taken by another program, which lets it go again before the recording ends.
         Down(field, Key.LeftCtrl, Ctrl);
         Up(field, Key.LeftCtrl, KeyModifiers.None);
-        started.Seam.RefuseNext(ShortcutReasons.HeldByAnotherProgram);
+        started.Seam.RefuseNext(ShortcutRefusal.HeldByAnotherProgram);
         Up(field, Key.PrintScreen, KeyModifiers.None);
 
-        var sentence = "Register the screenshot shortcut failed: Ctrl+PrtScn, another program holds it";
-        Assert.AreEqual(sentence, recording.Warning?.Sentence, "on the spot (G32)");
-        Assert.AreEqual(sentence, started.Shortcuts.UnavailableReason(ShortcutAct.Screenshot)?.Sentence, "it could not be registered (G33)");
+        var sentence = "Ctrl+PrtScn is already used by another app. Press a different combination.";
+        Assert.AreEqual(sentence, recording.WarningWords, "on the spot (G32)");
+        Assert.AreEqual("Ctrl+PrtScn is used by another app, so Take a screenshot has no shortcut.", started.Tray.ToolTip, "it could not be registered (G33)");
         Assert.AreEqual(ShortcutAct.Screenshot, started.Shortcuts.FirstUnavailable, "Settings opens on its row (G33)");
         CollectionAssert.DoesNotContain(started.Seam.Registered.ToList(), screenshot, "left unregistered until it is changed in Settings (G33)");
     }
@@ -196,6 +196,65 @@ public sealed class ShortcutFieldTests
     }
 
     [TestMethod]
+    public void AfterARefusalAPrtScnSeenOnlyComingUpIsTheRetryAndIsTaken()
+    {
+        var (started, recording, field) = Recording(held: "Ctrl+F9");
+        Down(field, Key.LeftCtrl, Ctrl);
+        Up(field, Key.F9, Ctrl);
+        Up(field, Key.LeftCtrl, KeyModifiers.None);
+        Assert.AreEqual(HeldCtrlF9, recording.WarningWords);
+
+        Down(field, Key.LeftShift, Shift);
+        Up(field, Key.PrintScreen, Shift);
+
+        Assert.IsFalse(recording.IsRecording, "a combination taken ends the recording (G32)");
+        Assert.IsNull(recording.WarningWords, "and clears the row's warning");
+        Assert.AreEqual("Shift+PrtScn", started.Settings.Current.Shortcuts.Screenshot, "PrtScn read with the modifiers held from the last modifier's press until it came up (G32)");
+        CollectionAssert.AreEquivalent(
+            new[] { "Ctrl+Alt+Space", "Shift+PrtScn", "Ctrl+Shift+PrtScn", "Win+Alt+V" }.Select(text => Shortcut.Parse(text).Value!).ToList(),
+            started.Seam.Registered.ToList(), "every shortcut due registered again, the new one among them");
+    }
+
+    [TestMethod]
+    public void AKeyHeldDownAfterARefusalRepeatsNoPress()
+    {
+        var (started, recording, field) = Recording();
+
+        Down(field, Key.LeftCtrl, Ctrl);
+        Down(field, Key.LeftAlt, Ctrl | Alt);
+        Down(field, Key.Space, Ctrl | Alt);
+        Up(field, Key.LeftAlt, Ctrl);
+        Up(field, Key.LeftCtrl, KeyModifiers.None);
+        // Space still held: Windows repeats its KeyDown, now with no modifier.
+        Down(field, Key.Space, KeyModifiers.None);
+        Down(field, Key.Space, KeyModifiers.None);
+
+        Assert.AreEqual("Open ImageStash already uses Ctrl+Alt+Space.", recording.WarningWords, "the next press is the retry, and a repeat is none (G32)");
+        Assert.IsFalse(started.Seam.Asked.Any(shortcut => shortcut.Text == "Space"), "plain Space never judged");
+        Up(field, Key.Space, KeyModifiers.None);
+        RefusedStillRecording(started, recording, field);
+    }
+
+    [TestMethod]
+    public void AfterARefusalTabAndShiftTabAreStillLeftToMoveOnAndNeverRead()
+    {
+        var (started, recording, field) = Recording(held: "Ctrl+F9");
+        Up(field, Key.F9, Ctrl);
+        Assert.IsTrue(recording.IsRecording);
+
+        foreach (var modifiers in new[] { KeyModifiers.None, Shift })
+        {
+            var tab = new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Tab, KeyModifiers = modifiers };
+            field.RaiseEvent(tab);
+            Assert.IsFalse(tab.Handled, "left to the page, which moves the focus on, and so ends the recording (G32)");
+            Up(field, Key.Tab, modifiers);
+        }
+
+        Assert.IsFalse(started.Seam.Asked.Any(shortcut => shortcut.Text.Contains("Tab")), "never asked of the seam");
+        Assert.AreEqual("Ctrl+PrtScn", recording.Text, "nothing bound");
+    }
+
+    [TestMethod]
     public void TheStopButtonShownAsAGlyphAloneNamesItsActionInItsTip()
     {
         var (_, _, field) = Recording();
@@ -214,6 +273,23 @@ public sealed class ShortcutFieldTests
         Click(field);
         Assert.IsTrue(recording.IsRecording);
         return (started, recording, field);
+    }
+
+    /// <summary>
+    /// After a refusal: the field still records, nothing is registered meanwhile, nothing bound or written; Esc then ends
+    /// the recording with nothing changed, the four registered again and the refusal no longer said (G32).
+    /// </summary>
+    private static void RefusedStillRecording(StartedShortcuts started, ShortcutRecording recording, ShortcutField field)
+    {
+        Assert.IsTrue(recording.IsRecording, "the field still records: the next press is the retry (G32)");
+        Assert.IsEmpty(started.Seam.Registered, "the four still released, so a retry of one of their combinations is refused, not run");
+        Assert.AreEqual("Ctrl+PrtScn", started.Settings.Current.Shortcuts.Screenshot, "nothing written");
+
+        Down(field, Key.Escape, KeyModifiers.None);
+        Up(field, Key.Escape, KeyModifiers.None);
+
+        Unchanged(started, recording);
+        Assert.IsNull(recording.WarningWords, "the row says only what is still true");
     }
 
     private static void Unchanged(StartedShortcuts started, ShortcutRecording recording)

@@ -93,10 +93,8 @@ public sealed class ShortcutTextTests
     public void AnUnavailableShortcutStoredInAnotherOrderIsNamedInTheOneOrderInTheTooltipAndOnItsRow()
     {
         var started = StartedShortcuts.Start(open: "alt+win+f9", held: Shortcut.Parse("Win+Alt+F9").Value!);
-        var sentence = $"Register the open shortcut failed: Win+Alt+F9, {ShortcutReasons.HeldByAnotherProgram}";
-
-        Assert.AreEqual(sentence, started.Tray.ToolTip, "the tray icon says which shortcut in the words its field shows (G33)");
-        Assert.AreEqual(sentence, started.Page().WarningOf(SettingsPage.OpenTitle)?.Sentence, "and so does its row");
+        Assert.AreEqual("Win+Alt+F9 is used by another app, so Open ImageStash has no shortcut.", started.Tray.ToolTip, "the tray icon says which shortcut in the words its field shows (G33)");
+        Assert.AreEqual("Win+Alt+F9 is already used by another app. Press a different combination.", started.Page().WarningOf(SettingsPage.OpenTitle), "and so does its row");
         Assert.AreEqual("Win+Alt+F9", started.Page().ShortcutField(ShortcutAct.Open).Text);
     }
 

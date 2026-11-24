@@ -6,12 +6,13 @@ ScreenshotDesk and stash-windows.ps1's StashWindows and check-published.ps1's Co
 tray menu, opened with a posted right-click, lists Settings between Pause shortcuts and Quit ImageStash, and its
 Settings, chosen through UI Automation, brings a window titled "ImageStash settings" to the front with G32's rows named
 in order and the stash folder in use. A PowerShell of the phase's own holds Ctrl+Shift+F8: the Take a screenshot field,
-clicked with real input, refuses the real Ctrl+Shift+F8 on the spot, its row reading "Register the screenshot shortcut
-failed: Ctrl+Shift+F8, another program holds it", then the real Shift+A ("it would type a character") and Ctrl+V ("it
-is the paste keystroke the handoff sends"), the field still reading Ctrl+PrtScn, settings.json's shortcuts unchanged,
-neither Shift+A nor Ctrl+V left registered, and the real Ctrl+PrtScn still showing the screenshot's overlay after the
-first refusal and after the third. With the holder gone the real Ctrl+Shift+F8 is recorded: the field
-and settings.json hold it. Start with Windows switched off removes the Run value and writes false, on writes the Run
+clicked with real input, refuses the real Ctrl+Shift+F8 on the spot, its row reading "Ctrl+Shift+F8 is already used by
+another app. Press a different combination.", and keeps recording, so the real Shift+A ("Shift+A types A on your
+keyboard layout, so it can't be a shortcut.") and Ctrl+V ("Ctrl+V is the paste key ImageStash presses, so it can't be a
+shortcut.") are its retries, each refused on the spot, the field still recording and reading Ctrl+PrtScn, neither
+Shift+A nor Ctrl+V left registered; Esc then ends the recording, the row's refusal gone, settings.json's shortcuts
+unchanged, and the real Ctrl+PrtScn shows the screenshot's overlay again. With the holder gone the real Ctrl+Shift+F8
+is recorded: the field and settings.json hold it. Start with Windows switched off removes the Run value and writes false, on writes the Run
 value naming the copy's executable and true; Theme set to Dark and back to Use system setting, and Thumbnail size to Huge
 and back to Medium, are written each time; Open
 folder opens a File Explorer window on the stash folder, which the phase closes. Another PowerShell takes Win+Alt+V
@@ -45,10 +46,11 @@ $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 # export's and the import's by their buttons' words.
 $rows = "Open ImageStash | Take a screenshot | Record a clip | Stash clipboard image | Also copy it to the clipboard | Maximum length | Show the mouse pointer | " +
     "Where your stash is stored | Open folder | Export stash$([char]0x2026) | Import stash$([char]0x2026) | Start with Windows | Theme | Thumbnail size"
-$held = 'Register the screenshot shortcut failed: Ctrl+Shift+F8, another program holds it'
-$typesACharacter = 'Register the screenshot shortcut failed: Shift+A, it would type a character'
-$pasteKeystroke = 'Register the screenshot shortcut failed: Ctrl+V, it is the paste keystroke the handoff sends'
-$grabbed = 'Register the Stash clipboard image shortcut failed: Win+Alt+V, another program holds it'
+$held = 'Ctrl+Shift+F8 is already used by another app. Press a different combination.'
+# The character the layout in use types for Shift+A, an uppercase A on the Latin layouts the check is run on.
+$typesACharacter = "Shift+A types A on your keyboard layout, so it can't be a shortcut."
+$pasteKeystroke = "Ctrl+V is the paste key ImageStash presses, so it can't be a shortcut."
+$grabbed = 'Win+Alt+V is already used by another app. Press a different combination.'
 
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 
@@ -273,7 +275,8 @@ try {
     Check ($folder -eq $stash) "Where your stash is stored shows the stash folder in use (G32): $folder"
     Check ((KeysOf 'Take a screenshot') -eq 'Ctrl+PrtScn') "the Take a screenshot field reads Ctrl+PrtScn (F5): $(KeysOf 'Take a screenshot')"
 
-    # G32, G33, Done when 5: a combination another program holds, refused on the spot; the old still registered.
+    # G32, G33, Done when 5: a combination another program holds, refused on the spot, the field recording on so the next
+    # press is the retry: a combination that types a character, then the paste keystroke the handoff sends.
     $shortcuts = (Settings).shortcuts | ConvertTo-Json -Compress
     $holder = Hold 'holder' 0x0006 0x77
     Need ($holder.First -eq 'registered') "another program registered Ctrl+Shift+F8 first: $($holder.First)"
@@ -283,35 +286,28 @@ try {
     $warned = WaitFor { WarnedUnder 'Take a screenshot' 'Record a clip' $held } 1000
     Check $warned ("within a second ({0} ms) the row under the field reads '$held', in the page's view (G32, G35, Done when 5)" -f $clock.ElapsedMilliseconds)
     Check (WaitFor { (-not $holder.Process.HasExited) -and ((Presses $holder) -eq 1) } 1000) "the other program still held Ctrl+Shift+F8 and took the press: $(Presses $holder) press(es)"
-    Need (WaitFor { -not (Recording 'Take a screenshot') } 2000) 'the refusal ended the recording'
-    Check ((KeysOf 'Take a screenshot') -eq 'Ctrl+PrtScn') "the field still reads Ctrl+PrtScn (G32): $(KeysOf 'Take a screenshot')"
-    $null = [PasteDesk]::Press([uint16[]]@(0x11, 0x2C))
-    $clock = [Diagnostics.Stopwatch]::StartNew()
-    Check (WaitFor { (Overlays).Count -eq $displays } 3000) ("the real Ctrl+PrtScn still shows the screenshot's overlay, its registration kept (G32, G33): {0} ms" -f $clock.ElapsedMilliseconds)
     Start-Sleep -Milliseconds 300
-    $null = [PasteDesk]::Press([uint16[]]@(0x1B))
-    if (-not (WaitFor { (Overlays).Count -eq 0 } 2000)) { CloseOverlays }
-    Need (WaitFor { (Overlays).Count -eq 0 } 2000) 'the overlay closed, cancelled'
-
-    # G32: a combination that types a character, and the paste keystroke the handoff sends.
-    Record 'Take a screenshot'
+    Need (Recording 'Take a screenshot') 'the refusal left the field recording, its Stop recording a shortcut button showing (G32)'
     $null = [PasteDesk]::Press([uint16[]]@(0x10, 0x41))
-    Check (WaitFor { WarnedUnder 'Take a screenshot' 'Record a clip' $typesACharacter } 1000) "Shift+A refused on the spot, the row reading '$typesACharacter' (G32, G35)"
-    Need (WaitFor { -not (Recording 'Take a screenshot') } 2000) 'the refusal ended the recording'
-    Record 'Take a screenshot'
+    Check (WaitFor { WarnedUnder 'Take a screenshot' 'Record a clip' $typesACharacter } 1000) "the retry Shift+A refused on the spot, the row reading '$typesACharacter' (G32, G35)"
+    Need (Recording 'Take a screenshot') 'the field still records after the second refusal'
     $null = [PasteDesk]::Press([uint16[]]@(0x11, 0x56))
-    Check (WaitFor { WarnedUnder 'Take a screenshot' 'Record a clip' $pasteKeystroke } 1000) "Ctrl+V refused on the spot, the row reading '$pasteKeystroke' (G32, G8, G35)"
-    Need (WaitFor { -not (Recording 'Take a screenshot') } 2000) 'the refusal ended the recording'
+    Check (WaitFor { WarnedUnder 'Take a screenshot' 'Record a clip' $pasteKeystroke } 1000) "the retry Ctrl+V refused on the spot, the row reading '$pasteKeystroke' (G32, G8, G35)"
+    Need (Recording 'Take a screenshot') 'the field still records after the third refusal'
     Check ((KeysOf 'Take a screenshot') -eq 'Ctrl+PrtScn') "the field still reads Ctrl+PrtScn: $(KeysOf 'Take a screenshot')"
-    Start-Sleep -Milliseconds 1000
-    Check (((Settings).shortcuts | ConvertTo-Json -Compress) -eq $shortcuts) "settings.json's shortcuts are as they were before the three refusals (G32): $shortcuts"
     $typing = Hold 'typing' 0x0004 0x41
     $paste = Hold 'paste' 0x0002 0x56
     Check (($typing.First -eq 'registered') -and ($paste.First -eq 'registered')) "ImageStash left neither Shift+A nor Ctrl+V registered: another program registered each ($($typing.First), $($paste.First)) (G32, G8)"
     Stop $typing
     Stop $paste
+    $null = [PasteDesk]::Press([uint16[]]@(0x1B))
+    Need (WaitFor { -not (Recording 'Take a screenshot') } 2000) 'Esc ended the recording, the page staying (G32, G2)'
+    Check (WaitFor { (WordsFrom 'Ctrl+V is the paste key').Count -eq 0 } 1000) 'the row no longer says a refusal once the recording ended (G32)'
+    Start-Sleep -Milliseconds 1000
+    Check (((Settings).shortcuts | ConvertTo-Json -Compress) -eq $shortcuts) "settings.json's shortcuts are as they were before the three refusals (G32): $shortcuts"
     $null = [PasteDesk]::Press([uint16[]]@(0x11, 0x2C))
-    Check (WaitFor { (Overlays).Count -eq $displays } 3000) 'after the three refusals the real Ctrl+PrtScn still shows the overlay (G32, G33)'
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    Check (WaitFor { (Overlays).Count -eq $displays } 3000) ("after the three refusals and Esc the real Ctrl+PrtScn shows the screenshot's overlay, registered again (G32, G33): {0} ms" -f $clock.ElapsedMilliseconds)
     Start-Sleep -Milliseconds 300
     $null = [PasteDesk]::Press([uint16[]]@(0x1B))
     if (-not (WaitFor { (Overlays).Count -eq 0 } 2000)) { CloseOverlays }
@@ -321,7 +317,7 @@ try {
     Stop $holder
     Record 'Take a screenshot'
     $null = [PasteDesk]::Press([uint16[]]@(0x11, 0x10, 0x77))
-    Check (WaitFor { ((KeysOf 'Take a screenshot') -eq 'Ctrl+Shift+F8') -and ((WordsFrom 'Register the screenshot shortcut failed').Count -eq 0) } 1000) "recorded once another program let it go, the field reads Ctrl+Shift+F8 and its row no refusal (G32, F5): $(KeysOf 'Take a screenshot')"
+    Check (WaitFor { ((KeysOf 'Take a screenshot') -eq 'Ctrl+Shift+F8') -and ((WordsFrom 'Ctrl+Shift+F8 is already used').Count -eq 0) } 1000) "recorded once another program let it go, the field reads Ctrl+Shift+F8 and its row no refusal (G32, F5): $(KeysOf 'Take a screenshot')"
     Check (WaitFor { (Settings).shortcuts.screenshot -eq 'Ctrl+Shift+F8' } 1500) "settings.json holds the screenshot shortcut Ctrl+Shift+F8 (G32, State Settings): $((Settings).shortcuts.screenshot)"
 
     # F1, G32, State Settings: Start with Windows takes effect at once, in the Run value and the file.
@@ -374,7 +370,7 @@ try {
     Need (WaitFor { Recording 'Stash clipboard image' } 2000) 'Enter on the focused field began recording'
     # The left Windows key, Alt and V.
     $null = [PasteDesk]::Press([uint16[]]@(0x5B, 0x12, 0x56))
-    Check (WaitFor { ((WordsFrom 'Register the Stash clipboard image shortcut failed').Count -eq 0) -and ((KeysOf 'Stash clipboard image') -eq 'Win+Alt+V') } 1000) 'changed there with the keyboard alone to Win+Alt+V once the other program let it go, the row no longer names it (G33, G7)'
+    Check (WaitFor { ((WordsFrom 'Win+Alt+V is already used').Count -eq 0) -and ((KeysOf 'Stash clipboard image') -eq 'Win+Alt+V') } 1000) 'changed there with the keyboard alone to Win+Alt+V once the other program let it go, the row no longer names it (G33, G7)'
     $taken = Hold 'taken' 0x0009 0x56
     Check ($taken.First -eq 'refused 1409') "ImageStash holds Win+Alt+V again, so another program's registration is refused: $($taken.First)"
     Stop $taken

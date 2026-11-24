@@ -223,8 +223,8 @@ public sealed class SettingsPageTests
         var outcome = page.SetStartWithWindows(false);
 
         Assert.AreEqual(refused, outcome.Failure);
-        Assert.AreEqual(refused, page.WarningOf(SettingsPage.StartWithWindowsTitle), "named on its row as the seam named it (G35)");
-        Assert.AreEqual("Stop starting with Windows failed: Run entry ImageStash, Windows refused the change", page.WarningOf(SettingsPage.StartWithWindowsTitle)!.Sentence);
+        Assert.AreEqual(refused.Sentence, page.WarningOf(SettingsPage.StartWithWindowsTitle), "named on its row as the seam named it (G35)");
+        Assert.AreEqual("Stop starting with Windows failed: Run entry ImageStash, Windows refused the change", page.WarningOf(SettingsPage.StartWithWindowsTitle));
         Assert.IsTrue(page.Rows.Where(row => row.Title != SettingsPage.StartWithWindowsTitle).All(row => page.WarningOf(row.Title) is null), "on that row alone");
         Assert.IsFalse(page.StartWithWindows, "the choice is the record whatever the entry answered (State: Settings)");
         await keeper.Flush();
@@ -250,7 +250,7 @@ public sealed class SettingsPageTests
         var moved = await page.Move(null!);
 
         Assert.AreEqual(new Failure(StashMove.Action, "the stash folder", "your stash is still opening"), moved.Failure);
-        Assert.AreEqual(moved.Failure, page.WarningOf(SettingsPage.StashFolderTitle), "named on its row (G35, G32)");
+        Assert.AreEqual(moved.Failure!.Sentence, page.WarningOf(SettingsPage.StashFolderTitle), "named on its row (G35, G32)");
         Assert.IsEmpty(dialogs.FolderPickers, "the picker not shown");
         Assert.IsFalse(page.MoveAsked);
         Assert.IsNull(page.MoveLine);
@@ -274,7 +274,7 @@ public sealed class SettingsPageTests
 
         CollectionAssert.AreEqual(new[] { DefaultStash, @"D:\Reactions" }, dialogs.OpenedFolders, "the default while Settings names none, then the folder it names (F6, G32)");
         Assert.AreEqual(dialogs.OpenFolderAnswer.Failure, refused.Failure);
-        Assert.AreEqual(refused.Failure, page.WarningOf(SettingsPage.StashFolderTitle), "named on its row (G35)");
+        Assert.AreEqual(refused.Failure!.Sentence, page.WarningOf(SettingsPage.StashFolderTitle), "named on its row (G35)");
         Assert.IsNotNull(page.WarningOf(SettingsPage.StartWithWindowsTitle), "another row's warning stays its own");
         Assert.IsEmpty(dialogs.Revealed, "no file in the stash folder selected");
         dialogs.OpenFolderAnswer = Outcome.Done;

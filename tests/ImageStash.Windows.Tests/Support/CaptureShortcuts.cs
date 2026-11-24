@@ -24,7 +24,7 @@ public sealed class CaptureShortcuts : IDisposable
             SettingsInMemory.Defaults(),
             GlobalShortcuts.Bindings(() => { }, () => pressed.taken.Add(desk.Screenshot.Take()), () => pressed.recorded.Add(desk.RecordClip.StartOrStop()), () => { }),
             pressed.seam,
-            failure => pressed.named.Add(failure.Sentence),
+            failure => pressed.named.Add(ShortcutWords.ToolTipLine(failure)),
             action => Dispatcher.UIThread.Post(action)).Start());
         return pressed;
     }

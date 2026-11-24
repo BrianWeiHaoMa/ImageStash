@@ -24,10 +24,10 @@ public sealed class GlobalShortcutsTests
     private static readonly Shortcut StashClipboardImage = Shortcut.Parse("Win+Alt+V").Value!;
 
     [TestMethod]
-    [DataRow("Ctrl+Alt+Space", "Register the open shortcut failed: Ctrl+Alt+Space, another program holds it", DisplayName = "the open shortcut held")]
-    [DataRow("Ctrl+PrtScn", "Register the screenshot shortcut failed: Ctrl+PrtScn, another program holds it", DisplayName = "the screenshot shortcut held")]
-    [DataRow("Ctrl+Shift+PrtScn", "Register the record shortcut failed: Ctrl+Shift+PrtScn, another program holds it", DisplayName = "the record shortcut held")]
-    [DataRow("Win+Alt+V", "Register the Stash clipboard image shortcut failed: Win+Alt+V, another program holds it", DisplayName = "Stash clipboard image's held")]
+    [DataRow("Ctrl+Alt+Space", "Ctrl+Alt+Space is used by another app, so Open ImageStash has no shortcut.", DisplayName = "the open shortcut held")]
+    [DataRow("Ctrl+PrtScn", "Ctrl+PrtScn is used by another app, so Take a screenshot has no shortcut.", DisplayName = "the screenshot shortcut held")]
+    [DataRow("Ctrl+Shift+PrtScn", "Ctrl+Shift+PrtScn is used by another app, so Record a clip has no shortcut.", DisplayName = "the record shortcut held")]
+    [DataRow("Win+Alt+V", "Win+Alt+V is used by another app, so Stash clipboard image has no shortcut.", DisplayName = "Stash clipboard image's held")]
     public void ACombinationAnotherProgramHoldsAtStartIsNamedAndStaysUnregisteredThroughPauseWhileTheOthersFire(string heldText, string sentence)
     {
         var heldShortcut = Shortcut.Parse(heldText).Value!;
@@ -146,7 +146,7 @@ public sealed class GlobalShortcutsTests
                 {
                     lock (named)
                     {
-                        named.Add(failure.Sentence);
+                        named.Add(ShortcutWords.ToolTipLine(failure));
                     }
                 },
                 action => Dispatcher.UIThread.Post(action));

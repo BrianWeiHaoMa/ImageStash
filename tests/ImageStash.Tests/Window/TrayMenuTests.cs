@@ -161,7 +161,7 @@ public sealed class TrayMenuTests
         var started = StartedShortcuts.Start();
         using (started.Shortcuts.Suspend())
         {
-            Assert.IsTrue(started.Shortcuts.Rebind(ShortcutAct.Open, Shortcut.Parse("ctrl+shift+f9").Value!).Succeeded);
+            Assert.IsNull(started.Shortcuts.Rebind(ShortcutAct.Open, Shortcut.Parse("ctrl+shift+f9").Value!));
         }
 
         Assert.AreEqual("ImageStash · Ctrl+Shift+F9", started.Tray.ToolTip, "as the menu's entries follow a remap, not composed once when the icon was shown");
@@ -169,7 +169,7 @@ public sealed class TrayMenuTests
         started.Shortcuts.TogglePause();
         using (started.Shortcuts.Suspend())
         {
-            Assert.IsTrue(started.Shortcuts.Rebind(ShortcutAct.Open, Shortcut.Parse("Alt+F9").Value!).Succeeded);
+            Assert.IsNull(started.Shortcuts.Rebind(ShortcutAct.Open, Shortcut.Parse("Alt+F9").Value!));
         }
 
         Assert.AreEqual("ImageStash", started.Tray.ToolTip, "remapped under Pause, still released");
@@ -178,37 +178,37 @@ public sealed class TrayMenuTests
     }
 
     [TestMethod]
-    [DataRow(ShortcutReasons.HeldByAnotherProgram)]
-    [DataRow(ShortcutReasons.TypesACharacter)]
-    public void WhileTheOpenShortcutIsUnavailableTheTooltipNamesOnlyWhyAndOnceItIsRegisteredAgainItNamesItAtOnce(string reason)
+    [DataRow(ShortcutRefusalKind.HeldByAnotherProgram, "Ctrl+Alt+Space is used by another app, so Open ImageStash has no shortcut.")]
+    [DataRow(ShortcutRefusalKind.TypesACharacter, "Ctrl+Alt+Space types a character, so Open ImageStash has no shortcut.")]
+    public void WhileTheOpenShortcutIsUnavailableTheTooltipNamesOnlyWhyAndOnceItIsRegisteredAgainItNamesItAtOnce(ShortcutRefusalKind reason, string line)
     {
         var open = Shortcut.Parse("Ctrl+Alt+Space").Value!;
-        var started = reason == ShortcutReasons.HeldByAnotherProgram ? StartedShortcuts.Start(held: open) : StartedShortcuts.Start();
-        if (reason == ShortcutReasons.TypesACharacter)
+        var started = reason == ShortcutRefusalKind.HeldByAnotherProgram ? StartedShortcuts.Start(held: open) : StartedShortcuts.Start();
+        if (reason == ShortcutRefusalKind.TypesACharacter)
         {
-            started.Seam.Release(open, reason);
+            started.Seam.Release(open, ShortcutRefusal.TypesACharacter(null));
             started.RunPosted();
         }
 
-        Assert.AreEqual($"Register the open shortcut failed: Ctrl+Alt+Space, {reason}", started.Tray.ToolTip, "the failure alone, as before, and no key that does nothing (G33)");
+        Assert.AreEqual(line, started.Tray.ToolTip, "the failure alone, as before, and no key that does nothing (G33)");
 
         started.Seam.Free(open);
         using (started.Shortcuts.Suspend())
         {
-            Assert.IsTrue(started.Shortcuts.Rebind(ShortcutAct.Open, open).Succeeded);
+            Assert.IsNull(started.Shortcuts.Rebind(ShortcutAct.Open, open));
         }
 
         Assert.AreEqual("ImageStash · Ctrl+Alt+Space", started.Tray.ToolTip, "registered again, at that moment and not at a later remap");
     }
 
     [TestMethod]
-    [DataRow("nonsense")]
-    [DataRow("")]
-    public void WhileTheOpenSettingIsNoShortcutTheTooltipNamesOnlyThatAndNoCombination(string open)
+    [DataRow("nonsense", "\"nonsense\" isn't a shortcut ImageStash understands, so Open ImageStash has no shortcut.")]
+    [DataRow("", "Open ImageStash has no shortcut set.")]
+    public void WhileTheOpenSettingIsNoShortcutTheTooltipNamesOnlyThatAndNoCombination(string open, string line)
     {
         var started = StartedShortcuts.Start(open: open);
 
-        Assert.AreEqual($"Register the open shortcut failed: {(open.Length == 0 ? "(empty)" : open)}, {ShortcutReasons.NotAShortcut}", started.Tray.ToolTip);
+        Assert.AreEqual(line, started.Tray.ToolTip);
     }
 
     [TestMethod]
@@ -216,7 +216,7 @@ public sealed class TrayMenuTests
     {
         var tray = new RecordingTray();
         var seam = new RecordingShortcuts();
-        seam.Refuse(Shortcut.Parse("Ctrl+Alt+Space").Value!, ShortcutReasons.HeldByAnotherProgram);
+        seam.Refuse(Shortcut.Parse("Ctrl+Alt+Space").Value!, ShortcutRefusal.HeldByAnotherProgram);
         var shortcuts = new GlobalShortcuts(StartedShortcuts.SettingsInMemory(), GlobalShortcuts.Bindings(() => { }, () => { }, () => { }, () => { }), seam, _ => { }, action => action());
         new TrayMenu(tray, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }).Show(shortcuts);
         shortcuts.Start();
@@ -233,11 +233,11 @@ public sealed class TrayMenuTests
         var started = StartedShortcuts.Start(held: Shortcut.Parse("Ctrl+PrtScn").Value!);
 
         Assert.IsNull(started.Shortcuts.UnavailableReason(ShortcutAct.Open), "the open shortcut is registered");
-        Assert.AreEqual($"Register the screenshot shortcut failed: Ctrl+PrtScn, {ShortcutReasons.HeldByAnotherProgram}", started.Tray.ToolTip,
+        Assert.AreEqual("Ctrl+PrtScn is used by another app, so Take a screenshot has no shortcut.", started.Tray.ToolTip,
             "exactly what it read before: the open shortcut's words never take room from a failure's why (G33)");
 
         started.Menu.Name(new Failure("Save settings", "settings.json", "refused"));
-        CollectionAssert.AreEqual(new[] { "Save settings failed: settings.json, refused", $"Register the screenshot shortcut failed: Ctrl+PrtScn, {ShortcutReasons.HeldByAnotherProgram}" },
+        CollectionAssert.AreEqual(new[] { "Save settings failed: settings.json, refused", "Ctrl+PrtScn is used by another app, so Take a screenshot has no shortcut." },
             started.Tray.ToolTip!.Split('\n'));
     }
 
@@ -294,20 +294,20 @@ public sealed class TrayMenuTests
     }
 
     [TestMethod]
-    [DataRow(ShortcutReasons.HeldByAnotherProgram)]
-    [DataRow(ShortcutReasons.TypesACharacter)]
-    public void AnUnavailableShortcutKeepsItsReasonWhileLaterFailuresAreShortened(string reason)
+    [DataRow(ShortcutRefusalKind.HeldByAnotherProgram, "Ctrl+Alt+Space is used by another app, so Open ImageStash has no shortcut.")]
+    [DataRow(ShortcutRefusalKind.TypesACharacter, "Ctrl+Alt+Space types a character, so Open ImageStash has no shortcut.")]
+    public void AnUnavailableShortcutKeepsItsReasonWhileLaterFailuresAreShortened(ShortcutRefusalKind reason, string line)
     {
         var tray = new RecordingTray(toolTipLength: 127);
         var menu = new TrayMenu(tray, () => { }, () => { }, () => { }, () => { }, () => { }, () => { });
         menu.Name(new Failure("Read settings", "settings.json", "another program is holding it open"));
         menu.Show(Shortcuts());
-        menu.NameUnavailableShortcut(new Failure("Register the open shortcut", "Ctrl+Alt+Space", reason));
+        menu.NameUnavailableShortcut(new ShortcutProblem(ShortcutAct.Open, "Ctrl+Alt+Space", ShortcutReason.Of(new ShortcutRefusal(reason))));
         menu.Name(new Failure("Open the stash", @"C:\Users\someone\Pictures\Reaction stash", "a file is where the stash folder should be"));
 
         var lines = tray.ToolTip!.Split('\n');
         Assert.IsLessThanOrEqualTo(127, tray.ToolTip.Length);
-        CollectionAssert.AreEqual(new[] { "Open the stash failed", $"Register the open shortcut failed: Ctrl+Alt+Space, {reason}", "Read settings failed" }, lines,
+        CollectionAssert.AreEqual(new[] { "Open the stash failed", line, "Read settings failed" }, lines,
             "which shortcut is unavailable and why stays whole (G33); the others keep their action (G35)");
     }
 
@@ -318,30 +318,30 @@ public sealed class TrayMenuTests
         var menu = new TrayMenu(tray, () => { }, () => { }, () => { }, () => { }, () => { }, () => { });
         menu.Name(new Failure("Stop starting with Windows", "Run entry ImageStash", "Windows refused the change"));
         menu.Show(Shortcuts());
-        menu.NameUnavailableShortcut(new Failure("Register the open shortcut", "Ctrl+Alt+Space", ShortcutReasons.HeldByAnotherProgram));
+        menu.NameUnavailableShortcut(Held(ShortcutAct.Open, "Ctrl+Alt+Space"));
         menu.Name(new Failure("Open the stash", @"C:\Users\someone\Pictures\Reaction stash", "a file is where the stash folder should be"));
 
-        var withTheReason = string.Join("\n", "Open the stash failed", $"Register the open shortcut failed: Ctrl+Alt+Space, {ShortcutReasons.HeldByAnotherProgram}", "Stop starting with Windows failed");
+        var withTheReason = string.Join("\n", "Open the stash failed", "Ctrl+Alt+Space is used by another app, so Open ImageStash has no shortcut.", "Stop starting with Windows failed");
         Assert.IsGreaterThan(127, withTheReason.Length, "the reason does not fit beside the others' actions");
         Assert.IsLessThanOrEqualTo(127, tray.ToolTip!.Length);
-        CollectionAssert.AreEqual(new[] { "Open the stash failed", "Register the open shortcut failed: Ctrl+Alt+Space", "Stop starting with Windows failed" }, tray.ToolTip.Split('\n'),
-            "the why gives way only when the tooltip cannot hold it beside every other failure named there, the shortcut still named (G33); every failure keeps its action (G35)");
+        CollectionAssert.AreEqual(new[] { "Open the stash failed", "Open ImageStash: Ctrl+Alt+Space is unavailable", "Stop starting with Windows failed" }, tray.ToolTip.Split('\n'),
+            "the why gives way only when the tooltip cannot hold it beside every other failure named there, the shortcut still named by act and combination (G33); every failure keeps its action (G35)");
     }
 
     [TestMethod]
-    public void OfTwoUnavailableShortcutsTheOlderIsCutToItsActionBeforeTheNewerLosesItsReason()
+    public void OfTwoUnavailableShortcutsTheOlderIsCutBeforeTheNewerLosesItsReason()
     {
         var tray = new RecordingTray(toolTipLength: 127);
         var menu = new TrayMenu(tray, () => { }, () => { }, () => { }, () => { }, () => { }, () => { });
         menu.Show(Shortcuts());
-        menu.NameUnavailableShortcut(new Failure("Register the open shortcut", "Ctrl+Alt+Space", ShortcutReasons.HeldByAnotherProgram));
-        menu.NameUnavailableShortcut(new Failure("Register the Stash clipboard image shortcut", "Ctrl+Alt+V", ShortcutReasons.HeldByAnotherProgram));
+        menu.NameUnavailableShortcut(Held(ShortcutAct.Open, "Ctrl+Alt+Space"));
+        menu.NameUnavailableShortcut(Held(ShortcutAct.StashClipboardImage, "Ctrl+Alt+V"));
 
-        var bothBySubject = string.Join("\n", "Register the Stash clipboard image shortcut failed: Ctrl+Alt+V", "Register the open shortcut failed: Ctrl+Alt+Space");
-        Assert.IsLessThanOrEqualTo(127, bothBySubject.Length, "cutting both to action and subject would also fit, and lose the newer's why");
+        var bothWithoutWhy = string.Join("\n", "Stash clipboard image: Ctrl+Alt+V is unavailable", "Open ImageStash: Ctrl+Alt+Space is unavailable");
+        Assert.IsLessThanOrEqualTo(127, bothWithoutWhy.Length, "cutting both to act and combination would also fit, and lose the newer's why");
         Assert.IsLessThanOrEqualTo(127, tray.ToolTip!.Length);
-        CollectionAssert.AreEqual(new[] { $"Register the Stash clipboard image shortcut failed: Ctrl+Alt+V, {ShortcutReasons.HeldByAnotherProgram}", "Register the open shortcut failed" }, tray.ToolTip.Split('\n'),
-            "the newest's why fits beside the older cut to its action, which still says which shortcut (G33)");
+        CollectionAssert.AreEqual(new[] { "Ctrl+Alt+V is used by another app, so Stash clipboard image has no shortcut.", "Open ImageStash: Ctrl+Alt+Space is unavailable" }, tray.ToolTip.Split('\n'),
+            "the newest's why fits beside the older cut to its act and combination, which still says which shortcut (G33)");
     }
 
     [TestMethod]
@@ -351,36 +351,100 @@ public sealed class TrayMenuTests
         var menu = new TrayMenu(tray, () => { }, () => { }, () => { }, () => { }, () => { }, () => { });
         menu.Name(new Failure("Read settings", "settings.json", "another program is holding it open"));
         menu.Show(Shortcuts());
-        menu.NameUnavailableShortcut(new Failure("Register the open shortcut", "Ctrl+Alt+Space", ShortcutReasons.HeldByAnotherProgram));
-        menu.NameUnavailableShortcut(new Failure("Register the Stash clipboard image shortcut", "Ctrl+Alt+V", ShortcutReasons.TypesACharacter));
+        menu.NameUnavailableShortcut(Held(ShortcutAct.Open, "Ctrl+Alt+Space"));
+        menu.NameUnavailableShortcut(new ShortcutProblem(ShortcutAct.StashClipboardImage, "Ctrl+Alt+V", ShortcutReason.Of(ShortcutRefusal.TypesACharacter(null))));
 
-        var withTheReason = string.Join("\n", $"Register the Stash clipboard image shortcut failed: Ctrl+Alt+V, {ShortcutReasons.TypesACharacter}", "Register the open shortcut failed", "Read settings failed");
-        Assert.IsGreaterThan(127, withTheReason.Length, "the newest's why does not fit beside the others cut to their actions");
+        var olderWithoutWhy = string.Join("\n", "Ctrl+Alt+V types a character, so Stash clipboard image has no shortcut.", "Open ImageStash: Ctrl+Alt+Space is unavailable", "Read settings failed");
+        Assert.IsGreaterThan(127, olderWithoutWhy.Length, "the newest's why does not fit beside the older cut only to act and combination");
         Assert.IsLessThanOrEqualTo(127, tray.ToolTip!.Length);
-        CollectionAssert.AreEqual(new[] { "Register the Stash clipboard image shortcut failed: Ctrl+Alt+V", "Register the open shortcut failed", "Read settings failed" }, tray.ToolTip.Split('\n'),
-            "the other failure is cut to its action first, then the older shortcut, and only then the newest's why gives way (G33, G35)");
+        CollectionAssert.AreEqual(new[] { "Ctrl+Alt+V types a character, so Stash clipboard image has no shortcut.", "Open ImageStash unavailable", "Read settings failed" }, tray.ToolTip.Split('\n'),
+            "the other failure is cut to its action first, then the older shortcut to its shortest form, and the newest keeps its why (G33, G35)");
 
         menu.Name(new Failure("Open the stash", @"C:\Users\someone\Pictures\Reaction stash", "a file is where the stash folder should be"));
 
         Assert.IsLessThanOrEqualTo(127, tray.ToolTip!.Length);
-        CollectionAssert.AreEqual(new[] { "Open the stash failed", "Register the Stash clipboard image shortcut failed", "Register the open shortcut failed", "Read settings failed" }, tray.ToolTip.Split('\n'),
+        CollectionAssert.AreEqual(new[] { "Open the stash failed", "Stash clipboard image: Ctrl+Alt+V is unavailable", "Open ImageStash unavailable", "Read settings failed" }, tray.ToolTip.Split('\n'),
             "every line still there, each shortcut line still saying which shortcut, the newest's why given way only when nothing else can (G33)");
     }
 
     [TestMethod]
-    public void AnUnavailableShortcutWhoseCombinationIsLongerThanItsActionKeepsItsActionWhenTheOthersAreCutToTheirs()
+    public void FourUnavailableShortcutsAreEachStillNamedByTheirShortestForm()
     {
         var tray = new RecordingTray(toolTipLength: 127);
         var menu = new TrayMenu(tray, () => { }, () => { }, () => { }, () => { }, () => { }, () => { });
         menu.Show(Shortcuts());
-        menu.NameUnavailableShortcut(new Failure("Register the open shortcut", "Ctrl+Alt+Shift+Win+PrintScreen", ShortcutReasons.HeldByAnotherProgram));
-        menu.NameUnavailableShortcut(new Failure("Register the screenshot shortcut", "Ctrl+PrtScn", ShortcutReasons.HeldByAnotherProgram));
-        menu.NameUnavailableShortcut(new Failure("Register the record shortcut", "Ctrl+Shift+PrtScn", ShortcutReasons.HeldByAnotherProgram));
-        menu.NameUnavailableShortcut(new Failure("Register the Stash clipboard image shortcut", "Ctrl+Alt+V", ShortcutReasons.HeldByAnotherProgram));
+        menu.NameUnavailableShortcut(Held(ShortcutAct.Open, "Ctrl+Alt+Shift+Win+PrintScreen"));
+        menu.NameUnavailableShortcut(Held(ShortcutAct.Screenshot, "Ctrl+PrtScn"));
+        menu.NameUnavailableShortcut(Held(ShortcutAct.Record, "Ctrl+Shift+PrtScn"));
+        menu.NameUnavailableShortcut(Held(ShortcutAct.StashClipboardImage, "Ctrl+Alt+V"));
 
         Assert.IsLessThanOrEqualTo(127, tray.ToolTip!.Length);
-        CollectionAssert.AreEqual(new[] { "Ctrl+Alt+V is unavailable", "Ctrl+Shift+PrtScn is unavailable", "Ctrl+PrtScn is unavailable", "Register the open shortcut failed" }, tray.ToolTip.Split('\n'),
-            "each line in its shorter form, so every shortcut is still named (G33)");
+        CollectionAssert.AreEqual(new[] { "Ctrl+Alt+V is unavailable", "Record a clip unavailable", "Take a screenshot: Ctrl+PrtScn is unavailable", "Open ImageStash unavailable" }, tray.ToolTip.Split('\n'),
+            "each line by its combination or its act, whichever is shorter, so every shortcut is still named, the room left keeping one act beside its combination (G33)");
+    }
+
+    [TestMethod]
+    public void FourLongRemappedShortcutsAreNamedByTheirActsWhichTogetherAlwaysFit()
+    {
+        var tray = new RecordingTray(toolTipLength: 127);
+        var menu = new TrayMenu(tray, () => { }, () => { }, () => { }, () => { }, () => { }, () => { });
+        menu.Show(Shortcuts());
+        foreach (var act in new[] { ShortcutAct.Open, ShortcutAct.Screenshot, ShortcutAct.Record, ShortcutAct.StashClipboardImage })
+        {
+            menu.NameUnavailableShortcut(Held(act, "Ctrl+Alt+Shift+Win+PrintScreen"));
+        }
+
+        Assert.IsLessThanOrEqualTo(127, tray.ToolTip!.Length);
+        CollectionAssert.AreEqual(new[] { "Stash clipboard image unavailable", "Record a clip unavailable", "Take a screenshot unavailable", "Open ImageStash unavailable" }, tray.ToolTip.Split('\n'),
+            "the platform cuts none of them away (G33)");
+    }
+
+    [TestMethod]
+    public void ThreeShortcutsHeldAtStartKeepTheNewestsWhyWhereItFitsBesideTheOthersShortestForms()
+    {
+        var started = StartedShortcuts.Start(open: "Alt+F9", screenshot: "Alt+F8", record: "Ctrl+F9",
+            held: [Shortcut.Parse("Alt+F9").Value!, Shortcut.Parse("Alt+F8").Value!, Shortcut.Parse("Ctrl+F9").Value!]);
+
+        Assert.IsLessThanOrEqualTo(127, started.Tray.ToolTip!.Length);
+        Assert.AreEqual(string.Join("\n", "Ctrl+F9 is used by another app, so Record a clip has no shortcut.", "Alt+F8 is unavailable", "Open ImageStash: Alt+F9 is unavailable"), started.Tray.ToolTip,
+            "the newest's line whole, since it fits beside the other two, each still named, and the room left keeps an act beside its combination (G33)");
+    }
+
+    [TestMethod]
+    public void ThreeDefaultsHeldAtStartKeepAWhyWhereOneFitsThoughTheNewestsDoesNot()
+    {
+        var started = StartedShortcuts.Start(held: [Shortcut.Parse("Ctrl+Alt+Space").Value!, Shortcut.Parse("Ctrl+PrtScn").Value!, Shortcut.Parse("Ctrl+Shift+PrtScn").Value!]);
+
+        var newestWhole = string.Join("\n", "Ctrl+Shift+PrtScn is used by another app, so Record a clip has no shortcut.", "Ctrl+PrtScn is unavailable", "Open ImageStash unavailable");
+        Assert.IsGreaterThan(127, newestWhole.Length, "the newest's why does not fit beside the other two");
+        Assert.AreEqual(string.Join("\n", "Record a clip unavailable", "Ctrl+PrtScn is used by another app, so Take a screenshot has no shortcut.", "Open ImageStash unavailable"), started.Tray.ToolTip,
+            "a why gives way only when the tooltip cannot hold it: the next newest's fits, so it is kept (G33)");
+    }
+
+    [TestMethod]
+    public void OneUnavailableShortcutAloneIsNamedWholeForEveryDefaultAndEveryReason()
+    {
+        var defaults = new Shortcuts();
+        var reasons = new[]
+        {
+            ShortcutReason.Of(ShortcutRefusal.HeldByAnotherProgram), ShortcutReason.Of(ShortcutRefusal.TypesACharacter("@")), ShortcutReason.Of(ShortcutRefusal.TypesACharacter(null)),
+            ShortcutReason.Of(ShortcutRefusal.NotAKey(Avalonia.Input.Key.ImeConvert)), ShortcutReason.Of(ShortcutRefusal.Stated("The parameter is incorrect.")),
+            ShortcutReason.PasteKeystroke, ShortcutReason.UsedBy(ShortcutAct.StashClipboardImage), ShortcutReason.ModifiersLetGoFirst, ShortcutReason.NotAShortcut,
+        };
+        foreach (var (act, text) in new[] { (ShortcutAct.Open, defaults.Open), (ShortcutAct.Screenshot, defaults.Screenshot), (ShortcutAct.Record, defaults.Record), (ShortcutAct.StashClipboardImage, defaults.StashClipboardImage) })
+        {
+            foreach (var reason in reasons)
+            {
+                var tray = new RecordingTray(toolTipLength: 127);
+                var menu = new TrayMenu(tray, () => { }, () => { }, () => { }, () => { }, () => { }, () => { });
+                menu.Show(Shortcuts());
+                var unavailable = new ShortcutProblem(act, text, reason);
+                menu.NameUnavailableShortcut(unavailable);
+
+                Assert.AreEqual(ShortcutWords.ToolTipLine(unavailable), tray.ToolTip, $"{text}, {reason.Kind}: the whole sentence, its why kept (G33)");
+                Assert.IsLessThanOrEqualTo(127, tray.ToolTip!.Length);
+            }
+        }
     }
 
     [TestMethod]
@@ -389,16 +453,62 @@ public sealed class TrayMenuTests
         var tray = new RecordingTray(toolTipLength: 127);
         var menu = new TrayMenu(tray, () => { }, () => { }, () => { }, () => { }, () => { }, () => { });
         menu.Show(Shortcuts());
-        menu.NameUnavailableShortcut(new Failure("Register the open shortcut", "Ctrl+Alt+Space", ShortcutReasons.HeldByAnotherProgram));
-        menu.NameUnavailableShortcut(new Failure("Register the Stash clipboard image shortcut", "Ctrl+Alt+V", ShortcutReasons.HeldByAnotherProgram));
+        menu.NameUnavailableShortcut(Held(ShortcutAct.Open, "Ctrl+Alt+Space"));
+        menu.NameUnavailableShortcut(Held(ShortcutAct.StashClipboardImage, "Ctrl+Alt+V"));
+        menu.Name(new Failure("Finish an unfinished save", "old meme.png", "another program is holding it open"));
         menu.Name(new Failure("Finish an unfinished rename", "laughing cat.gif", "another program is holding it open"));
         menu.Name(new Failure("Finish an unfinished rename", "sad dog.png", "another program is holding it open"));
 
-        var everyAction = string.Join("\n", "Finish an unfinished rename failed", "Finish an unfinished rename failed", "Register the Stash clipboard image shortcut failed", "Register the open shortcut failed");
-        Assert.IsGreaterThan(127, everyAction.Length, "the platform would cut the oldest line, the open shortcut's");
+        var everyShortest = string.Join("\n", "Finish an unfinished rename failed", "Finish an unfinished rename failed", "Finish an unfinished save failed", "Ctrl+Alt+V is unavailable", "Open ImageStash unavailable");
+        Assert.IsGreaterThan(127, everyShortest.Length, "the platform would cut the oldest line, the open shortcut's");
         Assert.IsLessThanOrEqualTo(127, tray.ToolTip!.Length);
-        CollectionAssert.AreEqual(new[] { "Finish an unfinished rename failed", "Register the Stash clipboard image shortcut failed", "Register the open shortcut failed" }, tray.ToolTip.Split('\n'),
+        CollectionAssert.AreEqual(new[] { "Finish an unfinished rename failed", "Finish an unfinished rename failed", "Ctrl+Alt+V is unavailable", "Open ImageStash unavailable" }, tray.ToolTip.Split('\n'),
             "the oldest other failure leaves, and every unavailable shortcut is still named (G33)");
+    }
+
+    private static ShortcutProblem Held(ShortcutAct act, string combination) => new(act, combination, ShortcutReason.Of(ShortcutRefusal.HeldByAnotherProgram));
+
+    [TestMethod]
+    public void ShortcutLinesNamedAgainAndAgainAreWeighedNewestFourFirstAndAtOnce()
+    {
+        var tray = new RecordingTray(toolTipLength: 127);
+        var menu = new TrayMenu(tray, () => { }, () => { }, () => { }, () => { }, () => { }, () => { });
+        menu.Show(Shortcuts());
+        // Each of twenty registrations names it once more, as importing the same settings again does.
+        for (var i = 0; i < 20; i++)
+        {
+            menu.NameUnavailableShortcut(Held(ShortcutAct.Screenshot, "Ctrl+PrtScn"));
+        }
+
+        var lines = tray.ToolTip!.Split('\n');
+        Assert.HasCount(20, lines, "every line still there, the platform cutting what does not fit");
+        Assert.IsTrue(lines.Skip(4).All(line => line == "Ctrl+PrtScn is unavailable"), "the older lines at their shortest form");
+    }
+
+    [TestMethod]
+    public void AShortcutTheLayoutComesToTypeIsNamedWithTheCharacterTheSeamFoundThen()
+    {
+        var started = StartedShortcuts.Start();
+        started.Seam.Release(Shortcut.Parse("Ctrl+Shift+PrtScn").Value!, ShortcutRefusal.TypesACharacter("\u00FC"));
+        started.RunPosted();
+
+        Assert.AreEqual("Ctrl+Shift+PrtScn types \u00FC, so Record a clip has no shortcut.", started.Tray.ToolTip, "the character of the judgment that released it (G33)");
+        Assert.AreEqual("Ctrl+Shift+PrtScn types \u00FC on your keyboard layout, so it can't be a shortcut.", started.Page().WarningOf(SettingsPage.RecordClipTitle));
+    }
+
+    [TestMethod]
+    public void AShortcutRefusedAtPausesToggleBackReadsAsOneRefusedAtStart()
+    {
+        var screenshot = Shortcut.Parse("Ctrl+PrtScn").Value!;
+        var atStart = StartedShortcuts.Start(held: screenshot);
+        var atToggleBack = StartedShortcuts.Start();
+        atToggleBack.Shortcuts.TogglePause();
+        atToggleBack.Seam.Refuse(screenshot, ShortcutRefusal.HeldByAnotherProgram);
+        atToggleBack.Shortcuts.TogglePause();
+
+        Assert.AreEqual("Ctrl+PrtScn is used by another app, so Take a screenshot has no shortcut.", atStart.Tray.ToolTip);
+        Assert.AreEqual(atStart.Tray.ToolTip, atToggleBack.Tray.ToolTip, "the words follow the reason, not the moment (G33)");
+        Assert.AreEqual(atStart.Page().WarningOf(SettingsPage.TakeScreenshotTitle), atToggleBack.Page().WarningOf(SettingsPage.TakeScreenshotTitle));
     }
 
     private static GlobalShortcuts Shortcuts(string openText = "Ctrl+Alt+Space", string stashText = "Win+Alt+V", string screenshotText = "Ctrl+PrtScn", string recordText = "Ctrl+Shift+PrtScn") =>

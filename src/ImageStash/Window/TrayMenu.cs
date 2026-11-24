@@ -8,15 +8,14 @@ namespace ImageStash.Window;
 /// (G35), the one place a failure at start can be named before the window is shown (F4), a shortcut that cannot be
 /// registered among them (G33), until Settings registers it. While it names none, it reads ImageStash with the open
 /// shortcut beside it, so pointing at the icon teaches the gesture, but only while that shortcut would summon: never
-/// under Pause, nor while its setting is no shortcut or it is unavailable. When the platform's tooltip cannot hold
-/// every failure whole, the oldest lines are shortened first, to action and subject and then to the action alone, so
-/// none drops out and the newest keeps its reason longest; an unavailable shortcut's line is shortened only after every
-/// other, since the tooltip is where the tray icon says which shortcut is unavailable and why (G33), and of several
-/// such lines the older is cut to its action before the newer loses its reason. Only when the actions alone do not fit
-/// together do lines leave: the oldest other failures first, so the platform never cuts away which shortcut is
-/// unavailable; and when the shortcuts' lines cut to their actions still do not fit together, as with all four held,
-/// each, oldest first, names its combination alone, or, when even those do not fit, as with four long combinations
-/// remapped in Settings, its entry's words.
+/// under Pause, nor while its setting is no shortcut or it is unavailable. An unavailable shortcut's line is one
+/// sentence of <see cref="ShortcutWords"/>: its combination, why, and the act left with no shortcut. When the platform's
+/// tooltip cannot hold every line whole, the other failures give way first, oldest first, to action and subject and then
+/// to the action alone; then the shortcuts' lines, to their act and combination or to the shortest form still saying
+/// which shortcut, keeping each why that fits, the newer's before the older's, since the tooltip is where the tray icon
+/// says which shortcut is unavailable and why (G33). Only when the other failures' actions do not fit beside the
+/// shortcuts' shortest forms do lines leave, the oldest other failures first, so the platform never cuts away which
+/// shortcut is unavailable; the four shortcuts' shortest forms always fit together.
 /// </summary>
 public sealed class TrayMenu
 {
@@ -37,7 +36,8 @@ public sealed class TrayMenu
     private readonly Action stashClipboardImage;
     private readonly Action openSettings;
     private readonly Action quit;
-    private readonly List<(Failure Failure, bool ShortcutUnavailable)> named = [];
+    // Newest first: each a failure, or an unavailable shortcut.
+    private readonly List<(Failure? Failure, ShortcutProblem? Unavailable)> named = [];
     private GlobalShortcuts? shortcuts;
 
     /// <param name="open">Shows the stash window, from Open ImageStash and from a left-click on the icon alike.</param>
@@ -113,7 +113,7 @@ public sealed class TrayMenu
         }
 
         // A shortcut registered since, or unavailable for another reason now, is no longer what its line says.
-        named.RemoveAll(line => line.ShortcutUnavailable && !reasons.Contains(line.Failure));
+        named.RemoveAll(line => line.Unavailable is { } unavailable && !reasons.Contains(unavailable));
         tray.SetToolTip(ToolTip());
     }
 
@@ -133,7 +133,7 @@ public sealed class TrayMenu
     }
 
     /// <summary>Adds a failure to the tooltip, newest first, until the next start.</summary>
-    public void Name(Failure failure) => Add(failure, shortcutUnavailable: false);
+    public void Name(Failure failure) => Add((failure, null));
 
     /// <summary>Names <paramref name="outcome"/>'s failure as <see cref="Name"/> does, when it failed.</summary>
     public void NameIfFailed(Outcome outcome)
@@ -148,22 +148,31 @@ public sealed class TrayMenu
     /// Adds a shortcut that is unavailable, and why, whose reason the tooltip keeps longest, until the shortcuts no longer
     /// give that reason for it (G33).
     /// </summary>
-    public void NameUnavailableShortcut(Failure failure) => Add(failure, shortcutUnavailable: true);
+    public void NameUnavailableShortcut(ShortcutProblem unavailable) => Add((null, unavailable));
 
-    private void Add(Failure failure, bool shortcutUnavailable)
+    private void Add((Failure? Failure, ShortcutProblem? Unavailable) line)
     {
-        named.Insert(0, (failure, shortcutUnavailable));
+        named.Insert(0, line);
         if (shortcuts is not null)
         {
             tray.SetToolTip(ToolTip());
         }
     }
 
+    // A failure's line, then its shorter forms, each saying what failed.
     private static readonly Func<Failure, string>[] Lines =
     [
         f => f.Sentence,
         f => $"{f.Action} failed: {f.Subject}",
         f => $"{f.Action} failed",
+    ];
+
+    // An unavailable shortcut's line, then its shorter forms, each saying which shortcut (G33).
+    private static readonly Func<ShortcutProblem, string>[] ShortcutLines =
+    [
+        ShortcutWords.ToolTipLine,
+        ShortcutWords.ToolTipLineWithoutWhy,
+        ShortcutWords.ToolTipLineShortest,
     ];
 
     private string ToolTip()
@@ -173,21 +182,19 @@ public sealed class TrayMenu
             return OpenShortcutSummoning() is { } open ? $"ImageStash · {open.Text}" : "ImageStash";
         }
 
-        // The lines shown, newest first, by their index in named; how far each is shortened, an index into Lines, or for
-        // an unavailable shortcut one past it, its shortest form, and two past it, its entry's words.
+        // The lines shown, newest first, by their index in named; how far each is shortened, an index into its forms.
         var kept = Enumerable.Range(0, named.Count).ToList();
         var shortened = new int[named.Count];
-        string Line(int i) => shortened[i] < Lines.Length ? Lines[shortened[i]](named[i].Failure)
-            : shortened[i] == Lines.Length ? Shortest(named[i].Failure)
-            : ByEntry(named[i].Failure);
+        string Line(int i) => named[i].Unavailable is { } unavailable ? ShortcutLines[shortened[i]](unavailable) : Lines[shortened[i]](named[i].Failure!);
+        string Shortest(int i) => named[i].Unavailable is { } unavailable ? ShortcutLines[^1](unavailable) : Lines[^1](named[i].Failure!);
         string Text() => string.Join("\n", kept.Select(Line));
-        int ByActions() => kept.Sum(i => Lines[^1](named[i].Failure).Length) + kept.Count - 1;
+        int AllShortest() => kept.Sum(i => Shortest(i).Length) + kept.Count - 1;
 
         // Past every shortening the platform would cut the text's end, an unavailable shortcut's line with it: the
         // oldest other failures leave instead, so the tooltip still says which shortcut is unavailable (G33).
-        for (var i = named.Count - 1; i >= 0 && ByActions() > tray.ToolTipLength; i--)
+        for (var i = named.Count - 1; i >= 0 && AllShortest() > tray.ToolTipLength; i--)
         {
-            if (!named[i].ShortcutUnavailable)
+            if (named[i].Unavailable is null)
             {
                 kept.Remove(i);
             }
@@ -196,52 +203,60 @@ public sealed class TrayMenu
         var oldestFirst = Enumerable.Reverse(kept).ToList();
         for (var step = 1; step < Lines.Length; step++)
         {
-            foreach (var i in oldestFirst.Where(i => !named[i].ShortcutUnavailable).TakeWhile(_ => Text().Length > tray.ToolTipLength))
+            foreach (var i in oldestFirst.Where(i => named[i].Unavailable is null).TakeWhile(_ => Text().Length > tray.ToolTipLength))
             {
                 shortened[i] = step;
             }
         }
 
-        // Then the shortcut lines, oldest first, each as far as it goes before a newer one loses its reason: every
-        // other failure is cut to its action before the newest shortcut's why gives way (G33).
-        foreach (var i in oldestFirst.Where(i => named[i].ShortcutUnavailable))
+        // Then the shortcut lines, three forms each: of the ways that fit, the one keeping the newest why that fits, and
+        // every older one that fits beside it, since a why gives way only when the tooltip cannot hold it (G33), then
+        // likewise acts beside their combinations; four shortest forms always fit together. The newest four are weighed,
+        // which keeps the ways few; an older line, named again by a later registration, keeps its shortest form.
+        var shortcutLines = kept.Where(i => named[i].Unavailable is not null).ToList();
+        foreach (var older in shortcutLines.Skip(ShortcutEntries.Length))
         {
-            for (var step = 1; step < Lines.Length && Text().Length > tray.ToolTipLength; step++)
+            shortened[older] = ShortcutLines.Length - 1;
+        }
+
+        shortcutLines = shortcutLines.Take(ShortcutEntries.Length).ToList();
+        int[]? best = null;
+        int[]? bestScore = null;
+        var ways = (int)Math.Pow(ShortcutLines.Length, shortcutLines.Count);
+        for (var way = 0; way < ways; way++)
+        {
+            var forms = new int[shortcutLines.Count];
+            for (int j = 0, rest = way; j < forms.Length; j++, rest /= ShortcutLines.Length)
             {
-                shortened[i] = step;
+                forms[j] = rest % ShortcutLines.Length;
+                shortened[shortcutLines[j]] = forms[j];
+            }
+
+            var score = ShorteningScore(forms);
+            if (Text().Length <= tray.ToolTipLength && (bestScore is null || score.AsSpan().SequenceCompareTo(bestScore) > 0))
+            {
+                (best, bestScore) = (forms, score);
             }
         }
 
-        // Last, when even the shortcuts' actions do not fit together: each, oldest first, by its shortest form, so the
-        // platform cuts none of them away (G33).
-        foreach (var i in oldestFirst.Where(i => named[i].ShortcutUnavailable).TakeWhile(_ => Text().Length > tray.ToolTipLength))
+        for (var j = 0; j < shortcutLines.Count; j++)
         {
-            shortened[i] = Lines.Length;
-        }
-
-        // And when even those do not fit together, as with four long combinations remapped in Settings: each, oldest
-        // first, by its entry's words, which together always fit (G33).
-        foreach (var i in oldestFirst.Where(i => named[i].ShortcutUnavailable).TakeWhile(_ => Text().Length > tray.ToolTipLength))
-        {
-            shortened[i] = Lines.Length + 1;
+            shortened[shortcutLines[j]] = best?[j] ?? ShortcutLines.Length - 1;
         }
 
         return Text();
     }
 
+    /// <summary>
+    /// How much of the shortcut lines a way of shortening them keeps, compared element by element: which keep their why,
+    /// the newest first, then which keep their act and combination, the newest first.
+    /// </summary>
+    private static int[] ShorteningScore(int[] formsNewestFirst) =>
+    [
+        .. formsNewestFirst.Select(form => form == 0 ? 1 : 0),
+        .. formsNewestFirst.Select(form => form <= 1 ? 1 : 0),
+    ];
+
     /// <summary>The open shortcut while a press of it would summon the window (G33); null otherwise, so the tooltip never offers a key that does nothing.</summary>
     private Shortcut? OpenShortcutSummoning() => shortcuts is null ? null : ActingShortcut.Of(shortcuts, ShortcutAct.Open);
-
-    /// <summary>An unavailable shortcut named by the words of its entry in the menu, or by its shortest line when it has none.</summary>
-    private static string ByEntry(Failure unavailable) =>
-        ShortcutEntries.FirstOrDefault(entry => GlobalShortcuts.RegistrationAction(entry.Act) == unavailable.Action) is { Header: { } header }
-            ? $"{header} unavailable"
-            : Shortest(unavailable);
-
-    /// <summary>
-    /// An unavailable shortcut's shortest line, which still says which shortcut: its combination as its Settings field
-    /// shows it, or its action when that is the shorter.
-    /// </summary>
-    private static string Shortest(Failure unavailable) =>
-        new[] { $"{unavailable.Subject} is unavailable", Lines[^1](unavailable) }.MinBy(line => line.Length)!;
 }

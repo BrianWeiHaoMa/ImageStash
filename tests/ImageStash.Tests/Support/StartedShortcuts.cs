@@ -48,7 +48,7 @@ public sealed class StartedShortcuts
         started.Menu.Show(started.Shortcuts);
         foreach (var shortcut in held)
         {
-            started.Seam.Refuse(shortcut, ShortcutReasons.HeldByAnotherProgram);
+            started.Seam.Refuse(shortcut, ShortcutRefusal.HeldByAnotherProgram);
         }
 
         started.Shortcuts.Start();

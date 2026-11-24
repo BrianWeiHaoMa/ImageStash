@@ -42,7 +42,7 @@ public sealed class ActingShortcutTests
     {
         var started = StartedShortcuts.Start();
 
-        started.Seam.Release(Record, ShortcutReasons.TypesACharacter);
+        started.Seam.Release(Record, ShortcutRefusal.TypesACharacter(null));
         foreach (var posted in started.Posted.ToList())
         {
             posted();

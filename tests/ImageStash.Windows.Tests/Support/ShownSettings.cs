@@ -80,7 +80,7 @@ public static class ShownSettings
         public GlobalShortcuts Shortcuts { get; }
 
         /// <summary>Each shortcut named unavailable, on the UI thread.</summary>
-        public List<Failure> Named { get; } = [];
+        public List<ShortcutProblem> Named { get; } = [];
 
         /// <summary>How often each act has run, by <see cref="ShortcutAct"/>, the open shortcut's at the press.</summary>
         public int Pressed(ShortcutAct act) => Volatile.Read(ref pressed[(int)act]);

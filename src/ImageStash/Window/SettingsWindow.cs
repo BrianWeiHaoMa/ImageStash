@@ -257,7 +257,7 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
             foreach (var (title, (row, words)) in warnings)
             {
                 var warning = page.WarningOf(title);
-                words.Text = warning?.Sentence;
+                words.Text = warning;
                 row.IsVisible = warning is not null;
             }
 

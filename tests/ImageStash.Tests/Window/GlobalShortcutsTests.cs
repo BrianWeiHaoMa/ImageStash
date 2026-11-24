@@ -103,7 +103,7 @@ public sealed class GlobalShortcutsTests
     {
         var started = StartedShortcuts.Start(held: Open);
 
-        Assert.AreEqual("Register the open shortcut failed: Ctrl+Alt+Space, another program holds it", started.Tray.ToolTip);
+        Assert.AreEqual("Ctrl+Alt+Space is used by another app, so Open ImageStash has no shortcut.", started.Tray.ToolTip);
         Assert.AreEqual(Open.Gesture, started.Tray.Entries[0].Gesture, "the menu still shows the shortcut");
         CollectionAssert.AreEquivalent(new[] { TakeScreenshot, RecordClip, StashClipboardImage }, started.Seam.Registered.ToList(), "the other shortcuts are registered (G33: every other function working)");
         started.Tray.Entries[0].Chosen();
@@ -126,7 +126,7 @@ public sealed class GlobalShortcutsTests
     {
         var started = StartedShortcuts.Start(held: TakeScreenshot);
 
-        Assert.AreEqual("Register the screenshot shortcut failed: Ctrl+PrtScn, another program holds it", started.Tray.ToolTip, "which shortcut is unavailable and why (G33)");
+        Assert.AreEqual("Ctrl+PrtScn is used by another app, so Take a screenshot has no shortcut.", started.Tray.ToolTip, "which shortcut is unavailable and why (G33)");
         CollectionAssert.AreEquivalent(new[] { Open, RecordClip, StashClipboardImage }, started.Seam.Registered.ToList());
         Assert.AreEqual(TakeScreenshot.Gesture, started.Tray.Entries[1].Gesture, "the entry still shows its shortcut (G34)");
         Assert.IsTrue(started.Seam.Press(Open));
@@ -143,7 +143,7 @@ public sealed class GlobalShortcutsTests
 
         Assert.AreEqual(7, started.Seam.Registrations, "only the other three are registered again");
         CollectionAssert.AreEquivalent(new[] { Open, RecordClip, StashClipboardImage }, started.Seam.Registered.ToList());
-        Assert.AreEqual("Register the screenshot shortcut failed: Ctrl+PrtScn, another program holds it", started.Tray.ToolTip, "named once");
+        Assert.AreEqual("Ctrl+PrtScn is used by another app, so Take a screenshot has no shortcut.", started.Tray.ToolTip, "named once");
     }
 
     [TestMethod]
@@ -151,7 +151,7 @@ public sealed class GlobalShortcutsTests
     {
         var started = StartedShortcuts.Start(held: RecordClip);
 
-        Assert.AreEqual("Register the record shortcut failed: Ctrl+Shift+PrtScn, another program holds it", started.Tray.ToolTip, "which shortcut is unavailable and why (G33)");
+        Assert.AreEqual("Ctrl+Shift+PrtScn is used by another app, so Record a clip has no shortcut.", started.Tray.ToolTip, "which shortcut is unavailable and why (G33)");
         CollectionAssert.AreEquivalent(new[] { Open, TakeScreenshot, StashClipboardImage }, started.Seam.Registered.ToList());
         Assert.AreEqual(RecordClip.Gesture, started.Tray.Entries[Record].Gesture, "the entry still shows its shortcut (G34)");
         Assert.IsTrue(started.Seam.Press(Open));
@@ -169,7 +169,7 @@ public sealed class GlobalShortcutsTests
 
         Assert.AreEqual(7, started.Seam.Registrations, "only the other three are registered again");
         CollectionAssert.AreEquivalent(new[] { Open, TakeScreenshot, StashClipboardImage }, started.Seam.Registered.ToList());
-        Assert.AreEqual("Register the record shortcut failed: Ctrl+Shift+PrtScn, another program holds it", started.Tray.ToolTip, "named once");
+        Assert.AreEqual("Ctrl+Shift+PrtScn is used by another app, so Record a clip has no shortcut.", started.Tray.ToolTip, "named once");
     }
 
     [TestMethod]
@@ -177,7 +177,7 @@ public sealed class GlobalShortcutsTests
     {
         var started = StartedShortcuts.Start(held: StashClipboardImage);
 
-        Assert.AreEqual("Register the Stash clipboard image shortcut failed: Win+Alt+V, another program holds it", started.Tray.ToolTip);
+        Assert.AreEqual("Win+Alt+V is used by another app, so Stash clipboard image has no shortcut.", started.Tray.ToolTip);
         CollectionAssert.AreEquivalent(new[] { Open, TakeScreenshot, RecordClip }, started.Seam.Registered.ToList());
         Assert.AreEqual(StashClipboardImage.Gesture, started.Tray.Entries[Stash].Gesture, "the entry still shows its shortcut");
         Assert.IsTrue(started.Seam.Press(Open));
@@ -190,7 +190,7 @@ public sealed class GlobalShortcutsTests
 
         Assert.AreEqual(7, started.Seam.Registrations, "only the other three are registered again");
         CollectionAssert.AreEquivalent(new[] { Open, TakeScreenshot, RecordClip }, started.Seam.Registered.ToList());
-        Assert.AreEqual("Register the Stash clipboard image shortcut failed: Win+Alt+V, another program holds it", started.Tray.ToolTip, "named once");
+        Assert.AreEqual("Win+Alt+V is used by another app, so Stash clipboard image has no shortcut.", started.Tray.ToolTip, "named once");
     }
 
     [TestMethod]
@@ -200,24 +200,24 @@ public sealed class GlobalShortcutsTests
 
         CollectionAssert.AreEqual(new[] { TakeScreenshot, RecordClip }, started.Seam.Registered.ToList());
         Assert.IsLessThanOrEqualTo(127, started.Tray.ToolTip!.Length);
-        CollectionAssert.AreEqual(new[] { "Register the Stash clipboard image shortcut failed: Win+Alt+V, another program holds it", "Register the open shortcut failed" }, started.Tray.ToolTip.Split('\n'),
-            "which shortcut is unavailable, each, and why for the newest, whose reason fits beside the older cut to its action (G33)");
+        CollectionAssert.AreEqual(new[] { "Win+Alt+V is used by another app, so Stash clipboard image has no shortcut.", "Open ImageStash: Ctrl+Alt+Space is unavailable" }, started.Tray.ToolTip.Split('\n'),
+            "which shortcut is unavailable, each, and why for the newest, whose reason fits beside the older cut to its act and combination (G33)");
         started.Tray.Clicked!();
         started.Tray.Entries[Stash].Chosen();
         Assert.AreEqual((1, 1), (started.Opened, started.StashedFromTray), "the tray still reaches every act");
     }
 
     [TestMethod]
-    public void AllFourHeldAreEachStillNamedByTheirCombinationsWhenTheirActionsDoNotFitTogether()
+    public void AllFourHeldAreEachStillNamedWhenTheirActsAndCombinationsDoNotFitTogether()
     {
         var started = StartedShortcuts.Start(held: [Open, TakeScreenshot, RecordClip, StashClipboardImage]);
 
         Assert.IsEmpty(started.Seam.Registered);
-        var byAction = string.Join("\n", "Register the Stash clipboard image shortcut failed", "Register the record shortcut failed", "Register the screenshot shortcut failed", "Register the open shortcut failed");
-        Assert.IsGreaterThan(127, byAction.Length, "the four cut to their actions do not fit, and the platform would cut the oldest away");
+        var withoutWhy = string.Join("\n", "Stash clipboard image: Win+Alt+V is unavailable", "Record a clip: Ctrl+Shift+PrtScn is unavailable", "Take a screenshot: Ctrl+PrtScn is unavailable", "Open ImageStash: Ctrl+Alt+Space is unavailable");
+        Assert.IsGreaterThan(127, withoutWhy.Length, "the four cut to act and combination do not fit, and the platform would cut the oldest away");
         Assert.IsLessThanOrEqualTo(127, started.Tray.ToolTip!.Length);
-        CollectionAssert.AreEqual(new[] { "Win+Alt+V is unavailable", "Ctrl+Shift+PrtScn is unavailable", "Ctrl+PrtScn is unavailable", "Ctrl+Alt+Space is unavailable" }, started.Tray.ToolTip.Split('\n'),
-            "each unavailable shortcut still named, by its combination as the settings spell it (G33)");
+        CollectionAssert.AreEqual(new[] { "Win+Alt+V is unavailable", "Record a clip: Ctrl+Shift+PrtScn is unavailable", "Ctrl+PrtScn is unavailable", "Open ImageStash unavailable" }, started.Tray.ToolTip.Split('\n'),
+            "each unavailable shortcut still named, by its combination as the settings spell it or by its act, whichever is shorter (G33)");
         started.Tray.Entries[Record].Chosen();
         Assert.AreEqual(1, started.RecordedFromTray, "the tray still reaches every act");
     }
@@ -241,11 +241,11 @@ public sealed class GlobalShortcutsTests
         var started = StartedShortcuts.Start();
         var pressInFlight = started.Seam.PressedCallback(StashClipboardImage);
 
-        started.Seam.Release(StashClipboardImage, ShortcutReasons.TypesACharacter);
+        started.Seam.Release(StashClipboardImage, ShortcutRefusal.TypesACharacter(null));
         pressInFlight();
         started.RunPosted();
 
-        Assert.AreEqual("Register the Stash clipboard image shortcut failed: Win+Alt+V, it would type a character", started.Tray.ToolTip);
+        Assert.AreEqual("Win+Alt+V types a character, so Stash clipboard image has no shortcut.", started.Tray.ToolTip);
         Assert.AreEqual(0, started.Stashed, "a released shortcut does not act");
         CollectionAssert.AreEquivalent(new[] { Open, TakeScreenshot, RecordClip }, started.Seam.Registered.ToList(), "the others are untouched");
         started.Tray.Entries[Pause].Chosen();
@@ -318,7 +318,7 @@ public sealed class GlobalShortcutsTests
         {
             if (shortcut == StashClipboardImage)
             {
-                started.Seam.Release(shortcut, ShortcutReasons.TypesACharacter);
+                started.Seam.Release(shortcut, ShortcutRefusal.TypesACharacter(null));
             }
         };
 
@@ -326,7 +326,7 @@ public sealed class GlobalShortcutsTests
         started.Tray.Entries[Pause].Chosen();
         started.RunPosted();
 
-        Assert.AreEqual($"Register the Stash clipboard image shortcut failed: Win+Alt+V, {ShortcutReasons.TypesACharacter}", started.Tray.ToolTip);
+        Assert.AreEqual("Win+Alt+V types a character, so Stash clipboard image has no shortcut.", started.Tray.ToolTip);
         Assert.AreEqual(7, started.Seam.Registrations, "the toggle back does not revive it (G33: until it is changed in Settings)");
         CollectionAssert.AreEquivalent(new[] { Open, TakeScreenshot, RecordClip }, started.Seam.Registered.ToList());
     }
@@ -337,11 +337,11 @@ public sealed class GlobalShortcutsTests
         var started = StartedShortcuts.Start();
         started.Tray.Entries[Pause].Chosen();
         // The toggle back registers in the order of the bindings: the open shortcut first.
-        started.Seam.RefuseNext(ShortcutReasons.TypesACharacter);
+        started.Seam.RefuseNext(ShortcutRefusal.TypesACharacter(null));
 
         started.Tray.Entries[Pause].Chosen();
 
-        Assert.AreEqual("Register the open shortcut failed: Ctrl+Alt+Space, it would type a character", started.Tray.ToolTip);
+        Assert.AreEqual("Ctrl+Alt+Space types a character, so Open ImageStash has no shortcut.", started.Tray.ToolTip);
         CollectionAssert.AreEquivalent(new[] { TakeScreenshot, RecordClip, StashClipboardImage }, started.Seam.Registered.ToList());
         started.Tray.Entries[Pause].Chosen();
         started.Tray.Entries[Pause].Chosen();
@@ -359,7 +359,7 @@ public sealed class GlobalShortcutsTests
     {
         var started = StartedShortcuts.Start(open: text);
 
-        Assert.AreEqual($"Register the open shortcut failed: {text}, not a shortcut ImageStash understands", started.Tray.ToolTip);
+        Assert.AreEqual($"\"{text}\" isn't a shortcut ImageStash understands, so Open ImageStash has no shortcut.", started.Tray.ToolTip);
         Assert.IsNull(started.Shortcuts.ShortcutOf(ShortcutAct.Open));
         Assert.IsNull(started.Tray.Entries[0].Gesture);
         Assert.AreEqual(3, started.Seam.Registrations);
@@ -369,13 +369,13 @@ public sealed class GlobalShortcutsTests
     }
 
     [TestMethod]
-    [DataRow("Ctrl+Bogus", "Ctrl+Bogus")]
-    [DataRow("", "(empty)")]
-    public void AScreenshotTextThatIsNotAShortcutIsNamedAndTheOthersAreRegistered(string text, string named)
+    [DataRow("Ctrl+Bogus", "\"Ctrl+Bogus\" isn't a shortcut ImageStash understands, so Take a screenshot has no shortcut.")]
+    [DataRow("", "Take a screenshot has no shortcut set.")]
+    public void AScreenshotTextThatIsNotAShortcutIsNamedAndTheOthersAreRegistered(string text, string line)
     {
         var started = StartedShortcuts.Start(screenshot: text);
 
-        Assert.AreEqual($"Register the screenshot shortcut failed: {named}, not a shortcut ImageStash understands", started.Tray.ToolTip);
+        Assert.AreEqual(line, started.Tray.ToolTip);
         Assert.IsNull(started.Shortcuts.ShortcutOf(ShortcutAct.Screenshot));
         Assert.IsNull(started.Tray.Entries[1].Gesture, "no shortcut shown for it");
         CollectionAssert.AreEqual(new[] { Open, RecordClip, StashClipboardImage }, started.Seam.Registered.ToList());
@@ -385,13 +385,13 @@ public sealed class GlobalShortcutsTests
     }
 
     [TestMethod]
-    [DataRow("Ctrl+Shift+Bogus", "Ctrl+Shift+Bogus")]
-    [DataRow("", "(empty)")]
-    public void ARecordTextThatIsNotAShortcutIsNamedAndTheOthersAreRegistered(string text, string named)
+    [DataRow("Ctrl+Shift+Bogus", "\"Ctrl+Shift+Bogus\" isn't a shortcut ImageStash understands, so Record a clip has no shortcut.")]
+    [DataRow("", "Record a clip has no shortcut set.")]
+    public void ARecordTextThatIsNotAShortcutIsNamedAndTheOthersAreRegistered(string text, string line)
     {
         var started = StartedShortcuts.Start(record: text);
 
-        Assert.AreEqual($"Register the record shortcut failed: {named}, not a shortcut ImageStash understands", started.Tray.ToolTip);
+        Assert.AreEqual(line, started.Tray.ToolTip);
         Assert.IsNull(started.Shortcuts.ShortcutOf(ShortcutAct.Record));
         Assert.IsNull(started.Tray.Entries[Record].Gesture, "no shortcut shown for it");
         CollectionAssert.AreEqual(new[] { Open, TakeScreenshot, StashClipboardImage }, started.Seam.Registered.ToList());
@@ -401,14 +401,14 @@ public sealed class GlobalShortcutsTests
     }
 
     [TestMethod]
-    [DataRow("Ctrl+Alt+Bogus", "Ctrl+Alt+Bogus")]
-    [DataRow("", "(empty)")]
-    [DataRow("  ", "(empty)")]
-    public void AStashClipboardImageTextThatIsNotAShortcutIsNamedAndTheOthersAreRegistered(string text, string named)
+    [DataRow("Ctrl+Alt+Bogus", "\"Ctrl+Alt+Bogus\" isn't a shortcut ImageStash understands, so Stash clipboard image has no shortcut.")]
+    [DataRow("", "Stash clipboard image has no shortcut set.")]
+    [DataRow("  ", "Stash clipboard image has no shortcut set.")]
+    public void AStashClipboardImageTextThatIsNotAShortcutIsNamedAndTheOthersAreRegistered(string text, string line)
     {
         var started = StartedShortcuts.Start(stash: text);
 
-        Assert.AreEqual($"Register the Stash clipboard image shortcut failed: {named}, not a shortcut ImageStash understands", started.Tray.ToolTip);
+        Assert.AreEqual(line, started.Tray.ToolTip);
         Assert.IsNull(started.Tray.Entries[Stash].Gesture, "no shortcut shown for it");
         CollectionAssert.AreEqual(new[] { Open, TakeScreenshot, RecordClip }, started.Seam.Registered.ToList());
         Assert.AreEqual(3, started.Seam.Registrations);
@@ -421,7 +421,7 @@ public sealed class GlobalShortcutsTests
     {
         var started = StartedShortcuts.Start(open: "");
 
-        Assert.AreEqual("Register the open shortcut failed: (empty), not a shortcut ImageStash understands", started.Tray.ToolTip);
+        Assert.AreEqual("Open ImageStash has no shortcut set.", started.Tray.ToolTip);
         Assert.AreEqual(3, started.Seam.Registrations);
     }
 
@@ -434,7 +434,7 @@ public sealed class GlobalShortcutsTests
 
         CollectionAssert.AreEqual(new[] { Open, TakeScreenshot, RecordClip }, started.Seam.Registered.ToList());
         Assert.AreEqual(3, started.Seam.Registrations, "never two registrations of one combination");
-        Assert.AreEqual("Register the Stash clipboard image shortcut failed: Ctrl+Alt+Space, the open shortcut uses it too", started.Tray.ToolTip, "named in the words its field shows, however the file spells it");
+        Assert.AreEqual("Open ImageStash already uses Ctrl+Alt+Space, so Stash clipboard image has no shortcut.", started.Tray.ToolTip, "named in the words its field shows, however the file spells it");
         Assert.IsTrue(started.Seam.Press(Open));
         started.RunPosted();
         Assert.AreEqual((1, 0), (started.Summoned, started.Stashed), "the press is the open shortcut's");
@@ -453,7 +453,7 @@ public sealed class GlobalShortcutsTests
 
         CollectionAssert.AreEqual(new[] { Open, RecordClip, StashClipboardImage }, started.Seam.Registered.ToList());
         Assert.AreEqual(3, started.Seam.Registrations, "never two registrations of one combination");
-        Assert.AreEqual("Register the screenshot shortcut failed: Ctrl+Alt+Space, the open shortcut uses it too", started.Tray.ToolTip);
+        Assert.AreEqual("Open ImageStash already uses Ctrl+Alt+Space, so Take a screenshot has no shortcut.", started.Tray.ToolTip);
         Assert.IsTrue(started.Seam.Press(Open));
         started.RunPosted();
         Assert.AreEqual((1, 0), (started.Summoned, started.Screenshots), "the press is the open shortcut's");
@@ -466,7 +466,7 @@ public sealed class GlobalShortcutsTests
 
         CollectionAssert.AreEqual(new[] { Open, TakeScreenshot, RecordClip }, started.Seam.Registered.ToList());
         Assert.AreEqual(3, started.Seam.Registrations, "never two registrations of one combination");
-        Assert.AreEqual("Register the Stash clipboard image shortcut failed: Ctrl+PrtScn, the screenshot shortcut uses it too", started.Tray.ToolTip);
+        Assert.AreEqual("Take a screenshot already uses Ctrl+PrtScn, so Stash clipboard image has no shortcut.", started.Tray.ToolTip);
         Assert.IsTrue(started.Seam.Press(TakeScreenshot));
         started.RunPosted();
         Assert.AreEqual((1, 0), (started.Screenshots, started.Stashed), "the press is the screenshot shortcut's");
@@ -479,7 +479,7 @@ public sealed class GlobalShortcutsTests
 
         CollectionAssert.AreEqual(new[] { Open, TakeScreenshot, StashClipboardImage }, started.Seam.Registered.ToList());
         Assert.AreEqual(3, started.Seam.Registrations, "never two registrations of one combination");
-        Assert.AreEqual("Register the record shortcut failed: Ctrl+PrtScn, the screenshot shortcut uses it too", started.Tray.ToolTip);
+        Assert.AreEqual("Take a screenshot already uses Ctrl+PrtScn, so Record a clip has no shortcut.", started.Tray.ToolTip);
         Assert.IsTrue(started.Seam.Press(TakeScreenshot));
         started.RunPosted();
         Assert.AreEqual((1, 0), (started.Screenshots, started.Recorded), "the press is the screenshot shortcut's");
@@ -492,7 +492,7 @@ public sealed class GlobalShortcutsTests
 
         CollectionAssert.AreEqual(new[] { Open, TakeScreenshot, RecordClip }, started.Seam.Registered.ToList());
         Assert.AreEqual(3, started.Seam.Registrations, "never two registrations of one combination");
-        Assert.AreEqual("Register the Stash clipboard image shortcut failed: Ctrl+Shift+PrtScn, the record shortcut uses it too", started.Tray.ToolTip);
+        Assert.AreEqual("Record a clip already uses Ctrl+Shift+PrtScn, so Stash clipboard image has no shortcut.", started.Tray.ToolTip);
         Assert.IsTrue(started.Seam.Press(RecordClip));
         started.RunPosted();
         Assert.AreEqual((1, 0), (started.Recorded, started.Stashed), "the press is the record shortcut's");

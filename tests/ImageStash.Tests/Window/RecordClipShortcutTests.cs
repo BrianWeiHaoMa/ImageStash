@@ -62,7 +62,7 @@ public sealed class RecordClipShortcutTests
         // As Settings remaps it: in a field recording the press.
         using (recording.Shortcuts.Suspend())
         {
-            Assert.IsTrue(recording.Shortcuts.Rebind(ShortcutAct.Record, Shortcut.Parse("Ctrl+Alt+R").Value!).Succeeded);
+            Assert.IsNull(recording.Shortcuts.Rebind(ShortcutAct.Record, Shortcut.Parse("Ctrl+Alt+R").Value!));
         }
 
         var named = recording.Frame.ShortcutsNamed;
@@ -75,7 +75,7 @@ public sealed class RecordClipShortcutTests
     public async Task AShortcutLeftUnregisteredIsNotNamed()
     {
         using var recording = await Recording();
-        recording.ShortcutsSeam.Release(Shortcut.Parse(RecordText).Value!, ShortcutReasons.TypesACharacter);
+        recording.ShortcutsSeam.Release(Shortcut.Parse(RecordText).Value!, ShortcutRefusal.TypesACharacter(null));
 
         var acting = recording.RecordClip.StartOrStop();
         await recording.WhileWaiting();

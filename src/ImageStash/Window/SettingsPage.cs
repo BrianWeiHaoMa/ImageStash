@@ -201,8 +201,8 @@ public sealed class SettingsPage
     /// <summary>A length in the words the list shows it in.</summary>
     public static string LengthWords(int seconds) => seconds == 1 ? "1 second" : $"{seconds} seconds";
 
-    /// <summary>The failure of the row's last act, or a shortcut field's warning, shown under the row, or null.</summary>
-    public Failure? WarningOf(string title) => ShortcutField(title) is { } field ? field.Warning : warnings.GetValueOrDefault(title);
+    /// <summary>The words under the row: a shortcut field's warning as guidance, else the failure of the row's last act, or null.</summary>
+    public string? WarningOf(string title) => ShortcutField(title) is { } field ? field.WarningWords : warnings.GetValueOrDefault(title)?.Sentence;
 
     /// <summary>Ends the recording in progress, if any, with nothing changed: the window lost the user's attention.</summary>
     public void CancelRecording()

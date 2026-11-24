@@ -66,8 +66,8 @@ public sealed class EmptyStashWaysInTests
         // Rebound as a Settings field rebinds them, the window told as the app tells it.
         using (listed.Shortcuts.Suspend())
         {
-            Assert.IsTrue(listed.Shortcuts.Rebind(ShortcutAct.Screenshot, Shortcut.Parse("shift+f8").Value!).Succeeded);
-            Assert.IsTrue(listed.Shortcuts.Rebind(ShortcutAct.Open, Shortcut.Parse("Ctrl+Alt+F9").Value!).Succeeded);
+            Assert.IsNull(listed.Shortcuts.Rebind(ShortcutAct.Screenshot, Shortcut.Parse("shift+f8").Value!));
+            Assert.IsNull(listed.Shortcuts.Rebind(ShortcutAct.Open, Shortcut.Parse("Ctrl+Alt+F9").Value!));
         }
 
         AssertRows(shown, ("Paste a copied image", "Ctrl+V"), ("Take a screenshot", "Shift+F8"), ("Record a clip", "Ctrl+Shift+PrtScn"),

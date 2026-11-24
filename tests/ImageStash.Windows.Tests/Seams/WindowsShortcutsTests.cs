@@ -35,7 +35,7 @@ public sealed class WindowsShortcutsTests
             thread = Environment.CurrentManagedThreadId;
             pressed.Set();
         });
-        Assert.IsTrue(registered.Succeeded, registered.Failure?.Sentence ?? "");
+        Assert.IsNull(registered, $"refused: {registered?.Kind}");
         var clock = Stopwatch.StartNew();
         TestHotKeys.Press(Open);
 
@@ -52,7 +52,7 @@ public sealed class WindowsShortcutsTests
     {
         using var shortcuts = new WindowsShortcuts();
         var presses = 0;
-        Assert.IsTrue(shortcuts.Register(Open, () => Interlocked.Increment(ref presses)).Succeeded);
+        Assert.IsNull(shortcuts.Register(Open, () => Interlocked.Increment(ref presses)));
 
         shortcuts.Release(Open);
 
@@ -71,7 +71,7 @@ public sealed class WindowsShortcutsTests
         var presses = 0;
         var other = OtherProgramHoldingAHotKey.Start(Open);
         Assert.IsNotNull(other, "the check's holder took the combination");
-        Outcome refused;
+        ShortcutRefusal? refused;
         try
         {
             refused = shortcuts.Register(Open, () => Interlocked.Increment(ref presses));
@@ -83,8 +83,8 @@ public sealed class WindowsShortcutsTests
             other.Dispose();
         }
 
-        Assert.IsFalse(refused.Succeeded);
-        Assert.AreEqual(ShortcutReasons.HeldByAnotherProgram, refused.Failure.Reason);
+        Assert.IsNotNull(refused);
+        Assert.AreEqual(ShortcutRefusal.HeldByAnotherProgram, refused);
         Assert.AreEqual(0, presses);
         // Nothing of the check's process holds it: another holder can take it, and once that one ends the seam can.
         using (var again = OtherProgramHoldingAHotKey.Start(Open))
@@ -92,17 +92,17 @@ public sealed class WindowsShortcutsTests
             Assert.IsNotNull(again, "the refused registration left nothing registered");
         }
 
-        Assert.IsTrue(shortcuts.Register(Open, () => { }).Succeeded);
+        Assert.IsNull(shortcuts.Register(Open, () => { }));
     }
 
     [TestMethod]
     public void AShortcutTheLayoutInUseComesToTypeIsReleasedWithinASecondAndReported()
     {
         var types = false;
-        using var reports = new BlockingCollection<(Shortcut Shortcut, string Reason)>();
-        using var shortcuts = new WindowsShortcuts((_, _) => Volatile.Read(ref types));
+        using var reports = new BlockingCollection<(Shortcut Shortcut, ShortcutRefusal Reason)>();
+        using var shortcuts = new WindowsShortcuts((_, _) => Volatile.Read(ref types) ? ShortcutRefusal.TypesACharacter("@") : null);
         shortcuts.ListenForReleases((shortcut, reason) => reports.Add((shortcut, reason)));
-        Assert.IsTrue(shortcuts.Register(Open, () => { }).Succeeded);
+        Assert.IsNull(shortcuts.Register(Open, () => { }));
 
         // As a switch of the foreground app's layout to one where the combination types a character.
         Volatile.Write(ref types, true);
@@ -110,7 +110,7 @@ public sealed class WindowsShortcutsTests
 
         Assert.IsTrue(reports.TryTake(out var report, TimeSpan.FromSeconds(3)), "the seam reported no release");
         Assert.IsLessThan(1500, clock.ElapsedMilliseconds, "judged at least once a second (G33)");
-        Assert.AreEqual((Open, ShortcutReasons.TypesACharacter), report);
+        Assert.AreEqual((Open, ShortcutRefusal.TypesACharacter("@")), report, "reported with the character the judgment found");
         using var other = OtherProgramHoldingAHotKey.Start(Open);
         Assert.IsNotNull(other, "the hot key itself was released");
     }
@@ -120,16 +120,16 @@ public sealed class WindowsShortcutsTests
     {
         var types = false;
         using var judged = new AutoResetEvent(false);
-        using var reports = new BlockingCollection<(Shortcut Shortcut, string Reason)>();
+        using var reports = new BlockingCollection<(Shortcut Shortcut, ShortcutRefusal Reason)>();
         using var shortcuts = new WindowsShortcuts((_, _) =>
         {
             var answer = Volatile.Read(ref types);
             judged.Set();
-            return answer;
+            return answer ? ShortcutRefusal.TypesACharacter("@") : null;
         });
         shortcuts.ListenForReleases((shortcut, reason) => reports.Add((shortcut, reason)));
         var presses = 0;
-        Assert.IsTrue(shortcuts.Register(Open, () => Interlocked.Increment(ref presses)).Succeeded);
+        Assert.IsNull(shortcuts.Register(Open, () => Interlocked.Increment(ref presses)));
         judged.WaitOne(0);
 
         // Just after a once-a-second sample, so the press, not the next sample, is what finds it.
@@ -138,7 +138,7 @@ public sealed class WindowsShortcutsTests
         TestHotKeys.Press(Open);
 
         Assert.IsTrue(reports.TryTake(out var report, TimeSpan.FromSeconds(3)), "the seam reported no release");
-        Assert.AreEqual((Open, ShortcutReasons.TypesACharacter), report);
+        Assert.AreEqual((Open, ShortcutRefusal.TypesACharacter("@")), report, "reported with the character the judgment found");
         Thread.Sleep(300);
         Assert.AreEqual(0, presses, "the press is swallowed, not acted on (How G33 holds)");
     }
@@ -190,6 +190,20 @@ public sealed class WindowsShortcutsTests
     }
 
     [TestMethod]
+    public void TheCharacterACombinationTypesCrossesTheSeamWithItsReasonAndADeadKeysNever()
+    {
+        // As TheWindowsKeyWithAltAndCtrlIsJudgedByItsTranslation, the translations an AltGr layout gives are supplied.
+        var withCtrl = WindowsShortcuts.CombinationOf(Shortcut.Parse("Ctrl+Alt+Q").Value!).Modifiers;
+
+        Assert.AreEqual(ShortcutRefusal.TypesACharacter("@"), WindowsShortcuts.Typing(withCtrl, 1, "@"), "the character the translation yields");
+        Assert.AreEqual(ShortcutRefusal.TypesACharacter(null), WindowsShortcuts.Typing(withCtrl, -1, "^"), "a dead key types, and names no character");
+        Assert.IsNull(WindowsShortcuts.Typing(withCtrl, 1, "\u0011"), "the code Ctrl makes of its key types nothing");
+        var shiftA = WindowsShortcuts.Typing(WindowsShortcuts.CombinationOf(ShiftA), WindowsShortcuts.ForegroundLayout());
+        Assert.AreEqual(ShortcutRefusalKind.TypesACharacter, shiftA?.Kind, "under the layout in use");
+        Assert.IsFalse(string.IsNullOrWhiteSpace(shiftA!.Character), "with the letter it types");
+    }
+
+    [TestMethod]
     public void TheWindowsKeyWithAltAndCtrlIsJudgedByItsTranslation()
     {
         // A check loads no keyboard layout of its own, the layouts being the signed-in user's: so the translations an
@@ -216,8 +230,8 @@ public sealed class WindowsShortcutsTests
         {
             var refused = shortcuts.Register(shortcut, () => { });
 
-            Assert.IsFalse(refused.Succeeded, $"{shortcut.Text} registered as a global hot key");
-            Assert.AreEqual(ShortcutReasons.TypesACharacter, refused.Failure.Reason);
+            Assert.IsNotNull(refused, $"{shortcut.Text} registered as a global hot key");
+            Assert.AreEqual(ShortcutRefusalKind.TypesACharacter, refused!.Kind);
             using var other = OtherProgramHoldingAHotKey.Start(shortcut);
             Assert.IsNotNull(other, $"{shortcut.Text} was left free");
         }
@@ -239,8 +253,8 @@ public sealed class WindowsShortcutsTests
 
         var refused = shortcuts.Register(ShiftA, () => { });
 
-        Assert.IsFalse(refused.Succeeded);
-        Assert.AreEqual(ShortcutReasons.TypesACharacter, refused.Failure.Reason);
+        Assert.IsNotNull(refused);
+        Assert.AreEqual(ShortcutRefusalKind.TypesACharacter, refused!.Kind);
         using var other = OtherProgramHoldingAHotKey.Start(ShiftA);
         Assert.IsNotNull(other, "Shift+A was left free");
     }
@@ -252,7 +266,7 @@ public sealed class WindowsShortcutsTests
 
         var refused = shortcuts.Register(Shortcut.Parse("Ctrl+FnLeftArrow").Value!, () => { });
 
-        Assert.IsFalse(refused.Succeeded);
-        Assert.AreEqual("FnLeftArrow is not a key this PC can register", refused.Failure.Reason);
+        Assert.IsNotNull(refused);
+        Assert.AreEqual(ShortcutRefusal.NotAKey(Avalonia.Input.Key.FnLeftArrow), refused);
     }
 }

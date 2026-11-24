@@ -127,11 +127,18 @@ public sealed class ShortcutField : Button
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
-        down.Add(e.Key);
+        var repeated = !down.Add(e.Key);
         if (!recording.IsRecording)
         {
             taken.Remove(e.Key);
             base.OnKeyDown(e);
+            return;
+        }
+
+        // A key held down repeats its KeyDown: no new press, so never the retry after a refusal (G32).
+        if (repeated)
+        {
+            e.Handled = true;
             return;
         }
 

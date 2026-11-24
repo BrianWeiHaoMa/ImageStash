@@ -150,7 +150,7 @@ public sealed class ScreenshotTests
             using var desk = await CaptureDesk.Open();
             using var pressed = CaptureShortcuts.Register(desk);
 
-            CollectionAssert.AreEqual(new[] { "Register the screenshot shortcut failed: Ctrl+PrtScn, another program holds it" }, pressed.Named(), "which shortcut is unavailable and why, for the tooltip (G33)");
+            CollectionAssert.AreEqual(new[] { "Ctrl+PrtScn is used by another app, so Take a screenshot has no shortcut." }, pressed.Named(), "which shortcut is unavailable and why, for the tooltip (G33)");
             TestHotKeys.Press(TakeScreenshot);
             await Task.Delay(500);
             TrayDesktop.Run(() => Assert.IsEmpty(desk.Overlay.Shown, "the press is the other program's"));

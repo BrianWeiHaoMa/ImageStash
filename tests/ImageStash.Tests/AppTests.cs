@@ -186,7 +186,7 @@ public sealed class AppTests
         File.WriteAllText(notAFolder, "a file where the stash folder should be");
         var tray = new RecordingTray(toolTipLength: 1000);
         var trayMenu = new TrayMenu(tray, () => { }, () => { }, () => { }, () => { }, () => { }, () => { });
-        trayMenu.Show(new GlobalShortcuts(StartedShortcuts.SettingsInMemory(), GlobalShortcuts.Bindings(() => { }, () => { }, () => { }, () => { }), new RecordingShortcuts(), trayMenu.Name, action => action()));
+        trayMenu.Show(new GlobalShortcuts(StartedShortcuts.SettingsInMemory(), GlobalShortcuts.Bindings(() => { }, () => { }, () => { }, () => { }), new RecordingShortcuts(), trayMenu.NameUnavailableShortcut, action => action()));
 
         var opening = await StashStore.Open(notAFolder, new TestRecycleBin(scratch.File("recycled")), ShortRetry, new SetClock());
         var store = StartOpening.NameOpening(opening, trayMenu);

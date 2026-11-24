@@ -55,13 +55,13 @@ public sealed class GlobalShortcutsRebindTests
         var started = StartedShortcuts.Start(settingsFolder: scratch.Path);
         var file = started.SavedText;
 
-        Outcome refused;
+        ShortcutProblem? refused;
         using (started.Shortcuts.Suspend())
         {
             refused = started.Shortcuts.Rebind(ShortcutAct.Screenshot, Open);
         }
 
-        Assert.AreEqual("Register the screenshot shortcut failed: Ctrl+Alt+Space, the open shortcut uses it too", refused.Failure?.Sentence,
+        Assert.AreEqual("Open ImageStash already uses Ctrl+Alt+Space.", ShortcutWords.Row(refused!),
             "which shortcut, the combination and why, not another program's hold (G32, G35)");
         CollectionAssert.AreEqual(Defaults.Concat(Defaults).ToList(), started.Seam.Asked, "the seam was never asked for it: the four at start, and again at the end");
         CollectionAssert.AreEquivalent(Defaults, started.Seam.Registered.ToList());
@@ -78,34 +78,34 @@ public sealed class GlobalShortcutsRebindTests
     {
         var started = StartedShortcuts.Start(held: Open);
 
-        Outcome refused;
+        ShortcutProblem? refused;
         using (started.Shortcuts.Suspend())
         {
             refused = started.Shortcuts.Rebind(ShortcutAct.Record, Open);
         }
 
-        Assert.AreEqual("Register the record shortcut failed: Ctrl+Alt+Space, the open shortcut uses it too", refused.Failure?.Sentence,
+        Assert.AreEqual("Open ImageStash already uses Ctrl+Alt+Space.", ShortcutWords.Row(refused!),
             "the combination of another of the four, registered or not (G32)");
         CollectionAssert.DoesNotContain(started.Seam.Asked.Skip(4).ToList(), Open, "and the seam was not asked for it");
     }
 
     [TestMethod]
-    [DataRow(ShortcutReasons.HeldByAnotherProgram, "Register the screenshot shortcut failed: Ctrl+Shift+F8, another program holds it")]
-    [DataRow(ShortcutReasons.TypesACharacter, "Register the screenshot shortcut failed: Ctrl+Shift+F8, it would type a character")]
-    public void WhatTheSeamRefusesIsNamedAndTheOldShortcutIsRegisteredAgainAndNotWritten(string reason, string sentence)
+    [DataRow(ShortcutRefusalKind.HeldByAnotherProgram, "Ctrl+Shift+F8 is already used by another app. Press a different combination.")]
+    [DataRow(ShortcutRefusalKind.TypesACharacter, "Ctrl+Shift+F8 types a character on your keyboard layout, so it can't be a shortcut.")]
+    public void WhatTheSeamRefusesIsNamedAndTheOldShortcutIsRegisteredAgainAndNotWritten(ShortcutRefusalKind reason, string sentence)
     {
         using var scratch = new ScratchFolder();
         var started = StartedShortcuts.Start(settingsFolder: scratch.Path);
         var file = started.SavedText;
-        started.Seam.Refuse(Free, reason);
+        started.Seam.Refuse(Free, new ShortcutRefusal(reason));
 
-        Outcome refused;
+        ShortcutProblem? refused;
         using (started.Shortcuts.Suspend())
         {
             refused = started.Shortcuts.Rebind(ShortcutAct.Screenshot, Free);
         }
 
-        Assert.AreEqual(sentence, refused.Failure?.Sentence, "G32's refusal with its warning's words (G35)");
+        Assert.AreEqual(sentence, ShortcutWords.Row(refused!), "G32's refusal with its warning's words (G35)");
         CollectionAssert.AreEquivalent(Defaults, started.Seam.Registered.ToList(), "the old one registered again");
         Assert.AreEqual(TakeScreenshot, started.Shortcuts.ShortcutOf(ShortcutAct.Screenshot), "and still the screenshot's");
         Assert.IsTrue(started.Seam.Press(TakeScreenshot));
@@ -123,8 +123,8 @@ public sealed class GlobalShortcutsRebindTests
         var ctrlV = Shortcut.Parse("Ctrl+V").Value!;
         var ctrlShiftV = Shortcut.Parse("Ctrl+Shift+V").Value!;
 
-        Outcome refused;
-        Outcome accepted;
+        ShortcutProblem? refused;
+        ShortcutProblem? accepted;
         using (started.Shortcuts.Suspend())
         {
             refused = started.Shortcuts.Rebind(ShortcutAct.StashClipboardImage, ctrlV);
@@ -135,10 +135,10 @@ public sealed class GlobalShortcutsRebindTests
             accepted = started.Shortcuts.Rebind(ShortcutAct.StashClipboardImage, ctrlShiftV);
         }
 
-        Assert.AreEqual($"Register the Stash clipboard image shortcut failed: Ctrl+V, {GlobalShortcuts.PasteKeystrokeReason}", refused.Failure?.Sentence,
+        Assert.AreEqual("Ctrl+V is the paste key ImageStash presses, so it can't be a shortcut.", ShortcutWords.Row(refused!),
             "the handoff's own paste keystroke (G32, G8)");
         CollectionAssert.DoesNotContain(started.Seam.Asked, ctrlV, "never registered, even for a moment");
-        Assert.IsTrue(accepted.Succeeded, "Ctrl+Shift+V is not the paste keystroke");
+        Assert.IsNull(accepted, "Ctrl+Shift+V is not the paste keystroke");
         CollectionAssert.Contains(started.Seam.Registered.ToList(), ctrlShiftV);
     }
 
@@ -150,14 +150,14 @@ public sealed class GlobalShortcutsRebindTests
         var changed = 0;
         started.Shortcuts.Changed += () => changed++;
 
-        Outcome accepted;
+        ShortcutProblem? accepted;
         using (started.Shortcuts.Suspend())
         {
             accepted = started.Shortcuts.Rebind(ShortcutAct.Screenshot, Free);
             Assert.AreEqual(1, changed, "the tray and an open page told once");
         }
 
-        Assert.IsTrue(accepted.Succeeded);
+        Assert.IsNull(accepted);
         CollectionAssert.AreEquivalent(new[] { Open, Free, RecordClip, StashClipboardImage }, started.Seam.Registered.ToList(), "registered in place of the old, which is not (G33)");
         Assert.AreEqual(Free, started.Shortcuts.ShortcutOf(ShortcutAct.Screenshot));
         Assert.AreEqual("Ctrl+Shift+F8", started.Shortcuts.TextOf(ShortcutAct.Screenshot));
@@ -179,7 +179,7 @@ public sealed class GlobalShortcutsRebindTests
 
         using (started.Shortcuts.Suspend())
         {
-            Assert.IsTrue(started.Shortcuts.Rebind(ShortcutAct.Record, Free).Succeeded);
+            Assert.IsNull(started.Shortcuts.Rebind(ShortcutAct.Record, Free));
         }
 
         Assert.AreEqual("Ctrl+Shift+PrtScn", started.Saved.Record, "not yet: the keeper waits for quiet");
@@ -196,7 +196,7 @@ public sealed class GlobalShortcutsRebindTests
 
         using (started.Shortcuts.Suspend())
         {
-            Assert.IsTrue(started.Shortcuts.Rebind(ShortcutAct.Open, openAnew).Succeeded);
+            Assert.IsNull(started.Shortcuts.Rebind(ShortcutAct.Open, openAnew));
         }
 
         Assert.IsTrue(started.Seam.Press(openAnew));
@@ -216,7 +216,7 @@ public sealed class GlobalShortcutsRebindTests
 
         using (started.Shortcuts.Suspend())
         {
-            Assert.IsTrue(started.Shortcuts.Rebind(ShortcutAct.Screenshot, TakeScreenshot).Succeeded, "no warning");
+            Assert.IsNull(started.Shortcuts.Rebind(ShortcutAct.Screenshot, TakeScreenshot), "no warning");
         }
 
         CollectionAssert.AreEqual(Defaults.Concat(Defaults).ToList(), started.Seam.Asked, "nothing registered anew beyond the four again at the end");
@@ -230,24 +230,24 @@ public sealed class GlobalShortcutsRebindTests
     {
         var started = StartedShortcuts.Start(held: Open);
         var unavailable = started.Shortcuts.UnavailableReason(ShortcutAct.Open);
-        Assert.AreEqual("Register the open shortcut failed: Ctrl+Alt+Space, another program holds it", unavailable?.Sentence);
-        Assert.AreEqual(unavailable!.Sentence, started.Tray.ToolTip, "the reason is the tooltip's line (G33)");
+        Assert.AreEqual("Ctrl+Alt+Space is used by another app, so Open ImageStash has no shortcut.", ShortcutWords.ToolTipLine(unavailable!));
+        Assert.AreEqual(ShortcutWords.ToolTipLine(unavailable!), started.Tray.ToolTip, "the reason is the tooltip's line (G33)");
         Assert.AreEqual(ShortcutAct.Open, started.Shortcuts.FirstUnavailable);
 
-        Outcome stillHeld;
+        ShortcutProblem? stillHeld;
         using (started.Shortcuts.Suspend())
         {
             stillHeld = started.Shortcuts.Rebind(ShortcutAct.Open, Open);
         }
 
-        Assert.AreEqual(unavailable.Sentence, stillHeld.Failure?.Sentence, "judged again, not taken as its own while it is unavailable");
+        Assert.AreEqual(unavailable, stillHeld, "judged again, not taken as its own while it is unavailable");
         Assert.AreEqual(unavailable, started.Shortcuts.UnavailableReason(ShortcutAct.Open), "and still unavailable, still named");
-        Assert.AreEqual(unavailable.Sentence, started.Tray.ToolTip);
+        Assert.AreEqual(ShortcutWords.ToolTipLine(unavailable!), started.Tray.ToolTip);
 
         started.Seam.Free(Open);
         using (started.Shortcuts.Suspend())
         {
-            Assert.IsTrue(started.Shortcuts.Rebind(ShortcutAct.Open, Open).Succeeded, "until it is changed in Settings (G33)");
+            Assert.IsNull(started.Shortcuts.Rebind(ShortcutAct.Open, Open), "until it is changed in Settings (G33)");
         }
 
         CollectionAssert.AreEquivalent(Defaults, started.Seam.Registered.ToList());
@@ -267,10 +267,10 @@ public sealed class GlobalShortcutsRebindTests
 
         using (started.Shortcuts.Suspend())
         {
-            Assert.IsTrue(started.Shortcuts.Rebind(ShortcutAct.Open, Free).Succeeded);
+            Assert.IsNull(started.Shortcuts.Rebind(ShortcutAct.Open, Free));
         }
 
-        CollectionAssert.AreEqual(new[] { store.Sentence, "Register the record shortcut failed: Ctrl+Shift+PrtScn, another program holds it" }, started.Tray.ToolTip!.Split('\n'),
+        CollectionAssert.AreEqual(new[] { store.Sentence, "Ctrl+Shift+PrtScn is used by another app, so Record a clip has no shortcut." }, started.Tray.ToolTip!.Split('\n'),
             "the record shortcut still unavailable and the other failure still named (G33, G35)");
         Assert.AreEqual(ShortcutAct.Record, started.Shortcuts.FirstUnavailable);
     }
@@ -282,13 +282,13 @@ public sealed class GlobalShortcutsRebindTests
         var changed = 0;
         started.Shortcuts.Changed += () => changed++;
 
-        started.Seam.Release(RecordClip, ShortcutReasons.TypesACharacter);
+        started.Seam.Release(RecordClip, ShortcutRefusal.TypesACharacter(null));
 
         Assert.AreEqual(0, changed, "nothing on the seam's thread");
         Assert.IsNull(started.Shortcuts.UnavailableReason(ShortcutAct.Record));
         started.RunPosted();
         Assert.AreEqual(1, changed, "raised on the UI thread, so the tray and an open page read it (G33)");
-        Assert.AreEqual("Register the record shortcut failed: Ctrl+Shift+PrtScn, it would type a character", started.Shortcuts.UnavailableReason(ShortcutAct.Record)?.Sentence);
+        Assert.AreEqual("Ctrl+Shift+PrtScn types a character, so Record a clip has no shortcut.", ShortcutWords.ToolTipLine(started.Shortcuts.UnavailableReason(ShortcutAct.Record)!));
         Assert.AreEqual(ShortcutAct.Record, started.Shortcuts.FirstUnavailable);
 
         using (started.Shortcuts.Suspend())
@@ -299,7 +299,7 @@ public sealed class GlobalShortcutsRebindTests
         CollectionAssert.DoesNotContain(started.Seam.Registered.ToList(), RecordClip, "a recording's end leaves it released (G33)");
         using (started.Shortcuts.Suspend())
         {
-            Assert.IsTrue(started.Shortcuts.Rebind(ShortcutAct.Record, Free).Succeeded);
+            Assert.IsNull(started.Shortcuts.Rebind(ShortcutAct.Record, Free));
         }
 
         CollectionAssert.AreEquivalent(new[] { Open, TakeScreenshot, Free, StashClipboardImage }, started.Seam.Registered.ToList());
@@ -316,20 +316,20 @@ public sealed class GlobalShortcutsRebindTests
         {
             if (shortcut == Free)
             {
-                started.Seam.Release(shortcut, ShortcutReasons.TypesACharacter);
+                started.Seam.Release(shortcut, ShortcutRefusal.TypesACharacter(null));
             }
         };
 
         using (started.Shortcuts.Suspend())
         {
-            Assert.IsTrue(started.Shortcuts.Rebind(ShortcutAct.Screenshot, Free).Succeeded, "the choice made and written");
+            Assert.IsNull(started.Shortcuts.Rebind(ShortcutAct.Screenshot, Free), "the choice made and written");
         }
 
         started.RunPosted();
 
-        Assert.AreEqual("Register the screenshot shortcut failed: Ctrl+Shift+F8, it would type a character", started.Shortcuts.UnavailableReason(ShortcutAct.Screenshot)?.Sentence,
+        Assert.AreEqual("Ctrl+Shift+F8 types a character, so Take a screenshot has no shortcut.", ShortcutWords.ToolTipLine(started.Shortcuts.UnavailableReason(ShortcutAct.Screenshot)!),
             "the release is not lost: the shortcut is unavailable and says why (G33)");
-        Assert.AreEqual(started.Shortcuts.UnavailableReason(ShortcutAct.Screenshot)!.Sentence, started.Tray.ToolTip);
+        Assert.AreEqual(ShortcutWords.ToolTipLine(started.Shortcuts.UnavailableReason(ShortcutAct.Screenshot)!), started.Tray.ToolTip);
         Assert.AreEqual(ShortcutAct.Screenshot, started.Shortcuts.FirstUnavailable, "Settings opens on its row");
         CollectionAssert.DoesNotContain(started.Seam.Registered.ToList(), Free, "and nothing registers it again behind the seam's back");
         Assert.AreEqual("Ctrl+Shift+F8", started.Settings.Current.Shortcuts.Screenshot);
@@ -340,10 +340,10 @@ public sealed class GlobalShortcutsRebindTests
     {
         var started = StartedShortcuts.Start();
 
-        started.Seam.Release(RecordClip, ShortcutReasons.TypesACharacter);
+        started.Seam.Release(RecordClip, ShortcutRefusal.TypesACharacter(null));
         using (started.Shortcuts.Suspend())
         {
-            Assert.IsTrue(started.Shortcuts.Rebind(ShortcutAct.Record, Free).Succeeded);
+            Assert.IsNull(started.Shortcuts.Rebind(ShortcutAct.Record, Free));
         }
 
         started.RunPosted();
@@ -358,15 +358,15 @@ public sealed class GlobalShortcutsRebindTests
     {
         var started = StartedShortcuts.Start();
 
-        started.Seam.Release(RecordClip, ShortcutReasons.TypesACharacter);
+        started.Seam.Release(RecordClip, ShortcutRefusal.TypesACharacter(null));
         using (started.Shortcuts.Suspend())
         {
-            Assert.IsFalse(started.Shortcuts.Rebind(ShortcutAct.Record, Shortcut.Parse("Ctrl+V").Value!).Succeeded);
+            Assert.IsNotNull(started.Shortcuts.Rebind(ShortcutAct.Record, Shortcut.Parse("Ctrl+V").Value!));
         }
 
         started.RunPosted();
 
-        Assert.AreEqual("Register the record shortcut failed: Ctrl+Shift+PrtScn, it would type a character", started.Tray.ToolTip,
+        Assert.AreEqual("Ctrl+Shift+PrtScn types a character, so Record a clip has no shortcut.", started.Tray.ToolTip,
             "a refused candidate changed nothing, so the shortcut is still unavailable and named (G33)");
         CollectionAssert.DoesNotContain(started.Seam.Registered.ToList(), RecordClip);
     }
@@ -379,7 +379,7 @@ public sealed class GlobalShortcutsRebindTests
 
         using (started.Shortcuts.Suspend())
         {
-            Assert.IsTrue(started.Shortcuts.Rebind(ShortcutAct.Screenshot, Free).Succeeded, "judged by the seam");
+            Assert.IsNull(started.Shortcuts.Rebind(ShortcutAct.Screenshot, Free), "judged by the seam");
             CollectionAssert.Contains(started.Seam.Asked, Free);
             Assert.IsEmpty(started.Seam.Registered, "and released again at once: none fire under Pause (Done when 5)");
         }
@@ -443,7 +443,7 @@ public sealed class GlobalShortcutsRebindTests
 
         using (started.Shortcuts.Suspend())
         {
-            Assert.IsTrue(started.Shortcuts.Rebind(ShortcutAct.Record, Free).Succeeded);
+            Assert.IsNull(started.Shortcuts.Rebind(ShortcutAct.Record, Free));
         }
 
         Assert.AreEqual("Ctrl+Shift+F8", started.Shortcuts.TextOf(ShortcutAct.Record));
@@ -476,10 +476,27 @@ public sealed class GlobalShortcutsRebindTests
         started.Tray.Entries[Pause].Chosen();
         using (started.Shortcuts.Suspend())
         {
-            Assert.IsTrue(started.Shortcuts.Rebind(ShortcutAct.Screenshot, Free).Succeeded);
+            Assert.IsNull(started.Shortcuts.Rebind(ShortcutAct.Screenshot, Free));
         }
 
         Assert.AreEqual(9, released, "the four for the recording, the four for Pause, and the candidate judged under Pause");
         Assert.IsEmpty(underTheLock, "a seam call under the lock would freeze both threads (G33: every other function keeps working)");
+    }
+
+    [TestMethod]
+    public void TheCharacterTheSeamsLayoutCheckFoundIsTheOneTheRowNames()
+    {
+        var started = StartedShortcuts.Start();
+        started.Seam.Refuse(Shortcut.Parse("Ctrl+Alt+Q").Value!, ShortcutRefusal.TypesACharacter("@"));
+        var page = started.Page();
+        var field = page.ShortcutField(ShortcutAct.Screenshot);
+
+        field.Begin();
+        field.Press(Key.Q, KeyModifiers.Control | KeyModifiers.Alt);
+
+        Assert.AreEqual("Ctrl+Alt+Q types @ on your keyboard layout, so it can't be a shortcut.", page.WarningOf(SettingsPage.TakeScreenshotTitle),
+            "the character the judgment found, carried with its reason (G32, G35)");
+        Assert.AreEqual(ShortcutReasonKind.TypesACharacter, started.Shortcuts.Rebind(ShortcutAct.Screenshot, Shortcut.Parse("Ctrl+Alt+Q").Value!)?.Reason.Kind,
+            "its kind readable apart from its words");
     }
 }
