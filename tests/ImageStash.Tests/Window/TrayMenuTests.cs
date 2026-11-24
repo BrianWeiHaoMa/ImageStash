@@ -469,20 +469,49 @@ public sealed class TrayMenuTests
     private static ShortcutProblem Held(ShortcutAct act, string combination) => new(act, combination, ShortcutReason.Of(ShortcutRefusal.HeldByAnotherProgram));
 
     [TestMethod]
-    public void ShortcutLinesNamedAgainAndAgainAreWeighedNewestFourFirstAndAtOnce()
+    public void AShortcutNamedAgainAndAgainHasOneWholeLine()
     {
         var tray = new RecordingTray(toolTipLength: 127);
         var menu = new TrayMenu(tray, () => { }, () => { }, () => { }, () => { }, () => { }, () => { });
         menu.Show(Shortcuts());
-        // Each of twenty registrations names it once more, as importing the same settings again does.
+        // Each of twenty registrations names it once more, as importing the same settings again does. It once kept twenty
+        // lines; G33 "the tray icon says which shortcut is unavailable and why" holds one line for each shortcut
+        // unavailable now: the tooltip is no history.
         for (var i = 0; i < 20; i++)
         {
             menu.NameUnavailableShortcut(Held(ShortcutAct.Screenshot, "Ctrl+PrtScn"));
         }
 
-        var lines = tray.ToolTip!.Split('\n');
-        Assert.HasCount(20, lines, "every line still there, the platform cutting what does not fit");
-        Assert.IsTrue(lines.Skip(4).All(line => line == "Ctrl+PrtScn is unavailable"), "the older lines at their shortest form");
+        Assert.AreEqual("Ctrl+PrtScn is used by another app, so Take a screenshot has no shortcut.", tray.ToolTip, "one whole line");
+    }
+
+    [TestMethod]
+    public void SettingsAppliedAgainHoldingAHeldShortcutLeaveItsOneWholeLine()
+    {
+        var started = StartedShortcuts.Start(held: Shortcut.Parse("Ctrl+PrtScn").Value!);
+
+        started.Shortcuts.BindFromSettings();
+        started.Shortcuts.BindFromSettings();
+
+        Assert.AreEqual("Ctrl+PrtScn is used by another app, so Take a screenshot has no shortcut.", started.Tray.ToolTip, "named once, whole (G33)");
+    }
+
+    [TestMethod]
+    public void ALineARemapTookAwayReturnsWhenSettingsBringTheHeldShortcutBack()
+    {
+        var held = Shortcut.Parse("Ctrl+PrtScn").Value!;
+        var started = StartedShortcuts.Start(held: held);
+        using (started.Shortcuts.Suspend())
+        {
+            Assert.IsNull(started.Shortcuts.Rebind(ShortcutAct.Screenshot, Shortcut.Parse("Ctrl+Shift+F8").Value!));
+        }
+
+        Assert.AreEqual("ImageStash · Ctrl+Alt+Space", started.Tray.ToolTip, "the line gone with the remap");
+
+        started.Settings.Change(s => s with { Shortcuts = s.Shortcuts with { Screenshot = "Ctrl+PrtScn" } });
+        started.Shortcuts.BindFromSettings();
+
+        Assert.AreEqual("Ctrl+PrtScn is used by another app, so Take a screenshot has no shortcut.", started.Tray.ToolTip, "unavailable now, so named now (G33)");
     }
 
     [TestMethod]

@@ -39,6 +39,9 @@ public sealed class RecordingTray(int toolTipLength = 127) : ITray
 
     public void SetHeader(string header, string text) => HeaderChanges.Add((header, text));
 
+    /// <summary>What the entry shown with <paramref name="header"/> reads at the menu's next opening.</summary>
+    public string HeaderOf(string header) => HeaderChanges.LastOrDefault(change => change.Header == header).Text ?? header;
+
     /// <summary>Keeps the shortcut on the entry, as the menu shows it at its next opening.</summary>
     public void SetGesture(string header, KeyGesture? gesture) =>
         Entries = Entries.Select(entry => entry.Header == header ? entry with { Gesture = gesture } : entry).ToList();

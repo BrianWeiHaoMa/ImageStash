@@ -1,3 +1,4 @@
+using Avalonia.Controls;
 using Avalonia.Input;
 using ImageStash.Seams;
 using ImageStash.Tests.Support;
@@ -6,9 +7,10 @@ using ImageStash.Window;
 namespace ImageStash.Tests.Window;
 
 /// <summary>
-/// One walk through shortcuts and Settings over a real store, empty at first, with the production policy, tray menu and
-/// Settings page on one recording Shortcuts seam and one recording tray, another program holding the screenshot
-/// shortcut's default from before the start: each step observes, through the product's own entries, what a person sees.
+/// One walk through shortcuts and Settings over a real store, empty at first, with the production policy, tray menu,
+/// notifications above the tray and Settings page on one recording Shortcuts seam and one recording tray, another program
+/// holding the screenshot shortcut's default from before the start: each step observes, through the product's own
+/// entries, what a person sees.
 /// </summary>
 [TestClass]
 public sealed class ShortcutsAndSettingsPathTests
@@ -22,6 +24,22 @@ public sealed class ShortcutsAndSettingsPathTests
         using var walked = await StashWithTray.Open(held: TakeScreenshot);
         var listed = walked.Listed;
         Assert.IsEmpty(listed.Listing.Items, "the walk begins on an empty stash");
+        var empty = EmptyStashShown.Over(listed);
+
+        // (3) At that start, with no change raised, one notification says the screenshot shortcut is taken and leads to
+        // its row; the tray menu's entry, the + menu's and the empty stash's row each say so beside the shortcut; settings
+        // applied again while it is still held say nothing more and leave its one line in the tooltip.
+        var said = listed.Notifications.Shown.Single();
+        Assert.AreEqual("Ctrl+PrtScn is used by another app, so Take a screenshot has no shortcut.", said.Text, "G33, G16");
+        await NoticeButton.Press(listed.Notifications, said);
+        CollectionAssert.AreEqual(new ShortcutAct?[] { ShortcutAct.Screenshot }, walked.SettingsAskedOn, "Choose another asks for Settings on Take a screenshot");
+        Assert.AreEqual("Take a screenshot (shortcut unavailable)", walked.Tray.HeaderOf(TrayMenu.TakeScreenshotHeader), "the tray menu's entry (G34)");
+        Assert.AreEqual("Take a screenshot (shortcut unavailable)", PlusMenuScreenshot(listed), "the + menu's");
+        Assert.AreEqual(ShortcutWords.UnavailableBesideKeys, empty.ReadRows().Single(row => row.Words == "Take a screenshot").Beside, "the empty stash's row (G2)");
+
+        listed.Shortcuts.BindFromSettings();
+
+        Assert.AreSame(said, listed.Notifications.Shown.Single(), "settings applied again while it is held: no second notification");
 
         // (1) The row and the tooltip say, in one sentence of guidance, which combination is taken and why, the tooltip
         // the act too; the field keeps recording through a refusal; a free combination taken clears both.
@@ -50,6 +68,12 @@ public sealed class ShortcutsAndSettingsPathTests
         Assert.IsTrue(listed.ShortcutsSeam.Press(StashClipboardImage), "and the others registered again");
         CollectionAssert.AreEqual(new[] { ShortcutAct.Screenshot, ShortcutAct.StashClipboardImage }, listed.ShortcutActsRun);
 
+        // (3) After the remap, nothing says unavailable any more, and the notification that said so is gone.
+        Assert.AreEqual("Take a screenshot", walked.Tray.HeaderOf(TrayMenu.TakeScreenshotHeader), "the tray menu's entry at its next opening");
+        Assert.AreEqual("Take a screenshot", PlusMenuScreenshot(listed), "the + menu's at its next opening");
+        Assert.IsTrue(empty.ReadRows().All(row => row.Beside is null), "the empty stash's rows at once");
+        Assert.AreSame(said, listed.Notifications.Shown.Single(), "the notification keeps its own six seconds (G16), and nothing more is said");
+
         // (2) Recording again, Delete alone is refused in its own words before anything is registered, and the field
         // still records; after Esc, with the default no longer held, the row's Reset puts it back, and leaves the row.
         Assert.IsTrue(field.ResetOffered, "a row off its default offers Reset");
@@ -71,5 +95,17 @@ public sealed class ShortcutsAndSettingsPathTests
         Assert.IsFalse(field.ResetOffered, "Reset offered no more");
         Assert.IsNull(page.WarningOf(SettingsPage.TakeScreenshotTitle));
         Assert.HasCount(4, listed.ShortcutsSeam.Registered, "every shortcut registered, no field recording");
+    }
+
+    /// <summary>The <c>+</c> menu's Take a screenshot as the window makes the menu over these shortcuts, at an opening.</summary>
+    private static string PlusMenuScreenshot(ListedStash listed)
+    {
+        var header = "";
+        ControlThread.Run(() =>
+        {
+            var button = AddMenu.Button(listed.Settings, act => listed.Shortcuts.UnavailableReason(act) is not null, listed.Paste, () => { }, () => { }, () => { });
+            header = (string)((MenuFlyout)button.Flyout!).Items.OfType<MenuItem>().ElementAt(2).Header!;
+        });
+        return header;
     }
 }

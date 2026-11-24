@@ -4,10 +4,11 @@ using ImageStash.Window;
 namespace ImageStash.Tests.Support;
 
 /// <summary>
-/// The stash window's parts (<see cref="ListedStash"/>) with the tray menu on a <see cref="RecordingTray"/> and the
+/// The stash window's parts (<see cref="ListedStash"/>) with the tray menu on a <see cref="RecordingTray"/>, the
+/// notifications that a shortcut became unavailable, raised on the parts' notifications above the tray, and the
 /// Settings page, all on one policy over one recording Shortcuts seam, composed as the app composes them: the tray menu
-/// told what becomes unavailable and shown before the shortcuts start, some combinations already another program's
-/// then; over a real store that begins empty. The walk through shortcuts and Settings runs on it.
+/// and the notifications told what becomes unavailable and following before the shortcuts start, some combinations
+/// already another program's then; over a real store that begins empty. The walk through shortcuts and Settings runs on it.
 /// </summary>
 public sealed class StashWithTray : IDisposable
 {
@@ -21,8 +22,11 @@ public sealed class StashWithTray : IDisposable
 
     public RecordingTray Tray { get; }
 
-    /// <summary>Settings asked for from the tray menu.</summary>
-    public int SettingsOpened { get; private set; }
+    /// <summary>
+    /// Each ask for Settings, by the tray menu's Settings or a notification's Choose another, with the row it asked the
+    /// page to open on, as the app's one ask takes it: the tray's, the first unavailable shortcut's (G33).
+    /// </summary>
+    public List<ShortcutAct?> SettingsAskedOn { get; } = [];
 
     /// <param name="held">Combinations another program holds from before the shortcuts start.</param>
     public static async Task<StashWithTray> Open(params Shortcut[] held)
@@ -34,8 +38,9 @@ public sealed class StashWithTray : IDisposable
             () => _ = parts.Screenshot.Take(),
             () => _ = parts.RecordClip.StartOrStop(),
             () => _ = parts.StashClipboardImage.Stash(),
-            () => walked!.SettingsOpened++,
-            () => { }), held);
+            () => walked!.SettingsAskedOn.Add(walked.Listed.Shortcuts.FirstUnavailable),
+            () => { }),
+            parts => new ShortcutNotifications(parts.Notifications, act => walked!.SettingsAskedOn.Add(act)), held);
         walked = new StashWithTray(listed, tray);
         return walked;
     }

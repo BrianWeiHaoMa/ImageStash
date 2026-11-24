@@ -99,5 +99,5 @@ public sealed class ShortcutTextTests
     }
 
     private static WayIn WayOf(Shortcuts shortcuts, string words) =>
-        EmptyStashWaysIn.Of(shortcuts, new WaysInActs(() => { }, () => { }, () => { }, () => { }, () => { })).Single(way => way.Words == words);
+        EmptyStashWaysIn.Of(shortcuts, new WaysInActs(() => { }, () => { }, () => { }, () => { }, () => { }), _ => false).Single(way => way.Words == words);
 }

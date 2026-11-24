@@ -10,7 +10,8 @@ namespace ImageStash.Windows.Tests.Seams;
 /// <summary>
 /// The tooltip respects NOTIFYICONDATA's limit; native tray messages reach the click action only for the left button;
 /// the menu's entries carry their shortcut and their toggle, whose check mark follows (G34); an entry's words change
-/// while it is still found by its header, and the icon carries a red dot while recording (G15, G34); and Open ImageStash
+/// while it is still found by its header, and the icon carries a red dot while recording (G15, G34); an entry whose
+/// shortcut another program holds reads so beside that shortcut (G33); and Open ImageStash
 /// chosen from the real menu, opened and clicked with real input, brings the stash window to the front (G1, G34).
 /// </summary>
 [TestClass]
@@ -87,6 +88,29 @@ public sealed class WindowsTrayTests
         Assert.AreEqual("Record a clip", items[1].Header, "still found by the header it was shown with");
         Assert.AreSame(plain, tray.Icon.Icon, "the plain icon again");
     });
+
+    [TestMethod]
+    public void AShortcutAnotherProgramHoldsAtStartIsSaidUnavailableBesideItsShortcutInTheRealMenu()
+    {
+        var screenshot = Shortcut.Parse("Ctrl+PrtScn").Value!;
+        using var holder = OtherProgramHoldingAHotKey.Start(screenshot);
+        Assert.IsNotNull(holder, "the screenshot shortcut free for the check's holder");
+        TrayDesktop.Run(() =>
+        {
+            using var tray = new WindowsTray();
+            using var seam = new WindowsShortcuts();
+            var menu = new ImageStash.Window.TrayMenu(tray, () => { }, () => { }, () => { }, () => { }, () => { }, () => { });
+            var shortcuts = new ImageStash.Window.GlobalShortcuts(SettingsInMemory.Defaults(), ImageStash.Window.GlobalShortcuts.Bindings(() => { }, () => { }, () => { }, () => { }),
+                seam, menu.NameUnavailableShortcut, action => Dispatcher.UIThread.Post(action));
+            menu.Show(shortcuts);
+            shortcuts.Start();
+
+            var items = tray.Icon!.Menu!.Items.OfType<NativeMenuItem>().ToList();
+            Assert.AreEqual("Take a screenshot (shortcut unavailable)", items[1].Header, "said unavailable at the menu's next opening (G33)");
+            Assert.AreEqual(screenshot.Gesture, items[1].Gesture, "beside its shortcut, still shown (G34)");
+            Assert.AreEqual("Open ImageStash", items[0].Header, "a shortcut that works is not marked");
+        });
+    }
 
     [TestMethod]
     public void AnEntrysShortcutChangesUnderItsOwnHeader() => TrayDesktop.Run(() =>

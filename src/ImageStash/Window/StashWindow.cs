@@ -31,6 +31,8 @@ public sealed class StashWindow : Avalonia.Controls.Window
     private readonly Listing listing;
     private readonly Notices notices;
     private readonly SettingsKeeper settings;
+    // Whether an act's shortcut is unavailable, as the shortcuts followed judge it; none until they are.
+    private Func<ShortcutAct, bool> unavailable = _ => false;
     private readonly IQuietWindows quietWindows;
     private readonly ITarget targets;
     private readonly IDialogsAndExplorer dialogs;
@@ -99,7 +101,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
         pin.Classes.Add(LookStyles.IconButton);
         chrome = new WindowChrome(this, settings, pin);
         seams.BorderDrag.StopAtMinimum(this);
-        head = WindowLayout.Head(search, WindowLayout.SettingsButton(() => SettingsRequested?.Invoke()), AddMenu.Button(settings, paste, ImportFiles, () => ScreenshotRequested?.Invoke(), () => RecordRequested?.Invoke()), pin);
+        head = WindowLayout.Head(search, WindowLayout.SettingsButton(() => SettingsRequested?.Invoke()), AddMenu.Button(settings, act => unavailable(act), paste, ImportFiles, () => ScreenshotRequested?.Invoke(), () => RecordRequested?.Invoke()), pin);
 
         // A chip's word goes into the box, which searches it, so the box, the grid and the lit chips agree (G4, G5); the
         // caret goes to its end, with nothing selected, whatever a summon left selected (G1).
@@ -818,6 +820,17 @@ public sealed class StashWindow : Avalonia.Controls.Window
         FocusAtSummon();
     }
 
-    /// <summary>A shortcut remapped in Settings: the empty stash lists it from now on (G2).</summary>
+    /// <summary>
+    /// From now on the empty stash and the <c>+</c> menu show each shortcut as <paramref name="shortcuts"/> bind it, one
+    /// unavailable marked so, following each change of them (G2, G33, G34).
+    /// </summary>
+    public void FollowShortcuts(GlobalShortcuts shortcuts)
+    {
+        unavailable = act => shortcuts.UnavailableReason(act) is not null;
+        status.FollowShortcuts(shortcuts);
+        shortcuts.Changed += ShortcutsChanged;
+    }
+
+    /// <summary>A shortcut remapped in Settings, or one unavailable or working again: the empty stash says so from now on (G2).</summary>
     public void ShortcutsChanged() => status.ShortcutsChanged();
 }

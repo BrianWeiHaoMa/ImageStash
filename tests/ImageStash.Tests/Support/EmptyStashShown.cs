@@ -8,7 +8,8 @@ namespace ImageStash.Tests.Support;
 /// One row of the empty stash as a person reads it, left to right: the icon glyph leading it, or null when none does, its
 /// words, and its key caps in order, or the words shown in their place.
 /// </summary>
-public sealed record ShownWay(string? Icon, string Words, IReadOnlyList<string> Caps, string? Instead);
+/// <param name="Beside">The words after the key caps, saying the shortcut is unavailable; null when none stand there.</param>
+public sealed record ShownWay(string? Icon, string Words, IReadOnlyList<string> Caps, string? Instead, string? Beside = null);
 
 /// <summary>
 /// The empty stash as the window draws it: the window's status over a listed stash, made as <c>StashWindow</c> makes it,
@@ -27,7 +28,8 @@ public sealed class EmptyStashShown
     /// <summary>
     /// The status over <paramref name="listed"/>'s listing and settings, its rows running <paramref name="acts"/>, the
     /// acts the window hands, <see cref="ListedStash.WaysIn"/>, unless a check gives its own; shown as the window shows it,
-    /// and told of a shortcut rebound as the app tells the window.
+    /// following the listed stash's shortcuts as the window follows the app's, and told of each change of them as the app
+    /// tells the window.
     /// </summary>
     public static EmptyStashShown Over(ListedStash listed, WaysInActs? acts = null)
     {
@@ -35,7 +37,7 @@ public sealed class EmptyStashShown
         ControlThread.Run(() =>
         {
             status = new WindowStatus(listed.Listing, listed.Notices, listed.Settings, listed.FooterHints, new ScrollViewer(), () => false, () => { }, acts ?? listed.WaysIn);
-            status.ShowListing();
+            status.FollowShortcuts(listed.Shortcuts);
         });
         listed.Shortcuts.Changed += () => ControlThread.Run(status!.ShortcutsChanged);
         return new EmptyStashShown(status!);
@@ -95,7 +97,8 @@ public sealed class EmptyStashShown
         var words = ((TextBlock)rest[0]).Text ?? "";
         return rest[1] switch
         {
-            StackPanel caps => new ShownWay(icon, words, caps.Children.OfType<Border>().Select(cap => ((TextBlock)cap.Child!).Text ?? "").ToList(), null),
+            StackPanel caps => new ShownWay(icon, words, caps.Children.OfType<Border>().Select(cap => ((TextBlock)cap.Child!).Text ?? "").ToList(), null,
+                caps.Children.OfType<TextBlock>().SingleOrDefault()?.Text),
             TextBlock instead => new ShownWay(icon, words, [], instead.Text),
             var other => throw new AssertFailedException($"{words}: a row's right part is {other.GetType().Name}"),
         };

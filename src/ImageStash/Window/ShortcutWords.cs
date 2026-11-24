@@ -66,6 +66,24 @@ public static class ShortcutWords
         return cause is null ? $"{act} has no shortcut set." : $"{cause}, so {act} has no shortcut.";
     }
 
+    /// <summary>
+    /// The notification's sentence when a shortcut becomes unavailable: the tooltip's whole line, so the two never say it
+    /// differently (G16, G33).
+    /// </summary>
+    public static string Notification(ShortcutProblem problem) => ToolTipLine(problem);
+
+    /// <summary>
+    /// A menu entry whose shortcut is unavailable: its act's words, then that its shortcut is unavailable, the shortcut
+    /// itself still shown beside it (G2, G34); the entry still runs its act (G33).
+    /// </summary>
+    public static string EntryMarked(string header) => $"{header} (shortcut unavailable)";
+
+    /// <summary>What stands beside an unavailable shortcut's key caps in the empty stash's row (G2).</summary>
+    public const string UnavailableBesideKeys = "unavailable";
+
+    /// <summary>The empty stash's line on opening ImageStash while the open shortcut is unavailable: it names it and offers only the icon (G2, G3).</summary>
+    public static string OpenLineUnavailable(string open) => $"Open ImageStash from its icon in the tray ({open} is unavailable).";
+
     /// <summary>The tooltip's line with its why given way: the act and its combination, still saying which shortcut (G33).</summary>
     public static string ToolTipLineWithoutWhy(ShortcutProblem problem) =>
         IsBlank(problem.Combination) ? $"{ActName(problem.Act)} has no shortcut" : $"{ActName(problem.Act)}: {problem.Combination} is unavailable";

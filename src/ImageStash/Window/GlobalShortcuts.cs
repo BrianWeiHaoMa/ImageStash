@@ -599,9 +599,7 @@ public sealed class GlobalShortcuts
     /// <summary>On the UI thread: the act's shortcut is unavailable for this reason until it is changed in Settings, and is told.</summary>
     private void MakeUnavailable(Bound each, ShortcutReason reason)
     {
-        // Which shortcut, in the words its Settings field shows: the shortcut's text, or the setting as written when it
-        // is no shortcut (G33, G35).
-        var problem = new ShortcutProblem(each.Binding.Act, each.Shortcut?.Text ?? each.Text.Trim(), reason);
+        var problem = new ShortcutProblem(each.Binding.Act, CombinationOf(each), reason);
         lock (gate)
         {
             each.Unavailable = problem;
@@ -609,6 +607,20 @@ public sealed class GlobalShortcuts
 
         name(problem);
     }
+
+    /// <summary>
+    /// Which shortcut <paramref name="act"/> has, in the words its Settings field shows and its unavailability names: the
+    /// shortcut's text, or the setting as written when it is no shortcut (G33, G35).
+    /// </summary>
+    public string CombinationOf(ShortcutAct act)
+    {
+        lock (gate)
+        {
+            return CombinationOf(Of(act));
+        }
+    }
+
+    private static string CombinationOf(Bound each) => each.Shortcut?.Text ?? each.Text.Trim();
 
     private Bound Of(ShortcutAct act) => bound.Single(each => each.Binding.Act == act);
 

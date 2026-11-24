@@ -36,8 +36,11 @@ public sealed class TrayMenu
     private readonly Action stashClipboardImage;
     private readonly Action openSettings;
     private readonly Action quit;
-    // Newest first: each a failure, or an unavailable shortcut.
+    // Newest first: each a failure, or an unavailable shortcut, at most one line for each act.
     private readonly List<(Failure? Failure, ShortcutProblem? Unavailable)> named = [];
+    // What each shortcut entry reads now, by the header it was shown with, where that differs from the header.
+    private readonly Dictionary<string, string> headers = [];
+    private RecordingStage recording;
     private GlobalShortcuts? shortcuts;
 
     /// <param name="open">Shows the stash window, from Open ImageStash and from a left-click on the icon alike.</param>
@@ -64,11 +67,14 @@ public sealed class TrayMenu
 
     /// <summary>
     /// Shows the icon with Open ImageStash, Take a screenshot, Record a clip and Stash clipboard image, each beside its
-    /// shortcut as the settings read it, whether or not it could be registered (the tooltip says when not), Pause
-    /// shortcuts as a toggle, Settings, which has no shortcut of its own, and Quit ImageStash, in G34's order (G33, G34).
-    /// From then on the entries follow the shortcuts: Pause's check mark, each act's shortcut once Settings changed it,
-    /// and the tooltip, which names an unavailable shortcut only while that is still why it is unavailable (G33), and the
-    /// open shortcut as it now reads, or not at all, the moment Pause, a remap or a registration changes it.
+    /// shortcut as the settings read it, whether or not it could be registered, an unavailable one's entry saying so
+    /// beside it and still running its act (<see cref="ShortcutWords.EntryMarked"/>), Pause shortcuts as a toggle,
+    /// Settings, which has no shortcut of its own, and Quit ImageStash, in G34's order (G2, G33, G34). From then on the
+    /// entries follow the shortcuts: Pause's check mark, each act's shortcut once Settings changed it, each entry's mark
+    /// while its shortcut is unavailable and no longer, and the tooltip, which names an unavailable shortcut only while
+    /// that is still why it is unavailable (G33), and the open shortcut as it now reads, or not at all, the moment Pause,
+    /// a remap or a registration changes it. A shortcut unavailable from the start is told before any change is raised,
+    /// and marked then.
     /// </summary>
     public void Show(GlobalShortcuts shortcuts)
     {
@@ -82,6 +88,7 @@ public sealed class TrayMenu
             ],
             ToolTip(),
             open);
+        ShowHeaders();
         shortcuts.Changed += () => Follow(shortcuts);
     }
 
@@ -114,7 +121,36 @@ public sealed class TrayMenu
 
         // A shortcut registered since, or unavailable for another reason now, is no longer what its line says.
         named.RemoveAll(line => line.Unavailable is { } unavailable && !reasons.Contains(unavailable));
+        ShowHeaders();
         tray.SetToolTip(ToolTip());
+    }
+
+    /// <summary>
+    /// Each shortcut entry's words as they should read now, asked of the tray only where they changed: Record a clip as
+    /// the recording reads it (G15, G34), and an entry whose shortcut is unavailable marked so beside its shortcut, by the
+    /// policy's one judgment of unavailable, never by Pause or a field's recording (G33).
+    /// </summary>
+    private void ShowHeaders()
+    {
+        foreach (var entry in ShortcutEntries)
+        {
+            var words = entry.Act != ShortcutAct.Record ? entry.Header : recording switch
+            {
+                RecordingStage.Waiting => StartRecordingHeader,
+                RecordingStage.Sampling => StopRecordingHeader,
+                _ => RecordClipHeader,
+            };
+            if (shortcuts?.UnavailableReason(entry.Act) is not null)
+            {
+                words = ShortcutWords.EntryMarked(words);
+            }
+
+            if (words != headers.GetValueOrDefault(entry.Header, entry.Header))
+            {
+                headers[entry.Header] = words;
+                tray.SetHeader(entry.Header, words);
+            }
+        }
     }
 
     /// <summary>
@@ -123,12 +159,8 @@ public sealed class TrayMenu
     /// </summary>
     public void SetRecording(RecordingStage stage)
     {
-        tray.SetHeader(RecordClipHeader, stage switch
-        {
-            RecordingStage.Waiting => StartRecordingHeader,
-            RecordingStage.Sampling => StopRecordingHeader,
-            _ => RecordClipHeader,
-        });
+        recording = stage;
+        ShowHeaders();
         tray.SetRecording(stage == RecordingStage.Sampling);
     }
 
@@ -146,15 +178,22 @@ public sealed class TrayMenu
 
     /// <summary>
     /// Adds a shortcut that is unavailable, and why, whose reason the tooltip keeps longest, until the shortcuts no longer
-    /// give that reason for it (G33).
+    /// give that reason for it (G33); its entry is marked. The tooltip is no history: the act's earlier line, a
+    /// registration that judged it again or an earlier reason, gives way to this one, so each shortcut unavailable now has
+    /// exactly one line.
     /// </summary>
-    public void NameUnavailableShortcut(ShortcutProblem unavailable) => Add((null, unavailable));
+    public void NameUnavailableShortcut(ShortcutProblem unavailable)
+    {
+        named.RemoveAll(line => line.Unavailable?.Act == unavailable.Act);
+        Add((null, unavailable));
+    }
 
     private void Add((Failure? Failure, ShortcutProblem? Unavailable) line)
     {
         named.Insert(0, line);
         if (shortcuts is not null)
         {
+            ShowHeaders();
             tray.SetToolTip(ToolTip());
         }
     }

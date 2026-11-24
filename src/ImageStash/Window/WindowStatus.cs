@@ -22,6 +22,7 @@ public sealed class WindowStatus
     private readonly Func<bool> covered;
     private readonly Action clearSearch;
     private readonly WaysInActs waysIn;
+    private GlobalShortcuts? shortcuts;
     private readonly ContentControl stashState;
     private readonly StackPanel noticeStack;
     private readonly Dictionary<Notice, Control> noticeCards = [];
@@ -69,7 +70,17 @@ public sealed class WindowStatus
     /// <summary>The footer: the hints, the busy state and the count.</summary>
     public Border Footer { get; }
 
-    /// <summary>A shortcut remapped in Settings: the empty stash's rows and its line name it from now on (G2).</summary>
+    /// <summary>
+    /// From now on the empty stash marks a shortcut <paramref name="shortcuts"/> judge unavailable (G2, G33); its owner
+    /// tells it of each change through <see cref="ShortcutsChanged"/>.
+    /// </summary>
+    public void FollowShortcuts(GlobalShortcuts shortcuts)
+    {
+        this.shortcuts = shortcuts;
+        ShortcutsChanged();
+    }
+
+    /// <summary>A shortcut remapped in Settings, or one unavailable or working again: the empty stash's rows and its line say so from now on (G2).</summary>
     public void ShortcutsChanged()
     {
         shownState = null;
@@ -82,7 +93,7 @@ public sealed class WindowStatus
         if (state != shownState)
         {
             shownState = state;
-            stashState.Content = state is null ? null : StashStateView.For(listing, settings, clearSearch, waysIn);
+            stashState.Content = state is null ? null : StashStateView.For(listing, settings, clearSearch, waysIn, act => shortcuts?.UnavailableReason(act) is not null);
         }
 
         stashState.IsVisible = state is not null;

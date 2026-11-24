@@ -38,7 +38,7 @@ public sealed class DefaultShortcutsTests
         CollectionAssert.DoesNotContain(started.Seam.Registered.ToList(), Shortcut.Parse("Win+Alt+V").Value!, "today's default is not registered in its place");
         Assert.AreEqual(new KeyGesture(Key.V, KeyModifiers.Control | KeyModifiers.Alt), started.Tray.Entries[3].Gesture);
         Assert.AreEqual(EarlierDefault, started.Page().ShortcutField(ShortcutAct.StashClipboardImage).Text);
-        Assert.AreEqual(EarlierDefault, EmptyStashWaysIn.Of(started.Settings.Current.Shortcuts, new WaysInActs(() => { }, () => { }, () => { }, () => { }, () => { }))
+        Assert.AreEqual(EarlierDefault, EmptyStashWaysIn.Of(started.Settings.Current.Shortcuts, new WaysInActs(() => { }, () => { }, () => { }, () => { }, () => { }), _ => false)
             .Single(way => way.Words == "Stash the clipboard image").Shortcut);
 
         started.Settings.Change(settings => settings with { RecordPointer = false });

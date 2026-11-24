@@ -7,7 +7,8 @@ namespace ImageStash.Tests.Support;
 
 /// <summary>
 /// F5's four shortcuts as ImageStash binds them, from these settings' texts, over <see cref="RecordingShortcuts"/>, with
-/// the tray menu shown on a <see cref="RecordingTray"/>, naming what is unavailable in its tooltip, then started: each
+/// the tray menu shown on a <see cref="RecordingTray"/>, naming what is unavailable in its tooltip, and the notifications
+/// above the tray saying it (<see cref="ShortcutNotifications"/>, on a stepped clock), as the app wires them, then started: each
 /// act counted where it runs, and what the policy posts to the UI thread waiting in <see cref="Posted"/> until the check
 /// runs it. The settings are kept in a folder the check gives, written there first, or held in memory and never written.
 /// </summary>
@@ -21,6 +22,7 @@ public sealed class StartedShortcuts
     {
         Settings = settings;
         this.settingsFolder = settingsFolder;
+        Notifications = new Notices(Clock);
     }
 
     /// <param name="settingsFolder">Where the settings are written, after a quiet spell of <paramref name="quiet"/>; held in memory when null.</param>
@@ -42,10 +44,17 @@ public sealed class StartedShortcuts
         var failures = new List<Failure>();
         var keeper = new SettingsKeeper(settingsFolder ?? "", new SettingsLoad(settings, null, AsSaved: settingsFolder is not null), ShortRetry, quiet ?? TimeSpan.FromSeconds(30), failures.Add);
         var started = new StartedShortcuts(keeper, settingsFolder) { WriteFailures = failures };
-        started.Menu = new TrayMenu(started.Tray, () => started.Opened++, () => started.ScreenshotsFromTray++, () => started.RecordedFromTray++, () => started.StashedFromTray++, () => started.SettingsOpened++, () => { });
+        started.Menu = new TrayMenu(started.Tray, () => started.Opened++, () => started.ScreenshotsFromTray++, () => started.RecordedFromTray++, () => started.StashedFromTray++,
+            () => started.SettingsAskedOn.Add(started.Shortcuts.FirstUnavailable), () => { });
+        var told = new ShortcutNotifications(started.Notifications, act => started.SettingsAskedOn.Add(act));
         started.Shortcuts = new GlobalShortcuts(keeper, GlobalShortcuts.Bindings(() => started.Summoned++, () => started.Screenshots++, () => started.Recorded++, () => started.Stashed++),
-            started.Seam, started.Menu.NameUnavailableShortcut, started.Posted.Add);
+            started.Seam, problem =>
+            {
+                started.Menu.NameUnavailableShortcut(problem);
+                told.Tell(problem);
+            }, started.Posted.Add);
         started.Menu.Show(started.Shortcuts);
+        told.Follow(started.Shortcuts);
         foreach (var shortcut in held)
         {
             started.Seam.Refuse(shortcut, ShortcutRefusal.HeldByAnotherProgram);
@@ -83,7 +92,16 @@ public sealed class StartedShortcuts
 
     public int StashedFromTray { get; set; }
 
-    public int SettingsOpened { get; set; }
+    /// <summary>
+    /// Each ask for Settings, by the tray menu's Settings or a notification's Choose another, with the row it asked the page
+    /// to open on, as the app's one ask takes it: the tray's, the first unavailable shortcut's (G33).
+    /// </summary>
+    public List<ShortcutAct?> SettingsAskedOn { get; } = [];
+
+    /// <summary>The notifications above the tray, on <see cref="Clock"/>.</summary>
+    public Notices Notifications { get; }
+
+    public SteppedClock Clock { get; } = new();
 
     /// <summary>Presses of the open shortcut, counted where its act runs.</summary>
     public int Summoned { get; set; }

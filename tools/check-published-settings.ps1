@@ -17,8 +17,10 @@ value naming the copy's executable and true; Theme set to Dark and back to Use s
 and back to Medium, are written each time; Open
 folder opens a File Explorer window on the stash folder, which the phase closes. Another PowerShell takes Win+Alt+V
 while the Stash clipboard image field records, so registering it again at the recording's end is refused and its row
-says why; the tray menu then shows Ctrl+Shift+F8 beside Take a screenshot, and its Settings opens the page on that
-field with the reason; with that holder gone, the keyboard alone records Win+Alt+V there and ImageStash holds it
+says why; a notification above the tray then says "Win+Alt+V is used by another app, so Stash clipboard image has no
+shortcut.", and its Choose another opens the page on that field; the tray menu then shows Ctrl+Shift+F8 beside Take a
+screenshot and "Stash clipboard image (shortcut unavailable)", and its Settings opens the page on that field with the
+reason; with that holder gone, the keyboard alone records Win+Alt+V there and ImageStash holds it
 again. Once the page is closed, the real Ctrl+Shift+F8 shows the overlay, adding nothing, while Ctrl+PrtScn is free for
 another program, whose hot key then takes the press, and shows none (G32, G33, G34, F1, F5, F10, G35, Done when 5).
 Exits with the number of checks that failed.
@@ -359,9 +361,21 @@ try {
     Check (WaitFor { (-not (Recording 'Stash clipboard image')) -and (WarnedUnder 'Stash clipboard image' 'After a screenshot or a recording' $grabbed) } 2000) "Esc ended the recording alone, the page staying, and the row reads '$grabbed' (G33, G35, G2)"
     $null = [PasteDesk]::Press([uint16[]]@(0x1B))
     Need (WaitFor { (Page) -eq [IntPtr]::Zero } 2000) 'a second Esc closed the page'
+    # G33, G16: the shortcut that became unavailable is said at once above the tray, its Choose another leading to its row.
+    $takenWords = 'Win+Alt+V is used by another app, so Stash clipboard image has no shortcut.'
+    $said = WaitFor { [PasteDesk]::Titled($running, $takenWords) -ne [IntPtr]::Zero } 2000
+    Check $said "a notification above the tray says '$takenWords' (G33, G16)"
+    if ($said) {
+        Choose (One (Elements ([Windows.Automation.AutomationElement]::FromHandle([PasteDesk]::Titled($running, $takenWords))) 'Choose another' $button) "the notification's Choose another")
+        $onRowFromNotification = WaitFor { (InFront) -and ([Windows.Automation.AutomationElement]::FocusedElement.Current.Name -eq 'Stash clipboard image') -and ([Windows.Automation.AutomationElement]::FocusedElement.Current.ProcessId -eq $running) } 3000
+        Check $onRowFromNotification "the notification's Choose another opened Settings on the unavailable shortcut's field (G33)"
+        $null = [PasteDesk]::Press([uint16[]]@(0x1B))
+        Need (WaitFor { (Page) -eq [IntPtr]::Zero } 2000) 'Esc closed the page Choose another opened'
+    }
     $entries = TrayMenu
     $shown = ($entries | Where-Object { $_.Current.Name -eq 'Take a screenshot' } | ForEach-Object { $_.Current.AcceleratorKey }) -join ','
     Check ($shown -eq 'Ctrl+Shift+F8') "the tray menu's Take a screenshot shows the recorded Ctrl+Shift+F8 (G34): '$shown'"
+    Check (@($entries | Where-Object { $_.Current.Name -eq 'Stash clipboard image (shortcut unavailable)' }).Count -eq 1) "the tray menu's Stash clipboard image says its shortcut is unavailable (G33, G34)"
     Choose (One ($entries | Where-Object { $_.Current.Name -eq 'Settings' }) "the tray menu's Settings")
     $onRow = WaitFor { (InFront) -and ([Windows.Automation.AutomationElement]::FocusedElement.Current.Name -eq 'Stash clipboard image') -and ([Windows.Automation.AutomationElement]::FocusedElement.Current.ProcessId -eq $running) } 3000
     Check ($onRow -and (WarnedUnder 'Stash clipboard image' 'After a screenshot or a recording' $grabbed)) "Settings opened on the unavailable shortcut's field, its row saying why (G33)"

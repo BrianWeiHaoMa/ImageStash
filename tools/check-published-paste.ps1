@@ -6,7 +6,7 @@ and logging every key it receives; from the tray, a posted click and a posted En
 Ctrl+Alt+Space showing the flyout beside its caret within a second; the footer naming it; a real Enter hiding the
 flyout and sending it one Ctrl+V; two real letters typed into the search box and Enter pasting their first match; the target closed between summon and Enter, which copies and raises "Copied <middle
 dot> press Ctrl+V"; the shortcut hiding the flyout; and, with another program holding Ctrl+Alt+Space when ImageStash starts, a
-press that shows nothing while the tray still does. Exits with the number of checks that failed.
+notification above the tray saying so, then a press that shows nothing while the tray still does. Exits with the number of checks that failed.
 
 With -Store, the running copy's stash is the check's own and the phases that press Enter run; without it the stash is
 the user's, and those phases are skipped, since each Enter records a use in it.
@@ -546,6 +546,11 @@ try {
     Check ((Lines $holderLog | Select-Object -First 1) -eq 'registered') "another program registered Ctrl+Alt+Space first: $(Lines $holderLog | Select-Object -First 1)"
     # As Windows starts it at sign-in, from a hidden window, so the tray click below is timed from nothing showing (G3, G1).
     $restarted = Start-Process -FilePath $Exe -ArgumentList ([StashWindows]::SignInArgument) -PassThru
+    # G33, G16: the taken shortcut is said at once in a notification above the tray, which then goes after its six
+    # seconds, so the checks below start from nothing of ImageStash showing.
+    $takenOpen = 'Ctrl+Alt+Space is used by another app, so Open ImageStash has no shortcut.'
+    Check (WaitFor { [PasteDesk]::Titled($restarted.Id, $takenOpen) -ne [IntPtr]::Zero } 5000) "a notification above the tray said '$takenOpen' at the start (G33, G16)"
+    Check (WaitFor { [StashWindows]::Showing($restarted.Id) -eq '' } 12000) "the notification gone after its six seconds, nothing else of ImageStash showing at a start at sign-in (G16, G3): '$([StashWindows]::Showing($restarted.Id))'"
     Start-Sleep -Seconds 3
     $showing = [StashWindows]::Showing($restarted.Id)
     Check (-not $restarted.HasExited) "ImageStash started after it and keeps running, showing '$showing'"

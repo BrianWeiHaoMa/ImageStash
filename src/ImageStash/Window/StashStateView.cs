@@ -40,9 +40,10 @@ public static class StashStateView
 
     /// <summary>
     /// The view of the state <see cref="Key"/> names; <paramref name="clearSearch"/> is no match's Clear, and
-    /// <paramref name="waysIn"/> the acts the empty stash's rows run.
+    /// <paramref name="waysIn"/> the acts the empty stash's rows run, and <paramref name="unavailable"/> whether an act's
+    /// shortcut is unavailable now, as the policy judges it.
     /// </summary>
-    public static Control For(Listing listing, SettingsKeeper settings, Action clearSearch, WaysInActs waysIn)
+    public static Control For(Listing listing, SettingsKeeper settings, Action clearSearch, WaysInActs waysIn, Func<ShortcutAct, bool> unavailable)
     {
         var view = new StackPanel { Spacing = 8, MaxWidth = 340 };
         if (listing.State == StashState.Opening)
@@ -68,9 +69,9 @@ public static class StashStateView
             view.Children.Add(Line(EmptyStashWaysIn.Heading, 20, FontWeight.SemiBold));
             view.Children.Add(Line(EmptyStashWaysIn.DropLine, 13));
             var rows = new StackPanel();
-            rows.Children.AddRange(EmptyStashWaysIn.Of(shortcuts, waysIn).Select(Row));
+            rows.Children.AddRange(EmptyStashWaysIn.Of(shortcuts, waysIn, unavailable).Select(Row));
             view.Children.Add(rows);
-            view.Children.Add(Line(EmptyStashWaysIn.OpenLine(shortcuts), 12.5));
+            view.Children.Add(Line(EmptyStashWaysIn.OpenLine(shortcuts, unavailable(ShortcutAct.Open)), 12.5));
         }
         else if (listing.NoMatch)
         {
@@ -96,9 +97,9 @@ public static class StashStateView
     }
 
     /// <summary>
-    /// A way in as a row: its icon, then its words, left, and its shortcut's key caps right, or the tray menu's words while
-    /// its setting is no shortcut. A click runs its act; unfocusable, as the <c>+</c> button is, so the keyboard's focus
-    /// stays where it was (G7).
+    /// A way in as a row: its icon, then its words, left, and its shortcut's key caps right, followed by the word
+    /// unavailable while it is, or the tray menu's words while its setting is no shortcut. A click runs its act;
+    /// unfocusable, as the <c>+</c> button is, so the keyboard's focus stays where it was (G7).
     /// </summary>
     private static Button Row(WayIn way)
     {
@@ -108,6 +109,10 @@ public static class StashStateView
         Control keys = way.Shortcut is { } text
             ? KeyCaps.Of(text)
             : new TextBlock { Text = EmptyStashWaysIn.FromTrayMenu, FontSize = 13, VerticalAlignment = VerticalAlignment.Center, Opacity = 0.7 };
+        if (way.ShortcutUnavailable && keys is StackPanel caps)
+        {
+            caps.Children.Add(new TextBlock { Text = ShortcutWords.UnavailableBesideKeys, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Opacity = 0.7 });
+        }
         keys.Margin = new Thickness(12, 0, 0, 0);
         Grid.SetColumn(keys, 2);
         var row = new Button

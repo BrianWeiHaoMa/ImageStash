@@ -69,12 +69,16 @@ public sealed class App : Application
         var notices = Notices.InWindow(LocalClock.Instance);
         // Before the shortcuts, which Settings remaps through it.
         var keeper = KeepSettings(desktop, settings, notices);
-        var shortcuts = this.shortcuts = Shortcuts(keeper, trayMenu);
+        // Before the shortcuts too, which tell them a shortcut that became unavailable (G33, G16).
+        var notifications = new Notices(LocalClock.Instance);
+        var shortcutNotifications = new ShortcutNotifications(notifications, act => OpenSettingsOn(act));
+        var shortcuts = this.shortcuts = Shortcuts(keeper, trayMenu, shortcutNotifications);
         trayMenu.Show(shortcuts);
-        var listing = CreateWindow(notices, keeper, trayMenu);
-        // The + menu and the empty stash show a shortcut remapped in Settings (G2, G34).
-        shortcuts.Changed += window!.ShortcutsChanged;
-        // G33's check "at start", once the window the open shortcut summons exists.
+        shortcutNotifications.Follow(shortcuts);
+        var listing = CreateWindow(notices, notifications, keeper, trayMenu);
+        // The + menu and the empty stash show a shortcut remapped in Settings, and one unavailable marked so (G2, G34).
+        window!.FollowShortcuts(shortcuts);
+        // G33's check "at start", once the window the open shortcut summons exists and the notifications are drawn.
         shortcuts.Start();
         OpenStash(desktop, trayMenu, settings, listing, keeper);
         ListenForShowRequests();
@@ -131,10 +135,9 @@ public sealed class App : Application
     /// stash… and Import stash…, which wait as Move waits, the import's reopened store kept as Move's is and the
     /// settings it brought put in effect at once (G36).
     /// </summary>
-    private Listing CreateWindow(Notices notices, SettingsKeeper keeper, TrayMenu trayMenu)
+    private Listing CreateWindow(Notices notices, Notices notifications, SettingsKeeper keeper, TrayMenu trayMenu)
     {
         var listing = new Listing(failure => notices.Raise(failure));
-        var notifications = new Notices(LocalClock.Instance);
         var notification = new Notification(notifications, seams.QuietWindows, seams.Screen, trayMenu.Name);
         var handoff = new Handoff(listing, notices, notifications, seams.ClipboardAndDrops, seams.Target, LocalClock.Instance, HeldFileRetry.Duration, HeldClipboard.Retry);
         var captured = new CaptureNotification(notifications, listing, handoff, seams.QuietWindows, HeldFileRetry.Duration);
@@ -249,9 +252,9 @@ public sealed class App : Application
     /// reaches the window from the Shortcuts seam's thread through the one summon, with the window in front at the press
     /// (G1, G8); Take a screenshot and Record a clip, whose acts run on the UI thread (G14, G15); and Stash clipboard
     /// image, whose act runs on the UI thread and opens no window (G13). A shortcut that cannot be registered is named in
-    /// the tooltip and stops nothing else (G33).
+    /// the tooltip, its entry marked, and said in a notification above the tray, and stops nothing else (G33, G16).
     /// </summary>
-    private GlobalShortcuts Shortcuts(SettingsKeeper settings, TrayMenu trayMenu)
+    private GlobalShortcuts Shortcuts(SettingsKeeper settings, TrayMenu trayMenu, ShortcutNotifications shortcutNotifications)
     {
         var summon = new ShortcutSummon(
             seams.Target,
@@ -260,7 +263,11 @@ public sealed class App : Application
             inFront => Dispatcher.UIThread.Post(() => window?.PasteTarget.FromPress(inFront)),
             anchor => Dispatcher.UIThread.Post(() => window?.SummonFromShortcut(anchor)));
         return new GlobalShortcuts(settings, GlobalShortcuts.Bindings(summon.Pressed, TakeScreenshot, RecordClip, StashFromShortcut),
-            seams.Shortcuts, trayMenu.NameUnavailableShortcut, action => Dispatcher.UIThread.Post(action));
+            seams.Shortcuts, problem =>
+            {
+                trayMenu.NameUnavailableShortcut(problem);
+                shortcutNotifications.Tell(problem);
+            }, action => Dispatcher.UIThread.Post(action));
     }
 
     private void ListenForShowRequests() =>
@@ -286,7 +293,10 @@ public sealed class App : Application
     /// over the settings in effect, their one keeper and the shortcuts, Theme and Look applied to every window at once (F4, F10, G32,
     /// G34), the window following it (G2); on the row of the first shortcut that is unavailable, while one is (G33).
     /// </summary>
-    private void OpenSettings()
+    private void OpenSettings() => OpenSettingsOn(shortcuts?.FirstUnavailable);
+
+    /// <summary>The page as <see cref="OpenSettings"/> opens it, on <paramref name="row"/>'s shortcut field when one is given: a notification's Choose another (G33).</summary>
+    private void OpenSettingsOn(ShortcutAct? row)
     {
         if (keeper is not { } settings || settingsLoad is not { } load || shortcuts is not { } bound || moving is not { } move || transferring is not { } transfer || window is not { } stash)
         {
@@ -296,7 +306,7 @@ public sealed class App : Application
         var open = settingsWindow;
         settingsWindow = SettingsWindow.Open(open, () => new SettingsPage(settings, load, bound, seams.Locations, seams.StartWithWindows, seams.DialogsAndExplorer,
             move, transfer, stash.ThumbnailSizing, ApplyTheme, Environment.ProcessPath!),
-            bound.FirstUnavailable);
+            row);
         if (!ReferenceEquals(open, settingsWindow))
         {
             window?.Follow(settingsWindow);
