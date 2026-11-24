@@ -23,17 +23,19 @@ internal static class WorkFolder
 
     /// <summary>
     /// Copies <paramref name="source"/> into <c>.work\</c>, never moving or changing it (G11, R3), and returns the
-    /// copy's path. A failure leaves nothing in <c>.work\</c>.
+    /// copy's path, carrying <paramref name="extension"/> when given, else the source's own. A failure leaves nothing in
+    /// <c>.work\</c>.
     /// </summary>
-    public static Outcome<string> Stage(StoreContext store, string source) => CopyIn(store, source, "Copy into the stash");
+    public static Outcome<string> Stage(StoreContext store, string source, string? extension) => CopyIn(store, source, "Copy into the stash", extension);
 
     /// <summary>
-    /// Copies <paramref name="source"/> into <c>.work\</c> at a fresh path, leaving it as it was, and returns the copy's
-    /// path; a failure names <paramref name="action"/> and the source and leaves nothing in <c>.work\</c>.
+    /// Copies <paramref name="source"/> into <c>.work\</c> at a fresh path carrying <paramref name="extension"/>, by
+    /// default the source's own, leaving it as it was, and returns the copy's path; a failure names
+    /// <paramref name="action"/> and the source and leaves nothing in <c>.work\</c>.
     /// </summary>
-    public static Outcome<string> CopyIn(StoreContext store, string source, string action)
+    public static Outcome<string> CopyIn(StoreContext store, string source, string action, string? extension = null)
     {
-        var path = Allocate(store.Folder, Path.GetExtension(source));
+        var path = Allocate(store.Folder, extension ?? Path.GetExtension(source));
         if (!path.Succeeded)
         {
             return new Failure(action, Path.GetFileName(source), "its name does not end in a file extension");

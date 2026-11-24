@@ -9,7 +9,10 @@ public enum ImageFormat
     WebP,
 }
 
-/// <summary>F3's file extensions for each format; the first is the one a file named for its format gets.</summary>
+/// <summary>
+/// F3's file extensions for each format: <see cref="Of"/> those a stored file keeps, the first the one a file named for
+/// its format gets; <see cref="Taken"/> every one a file is taken as that format by.
+/// </summary>
 public static class ImageFormatExtensions
 {
     public static IReadOnlyList<string> Of(ImageFormat format) => format switch
@@ -19,6 +22,12 @@ public static class ImageFormatExtensions
         ImageFormat.Gif => [".gif"],
         _ => [".webp"],
     };
+
+    /// <summary>
+    /// The format's own extensions and, for a JPEG, the names browsers give some, which a stored file does not keep: it
+    /// is kept under <c>.jpg</c>, a name every chat takes (F3).
+    /// </summary>
+    public static IReadOnlyList<string> Taken(ImageFormat format) => format == ImageFormat.Jpeg ? [.. Of(format), ".jfif", ".jpe", ".pjpeg"] : Of(format);
 }
 
 /// <summary>

@@ -86,9 +86,12 @@ public sealed class StashStore : IDisposable
     public Outcome<string> AllocateWorkPath(string extension) =>
         store.MoveRefusal("Make room for a new file", extension) is { } moving ? moving : WorkFolder.Allocate(store.Folder, extension);
 
-    /// <summary>Copies <paramref name="source"/> into <c>.work\</c>, leaving the source as it was, and returns the copy's path.</summary>
-    public Task<Outcome<string>> Stage(string source) =>
-        thread.Run(() => store.MoveRefusal("Copy into the stash", Path.GetFileName(source)) is { } moving ? moving : WorkFolder.Stage(store, source));
+    /// <summary>
+    /// Copies <paramref name="source"/> into <c>.work\</c>, leaving the source as it was, and returns the copy's path,
+    /// which carries <paramref name="extension"/> when given, as a file whose name has none needs (F3), else the source's.
+    /// </summary>
+    public Task<Outcome<string>> Stage(string source, string? extension = null) =>
+        thread.Run(() => store.MoveRefusal("Copy into the stash", Path.GetFileName(source)) is { } moving ? moving : WorkFolder.Stage(store, source, extension));
 
     /// <summary>Deletes a staged file the import will not add, such as one Media found unreadable.</summary>
     public Task<Outcome> Discard(string stagedPath) =>

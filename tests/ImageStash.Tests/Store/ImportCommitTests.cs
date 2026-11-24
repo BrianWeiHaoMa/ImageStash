@@ -316,6 +316,9 @@ public sealed class ImportCommitTests
     [DataRow(ImageFormat.Png, ".jpg", "cat.png")]
     [DataRow(ImageFormat.Jpeg, ".jpeg", "cat.jpeg")]
     [DataRow(ImageFormat.Jpeg, ".JPG", "cat.jpg")]
+    [DataRow(ImageFormat.Jpeg, ".jfif", "cat.jpg")]
+    [DataRow(ImageFormat.Jpeg, ".jpe", "cat.jpg")]
+    [DataRow(ImageFormat.Jpeg, ".pjpeg", "cat.jpg")]
     [DataRow(ImageFormat.Gif, ".webp", "cat.gif")]
     [DataRow(ImageFormat.WebP, ".webp", "cat.webp")]
     public async Task TheFileTakesTheExtensionOfTheFormatMediaRead(ImageFormat format, string extension, string fileName)

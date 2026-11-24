@@ -21,7 +21,8 @@ public sealed record PastedPicture(string Name, byte[]? Png, MediaFrame? Frame);
 /// </summary>
 public sealed class PictureImport(TimeSpan heldFileRetry, Action<Failure> named)
 {
-    private const string Copy = "Copy into the stash";
+    /// <summary>The action a copy into the work folder fails as.</summary>
+    internal const string Copy = "Copy into the stash";
 
     /// <summary>
     /// Saves <paramref name="picture"/> as one still PNG item, even when its bytes equal an item's original, getting

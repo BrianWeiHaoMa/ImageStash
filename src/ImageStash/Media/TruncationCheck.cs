@@ -30,34 +30,43 @@ internal static class TruncationCheck
         return whole ? format : null;
     }
 
+    /// <summary>How many first bytes <see cref="Begins"/> reads at most: WebP's signature ends at the twelfth.</summary>
+    public const int HeadLength = 12;
+
     private static ImageFormat? Sniff(Stream stream)
     {
         stream.Position = 0;
-        Span<byte> head = stackalloc byte[12];
-        if (stream.ReadAtLeast(head, head.Length, throwOnEndOfStream: false) < head.Length)
-        {
-            return null;
-        }
+        Span<byte> head = stackalloc byte[HeadLength];
+        return Begins(head[..stream.ReadAtLeast(head, head.Length, throwOnEndOfStream: false)]);
+    }
 
-        if (head[..8].SequenceEqual(PngSignature))
+    /// <summary>
+    /// The format whose signature <paramref name="head"/>, a file's first bytes (up to <see cref="HeadLength"/>), begins
+    /// with; null when it begins as none, or is shorter than the signature it starts.
+    /// </summary>
+    public static ImageFormat? Begins(ReadOnlySpan<byte> head)
+    {
+        if (head.StartsWith(PngSignature))
         {
             return ImageFormat.Png;
         }
 
-        if (head[0] == 0xFF && head[1] == 0xD8 && head[2] == 0xFF)
+        if (head.StartsWith(JpegSignature))
         {
             return ImageFormat.Jpeg;
         }
 
-        if (head[..6].SequenceEqual("GIF87a"u8) || head[..6].SequenceEqual("GIF89a"u8))
+        if (head.StartsWith("GIF87a"u8) || head.StartsWith("GIF89a"u8))
         {
             return ImageFormat.Gif;
         }
 
-        return head[..4].SequenceEqual("RIFF"u8) && head[8..12].SequenceEqual("WEBP"u8) ? ImageFormat.WebP : null;
+        return head.Length >= HeadLength && head[..4].SequenceEqual("RIFF"u8) && head[8..12].SequenceEqual("WEBP"u8) ? ImageFormat.WebP : null;
     }
 
     private static ReadOnlySpan<byte> PngSignature => [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+
+    private static ReadOnlySpan<byte> JpegSignature => [0xFF, 0xD8, 0xFF];
 
     /// <summary>Chunk by chunk, each its length, type, data and CRC, to a whole IEND chunk.</summary>
     private static bool PngEnds(Walk walk)

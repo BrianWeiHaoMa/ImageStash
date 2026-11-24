@@ -83,10 +83,13 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
     /// <summary>What every pasted picture's result says beside it, added or not (G13).</summary>
     public const string StillOnly = "A pasted picture is always a still; to add an animated one, drag its file in.";
 
-    /// <summary>Import files…'s picker: the four formats first, then every file, so a wrongly named one can be chosen and named (G12).</summary>
+    /// <summary>
+    /// Import files…'s picker: the four formats by every name they are taken by first, then every file, so a wrongly
+    /// named one, or one whose name has no extension, can be chosen (G12, F3).
+    /// </summary>
     public static readonly IReadOnlyList<PickerFilter> PickerFilters =
     [
-        new("Pictures (GIF, PNG, JPG, WebP)", Enum.GetValues<ImageFormat>().SelectMany(ImageFormatExtensions.Of).Select(extension => "*" + extension).ToList()),
+        new("Pictures (GIF, PNG, JPG, WebP)", Enum.GetValues<ImageFormat>().SelectMany(ImageFormatExtensions.Taken).Select(extension => "*" + extension).ToList()),
         new("All files", ["*.*"]),
     ];
 
@@ -442,16 +445,24 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
         await ShowResult(listing.Replacements == replacements ? items : [], byPerson: true);
     }
 
-    /// <summary>One file through the import's steps: format by name, stage, read, then Store's duplicate question and commit.</summary>
+    /// <summary>
+    /// One file through the import's steps: format by name, or for a name with no extension by its first bytes, stage,
+    /// read, then Store's duplicate question and commit.
+    /// </summary>
     private async Task<ImportedFile> One(StashStore store, DroppedItem file, IReadOnlyList<string> litTags)
     {
         var verdict = FormatByName.Judge(file.Name);
-        if (!verdict.Supported)
+        var staged = verdict switch
+        {
+            { ToCheck: true } => await FileWithoutExtension.Stage(store, file, pictures, heldFileRetry),
+            { Supported: false } => null,
+            _ => file.LocalPath is { } path ? await store.Stage(path) : await pictures.StageStream(store, file.Name, Path.GetExtension(file.Name), file.OpenRead!),
+        };
+        if (staged is null)
         {
             return new ImportedFile(file.Name, ImportResultKind.Skipped, Type: verdict.UnsupportedType);
         }
 
-        var staged = file.LocalPath is { } path ? await store.Stage(path) : await pictures.StageStream(store, file.Name, Path.GetExtension(file.Name), file.OpenRead!);
         if (!staged.Succeeded)
         {
             return new ImportedFile(file.Name, ImportResultKind.Failed, Failure: staged.Failure);

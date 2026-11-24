@@ -17,7 +17,9 @@ namespace ImageStash.Tests.Window;
 /// focus between real controls is beyond these parts: the walk drives the rule a field calls as focus leaves it.
 /// Collecting into a stash that holds pictures: with a tag chip lit, a drop tags its new picture and the one the stash
 /// already held, its notice says so, and its Undo takes back both (G11, G12); a drop whose picture comes in after the
-/// person typed a search and moved the selection leaves both, and its notice's Show brings the new picture up (G12).
+/// person typed a search and moved the selection leaves both, and its notice's Show brings the new picture up (G12); a
+/// JPEG named <c>.jfif</c> and a PNG whose name has no extension come in under <c>.jpg</c> and <c>.png</c>, the card
+/// counting the nameless files as to check, and a text file with no extension is skipped as such (F3, G11, G12).
 /// </summary>
 [TestClass]
 public sealed class StashWindowPathTests
@@ -299,6 +301,24 @@ public sealed class StashWindowPathTests
         Assert.AreEqual(("", Scope.All), (listed.Listing.Query, listed.Listing.LitChip), "Show clears the search and shows All");
         Assert.AreEqual(third.Id, listed.Listing.Items[0].Id, "the new item first");
         CollectionAssert.AreEqual(new[] { third.Id }, listed.Listing.Selection.ToList(), "and selected");
+
+        // (3) A drop of a JPEG named .jfif, a PNG whose name has no extension and a text file whose name has none.
+        var named = ListedStash.Contents(
+        [
+            listed.Stash.Source("from a browser.jfif", MediaFixtures.Bytes("progressive.jpg")),
+            listed.Stash.Source("nameless", MediaFixtures.Bytes("translucent.png")),
+            listed.Stash.Source("LICENSE", "MIT License"u8.ToArray()),
+        ]);
+        var card = DropCard.Of(named, listed.Listing.LitTags);
+        Assert.AreEqual((1, 2, 0), (card.Supported, card.ToCheck, card.Skipped), "the drop card counts one supported and two to check (G11)");
+        var brought = await listed.Import.Drop(named);
+
+        CollectionAssert.AreEqual(new[] { ImportResultKind.Added, ImportResultKind.Added, ImportResultKind.Skipped }, brought.Select(file => file.Result).ToList());
+        CollectionAssert.AreEqual(new[] { "from a browser.jpg", "nameless.png" }, brought.Take(2).Select(file => file.Item!.FileName).ToList(), "two items added, stored ending .jpg and .png (F3)");
+        Assert.AreEqual("a file without an extension", brought[2].Type, "the text file skipped and named as a file without an extension (G12)");
+        var namedNotice = listed.Notices.Shown[^1];
+        Assert.AreEqual(("Added 2 · 1 skipped", "Skipped LICENSE (a file without an extension): ImageStash keeps GIF, PNG, JPG and WebP. Added “from a browser” and “nameless”."),
+            (namedNotice.Heading, namedNotice.Text));
         Assert.IsEmpty(listed.Failures);
     }
 
