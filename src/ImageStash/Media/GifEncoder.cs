@@ -56,7 +56,7 @@ public sealed class GifEncoder : IClipEncoder
     private readonly Library library;
 
     // What the library writes for the clip's file, gathered until the image is whole; null for a caller's stream.
-    private readonly GatheredWrites? gathered;
+    private readonly ClipFileWrites? gathered;
 
     // The opaque colours the image being written shows, while one palette can hold them.
     private readonly HashSet<uint> colours = [];
@@ -77,7 +77,7 @@ public sealed class GifEncoder : IClipEncoder
     private bool finished;
     private long bytesWritten;
 
-    private GifEncoder(string? path, string name, TimeSpan heldFileRetry, int width, int height, Stream output, Library library, GatheredWrites? gathered)
+    private GifEncoder(string? path, string name, TimeSpan heldFileRetry, int width, int height, Stream output, Library library, ClipFileWrites? gathered)
     {
         this.path = path;
         this.name = name;
@@ -115,7 +115,7 @@ public sealed class GifEncoder : IClipEncoder
         }
 
         // The library writes nothing before the first image, so an open clip is an empty file.
-        var gathered = new GatheredWrites(created.Value!, heldFileRetry);
+        var gathered = new ClipFileWrites(created.Value!, Action, heldFileRetry);
         var library = new Library(gathered, new Size(width, height)) { RepeatCount = 0 };
         return Outcome<GifEncoder>.Of(new GifEncoder(workPath, name, heldFileRetry, width, height, created.Value!, library, gathered));
     }
@@ -241,9 +241,12 @@ public sealed class GifEncoder : IClipEncoder
                 library.FinalizeEncoding(leaveStreamOpen: true);
                 gathered?.WriteGathered();
                 Interlocked.Exchange(ref bytesWritten, output.Position);
+                // The trailer was the last write: the file is whole, so the hash taken as it was written is the file's.
+                var durationMs = 10 * (stopCs - firstCs);
+                var asWritten = gathered is null ? null : new MediaRead(MediaFacts.Of(ImageFormat.Gif, width, height, written, durationMs), gathered.Sha256());
                 finished = true;
                 Close();
-                return Outcome<GifClip?>.Of(new GifClip(path, written, 10 * (stopCs - firstCs)));
+                return Outcome<GifClip?>.Of(new GifClip(path, written, durationMs, asWritten));
             }
             catch (Exception e)
             {
@@ -372,7 +375,7 @@ public sealed class GifEncoder : IClipEncoder
         Close();
         return e switch
         {
-            RefusedWrite refused => refused.Failure with { Subject = name },
+            RefusedClipWrite refused => refused.Failure with { Subject = name },
             OutOfMemoryException => new Failure(Action, name, "there is not enough memory to write it"),
             _ => new Failure(Action, name, HeldFileRetry.ReasonFor(e)),
         };
@@ -386,6 +389,7 @@ public sealed class GifEncoder : IClipEncoder
         if (path is not null)
         {
             output.Dispose();
+            gathered!.Dispose();
         }
     }
 
@@ -490,73 +494,12 @@ public sealed class GifEncoder : IClipEncoder
 
         return top < 0 ? new Rectangle(0, 0, 1, 1) : new Rectangle(left, top, right - left + 1, bottom - top + 1);
     }
-
-    /// <summary>
-    /// The clip's file as the library writes to it: the library's writes are gathered in memory, in a buffer kept for the
-    /// clip (R7), and <see cref="WriteGathered"/> writes them to the file in one write, run again while another program
-    /// holds the file, for the retry G35 gives a held file, so a brief hold only delays the clip; a write still refused
-    /// carries its failure out. Nothing gathered is left unwritten when a call of the encoder returns, so the file's length
-    /// is the bytes written so far, and a clip finished without Stop has nothing more to write.
-    /// </summary>
-    private sealed class GatheredWrites(FileStream file, TimeSpan heldFileRetry) : Stream
-    {
-        private readonly MemoryStream gathered = new();
-
-        public override bool CanRead => false;
-
-        public override bool CanSeek => false;
-
-        public override bool CanWrite => true;
-
-        public override long Length => throw new NotSupportedException();
-
-        public override long Position
-        {
-            get => file.Position + gathered.Length;
-            set => throw new NotSupportedException();
-        }
-
-        public override void Write(byte[] buffer, int offset, int count) => gathered.Write(buffer, offset, count);
-
-        public override void Write(ReadOnlySpan<byte> buffer) => gathered.Write(buffer);
-
-        public override void WriteByte(byte value) => gathered.WriteByte(value);
-
-        // A refused write leaves the file as it was (a write refused by a lock, observed), so it is made again at the same place.
-        public void WriteGathered()
-        {
-            if (gathered.Length == 0)
-            {
-                return;
-            }
-
-            var written = HeldFileRetry.Run(Action, file.Name, heldFileRetry, () => file.Write(gathered.GetBuffer(), 0, (int)gathered.Length));
-            gathered.SetLength(0);
-            if (!written.Succeeded)
-            {
-                throw new RefusedWrite(written.Failure);
-            }
-        }
-
-        public override void Flush()
-        {
-        }
-
-        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-
-        public override void SetLength(long value) => throw new NotSupportedException();
-    }
-
-    private sealed class RefusedWrite(Failure failure) : IOException(failure.Reason)
-    {
-        public Failure Failure { get; } = failure;
-    }
 }
 
 /// <summary>
 /// A clip written whole: its <c>.work\</c> file (null for a clip written to a caller's stream), how many frames it holds,
-/// and how long it plays, the sum of its delays.
+/// and how long it plays, the sum of its delays; and <see cref="Written"/>, the file's facts as Media's reading of it
+/// states them (<see cref="MediaDecoder.ReadFacts"/>), a clip of one image a still, with its content hash taken as its
+/// bytes were written, so the clip becomes an item without its file being read back (null for a caller's stream).
 /// </summary>
-public sealed record GifClip(string? WorkPath, int FrameCount, long DurationMs);
+public sealed record GifClip(string? WorkPath, int FrameCount, long DurationMs, MediaRead? Written);

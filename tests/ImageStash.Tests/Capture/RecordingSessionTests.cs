@@ -81,7 +81,7 @@ public sealed class RecordingSessionTests
         Assert.AreEqual(clip, saved.Value, "the clip the commit was given");
         Assert.AreEqual("Recording 2026-10-20 17.31.03", clip.Name, "Record's moment in local time, not the press's, the release's nor Stop's (F12)");
         Assert.IsTrue(recording.Stash.Folder.IsWorkFile(clip.WorkPath) && clip.WorkPath.EndsWith(".gif", StringComparison.Ordinal), clip.WorkPath);
-        Assert.AreEqual(new GifClip(clip.WorkPath, 1, 7000), clip.Clip, "one frame lasting from Record until Stop, the wait not counted in");
+        WrittenClips.AreAsRead(new GifClip(clip.WorkPath, 1, 7000, null), clip.Clip, "one frame lasting from Record until Stop, the wait not counted in");
         Assert.IsTrue(File.Exists(clip.WorkPath), "written whole before the commit");
         Assert.IsTrue(inProgress && !sampling, "the commit runs while the recording is in progress, its sampling over");
         CollectionAssert.AreEqual(new[] { "show", "record", "saving" }, calls.ToList(), "the bar names the saving from Stop until the commit has run (G35)");

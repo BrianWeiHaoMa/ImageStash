@@ -40,7 +40,7 @@ public sealed class GifEncoderTests
 
         var clip = Encode(path, frames, [0, 70, 140, 210], stopMs: 280);
 
-        Assert.AreEqual(new GifClip(path, 4, 280), clip);
+        WrittenClips.AreAsRead(new GifClip(path, 4, 280, null), clip);
         Assert.AreEqual(new MediaFacts(ImageFormat.Gif, W, H, true, 4, 280), Facts(path));
         var decoded = MediaFixtures.Frames(path);
         CollectionAssert.AreEqual(new[] { 70, 70, 70, 70 }, decoded.Select(f => f.DurationMs).ToList());
@@ -123,7 +123,7 @@ public sealed class GifEncoderTests
         CollectionAssert.AreEqual(
             new[] { (0, 0, W, H), (0, 0, 1, 1), (0, 0, 1, 1), (0, 0, 1, 1), (0, 0, 1, 1) },
             GifImages.Read(path).Images.Select(image => (image.Left, image.Top, image.Width, image.Height)).ToList());
-        Assert.AreEqual(new GifClip(path, 5, 350), clip);
+        WrittenClips.AreAsRead(new GifClip(path, 5, 350, null), clip);
         Assert.AreEqual(new MediaFacts(ImageFormat.Gif, W, H, true, 5, 350), Facts(path));
         foreach (var frame in MediaFixtures.Frames(path))
         {
@@ -292,7 +292,7 @@ public sealed class GifEncoderTests
 
         var clip = Encode(path, [Pattern(0)], [0], stopMs: 2500);
 
-        Assert.AreEqual(new GifClip(path, 1, 2500), clip);
+        WrittenClips.AreAsRead(new GifClip(path, 1, 2500, null), clip);
         CollectionAssert.AreEqual(new[] { 250 }, Delays(path));
         Assert.AreEqual(new MediaFacts(ImageFormat.Gif, W, H, false, 1, 0), Facts(path));
     }
@@ -355,7 +355,7 @@ public sealed class GifEncoderTests
             CollectionAssert.AreEqual(frames[i].Pixels, decoded[i].Pixels, $"frame {i}");
         }
 
-        Assert.AreEqual(new GifClip(path, 3, 200), clip);
+        WrittenClips.AreAsRead(new GifClip(path, 3, 200, null), clip);
         Assert.AreEqual(new MediaFacts(ImageFormat.Gif, W, H, true, 3, 200), Facts(path));
     }
 
@@ -379,7 +379,7 @@ public sealed class GifEncoderTests
         Assert.IsTrue(encoder.Append(Pattern(2), 210).Succeeded);
         var clip = encoder.Stop(280);
 
-        Assert.AreEqual(new GifClip(path, 3, 210), clip.Value);
+        WrittenClips.AreAsRead(new GifClip(path, 3, 210, null), clip.Value);
         CollectionAssert.AreEqual(new[] { 70, 70, 70 }, MediaFixtures.Frames(path).Select(f => f.DurationMs).ToList());
     }
 
@@ -486,7 +486,7 @@ public sealed class GifEncoderTests
 
         var clip = encoder.Stop(210);
 
-        Assert.AreEqual(new GifClip(null, 3, 210), clip.Value, clip.Failure?.ToString());
+        Assert.AreEqual(new GifClip(null, 3, 210, null), clip.Value, clip.Failure?.ToString());
         Assert.AreEqual(stream.Length, encoder.BytesWritten);
         Assert.IsTrue(stream.CanWrite, "the stream is the caller's and stays open");
         CollectionAssert.AreEqual(File.ReadAllBytes(path), stream.ToArray(), "one encoder path: the bytes the file got");
@@ -548,7 +548,7 @@ public sealed class GifEncoderTests
 
         var clip = encoder.Stop(140);
 
-        Assert.AreEqual(new GifClip(path, 2, 140), clip.Value);
+        WrittenClips.AreAsRead(new GifClip(path, 2, 140, null), clip.Value);
         var decoded = MediaFixtures.Frames(path);
         CollectionAssert.AreEqual(Pattern(1).Pixels, decoded[1].Pixels);
     }
@@ -598,7 +598,7 @@ public sealed class GifEncoderTests
         await released;
 
         Assert.IsTrue(appended.Succeeded, appended.Failure?.ToString());
-        Assert.AreEqual(new GifClip(path, 2, 140), stopped.Value, stopped.Failure?.ToString());
+        WrittenClips.AreAsRead(new GifClip(path, 2, 140, null), stopped.Value, stopped.Failure?.ToString());
         Assert.AreEqual(new MediaFacts(ImageFormat.Gif, 256, 256, true, 2, 140), Facts(path));
     }
 

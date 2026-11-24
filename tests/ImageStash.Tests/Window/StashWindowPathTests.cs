@@ -392,12 +392,16 @@ public sealed class StashWindowPathTests
         Assert.AreEqual(usesBefore + 1, listed.Uses(), "one use recorded (G10)");
         Assert.IsEmpty(listed.Failures);
 
-        // (2) A clip's card, the clip recorded with Also copy on, in a stash of its own on the recorder's stepped clock until
-        // the walk records its clip in this stash: its line leads with the clip's length, and it offers Trim (G16).
+        // (3) A clip recorded with Also copy on, in a stash of its own on the recorder's stepped clock until the walk records
+        // its clip in this stash, which shows All: when the clipboard is written, the store answers the clip's item with
+        // its file in place, and the listing the capture's end makes has not yet read the stash (G15, G28, R9).
         using var recording = await ListedStash.OpenRecording();
         recording.Selection.Answer = new SelectedRegion(RecordingScreen.Primary, new Avalonia.PixelRect(100, 50, 32, 24));
         MediaFrame[] pictures = [recording.Screen.Paint(RecordingScreen.Primary, seed: 1), recording.Screen.Paint(RecordingScreen.Primary, seed: 2)];
         recording.Screen.EachGrab = index => Outcome<MediaFrame>.Of(pictures[index % 2]);
+        await recording.Listing.ShowScope(Scope.All);
+        var atTheWrite = "";
+        recording.Clipboard.AtWrite = async () => atTheWrite = await CaptureEnds.AtTheWrite(recording);
         var acting = recording.RecordClip.StartOrStop();
         await recording.RecordFromTheWait();
         // Four samples, at 0, 70, 140 and 210 ms, then Stop at 280 ms.
@@ -406,6 +410,11 @@ public sealed class StashWindowPathTests
         recording.Frame.PressStop();
         await acting.WaitAsync(TimeSpan.FromSeconds(10));
         var clip = (await recording.Stash.All()).Single();
+        Assert.AreEqual("hide; in place True; listed False; 0 notifications", atTheWrite, "copied before the stash is listed again and the window is back");
+        // The item's recorded facts and hash are what Media reads from the saved file (G12, G19).
+        CaptureEnds.CommittedAsRead(recording.Stash, clip, "committed from what the recorder wrote");
+
+        // (2) That clip's card: its line leads with the clip's length, and it offers Trim (G16).
         var clipCard = recording.CaptureNotification.WordsOf(recording.Notifications.Shown.Single())!;
         await Handing.Eventually(() => clipCard.Size is not null);
         Assert.AreEqual(("Recording stashed", $"0.3 s · On the clipboard · Ctrl+V pastes it · {FileSize.Words(new FileInfo(clip.FilePath).Length)}", "Trim"),

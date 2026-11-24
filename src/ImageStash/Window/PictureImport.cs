@@ -71,6 +71,14 @@ public sealed class PictureImport(TimeSpan heldFileRetry, Action<Failure> named)
         await Commit(store, name, workPath, await Task.Run(() => MediaDecoder.ReadFacts(workPath, name, heldFileRetry)), tags: []);
 
     /// <summary>
+    /// Saves the clip a recording's encoder wrote whole at <paramref name="workPath"/>, as <see cref="SaveStaged"/> saves
+    /// a picture, but with <paramref name="written"/>, the facts and the content hash its encoder took as it wrote it
+    /// (<see cref="GifClip.Written"/>), so the file is not opened again and every frame decoded before it becomes an item.
+    /// </summary>
+    public Task<ImportedFile> SaveWritten(StashStore store, string name, string workPath, MediaRead written) =>
+        Commit(store, name, workPath, Outcome<MediaRead>.Of(written), tags: []);
+
+    /// <summary>
     /// The staged picture's facts committed through Store's import commit, getting <paramref name="tags"/> in its own
     /// insert; or, when they could not be read, its staged copy discarded and the picture unread.
     /// </summary>

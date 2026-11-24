@@ -58,6 +58,9 @@ public sealed class RecordClipTests
         using var counter = CounterWindow.Show(CounterPlace);
         var screen = new WindowsScreen();
         await counter.OnScreen(screen);
+        // All, which lists the clip once the stash is read again.
+        await TrayDesktop.Get(() => desk.Shown.Listing.ShowScope(Scope.All));
+        using var whenListed = TrayDesktop.Get(() => new ClipboardWhenListed(desk.Shown.Listing));
 
         var recording = desk.Record();
         await desk.OverlayInFront();
@@ -140,6 +143,7 @@ public sealed class RecordClipTests
         Assert.IsEmpty(notificationSeen, $"nothing of the notification in any frame (G15, S4): {string.Join("; ", notificationSeen.Take(3).Select(found => $"frame {found.index}: {string.Join(", ", found.Item2.Take(3))}"))}");
         var read = TestClipboard.Read();
         CollectionAssert.AreEqual(new[] { item.FilePath }, read.Files.ToList(), "the file (G8)");
+        CollectionAssert.AreEqual(new[] { item.FilePath }, TrayDesktop.Get(() => whenListed.Files)?.ToList(), "on the clipboard already when the window first listed it (G15, R9)");
         Assert.IsNull(read.Png, "an animation goes as a file only (G8)");
         Assert.IsNull(read.DibV5);
         Assert.AreEqual(0L, desk.Shown.Uses(), "the capture records no use (G10)");

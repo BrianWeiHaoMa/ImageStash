@@ -12,9 +12,10 @@ namespace ImageStash.Tests.Window;
 /// <summary>
 /// Take a screenshot over a real stash, a preset screen and a preset region (G14): the region's frozen pixels one PNG
 /// item named at the release in local time (F12, F3), saved even when equal to an item, with no tag and no use, the
-/// window's scope, query and selection left as they were (G10, G11); the window hidden for the capture and back only
-/// once the item is listed (G3); then, while Also copy is on, the item on the clipboard as a copy puts it, recording no
-/// use, under the copies' one gate (G8, G10); then the capture notification, saying on the clipboard only when it is
+/// window's scope, query and selection left as they were (G10, G11); the window hidden for the capture; while Also copy
+/// is on, the item on the clipboard as a copy puts it as soon as its file is in place, before the stash is listed again,
+/// recording no use, under the copies' one gate (G8, G10); the window back only once the item is listed (G3); then the
+/// capture notification, saying on the clipboard only when it is
 /// (G16); a cancel silent (E3); a refused grab, a stash not open, a commit refused before it and each step after it
 /// refused named above the tray, nothing announced before the file is in place, a kill's leftovers finished or undone at
 /// the next start (G35, R9, G28); a second press while the overlay is up doing nothing, and once it is released refused by
@@ -51,7 +52,7 @@ public sealed class ScreenshotTests
         CollectionAssert.AreEqual(RecordingScreen.Cut(painted, Region).Pixels, MediaFixtures.FirstFrame(item.FilePath).Pixels, "the frozen pixels of the region (G14, F3)");
         Assert.IsEmpty(item.Tags);
         Assert.AreEqual(0L, taking.Uses(), "neither the capture nor its copy is a use (G10)");
-        Assert.AreEqual("hide, restore Flyout; placed True; 0 notifications", atTheWrite, "copied once the window is back and the file in place, before the notification (G14, G3, R9)");
+        Assert.AreEqual("hide; placed True; 0 notifications", atTheWrite, "copied as soon as the file is in place, before the window is back and the notification (G14, G28, R9)");
         var content = taking.Clipboard.Written.Single().Content;
         CollectionAssert.AreEqual(new[] { item.FilePath }, content.FilePaths.ToList());
         CollectionAssert.AreEqual(File.ReadAllBytes(item.FilePath), content.Png, "its PNG bytes, as a copy's (G8)");
@@ -75,13 +76,32 @@ public sealed class ScreenshotTests
     {
         using var taking = await Taking();
         await taking.Listing.ShowScope(Scope.All);
-        var listedAtTheRestore = -1;
-        var hiding = new CaptureHiding(() => CaptureHide.Pinned, _ => listedAtTheRestore = taking.Listing.Items.Count);
+        var atTheRestore = "";
+        var hiding = new CaptureHiding(() => CaptureHide.Pinned, _ => atTheRestore = $"listed {taking.Listing.Items.Count}; copied {taking.Clipboard.Written.Count}; {taking.Notifications.Shown.Count} notifications");
         var act = new Screenshot(taking.Listing, taking.Notifications, taking.CaptureNotification, taking.Handoff, taking.Capture, taking.Settings, hiding, null!, TestStash.ShortRetry);
 
         await act.Take();
 
-        Assert.AreEqual(1, listedAtTheRestore, "not at the release, before the item is listed (G3)");
+        Assert.AreEqual("listed 1; copied 1; 0 notifications", atTheRestore, "not at the release, before the item is copied and listed, and before the notification (G3, G14)");
+        Assert.HasCount(1, taking.Notifications.Shown);
+    }
+
+    [TestMethod]
+    public async Task TheCopyIsWrittenOnceTheFileIsInPlaceBeforeTheStashIsListedAgain()
+    {
+        using var taking = await Taking();
+        await taking.Stash.Import("older");
+        await taking.Listing.ShowScope(Scope.All);
+        var atTheWrite = "";
+        taking.Clipboard.AtWrite = async () => atTheWrite = await CaptureEnds.AtTheWrite(taking);
+
+        await taking.Screenshot.Take();
+
+        Assert.AreEqual("hide; in place True; listed False; 0 notifications", atTheWrite,
+            "the item committed with its file in place, the clipboard written before All is read again to list it, the window still away (G14, G28, G3)");
+        Assert.HasCount(2, taking.Listing.Items, "then listed");
+        CollectionAssert.AreEqual(new[] { "hide", "restore Flyout" }, taking.WindowSteps, "then the window back");
+        Assert.HasCount(1, taking.Notifications.Shown);
     }
 
     [TestMethod]
@@ -342,6 +362,27 @@ public sealed class ScreenshotTests
     }
 
     /// <summary>An open stash in local time five and a half hours ahead, its screen painted and its region the one the check drags.</summary>
+    [TestMethod]
+    public async Task TheCopyOfAnItemCommittedAndNotYetListedGoesWhileAnotherProgramHoldsTheStore()
+    {
+        using var taking = await Taking();
+        var work = taking.Stash.Store!.AllocateWorkPath(".png").Value!;
+        File.WriteAllBytes(work, MediaFixtures.DistinctPng(seed: 7));
+        var saved = await new PictureImport(TestStash.ShortRetry, taking.Failures.Add).SaveStaged(taking.Stash.Store!, "Screenshot 2026-10-16 17.30.00", work);
+        var item = saved.Item!;
+        Assert.IsFalse(taking.Listing.Items.Any(each => each.Id == item.Id), "committed, not yet listed");
+
+        Outcome copied;
+        using (taking.Stash.HoldStore())
+        {
+            copied = await taking.Handoff.CopyCapture(null!, item);
+        }
+
+        Assert.IsTrue(copied.Succeeded, $"the item as its commit answered it, unchanged since (G8): {copied.Failure}");
+        CollectionAssert.AreEqual(new[] { item.FilePath }, taking.Clipboard.Written.Single().Content.FilePaths.ToList());
+        Assert.AreEqual(0L, taking.Uses(), "a capture's copy is no use (G10)");
+    }
+
     private static async Task<ListedStash> Taking()
     {
         var taking = await ListedStash.Open(SetClock.Ahead);

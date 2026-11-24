@@ -54,6 +54,9 @@ public sealed class ScreenshotTests
         Assert.AreEqual(desk.NotificationHandle, GetAncestor(WindowFromPoint(new NativePoint(standing.Center.X, standing.Center.Y)), GaRoot), "and over it");
         Assert.AreEqual(desk.Chat.Window, FrontWindow.GetForegroundWindow(), "the chat in front at the press");
         var displays = new WindowsScreen().Displays().Count;
+        // All, which lists the screenshot once the stash is read again.
+        await TrayDesktop.Get(() => desk.Shown.Listing.ShowScope(Scope.All));
+        using var whenListed = TrayDesktop.Get(() => new ClipboardWhenListed(desk.Shown.Listing));
 
         var clock = Stopwatch.StartNew();
         TestHotKeys.Press(TakeScreenshot);
@@ -72,6 +75,7 @@ public sealed class ScreenshotTests
         Assert.IsEmpty(differences, $"the pattern's pixels, nothing of the notification standing over them (G14, S4): {string.Join("; ", differences.Take(5))}");
         var read = TestClipboard.Read();
         CollectionAssert.AreEqual(new[] { item.FilePath }, read.Files.ToList(), "the file (G8)");
+        CollectionAssert.AreEqual(new[] { item.FilePath }, TrayDesktop.Get(() => whenListed.Files)?.ToList(), "on the clipboard already when the window first listed it (G14, R9)");
         CollectionAssert.AreEqual(File.ReadAllBytes(item.FilePath), read.Png, "its PNG bytes");
         var rows = read.DibV5![124..];
         Assert.IsTrue(Enumerable.Range(0, region.Width * region.Height).All(pixel => rows[pixel * 4 + 3] == 255), "an opaque CF_DIBV5: every alpha byte 255");

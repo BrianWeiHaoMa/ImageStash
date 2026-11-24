@@ -102,7 +102,7 @@ public sealed class RecordingClipEncoder : IClipEncoder
     {
         StoppedAt = atMs;
         var appended = Appends;
-        return StopAnswer ?? Outcome<GifClip?>.Of(appended.Count == 0 ? null : new GifClip(Opened!.Value.WorkPath, appended.Count, atMs - appended[0].AtMs));
+        return StopAnswer ?? Outcome<GifClip?>.Of(appended.Count == 0 ? null : new GifClip(Opened!.Value.WorkPath, appended.Count, atMs - appended[0].AtMs, Written: null));
     }
 
     public void Cancel() => Cancelled = true;

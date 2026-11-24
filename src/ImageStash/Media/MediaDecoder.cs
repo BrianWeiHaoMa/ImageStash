@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using ImageStash.Files;
 using SkiaSharp;
 
@@ -84,7 +83,7 @@ public sealed class MediaDecoder : IDisposable
     public static bool IsUnreadable(Failure failure) => failure.Reason == UnreadableReason;
 
     /// <summary>The content hash (Composition: Media): the SHA-256 of the bytes from <paramref name="stream"/>'s position to its end, read through it. A read error throws.</summary>
-    public static byte[] Sha256Of(Stream stream) => SHA256.HashData(stream);
+    public static byte[] Sha256Of(Stream stream) => ContentHash.Of(stream);
 
     /// <summary>
     /// The facts of the file at <paramref name="path"/> and the SHA-256 of its bytes, from one open (G12). Every frame
@@ -140,7 +139,7 @@ public sealed class MediaDecoder : IDisposable
             duration += decoder.Duration(frame);
         }
 
-        return Outcome<MediaFacts>.Of(new MediaFacts(decoder.Format, decoder.Width, decoder.Height, decoder.FrameCount > 1, decoder.FrameCount, duration));
+        return Outcome<MediaFacts>.Of(MediaFacts.Of(decoder.Format, decoder.Width, decoder.Height, decoder.FrameCount, duration));
     }
 
     /// <summary>Opens the file at <paramref name="path"/> for its frames; failures name <paramref name="name"/>.</summary>

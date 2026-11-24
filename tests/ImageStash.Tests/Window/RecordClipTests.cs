@@ -14,9 +14,10 @@ namespace ImageStash.Tests.Window;
 /// frame and bar's stand-in, Media's GIF encoder and a clock the check steps (G15): the released region waiting until
 /// Record, the bar's or a second press of the act's, with nothing written; the clip one GIF item named at Record in
 /// local time, one image per sample, saved with no tag and no use, the window's scope, query and selection kept (F12,
-/// F3, G10, G11); the window hidden before anything is grabbed and back only once the item is listed and no capture is
-/// in progress any more, a screenshot during the wait or the recording included (G3); then, while Also copy is on, the
-/// item on the clipboard as its facts decide, recording no use (G8, G10); then the capture notification with the clip's
+/// F3, G10, G11); the window hidden before anything is grabbed; while Also copy is on, the item on the clipboard as its
+/// facts decide as soon as its file is in place, recording no use (G8, G10); the window back only once the item is listed
+/// and no capture is in progress any more, a screenshot during the wait or the recording included (G3); then the
+/// capture notification with the clip's
 /// length from Record, saying on the clipboard only when it is (G16); the tray told of the wait and the sampling (G15),
 /// its Record a clip beginning the act, reading Start recording starting it and reading Stop recording stopping it
 /// (G34); a press during the wait starting it and one while it samples stopping it, a screenshot's overlay up or not,
@@ -32,12 +33,10 @@ public sealed class RecordClipTests
 
     private const string AMinuteLater = "Recording 2026-10-20 17.31.00";
 
-    private static readonly PixelRect Region = new(100, 50, 32, 24);
-
     [TestMethod]
     public async Task TheRegionWaitsForRecordAndTheClipIsOneGifItemNamedAtRecordThenCopiedAsAFileThenAnnouncedWithItsLength()
     {
-        using var recording = await Recording();
+        using var recording = await ClipRecording.Open();
         var older = await recording.Stash.Import("older");
         await recording.Listing.ShowScope(Scope.Favorites);
         await recording.Listing.SetQuery("older");
@@ -81,7 +80,7 @@ public sealed class RecordClipTests
         Assert.IsEmpty(item.Tags);
         Assert.AreEqual(0L, recording.Uses(), "neither the capture nor its copy is a use (G10)");
         Assert.AreEqual("hide", atTheFirstGrab, "hidden before anything is grabbed (G3)");
-        Assert.AreEqual("hide, restore Flyout; placed True; 0 notifications", atTheWrite, "copied once the window is back and the file in place, before the notification (G15, G3, R9)");
+        Assert.AreEqual("hide; placed True; 0 notifications", atTheWrite, "copied as soon as the file is in place, before the window is back and the notification (G15, G28, R9)");
         var content = recording.Clipboard.Written.Single().Content;
         CollectionAssert.AreEqual(new[] { item.FilePath }, content.FilePaths.ToList());
         Assert.IsNull(content.Png, "an animation goes as a file only (G8)");
@@ -104,9 +103,9 @@ public sealed class RecordClipTests
     [TestMethod]
     public async Task AClipOfOneImageIsCopiedAsAStillAndAnnouncedWithTheLengthItWasRecordedFor()
     {
-        using var recording = await Recording();
+        using var recording = await ClipRecording.Open();
 
-        await Record(recording, untilMs: 0);
+        await ClipRecording.Record(recording, untilMs: 0);
 
         var item = (await recording.Stash.All()).Single();
         Assert.AreEqual(new MediaFacts(ImageFormat.Gif, 32, 24, false, 1, 0), item.Facts, "one image is a still to Media's decoder");
@@ -122,10 +121,10 @@ public sealed class RecordClipTests
     [TestMethod]
     public async Task WithAlsoCopyOffNothingIsWrittenAndTheNotificationSaysInTheStashOnly()
     {
-        using var recording = await Recording();
+        using var recording = await ClipRecording.Open();
         recording.Settings.Change(settings => settings with { AlsoCopyCapture = false });
 
-        await Record(recording);
+        await ClipRecording.Record(recording);
 
         Assert.AreEqual(0, recording.Clipboard.Begun, "the clipboard untouched (G15)");
         Assert.AreEqual($"Recording stashed: “{Clip}”. 0.3 s.", recording.Notifications.Shown.Single().Text, "G16: on the clipboard only \"when it is\"");
@@ -135,10 +134,10 @@ public sealed class RecordClipTests
     [TestMethod]
     public async Task ACopyRefusedIsNamedBesideTheCaptureNotificationWhichSaysInTheStashOnly()
     {
-        using var recording = await Recording();
+        using var recording = await ClipRecording.Open();
         recording.Clipboard.FailNext = RecordingClipboard.Held;
 
-        await Record(recording);
+        await ClipRecording.Record(recording);
 
         CollectionAssert.AreEqual(
             new[] { $"Copy failed: {Clip}, {HeldClipboard.Reason}", $"Recording stashed: “{Clip}”. 0.3 s." },
@@ -151,7 +150,7 @@ public sealed class RecordClipTests
     [TestMethod]
     public async Task AMaximumLengthBelowASecondIsRefusedByNameBeforeAnythingIsHiddenOrGrabbed()
     {
-        using var recording = await Recording();
+        using var recording = await ClipRecording.Open();
         recording.Settings.Change(settings => settings with { RecordingMaxSeconds = 0 });
 
         await recording.RecordClip.StartOrStop();
@@ -166,7 +165,7 @@ public sealed class RecordClipTests
     [TestMethod]
     public async Task NothingIsGrabbedOrHiddenWhileTheStashIsStillOpeningOrDidNotOpen()
     {
-        using var recording = await Recording();
+        using var recording = await ClipRecording.Open();
         var opening = new Listing(_ => { });
         var act = new RecordClip(opening, recording.Notifications, new CaptureNotification(recording.Notifications, opening, recording.Handoff, new NoWindowShown(), TestStash.ShortRetry),
             recording.Handoff, recording.Capture, recording.Settings, recording.Hiding, null!, _ => { }, TestStash.ShortRetry);
@@ -185,7 +184,7 @@ public sealed class RecordClipTests
     [TestMethod]
     public async Task ASecondPressWhileTheRegionWaitsStartsItAThirdWhileItSamplesStopsItAndNeitherDoesAnythingElse()
     {
-        using var recording = await Recording();
+        using var recording = await ClipRecording.Open();
 
         var acting = recording.RecordClip.StartOrStop();
         await recording.WhileWaiting();
@@ -210,7 +209,7 @@ public sealed class RecordClipTests
     [TestMethod]
     public async Task CancelWhileTheRegionWaitsAddsNothingSaysNothingWritesNothingAndBringsTheWindowBack()
     {
-        using var recording = await Recording();
+        using var recording = await ClipRecording.Open();
 
         var acting = recording.RecordClip.StartOrStop();
         await recording.WhileWaiting();
@@ -230,7 +229,7 @@ public sealed class RecordClipTests
     [TestMethod]
     public async Task AFrameThePlatformRefusesForTheWaitIsNamedOnTheScreenAndAddsNothing()
     {
-        using var recording = await Recording();
+        using var recording = await ClipRecording.Open();
         recording.Frame.ShowAnswer = new Failure("Record a clip", "ImageStash recording", "Windows would not show the frame around the region");
 
         await recording.RecordClip.StartOrStop();
@@ -245,7 +244,7 @@ public sealed class RecordClipTests
     [TestMethod]
     public async Task TheCapAndThePointerAreTheSettingsReadAtThePressNotAtRecord()
     {
-        using var recording = await Recording();
+        using var recording = await ClipRecording.Open();
         recording.Settings.Change(settings => settings with { RecordingMaxSeconds = 1, RecordPointer = false });
 
         var acting = recording.RecordClip.StartOrStop();
@@ -269,7 +268,7 @@ public sealed class RecordClipTests
     [TestMethod]
     public async Task TheTraysRecordAClipBeginsTheRecordingReadsStartRecordingWhileItWaitsAndStopRecordingWhileItSamplesEachChosenInTurn()
     {
-        using var recording = await Recording();
+        using var recording = await ClipRecording.Open();
         var tray = new RecordingTray();
         RecordClip? act = null;
         var presses = new List<Task>();
@@ -304,7 +303,7 @@ public sealed class RecordClipTests
     [TestMethod]
     public async Task APressWhileTheOverlayIsUpOrTheClipIsSavingSaysNothingAndStartsNothing()
     {
-        using var recording = await Recording();
+        using var recording = await ClipRecording.Open();
         var releasing = new TaskCompletionSource();
         recording.Selection.Gate = releasing.Task;
 
@@ -336,7 +335,7 @@ public sealed class RecordClipTests
     public async Task APressWhileAScreenshotIsBeingSavedAfterItsReleaseIsRefusedByName()
     {
         // The store's retry outlasts the hold, so the screenshot's commit waits on it however slowly the press comes.
-        using var recording = await Recording(storeRetry: TimeSpan.FromSeconds(30));
+        using var recording = await ClipRecording.Open(storeRetry: TimeSpan.FromSeconds(30));
         Task screenshot;
         using (recording.Stash.HoldStore())
         {
@@ -358,7 +357,7 @@ public sealed class RecordClipTests
     [TestMethod]
     public async Task AScreenshotDuringTheWaitIsAllowedAndTheWindowComesBackOnlyOnceTheWaitIsCancelled()
     {
-        using var recording = await Recording();
+        using var recording = await ClipRecording.Open();
 
         var acting = recording.RecordClip.StartOrStop();
         await recording.WhileWaiting();
@@ -380,7 +379,7 @@ public sealed class RecordClipTests
     [TestMethod]
     public async Task APressDuringTheWaitWithAScreenshotsOverlayUpStartsTheRecording()
     {
-        using var recording = await Recording();
+        using var recording = await ClipRecording.Open();
 
         var acting = recording.RecordClip.StartOrStop();
         await recording.WhileWaiting();
@@ -407,7 +406,7 @@ public sealed class RecordClipTests
     [TestMethod]
     public async Task AScreenshotAfterASummonDuringTheRecordingHidesTheWindowAgainUntilTheRecordingEnds()
     {
-        using var recording = await Recording();
+        using var recording = await ClipRecording.Open();
 
         var acting = recording.RecordClip.StartOrStop();
         await recording.RecordFromTheWait();
@@ -430,7 +429,7 @@ public sealed class RecordClipTests
     [TestMethod]
     public async Task ARecordingStoppedWhileAScreenshotsOverlayIsUpLeavesTheWindowAwayUntilTheScreenshotEnds()
     {
-        using var recording = await Recording();
+        using var recording = await ClipRecording.Open();
 
         var acting = recording.RecordClip.StartOrStop();
         await recording.RecordFromTheWait();
@@ -456,7 +455,7 @@ public sealed class RecordClipTests
     [TestMethod]
     public async Task CancelAddsNothingSaysNothingLeavesNoClipAndBringsTheWindowBack()
     {
-        using var recording = await Recording();
+        using var recording = await ClipRecording.Open();
 
         var acting = recording.RecordClip.StartOrStop();
         await recording.RecordFromTheWait();
@@ -475,7 +474,7 @@ public sealed class RecordClipTests
     [TestMethod]
     public async Task AGrabTheScreenRefusesMidClipIsNamedUnchangedAndAddsNothing()
     {
-        using var recording = await Recording();
+        using var recording = await ClipRecording.Open();
         var refusal = new Failure("Grab the screen", "the screen area at 100, 50 (32 × 24)", "access is denied");
         var pictures = recording.Screen.EachGrab!;
         // Grab 0 is the overlay's; the clip's samples follow, and its second is refused.
@@ -498,7 +497,7 @@ public sealed class RecordClipTests
     public async Task AnEncoderFailingMidClipIsNamedOnTheClipAndAddsNothing()
     {
         var encoder = new RecordingClipEncoder { AppendAnswer = index => index == 1 ? new Failure("Write the clip", "Recording", "the disk is full") : Outcome.Done };
-        using var recording = await Recording(encoder.Opener);
+        using var recording = await ClipRecording.Open(encoder.Opener);
 
         var acting = recording.RecordClip.StartOrStop();
         await recording.RecordFromTheWait();
@@ -513,11 +512,11 @@ public sealed class RecordClipTests
     [TestMethod]
     public async Task AStoreAnotherProgramHoldsThroughTheCommitIsNamedAndLeavesNothing()
     {
-        using var recording = await Recording();
+        using var recording = await ClipRecording.Open();
 
         using (recording.Stash.HoldStore())
         {
-            await Record(recording);
+            await ClipRecording.Record(recording);
         }
 
         var notification = recording.Notifications.Shown.Single();
@@ -533,14 +532,14 @@ public sealed class RecordClipTests
     [TestMethod]
     public async Task ARenameIntoTheRootRefusedIsNamedNotCopiedNotAnnouncedAndTheNextStartRemovesTheRow()
     {
-        using var recording = await Recording();
+        using var recording = await ClipRecording.Open();
         FileStream? heldClip;
         Task recorded;
         // The store held until the finished clip is held too, with read sharing, so its facts are read and the row is
         // committed once the store is let go, and only its rename into the root is refused.
         using (recording.Stash.HoldStore())
         {
-            recorded = Record(recording);
+            recorded = ClipRecording.Record(recording);
             heldClip = await recording.Stash.HoldTheWorkFileOnceWritten();
         }
 
@@ -561,29 +560,5 @@ public sealed class RecordClipTests
         Assert.IsEmpty(await recording.Stash.All(), "absent, never half there (G28)");
         Assert.IsEmpty(recording.Stash.WorkFiles());
         Assert.IsEmpty(recording.Stash.RootFiles());
-    }
-
-    /// <summary>
-    /// An open stash whose captures run on a clock the check steps, reading local time five and a half hours ahead; the
-    /// region the check drags; the display's picture different at every grab, as a live screen's is.
-    /// </summary>
-    private static async Task<ListedStash> Recording(ClipOpener? opener = null, TimeSpan? storeRetry = null)
-    {
-        var recording = await ListedStash.OpenRecording(opener, storeRetry);
-        recording.Selection.Answer = new SelectedRegion(RecordingScreen.Primary, Region);
-        MediaFrame[] pictures = [recording.Screen.Paint(RecordingScreen.Primary, seed: 1), recording.Screen.Paint(RecordingScreen.Primary, seed: 2)];
-        recording.Screen.EachGrab = index => Outcome<MediaFrame>.Of(pictures[index % 2]);
-        return recording;
-    }
-
-    /// <summary>One recording through the act: Record pressed on the waiting region, a sample at each tick up to <paramref name="untilMs"/>, then Stop 70 ms after the last.</summary>
-    private static async Task Record(ListedStash recording, long untilMs = 210)
-    {
-        var acting = recording.RecordClip.StartOrStop();
-        await recording.RecordFromTheWait();
-        recording.StepRecording(untilMs);
-        recording.Stepped!.Pass(TimeSpan.FromMilliseconds(70));
-        recording.Frame.PressStop();
-        await acting.WaitAsync(TimeSpan.FromSeconds(10));
     }
 }

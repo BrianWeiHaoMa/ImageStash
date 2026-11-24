@@ -34,4 +34,13 @@ public static class ImageFormatExtensions
 /// What Media reads from a picture file: its format, its size in pixels, whether it is animated, how many frames it
 /// has (one for a still), and the sum of its frame durations in milliseconds (0 for a still).
 /// </summary>
-public sealed record MediaFacts(ImageFormat Format, int Width, int Height, bool Animated, int FrameCount, long DurationMs);
+public sealed record MediaFacts(ImageFormat Format, int Width, int Height, bool Animated, int FrameCount, long DurationMs)
+{
+    /// <summary>
+    /// The facts of a picture of <paramref name="frameCount"/> frames lasting <paramref name="durationMs"/>, the sum of
+    /// their durations, as Media states them whoever counted the frames, its decoder or its encoder: animated with more
+    /// than one frame; a still, of one, with no length.
+    /// </summary>
+    public static MediaFacts Of(ImageFormat format, int width, int height, int frameCount, long durationMs) =>
+        new(format, width, height, frameCount > 1, frameCount, frameCount > 1 ? durationMs : 0);
+}

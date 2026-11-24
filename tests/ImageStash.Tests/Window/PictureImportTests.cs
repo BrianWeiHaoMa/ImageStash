@@ -180,15 +180,19 @@ public sealed class PictureImportTests
     [TestMethod]
     public void TheCapturesThatWriteMediasOwnFileAreTheOnlyCallersOfTheWrittenPicturesSave()
     {
-        var callers = ProductCalls.Methods()
-            .Where(method => ProductCalls.CalledMethods(method).Any(called => called.DeclaringType == typeof(PictureImport) && called.Name == nameof(PictureImport.SaveStaged)))
-            .Select(method => ProductCalls.Outermost(method.DeclaringType!).FullName)
-            .Distinct()
-            .ToList();
-
-        // Nothing is re-encoded there, so only a file Media wrote itself, a screenshot's PNG or a recording's GIF, may come in that way.
-        CollectionAssert.AreEquivalent(new[] { "ImageStash.Window.Screenshot", "ImageStash.Window.RecordClip" }, callers);
+        // Nothing is re-encoded there, so only a file Media wrote itself, a screenshot's PNG or a recording's GIF, may come
+        // in that way: through the capture's end, which the two captures alone call.
+        CollectionAssert.AreEquivalent(new[] { "ImageStash.Window.CaptureEnd" }, Callers(typeof(PictureImport), nameof(PictureImport.SaveStaged)));
+        CollectionAssert.AreEquivalent(new[] { "ImageStash.Window.CaptureEnd" }, Callers(typeof(PictureImport), nameof(PictureImport.SaveWritten)));
+        CollectionAssert.AreEquivalent(new[] { "ImageStash.Window.Screenshot", "ImageStash.Window.RecordClip" }, Callers(typeof(CaptureEnd), nameof(CaptureEnd.Save)));
     }
+
+    /// <summary>The product types whose code calls <paramref name="type"/>'s method <paramref name="name"/>, each named by its outermost type.</summary>
+    private static List<string> Callers(Type type, string name) => ProductCalls.Methods()
+        .Where(method => ProductCalls.CalledMethods(method).Any(called => called.DeclaringType == type && called.Name == name))
+        .Select(method => ProductCalls.Outermost(method.DeclaringType!).FullName!)
+        .Distinct()
+        .ToList();
 
     /// <summary>A stream that hands over its first bytes, then runs <paramref name="beforeBreaking"/> and breaks.</summary>
     private sealed class BreakingStream(Action beforeBreaking) : MemoryStream(MediaFixtures.Bytes("transparent.png"))

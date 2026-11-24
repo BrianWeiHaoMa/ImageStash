@@ -46,7 +46,7 @@ public static class PictureHeader
                 // F3: an animated PNG is handled as a still, as the decoder handles it.
                 var frames = format == ImageFormat.Png ? 1 : Math.Max(1, codec.FrameCount);
                 var durations = frames > 1 ? codec.FrameInfo.Take(frames).Sum(frame => (long)frame.Duration) : 0;
-                facts = new MediaFacts(format, width, height, frames > 1, frames, durations);
+                facts = MediaFacts.Of(format, width, height, frames, durations);
             }
         }
         catch (Exception)

@@ -35,7 +35,7 @@ public sealed class RecorderEndingTests
         var ended = await recording.Ended();
 
         Assert.IsTrue(ended.Succeeded, ended.Failure?.Sentence);
-        Assert.AreEqual(new GifClip(path, 8, 500), ended.Value, "samples at 0, 70, … 490, the clip ending at the cap (G15, G32)");
+        WrittenClips.AreAsRead(new GifClip(path, 8, 500, null), ended.Value, "samples at 0, 70, … 490, the clip ending at the cap (G15, G32)");
         Assert.IsFalse(recording.Recorder.Sampling);
         Assert.AreEqual(500, recording.Recorder.ElapsedMs, "frozen at the end");
         Assert.HasCount(8, recording.Screen.Grabs, "no grab at or after the cap");
@@ -103,7 +103,7 @@ public sealed class RecorderEndingTests
         var ended = await recording.Ended();
 
         Assert.IsTrue(ended.Succeeded, ended.Failure?.Sentence);
-        Assert.AreEqual(new GifClip(path, 2, 100), ended.Value);
+        WrittenClips.AreAsRead(new GifClip(path, 2, 100, null), ended.Value);
         CollectionAssert.AreEqual(new[] { 70, 30 }, MediaFixtures.Frames(path).Select(f => f.DurationMs).ToList());
     }
 
@@ -164,7 +164,7 @@ public sealed class RecorderEndingTests
         var ended = await recording.Ended();
 
         Assert.IsTrue(ended.Succeeded, ended.Failure?.Sentence);
-        Assert.AreEqual(new GifClip(path, 1, 10), ended.Value, "the grab started at 0, before Stop at 10");
+        WrittenClips.AreAsRead(new GifClip(path, 1, 10, null), ended.Value, "the grab started at 0, before Stop at 10");
         Assert.AreEqual(1, GifImages.Read(path).Images.Single().DelayCs);
     }
 

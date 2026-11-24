@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using ImageStash.Capture;
-using ImageStash.Media;
 using ImageStash.Store;
 
 namespace ImageStash.Window;
@@ -12,12 +11,12 @@ namespace ImageStash.Window;
 /// no capture is in progress any more (G3); the region selected over the frozen displays, waiting under the frame and the
 /// bar until Record and then recorded live (the capture session's); the clip saved as one GIF item with the auto name of
 /// its start, Record (F12, F3), through the import commit inside the capture's span, so a kill leaves it absent or
-/// complete (G28), even when its bytes equal an item's and with no tag, the window's scope, query and selection left as
-/// the listing's refresh keeps them (G10, G11); the window back as it was; then, while Also copy is on, the item on the
-/// clipboard as a copy puts it, recording no use (G8, G10); then the capture notification above the tray with the clip's
-/// length, saying it is on the clipboard only when it was put there (G16). While the region waits, the tray's entry
-/// reads Start recording; while the recording samples, the icon carries its red dot and the entry reads Stop recording,
-/// through <c>recording</c> (G15, G34). The bar names the record shortcut only while a press of it would act, read as
+/// complete (G28), even when its bytes equal an item's and with no tag; then, while Also copy is on, the item on the
+/// clipboard as a copy puts it, recording no use (G8, G10); then the stash listed again, the window's scope, query and
+/// selection kept (G10, G11); the window back as it was; then the capture notification above the tray with the clip's
+/// length, saying it is on the clipboard only when it was put there (G16), in that order (<see cref="CaptureEnd"/>).
+/// While the region waits, the tray's entry reads Start recording; while the recording samples, the icon carries its red
+/// dot and the entry reads Stop recording, through <c>recording</c> (G15, G34). The bar names the record shortcut only while a press of it would act, read as
 /// each recording starts and again at every change of the shortcuts (G33, <see cref="FollowShortcuts"/>). A stash
 /// still opening or that did not open, or a maximum length in the settings
 /// file below one second, is refused before anything is grabbed or hidden; a press with no recording in progress while
@@ -38,13 +37,10 @@ public sealed class RecordClip
 
     private readonly Listing listing;
     private readonly Notices notifications;
-    private readonly CaptureNotification captured;
-    private readonly Handoff handoff;
     private readonly CaptureSession capture;
     private readonly SettingsKeeper settings;
     private readonly CaptureHiding hiding;
-    private readonly TopLevel owner;
-    private readonly PictureImport pictures;
+    private readonly CaptureEnd end;
     private GlobalShortcuts? shortcuts;
 
     /// <param name="recording">Told the recording's stage at every change: the tray's Start recording, and its red dot and Stop recording.</param>
@@ -52,13 +48,10 @@ public sealed class RecordClip
     {
         this.listing = listing;
         this.notifications = notifications;
-        this.captured = captured;
-        this.handoff = handoff;
         this.capture = capture;
         this.settings = settings;
         this.hiding = hiding;
-        this.owner = owner;
-        pictures = new PictureImport(heldFileRetry, failure => notifications.Raise(failure));
+        end = new CaptureEnd(listing, notifications, captured, handoff, settings, owner, heldFileRetry);
         // The wait and the sampling, not the saving: once Stop has been pressed nothing is left to start or stop.
         capture.RecordingChanged += () => recording(capture.Stage);
     }
@@ -145,18 +138,13 @@ public sealed class RecordClip
     /// <summary>The recording, from its selection to its end, then what it saved said above the tray.</summary>
     private async Task RecordAndSay(Settings current)
     {
-        ImportedFile? saved = null;
+        EndedCapture? ended = null;
         Outcome<RecordedClip?> recorded;
         hiding.HideForCapture();
         try
         {
             var options = new RecordingOptions(TimeSpan.FromSeconds(current.RecordingMaxSeconds), current.RecordPointer);
-            recorded = await capture.Record(listing.Store!, options, async clip =>
-            {
-                saved = await pictures.SaveStaged(listing.Store!, clip.Name, clip.WorkPath);
-                // After any outcome: a row committed before a later step failed is listed or not as Store recorded it.
-                await listing.Refresh();
-            });
+            recorded = await capture.Record(listing.Store!, options, async clip => ended = await end.Save(clip.Name, clip.WorkPath, clip.Clip.Written));
         }
         finally
         {
@@ -176,51 +164,12 @@ public sealed class RecordClip
             return;
         }
 
-        switch (saved)
+        // Null when cancelled: Esc or a click without a drag at the overlay, Cancel on the bar while the region waits or
+        // while it records, or Stop before any frame (E3). The length is the one the encoder closed the clip at, never
+        // the facts', which call a one-image clip a still (G16).
+        if (ended is not null)
         {
-            case null:
-                // Cancelled: Esc or a click without a drag at the overlay, Cancel on the bar while the region waits or
-                // while it records, or Stop before any frame (E3).
-                break;
-            case { Result: ImportResultKind.Added, Item: { } item }:
-                // The length the encoder closed the clip at, never the facts', which call a one-image clip a still (G16).
-                captured.Raise(item, CaptureKind.Recording, await CopiedIfAsked(item), lengthMs: recorded.Value!.Clip.DurationMs);
-                break;
-            case { Result: ImportResultKind.Unreadable }:
-                notifications.Raise(new Failure(Action, saved.Name, MediaDecoder.UnreadableReason));
-                if (saved.Failure is { } discarded)
-                {
-                    notifications.Raise(discarded);
-                }
-
-                break;
-            case { Failure: { } failure }:
-                // Refused before the commit, which left nothing, or failed after it, which left the item as Store
-                // committed it for the next start to finish: no copy and no capture notification (R9), and nothing
-                // discarded, since a committed step still names the file (What crosses every boundary).
-                notifications.Raise(failure);
-                break;
+            end.Say(ended, Action, CaptureKind.Recording, lengthMs: recorded.Value!.Clip.DurationMs);
         }
-    }
-
-    /// <summary>
-    /// The saved item onto the clipboard while Also copy is on, as the capture ends (G15): whether it is there now. Its
-    /// facts decide the content as for every copy: a clip of several images as a file only, one of a single image as a
-    /// still (G8). A write refused is named beside the capture notification, which then says in the stash only (G16, G35).
-    /// </summary>
-    private async Task<bool> CopiedIfAsked(StashItem item)
-    {
-        if (!settings.Current.AlsoCopyCapture)
-        {
-            return false;
-        }
-
-        var copied = await handoff.CopyCapture(owner, item);
-        if (!copied.Succeeded)
-        {
-            notifications.Raise(copied.Failure);
-        }
-
-        return copied.Succeeded;
     }
 }
