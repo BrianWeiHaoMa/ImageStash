@@ -11,7 +11,8 @@ namespace ImageStash.Tests.Window;
 /// order, each with its shortcut's key caps as the settings read it, or the tray menu's words while the setting is no
 /// shortcut, and a remap read at once; the line saying how ImageStash opens again, naming the open shortcut, the tray and
 /// that closing keeps it running (G3); each row running the one act the window hands it (G12 to G15); no clipboard read
-/// until a row's act reads it (N9); no row taking the keyboard's focus (G7), and the caps in the look's own keys (F10).
+/// until a row's act reads it (N9); no row taking the keyboard's focus (G7); each row led by an icon of its own in the
+/// look's icon font, and the caps in the look's own keys (F10).
 /// </summary>
 [TestClass]
 public sealed class EmptyStashWaysInTests
@@ -30,6 +31,30 @@ public sealed class EmptyStashWaysInTests
             "the heading, the drop line as words, and under the rows the line naming the open shortcut, the tray and that closing keeps it running");
         AssertRows(shown, ("Paste a copied image", "Ctrl+V"), ("Take a screenshot", "Ctrl+PrtScn"), ("Record a clip", "Ctrl+Shift+PrtScn"),
             ("Stash the clipboard image", listed.Settings.Current.Shortcuts.StashClipboardImage), ("Import files", "Ctrl+O"));
+    }
+
+    [TestMethod]
+    public async Task EachRowLeadsWithAnIconOfItsOwnInTheLooksIconFontBeforeItsWordsWithOrWithoutAShortcut()
+    {
+        using var listed = await ListedStash.Open();
+        var shown = EmptyStashShown.Over(listed);
+
+        AssertIcons(shown.ReadRows(), "with every shortcut set");
+
+        // Two settings that are no shortcut, so their rows read the tray menu's words in their caps' place.
+        listed.Settings.Change(s => s with { Shortcuts = s.Shortcuts with { Record = "nonsense", StashClipboardImage = "" } });
+        shown.ShortcutsChanged();
+
+        AssertIcons(shown.ReadRows(), "with two settings that are no shortcut");
+
+        static void AssertIcons(IReadOnlyList<ShownWay> rows, string when)
+        {
+            var read = string.Join(" | ", rows.Select(way => $"{(way.Icon is { } icon ? $"U+{(int)icon[0]:X4}" : "no icon")} {way.Words}"));
+            Assert.HasCount(5, rows, read);
+            Assert.IsTrue(rows.All(way => way.Icon is { Length: 1 } icon && icon[0] is >= '\uE000' and <= '\uF8FF'),
+                $"{when}, each row leads with one glyph of the look's icon font, then its words and its caps (G2, F10): {read}");
+            Assert.HasCount(5, rows.Select(way => way.Icon).Distinct(), $"{when}, each way in has an icon of its own: {read}");
+        }
     }
 
     [TestMethod]

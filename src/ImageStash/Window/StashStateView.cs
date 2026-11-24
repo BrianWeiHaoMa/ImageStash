@@ -96,20 +96,23 @@ public static class StashStateView
     }
 
     /// <summary>
-    /// A way in as a row: its words left, its shortcut's key caps right, or the tray menu's words while its setting is no
-    /// shortcut. A click runs its act; unfocusable, as the <c>+</c> button is, so the keyboard's focus stays where it was (G7).
+    /// A way in as a row: its icon, then its words, left, and its shortcut's key caps right, or the tray menu's words while
+    /// its setting is no shortcut. A click runs its act; unfocusable, as the <c>+</c> button is, so the keyboard's focus
+    /// stays where it was (G7).
     /// </summary>
     private static Button Row(WayIn way)
     {
+        var icon = IconGlyph.Of(way.Glyph, 16, new Thickness(0, 0, 10, 0));
+        var words = new TextBlock { Text = way.Words, FontSize = 13, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(words, 1);
         Control keys = way.Shortcut is { } text
             ? KeyCaps.Of(text)
             : new TextBlock { Text = EmptyStashWaysIn.FromTrayMenu, FontSize = 13, VerticalAlignment = VerticalAlignment.Center, Opacity = 0.7 };
         keys.Margin = new Thickness(12, 0, 0, 0);
-        Grid.SetColumn(keys, 1);
-        var words = new TextBlock { Text = way.Words, FontSize = 13, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(keys, 2);
         var row = new Button
         {
-            Content = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = { words, keys } },
+            Content = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Children = { icon, words, keys } },
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
             Padding = new Thickness(10, 3),

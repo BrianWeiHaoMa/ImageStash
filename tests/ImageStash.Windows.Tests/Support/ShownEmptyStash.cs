@@ -6,7 +6,8 @@ namespace ImageStash.Windows.Tests.Support;
 
 /// <summary>
 /// The empty stash as the real window shows it, read on the UI thread as a person reads it: its lines of words, and its
-/// rows, each its words and its key caps joined as a shortcut's text, or the words shown in their place.
+/// rows, each its words and its key caps joined as a shortcut's text, or the words shown in their place, past the icon
+/// leading it.
 /// </summary>
 public static class ShownEmptyStash
 {
@@ -31,9 +32,16 @@ public static class ShownEmptyStash
 
     private static Panel Shown(ShownWindow shown) => View(shown) ?? throw new AssertFailedException($"“{EmptyStashWaysIn.Heading}” is not shown");
 
-    private static string Words(Button row) => ((TextBlock)((Grid)row.Content!).Children[0]).Text ?? "";
+    /// <summary>The row's words and its right part, in the order its columns lay them out, past the glyph of the look's icon font leading them.</summary>
+    private static List<Control> Parts(Button row)
+    {
+        var parts = ((Grid)row.Content!).Children.OrderBy(Grid.GetColumn).ToList();
+        return parts[0] is TextBlock { FontFamily.Name: "Segoe Fluent Icons" } ? parts.Skip(1).ToList() : parts;
+    }
 
-    private static string Keys(Button row) => ((Grid)row.Content!).Children[1] switch
+    private static string Words(Button row) => ((TextBlock)Parts(row)[0]).Text ?? "";
+
+    private static string Keys(Button row) => Parts(row)[1] switch
     {
         StackPanel caps => string.Join("+", caps.Children.OfType<Border>().Select(cap => ((TextBlock)cap.Child!).Text)),
         TextBlock instead => instead.Text ?? "",

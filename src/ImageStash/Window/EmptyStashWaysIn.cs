@@ -4,10 +4,10 @@ using ImageStash.Store;
 namespace ImageStash.Window;
 
 /// <summary>
-/// One way into the empty stash: its words, its shortcut as <see cref="Shortcut.Text"/> writes it, or null while the
-/// setting is no shortcut, and the act a click on its row runs.
+/// One way into the empty stash: the Segoe Fluent Icons glyph leading its row (F10), its words, its shortcut as
+/// <see cref="Shortcut.Text"/> writes it, or null while the setting is no shortcut, and the act a click on its row runs.
 /// </summary>
-public sealed record WayIn(string Words, string? Shortcut, Action Act);
+public sealed record WayIn(string Glyph, string Words, string? Shortcut, Action Act);
 
 /// <summary>
 /// The acts the window hands its empty stash's rows, each the one act its key, its <c>+</c> menu's entry or the tray
@@ -35,11 +35,12 @@ public static class EmptyStashWaysIn
     /// </summary>
     public static IReadOnlyList<WayIn> Of(Shortcuts shortcuts, WaysInActs acts) =>
     [
-        new("Paste a copied image", Shortcut.Of(StashKeys.PasteKey).Text, acts.Paste),
-        new("Take a screenshot", TextOf(shortcuts.Screenshot), acts.Screenshot),
-        new("Record a clip", TextOf(shortcuts.Record), acts.Record),
-        new("Stash the clipboard image", TextOf(shortcuts.StashClipboardImage), acts.StashClipboardImage),
-        new("Import files", Shortcut.Of(StashKeys.ImportFilesKey).Text, acts.ImportFiles),
+        // A clipboard, a dashed clip, a record button, a picture, an arrow coming in.
+        new("\uE77F", "Paste a copied image", Shortcut.Of(StashKeys.PasteKey).Text, acts.Paste),
+        new("\uE924", "Take a screenshot", TextOf(shortcuts.Screenshot), acts.Screenshot),
+        new("\uE7C8", "Record a clip", TextOf(shortcuts.Record), acts.Record),
+        new("\uE91B", "Stash the clipboard image", TextOf(shortcuts.StashClipboardImage), acts.StashClipboardImage),
+        new("\uE8B5", "Import files", Shortcut.Of(StashKeys.ImportFilesKey).Text, acts.ImportFiles),
     ];
 
     /// <summary>

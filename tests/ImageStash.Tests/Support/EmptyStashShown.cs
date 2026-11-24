@@ -4,8 +4,11 @@ using ImageStash.Window;
 
 namespace ImageStash.Tests.Support;
 
-/// <summary>One row of the empty stash as a person reads it: its words, its key caps in order, or the words shown in their place.</summary>
-public sealed record ShownWay(string Words, IReadOnlyList<string> Caps, string? Instead);
+/// <summary>
+/// One row of the empty stash as a person reads it, left to right: the icon glyph leading it, or null when none does, its
+/// words, and its key caps in order, or the words shown in their place.
+/// </summary>
+public sealed record ShownWay(string? Icon, string Words, IReadOnlyList<string> Caps, string? Instead);
 
 /// <summary>
 /// The empty stash as the window draws it: the window's status over a listed stash, made as <c>StashWindow</c> makes it,
@@ -14,6 +17,9 @@ public sealed record ShownWay(string Words, IReadOnlyList<string> Caps, string? 
 /// </summary>
 public sealed class EmptyStashShown
 {
+    /// <summary>The look's icon font (F10), the only font a row's icon is read in.</summary>
+    private const string IconFont = "Segoe Fluent Icons";
+
     private EmptyStashShown(WindowStatus status) => Status = status;
 
     public WindowStatus Status { get; }
@@ -77,12 +83,20 @@ public sealed class EmptyStashShown
 
     private static ShownWay Read(Button row)
     {
-        var parts = ((Grid)row.Content!).Children;
-        var words = ((TextBlock)parts[0]).Text ?? "";
-        return parts[1] switch
+        // What shows, in the order the row's columns lay it out, as the eye reads it.
+        var parts = ((Grid)row.Content!).Children.Where(part => part.IsVisible).OrderBy(Grid.GetColumn).ToList();
+        if (parts.Select(Grid.GetColumn).Distinct().Count() != parts.Count)
         {
-            StackPanel caps => new ShownWay(words, caps.Children.OfType<Border>().Select(cap => ((TextBlock)cap.Child!).Text ?? "").ToList(), null),
-            TextBlock instead => new ShownWay(words, [], instead.Text),
+            throw new AssertFailedException($"a row lays two of its parts in one column: {string.Join(", ", parts.Select(part => $"{part.GetType().Name} in {Grid.GetColumn(part)}"))}");
+        }
+
+        var icon = parts[0] is TextBlock { FontFamily.Name: IconFont } glyph ? glyph.Text : null;
+        var rest = icon is null ? parts : parts.Skip(1).ToList();
+        var words = ((TextBlock)rest[0]).Text ?? "";
+        return rest[1] switch
+        {
+            StackPanel caps => new ShownWay(icon, words, caps.Children.OfType<Border>().Select(cap => ((TextBlock)cap.Child!).Text ?? "").ToList(), null),
+            TextBlock instead => new ShownWay(icon, words, [], instead.Text),
             var other => throw new AssertFailedException($"{words}: a row's right part is {other.GetType().Name}"),
         };
     }
