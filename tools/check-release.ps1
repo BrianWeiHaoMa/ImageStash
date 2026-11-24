@@ -11,7 +11,7 @@ The comprehensive suite a release must pass, as one command run whole on a Windo
   published  tools/check-published.ps1, failing on a nonzero exit or on any line beginning "skipped:" but the
              earlier-build phase's "skipped: no -EarlierCommit ..." line, which every run without that parameter prints
   assets     tools/build-release-assets.ps1 into -Output, and at the version with its patch raised by one into
-             "<-Output>-upgrade"
+             "<-Output>-upgrade", then tools/check-installer-start.ps1 on each of the two MSIs
   installer  tools/check-installer.ps1 -Assets <-Output> -Upgrade <-Output>-upgrade
 
 Each phase prints a line as it starts and as it ends, with its seconds. A failing phase ends the run with a line
@@ -183,6 +183,10 @@ function Test-Assets {
     if ($code -ne 0) { return "build-release-assets.ps1 -Output $assetsFolder exited $code" }
     $code = Invoke-Script $builder @('-Output', $upgradeFolder, '-Version', $upgradeVersion)
     if ($code -ne 0) { return "build-release-assets.ps1 -Output $upgradeFolder (version $upgradeVersion) exited $code" }
+    foreach ($msi in (Join-Path $assetsFolder "ImageStash-$version-win-x64.msi"), (Join-Path $upgradeFolder "ImageStash-$upgradeVersion-win-x64.msi")) {
+        $code = Invoke-Script (Join-Path $PSScriptRoot 'check-installer-start.ps1') @('-Msi', $msi)
+        if ($code -ne 0) { return "check-installer-start.ps1 -Msi $msi exited $code" }
+    }
 }
 
 function Test-Installer {

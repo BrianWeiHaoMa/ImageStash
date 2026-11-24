@@ -22,8 +22,9 @@ On a Windows 11 PC (x64), download one of these from the
 [latest release](https://github.com/BrianWeiHaoMa/ImageStash/releases/latest):
 
 - **`ImageStash-<version>-win-x64.msi`**, the installer: it installs ImageStash for you alone, with no administrator
-  rights, in `%LOCALAPPDATA%\Programs\ImageStash`, with a Start Menu entry. Uninstalling it (Settings, Apps,
-  Installed apps) removes what it installed and keeps your pictures, even ones you moved into that folder.
+  rights, in `%LOCALAPPDATA%\Programs\ImageStash`, with a Start Menu entry, and starts it once it has installed,
+  upgraded or repaired it. Uninstalling it (Settings, Apps, Installed apps) removes what it installed and keeps your
+  pictures, even ones you moved into that folder.
 - **`ImageStash-<version>-win-x64.zip`**: the same program as a folder. Unzip it anywhere you like and run
   `ImageStash.Windows.exe` in it.
 
@@ -62,7 +63,7 @@ can be changed) and Quit.
   Uninstalling keeps them. Back that folder up, or use Export stash… in Settings to carry everything to another PC.
 - **Nothing leaves your PC.** There is no account, cloud, sync or telemetry, and a link is never fetched.
 - **There is no updater.** A new version is a new download from the releases page; installing it over the old one
-  keeps your pictures, tags, edits and settings.
+  keeps your pictures, tags, edits and settings, and starts the new version in place of the one it closed.
 - **Edits never touch the original.** Text, crops, trims, blurs and drawings stay layers you can change or remove at
   the next Edit; Revert to original takes them all off.
 - **Nothing claims delivery.** ImageStash puts the picture on the clipboard and presses `Ctrl+V` in the app you came

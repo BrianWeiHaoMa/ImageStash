@@ -9,9 +9,10 @@ The release page `https://github.com/BrianWeiHaoMa/ImageStash/releases/tag/v<ver
 written by `tools/build-release-assets.ps1` from one publish of the current tree:
 
 - `ImageStash-<version>-win-x64.msi`: installs ImageStash for the signed-in user without administrator rights, under
-  `%LOCALAPPDATA%\Programs\ImageStash`, with a Start Menu entry; a newer MSI upgrades it in place, and uninstalling
-  removes what it installed, and the folder once nothing else is in it, and leaves the stash and settings under
-  `%LOCALAPPDATA%\ImageStash`, and anything the person keeps in the install folder.
+  `%LOCALAPPDATA%\Programs\ImageStash`, with a Start Menu entry; a newer MSI upgrades it in place; each install,
+  upgrade or repair ends a running copy and then starts ImageStash, as a start by hand; and uninstalling starts
+  nothing, removes what it installed, and the folder once nothing else is in it, and leaves the stash and settings
+  under `%LOCALAPPDATA%\ImageStash`, and anything the person keeps in the install folder.
 - `ImageStash-<version>-win-x64.zip`: the same folder, under `ImageStash/`, to copy onto a PC and run.
 - `SHA256SUMS.txt`: the SHA-256 of the MSI and the zip, in the `sha256sum` shape.
 
@@ -66,8 +67,10 @@ refuses a tag of another form, a tag naming another version, and a version with 
 fails: `identity` (only with `-Tag`), `build`, `portable` (`tests/ImageStash.Tests`), `desktop`
 (`tests/ImageStash.Windows.Tests`; in both, a check skipped as inconclusive is a failure), `published`
 (`tools/check-published.ps1`, where any `skipped:` line is a failure but the earlier-build phase's, below), `assets`
-(`tools/build-release-assets.ps1`, at the version and at the version with its patch raised by one) and `installer`
-(`tools/check-installer.ps1`, which installs, upgrades, repairs and uninstalls the MSI for the signed-in user). With
+(`tools/build-release-assets.ps1`, at the version and at the version with its patch raised by one, then
+`tools/check-installer-start.ps1` on each MSI, which reads from its tables, without installing it, the step that
+starts ImageStash) and `installer` (`tools/check-installer.ps1`, which installs, upgrades, repairs and uninstalls the
+MSI for the signed-in user, and watches what each starts). With
 `-NoDesktop` it runs only `identity` (with `-Tag`), `build`, `portable` and `assets`, the phases that need no
 desktop, which is what the workflows run. Its comment-based help (`Get-Help tools/check-release.ps1 -Full`) lists its
 parameters.

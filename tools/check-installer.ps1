@@ -5,15 +5,18 @@ tools/build-release-assets.ps1 wrote, -Assets and -Upgrade at a higher version, 
 version, the zip of that folder under ImageStash/ with the same files, the MSI at that version and SHA256SUMS.txt
 matching both; and the script refuses an -Output that holds a file. Then, from this unelevated shell: the -Assets MSI
 installs quietly for the signed-in user, adding no ALLUSERS, with exactly the published files under
-%LOCALAPPDATA%\Programs\ImageStash, the Start Menu shortcut and the per-user registration; the shortcut starts it on a
-first run, pinned, with its settings, its stash and the Run value; one picture is stashed through the tray menu's
-Stash clipboard image; the -Upgrade MSI installs over that running copy, ending it, with the upgrade's files in place,
-a folder the person keeps in the install folder untouched and %LOCALAPPDATA%\ImageStash byte for byte as it was; the shortcut starts it again, showing nothing until a tray click,
-which lists the item; a deleted file comes back by msiexec /fa; the older MSI is refused; the uninstall over a
-running copy removes every installed file, the shortcut, the registration and its key, leaving %LOCALAPPDATA%\ImageStash,
-the Run value, and a stash and a stray file the person kept in the install folder as they were (G29); and, installed
-again with nothing of the person's in the folder, the uninstall removes the folder whole. Exits with the number of
-checks that failed.
+%LOCALAPPDATA%\Programs\ImageStash, the Start Menu shortcut and the per-user registration, and starts the installed
+copy itself (G3), whose first run shows pinned and writes its settings, its stash and the Run value, the MSI's own log
+naming no operation on either; one picture is stashed through the tray menu's Stash clipboard image; the -Upgrade MSI
+installs over that running copy, ending it, with the upgrade's files in place, a folder the person keeps in the install
+folder untouched, and starts one new copy, which shows its window as a launch by hand does before this script starts or
+clicks anything, %LOCALAPPDATA%\ImageStash byte for byte as it was once that copy settles; quit, the shortcut starts it
+again by hand, showing its window; started as at sign-in, it shows nothing until a tray click, which lists the item; a
+deleted file comes back by msiexec /fa, which starts it again; the older MSI is refused; the uninstall over a running
+copy removes every installed file, the shortcut, the registration and its key, starts nothing, and leaves
+%LOCALAPPDATA%\ImageStash, the Run value, and a stash and a stray file the person kept in the install folder as they
+were (G29); and, installed again with nothing of the person's in the folder, the uninstall removes the folder whole.
+Exits with the number of checks that failed.
 
 It refuses to start while ImageStash runs, while %LOCALAPPDATA%\ImageStash exists, so a person's stash is never under
 it, and while ImageStash is installed or its install folder, shortcut or key exists, since its cleanup removes only
@@ -41,9 +44,9 @@ $appData = Join-Path $env:LOCALAPPDATA 'ImageStash'
 $stash = Join-Path $appData 'stash'
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $work = Join-Path $env:TEMP ('ImageStash-installer-check-' + [guid]::NewGuid().ToString('N'))
-$installer = New-Object -ComObject WindowsInstaller.Installer
 
 . (Join-Path $PSScriptRoot 'stash-windows.ps1')
+. (Join-Path $PSScriptRoot 'msi-tables.ps1')
 Add-Type -AssemblyName System.Drawing, System.IO.Compression.FileSystem, UIAutomationClient, UIAutomationTypes
 Add-Type -TypeDefinition @'
 using System;
@@ -163,29 +166,44 @@ function StoredRunValue {
     '{0}|{1}' -f $key.GetValueKind('ImageStash'), $key.GetValue('ImageStash', $null, 'DoNotExpandEnvironmentNames')
 }
 
-function Com($target, [string] $member, [string] $kind, [object[]] $arguments) {
-    $target.GetType().InvokeMember($member, $kind, $null, $target, $arguments)
-}
-
-# A value of the MSI's Property table, read from the package itself.
-function MsiProperty([string] $msi, [string] $property) {
-    $database = Com $installer 'OpenDatabase' 'InvokeMethod' @($msi, [object] 0)
-    $view = Com $database 'OpenView' 'InvokeMethod' @("SELECT Value FROM Property WHERE Property = '$property'")
-    $null = Com $view 'Execute' 'InvokeMethod' @()
-    $record = Com $view 'Fetch' 'InvokeMethod' @()
-    $value = if ($record) { Com $record 'StringData' 'GetProperty' @([object] 1) } else { $null }
-    $null = Com $view 'Close' 'InvokeMethod' @()
-    $value
-}
-
 # The product codes Windows Installer has registered, for this user or the machine, under the package's UpgradeCode;
 # PowerShell unrolls the StringList it returns into those codes.
 function Registered { @(Com $installer 'RelatedProducts' 'GetProperty' @($upgradeCode)) }
 
 function ProductInfo([string] $code, [string] $property) { Com $installer 'ProductInfo' 'GetProperty' @($code, $property) }
 
+# msiexec's exit code, waiting for it alone: Start-Process -Wait also waits for its descendants, and the copy an
+# install starts never exits. Reading Handle first keeps the exit code readable once the process has gone.
 function Msiexec([string] $arguments) {
-    (Start-Process -FilePath msiexec.exe -ArgumentList $arguments -Wait -PassThru).ExitCode
+    $process = Start-Process -FilePath msiexec.exe -ArgumentList $arguments -PassThru
+    $null = $process.Handle
+    # An install that waited for the copy it starts would never end: past five minutes the copies are ended, so the
+    # run ends and its exit code fails the check instead of hanging it.
+    if (-not $process.WaitForExit(300000)) {
+        StopCopies
+        $process.WaitForExit()
+    }
+    $process.ExitCode
+}
+
+# Whether Windows Installer's log of a run names no operation on %LOCALAPPDATA%\ImageStash or the Run key: what is
+# there afterwards is what the copy it started wrote, as after a first run by hand (F6, F1).
+function LeftToTheCopy([string] $log) {
+    $operations = @(Get-Content -LiteralPath $log | Where-Object { $_ -match 'Executing op: ' })
+    $touching = @($operations | Where-Object { ($_.IndexOf("$appData\", [StringComparison]::OrdinalIgnoreCase) -ge 0) -or ($_ -match 'CurrentVersion\\Run') })
+    ($operations.Count -gt 0) -and ($touching.Count -eq 0)
+}
+
+# The MSI's custom actions apart from its start: the Util extension's close of a running copy and its reboot check. Any
+# other could write outside what the log's operations show, so the check above holds only while these are all.
+function OnlyKnownCustomActions([string] $msi) {
+    $unknown = @(MsiRows $msi 'SELECT Action FROM CustomAction' | ForEach-Object { $_[0] } | Where-Object { $_ -notmatch '^(StartImageStash|Wix4CloseApplications_\w+|Wix4CloseApplicationsDeferred_\w+|Wix4CheckRebootRequired_\w+)$' })
+    if ($unknown.Count -eq 0) { '' } else { $unknown -join ', ' }
+}
+
+# Whether Windows Installer's log of a run says it skipped the start step, its condition false.
+function StartSkipped([string] $log) {
+    [bool] (Select-String -LiteralPath $log -SimpleMatch 'Skipping action: StartImageStash (condition is false)' -Quiet)
 }
 
 # Windows Installer's own log: the MSI's step that ends a running copy (G3 with E3: an admitted kill) runs before its
@@ -208,20 +226,23 @@ function StopCopies {
     }
 }
 
-# The copy the Start Menu shortcut starts, as a person starts it; $null when none appears within ten seconds.
-function StartFromShortcut {
-    Start-Process -FilePath $shortcut
+# The one installed copy running, once one runs; $null when none, or more than one, runs within ten seconds.
+function OneCopy {
     $null = WaitFor { (InstalledCopies).Count -eq 1 } 10000
     $copies = @(InstalledCopies)
     if ($copies.Count -eq 1) { $copies[0] } else { $null }
 }
 
+# The copy the Start Menu shortcut starts, as a person starts it; $null as OneCopy says.
+function StartFromShortcut {
+    Start-Process -FilePath $shortcut
+    OneCopy
+}
+
 # The installed copy started as Windows starts it at sign-in, with the Run value's argument; $null as above.
 function StartAsSignIn {
     Start-Process -FilePath $installedExe -ArgumentList ([StashWindows]::SignInArgument)
-    $null = WaitFor { (InstalledCopies).Count -eq 1 } 10000
-    $copies = @(InstalledCopies)
-    if ($copies.Count -eq 1) { $copies[0] } else { $null }
+    OneCopy
 }
 
 # A tray click on <process>, posted once its platform window exists (a click posted before its start completes waits
@@ -331,12 +352,15 @@ try {
     $codes = @(Registered)
     $registration = if ($codes.Count -eq 1) { '{0} {1} by {2}, assignment {3}' -f (ProductInfo $codes[0] 'InstalledProductName'), (ProductInfo $codes[0] 'VersionString'), (ProductInfo $codes[0] 'Publisher'), (ProductInfo $codes[0] 'AssignmentType') } else { "$($codes.Count) registrations" }
     Check ($registration -eq "ImageStash $($from.Version) by Brian Wei Hao Ma, assignment 0") "Windows Installer registers it once, for this user alone (assignment 0), as Apps lists it (F1, F10): $registration"
-    Check ((-not (Test-Path -LiteralPath $appData)) -and ((StoredRunValue) -eq $runFound)) "the install made nothing under $appData and left the Run value alone (F6, F1)"
+    Check (LeftToTheCopy $log) "its log names no operation on $appData or the Run value: the install leaves both to the copy it starts (F6, F1)"
+    $unknown = OnlyKnownCustomActions $from.Msi
+    Check ($unknown -eq '') "its only custom actions are its start, the close of a running copy and the reboot check, none writing elsewhere (F6, F1): $unknown"
 
-    # G2, F1, G32: the shortcut starts a first run, pinned, which makes the settings, the stash and the Run value.
+    # G3, G2, F1, G32: the install itself starts the installed copy, a first run, pinned, which makes the settings, the
+    # stash and the Run value; this script starts nothing.
     $clock = [Diagnostics.Stopwatch]::StartNew()
-    $copy = StartFromShortcut
-    Check ($null -ne $copy) "the shortcut started $installedExe"
+    $copy = OneCopy
+    Check ($null -ne $copy) "the install started one copy of $installedExe, with no start from this script (G3)"
     if ($null -eq $copy) { throw 'nothing further can be checked without the installed copy running' }
     $pinned = WaitFor { [StashWindows]::Showing($copy.Id) -eq 'pinned' } 20000
     Check $pinned "on the first run its one window shows pinned (G2): '$([StashWindows]::Showing($copy.Id))' after $($clock.ElapsedMilliseconds) ms"
@@ -371,12 +395,19 @@ try {
     Set-Content -LiteralPath (Join-Path $personal 'originals\picture.png') -Value 'an original'
     $personalTree = Tree $personal
 
-    # G31, F6, G3, E3: the newer MSI over the running copy ends it and keeps the stash and settings byte for byte.
+    # G31, F6, G3, E3: the newer MSI over the running copy ends it, keeps the stash and settings byte for byte, and
+    # starts the new copy, which shows its window as a launch by hand does now the first run is over.
+    $earlier = $copy
+    $upgradeStarted = Get-Date
     $log = Join-Path $work 'upgrade.log'
     $exit = Msiexec "/i `"$($to.Msi)`" /qn /l*v `"$log`""
     Check ($exit -eq 0) "msiexec /i $(Split-Path $to.Msi -Leaf) /qn over the running copy exited 0, not 3010 or 1603 (G31): $exit"
     Check (CloseStepBeforeFiles $log) 'its log runs the step that ends a running copy before its first file operation (G3, E3)'
-    Check ((AnyCopies).Count -eq 0) 'no ImageStash.Windows process remains'
+    Check (LeftToTheCopy $log) "its log names no operation on $appData or the Run value (G31, F6, F1)"
+    $copy = OneCopy
+    Check (($null -ne $copy) -and ($copy.Id -ne $earlier.Id) -and ($copy.StartTime -gt $upgradeStarted) -and ((AnyCopies).Count -eq 1)) "the upgrade ended the running copy and started one new copy of $installedExe, the only ImageStash.Windows process (G3): $(@(AnyCopies | ForEach-Object { $_.Id }) -join ', ')"
+    if ($null -eq $copy) { throw 'nothing further can be checked without the installed copy running' }
+    Check (WaitFor { [StashWindows]::Showing($copy.Id) -eq 'flyout' } 10000) "before this script starts or clicks anything, that copy shows the stash window above the tray, as a launch by hand does once the first run is over (G3): '$([StashWindows]::Showing($copy.Id))'"
     Check ((Tree $personal) -eq $personalTree) "a folder the person keeps in $installDir is there after the upgrade, byte for byte (G31, E2)"
     if (Test-Path -LiteralPath $personal) { Remove-Item -LiteralPath $personal -Recurse -Force }
     Check ((Tree $installDir) -eq $to.Files) "$installDir holds exactly the upgrade's published files, each by SHA-256 (G31)"
@@ -385,14 +416,16 @@ try {
     $codes = @(Registered)
     $versions = @($codes | ForEach-Object { ProductInfo $_ 'VersionString' }) -join ', '
     Check ($versions -eq "$($to.Version)") "one registration remains, at $($to.Version): $versions"
-    $afterUpgrade = Tree $appData
-    Check ($afterUpgrade -eq $beforeUpgrade) "every file under $appData is byte-identical to before the upgrade (G31, F6, G28)"
+    $afterUpgrade = SettledAppData
+    Check ($afterUpgrade -eq $beforeUpgrade) "every file under $appData is byte-identical to before the upgrade, once the copy it started has settled (G31, F6, G28)"
     if ($afterUpgrade -ne $beforeUpgrade) {
         Compare-Object ($beforeUpgrade -split "`n") ($afterUpgrade -split "`n") | ForEach-Object { Write-Host "     $($_.SideIndicator) $($_.InputObject)" }
     }
     Check ((StoredRunValue) -eq $runValue) 'the Run value is unchanged (F1)'
 
-    # G3, G2: started again by hand, the first run over, it shows the window as a tray click would, above the tray.
+    # G3, G2: quit, then started again by hand, the first run over, it shows the window as a tray click would, above the
+    # tray.
+    StopCopies
     $copy = StartFromShortcut
     Check ($null -ne $copy) 'the shortcut started the upgraded copy'
     if ($null -eq $copy) { throw 'nothing further can be checked without the installed copy running' }
@@ -415,6 +448,9 @@ try {
     Remove-Item -LiteralPath $dll
     $exit = Msiexec "/fa `"$($to.Msi)`" /qn /l*v `"$(Join-Path $work 'repair.log')`""
     Check (($exit -eq 0) -and (Test-Path -LiteralPath $dll) -and ((HashOf $dll) -eq (HashOf (Join-Path $to.Published 'ImageStash.dll')))) "with ImageStash.dll deleted, msiexec /fa exited 0 and put it back with its SHA-256 (N8): $exit"
+    $copy = OneCopy
+    Check ($null -ne $copy) "the repair started one copy of $installedExe again (G3)"
+    Check (($null -ne $copy) -and (WaitFor { [StashWindows]::Showing($copy.Id) -eq 'flyout' } 10000)) "before this script clicks anything, that copy shows the stash window above the tray, a launch by hand (G3)"
 
     # The agreement's downgrade refusal: the older MSI over the newer is refused by name and changes nothing.
     $log = Join-Path $work 'downgrade.log'
@@ -428,8 +464,7 @@ try {
     # F1, N8, F6, G29: the uninstall over a running copy removes what the MSI installed and nothing of the person's. A
     # stash moved into the install folder (E2) is removed by none of G29's routes, so it and a stray file survive, and
     # the folder stays holding only them.
-    $copy = StartFromShortcut
-    Check (($null -ne $copy) -and ((SummonByTray $copy) -ge 0)) 'the shortcut started the copy once more, and a tray click shows its window'
+    Check (($null -ne $copy) -and ((SummonByTray $copy) -ge 0)) 'the copy the repair started still runs, and a tray click shows its window'
     $persons = Join-Path $work 'kept by the person'
     New-Item -ItemType Directory -Path (Join-Path $persons 'stash\originals') | Out-Null
     Set-Content -LiteralPath (Join-Path $persons 'stash\stash.db') -Value 'a stash moved here'
@@ -443,7 +478,8 @@ try {
     $exit = Msiexec "/x `"$($to.Msi)`" /qn /l*v `"$log`""
     Check ($exit -eq 0) "msiexec /x $(Split-Path $to.Msi -Leaf) /qn over the running copy exited 0, not 3010 (F1, N8): $exit"
     Check (CloseStepBeforeFiles $log) 'its log runs the step that ends a running copy before its first file operation (G3, E3)'
-    Check ((AnyCopies).Count -eq 0) 'no ImageStash.Windows process remains'
+    Check (-not (WaitFor { (AnyCopies).Count -gt 0 } 5000)) 'no ImageStash.Windows process remains, and for five seconds none starts: the uninstall starts nothing (G3)'
+    Check (StartSkipped $log) 'its log skips the start step, its condition false (G3)'
     $left = Tree $installDir
     Check ($left -eq $personsTree) "$installDir holds exactly what the person kept there, byte for byte: the stash\stash.db moved there and a stray file (G29, E2)"
     $installedLeft = @(Get-ChildItem -LiteralPath $to.Published -Force | Where-Object { Test-Path -LiteralPath (Join-Path $installDir $_.Name) })
@@ -462,8 +498,12 @@ try {
     if (Test-Path -LiteralPath $installDir) { Remove-Item -LiteralPath $installDir -Recurse -Force }
     $exit = Msiexec "/i `"$($to.Msi)`" /qn /l*v `"$(Join-Path $work 'reinstall.log')`""
     Check (($exit -eq 0) -and ((Tree $installDir) -eq $to.Files)) "with the person's things taken out, msiexec /i $(Split-Path $to.Msi -Leaf) installed the published files again: $exit"
-    $exit = Msiexec "/x `"$($to.Msi)`" /qn /l*v `"$(Join-Path $work 'uninstall-empty.log')`""
+    Check ($null -ne (OneCopy)) "that install started one copy of $installedExe (G3)"
+    $null = SettledAppData
+    $log = Join-Path $work 'uninstall-empty.log'
+    $exit = Msiexec "/x `"$($to.Msi)`" /qn /l*v `"$log`""
     Check ($exit -eq 0) "msiexec /x $(Split-Path $to.Msi -Leaf) /qn exited 0: $exit"
+    Check ((StartSkipped $log) -and (-not (WaitFor { (AnyCopies).Count -gt 0 } 5000))) 'its log skips the start step, and for five seconds no ImageStash.Windows process runs (G3)'
     Check (-not (Test-Path -LiteralPath $installDir)) "$installDir, holding nothing but what the MSI installed, is gone whole (F1, N8)"
     Check ((-not (Test-Path -LiteralPath $shortcut)) -and ((Registered).Count -eq 0) -and (-not (Test-Path -LiteralPath $appKey))) "the shortcut, the registration and $appKey are gone"
     Check ((Tree $appData) -eq $afterUninstall) "every file under $appData is still byte-identical (F6)"
