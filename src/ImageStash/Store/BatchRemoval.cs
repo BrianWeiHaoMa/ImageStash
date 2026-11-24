@@ -21,7 +21,11 @@ internal static class BatchRemoval
     /// it; one whose pending rename, save or revert cannot finish first fails alone, unmarked. A row a Delete marked
     /// keeps its mark and its held copies once its files have gone.
     /// </summary>
-    public static IReadOnlyList<Outcome> Remove(StoreContext store, IReadOnlyList<long> ids)
+    /// <param name="alsoWhenMarked">
+    /// What else the removal takes back, run in the transaction that marks the rows, so a kill or a refusal leaves all of
+    /// it or none (an import's Undo of the tags it gave items already in the stash, G12, G28).
+    /// </param>
+    public static IReadOnlyList<Outcome> Remove(StoreContext store, IReadOnlyList<long> ids, Action? alsoWhenMarked = null)
     {
         var unfinished = UnfinishedChanges(store, ids);
         if (!unfinished.Succeeded)
@@ -41,6 +45,7 @@ internal static class BatchRemoval
                 store.Execute("UPDATE items SET deleted = 1 WHERE id = $id", ("$id", id));
             }
 
+            alsoWhenMarked?.Invoke();
             return rows;
         });
         if (!marked.Succeeded)

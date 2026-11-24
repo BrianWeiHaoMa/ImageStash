@@ -240,6 +240,17 @@ public sealed class StashStore : IDisposable
     public Task<IReadOnlyList<Outcome>> Remove(IReadOnlyList<long> ids) => thread.Run(() => BatchRemoval.Remove(store, ids));
 
     /// <summary>
+    /// An import's Undo (G12): the items it put in the stash removed as <see cref="Remove"/> removes them, the tags it
+    /// gave items already in the stash taken back in the transaction that marks those items, so a kill or a refusal
+    /// leaves the whole Undo or none of it (G28); one outcome per identity, in order, or, with no item to remove, the
+    /// tags' one transaction's.
+    /// </summary>
+    public Task<IReadOnlyList<Outcome>> UndoImport(IReadOnlyList<long> added, IReadOnlyList<(long Item, IReadOnlyList<string> Tags)> given) =>
+        thread.Run(() => added.Count > 0
+            ? BatchRemoval.Remove(store, added, () => ItemTags.TakeBackImported(store, given))
+            : [store.Change(ItemTags.RemoveAction, () => ItemTags.TakeBackImported(store, given))]);
+
+    /// <summary>
     /// Deletes the items (G18): their files held as copies in <c>.work\</c>, the rows marked, the files to the Recycle
     /// Bin; one outcome per identity, in order, carrying what Undo needs.
     /// </summary>

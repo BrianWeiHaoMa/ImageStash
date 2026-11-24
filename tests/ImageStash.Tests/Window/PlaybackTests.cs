@@ -318,7 +318,7 @@ public sealed class PlaybackTests
         await listing.StashOpened(stash.Store!);
         var import = new Import(listing, notices, TestStash.ShortRetry);
         var source = stash.Source("dance.gif", MediaFixtures.Bytes("animated.gif"));
-        var item = (await import.Pick(() => Task.FromResult<IReadOnlyList<string>?>([source]), _ => { })).Single().Item!;
+        var item = (await import.Pick(_ => Task.FromResult<IReadOnlyList<string>?>([source]), _ => { })).Single().Item!;
         var playback = NewPlayback(NewThumbnails());
 
         await Until(2, () => playback.Play(Request(item.Name, item.FilePath)));

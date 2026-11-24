@@ -15,6 +15,8 @@ namespace ImageStash.Tests.Window;
 /// G16); Del then <c>Ctrl+Z</c> from the grid brings the item back, and a second <c>Ctrl+Z</c> finds nothing (G7, G18);
 /// <c>Ctrl+T</c> opens the tag field on the selection, and focus moving on adds what was typed there (G7, G17). Moving
 /// focus between real controls is beyond these parts: the walk drives the rule a field calls as focus leaves it.
+/// Collecting into a stash that holds pictures: with a tag chip lit, a drop tags its new picture and the one the stash
+/// already held, its notice says so, and its Undo takes back both (G11, G12).
 /// </summary>
 [TestClass]
 public sealed class StashWindowPathTests
@@ -236,6 +238,41 @@ public sealed class StashWindowPathTests
         Assert.IsFalse(listed.Listing.IsEmptyStash, "the listing is no longer the empty stash");
         shown.ShowListing();
         Assert.IsFalse(shown.Showing, "the grid takes the empty stash's place (G2)");
+    }
+
+    [TestMethod]
+    public async Task CollectingIntoAStashThatHoldsPicturesTagsEveryDroppedPictureAndItsNoticeSaysWhatItDid()
+    {
+        using var listed = await ListedStash.Open();
+        var held = await listed.Stash.ImportFixture("held", "still.png");
+        var carrying = await listed.Stash.ImportFixture("carrying", "photo.jpg");
+        listed.Stash.Tag(carrying.Id, "cat");
+
+        // (1) With the chip #cat lit, as its click lights it, a drop of one new picture and one the stash already holds.
+        await listed.Listing.SetQuery(ItemSearch.WithWord(listed.Listing.Query, "cat"));
+        CollectionAssert.AreEqual(new[] { "cat" }, listed.Listing.LitTags.ToList(), "the chip is lit");
+        var drop = ListedStash.Contents([MediaFixtures.Path("transparent.png"), MediaFixtures.Path("still.png")]);
+        Assert.AreEqual("Each picture gets the tag #cat, those already in your stash too.", DropCard.Of(drop, listed.Listing.LitTags).Lines[1], "the drop card says so before release (G11)");
+        var dropped = await listed.Import.Drop(drop);
+
+        var added = dropped.Single(file => file.Result == ImportResultKind.Added).Item!;
+        var stash = await listed.Stash.All();
+        Assert.HasCount(3, stash, "one item added, the other already in the stash (G12)");
+        CollectionAssert.AreEqual(new[] { "cat" }, stash.Single(item => item.Id == added.Id).Tags.ToList(), "the new item carries the tag");
+        CollectionAssert.AreEqual(new[] { "cat" }, stash.Single(item => item.Id == held.Id).Tags.ToList(), "and so does the one the stash already held (G11)");
+        var notice = listed.Notices.Shown.Single();
+        Assert.AreEqual(
+            ("Added 1, tagged #cat · 1 already in your stash", "still.png was already in your stash as “held”, now tagged #cat. Added “transparent”."),
+            (notice.Heading, notice.Text),
+            "it counts one added and one already in the stash, names that one, and says each got the tag (G12)");
+
+        await listed.Notices.Undo(notice);
+
+        stash = await listed.Stash.All();
+        Assert.IsFalse(stash.Any(item => item.Id == added.Id), "its Undo removes the added item");
+        Assert.IsEmpty(stash.Single(item => item.Id == held.Id).Tags, "and takes the tag off the other (G12)");
+        CollectionAssert.AreEqual(new[] { "cat" }, stash.Single(item => item.Id == carrying.Id).Tags.ToList(), "leaving what the batch did not give");
+        Assert.IsEmpty(listed.Failures);
     }
 
     /// <summary>An arrow pressed in the preview as the window takes it; then the item shown, and the grid's one selected item, read.</summary>

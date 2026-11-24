@@ -439,7 +439,7 @@ public sealed class ChipRowTests
         var entered = TrayDesktop.Get(() => ShownWindow.RaiseDrag(reaction, DragDrop.DragEnterEvent, data));
 
         Assert.AreEqual(DragDropEffects.Copy, entered, "the window's drop takes it as a copy (G11)");
-        TrayDesktop.Run(() => Assert.IsTrue(shown.Window.GetVisualDescendants().OfType<TextBlock>().Any(text => text.IsEffectivelyVisible && text.Text == "New items get the tag #reaction."),
+        TrayDesktop.Run(() => Assert.IsTrue(shown.Window.GetVisualDescendants().OfType<TextBlock>().Any(text => text.IsEffectivelyVisible && text.Text == "Each picture gets the tag #reaction, those already in your stash too."),
             "the drop card says so (G11)"));
         TrayDesktop.Run(() => ShownWindow.RaiseDrag(reaction, DragDrop.DropEvent, data));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Items.Count == 2));

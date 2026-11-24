@@ -6,7 +6,8 @@ namespace ImageStash.Tests.Window;
 
 /// <summary>
 /// G11's drop card before release: supported and unsupported files counted by their names alone, a folder by its own
-/// files; the lit chip's tag the new items will get; a link is not taken (N2); nothing is opened to count.
+/// files; the lit chip's tag every picture dropped will get, an item already in the stash included; a link is not taken
+/// (N2); nothing is opened to count.
 /// </summary>
 [TestClass]
 public sealed class DropCardTests
@@ -44,7 +45,7 @@ public sealed class DropCardTests
     }
 
     [TestMethod]
-    public void WhileATagChipIsLitTheCardSaysTheNewItemsGetItsTag()
+    public void WhileATagChipIsLitTheCardSaysEveryPictureGetsItsTagThoseAlreadyInTheStashToo()
     {
         var contents = new DropContents([Named("photo.jpg")], false, false, []);
 
@@ -52,9 +53,10 @@ public sealed class DropCardTests
         var both = DropCard.Of(contents, ["dog", "cat"]);
         var unlit = DropCard.Of(contents, []);
 
-        CollectionAssert.AreEqual(new[] { "1 supported file", "New items get the tag #dog.", "Copies are made; the originals stay where they are." }, lit.Lines.ToList());
-        Assert.AreEqual("New items get the tags #dog #cat.", both.Lines[1], "every lit chip's (G11)");
+        CollectionAssert.AreEqual(new[] { "1 supported file", "Each picture gets the tag #dog, those already in your stash too.", "Copies are made; the originals stay where they are." }, lit.Lines.ToList());
+        Assert.AreEqual("Each picture gets the tags #dog #cat, those already in your stash too.", both.Lines[1], "every lit chip's, a duplicate's item getting them too (G11)");
         Assert.IsFalse(unlit.Lines.Any(line => line.Contains("tag")), "no tag lit, no such line");
+        Assert.IsFalse(DropCard.Of(new DropContents([Named("clip.mp4")], false, false, []), ["dog"]).Lines.Any(line => line.Contains("tag")), "no picture that may come in, no tag to give");
         Assert.AreEqual("Links are not taken", DropCard.Of(new DropContents([], onlyLink: true, filesUnavailable: false, []), ["dog"]).Title, "nothing is said of a tag for what cannot be added");
     }
 

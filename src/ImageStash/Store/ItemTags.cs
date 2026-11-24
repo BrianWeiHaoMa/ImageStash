@@ -57,16 +57,19 @@ internal static class ItemTags
             {
                 foreach (var spelling in spellings)
                 {
-                    store.Execute("DELETE FROM tags WHERE item_id = $id AND tag = $tag", ("$id", id), ("$tag", spelling));
+                    Delete(store, id, spelling);
                 }
             }
         });
 
     /// <summary>
-    /// Writes an import's tags on its new row, inside the transaction that inserts it (G11, G28), and returns them as
-    /// written; the tags pass through <see cref="Words"/> and the one spelling as any other tag does.
+    /// Writes <paramref name="tags"/> on a row inside the caller's transaction (G28): a new row's, in the transaction
+    /// that inserts it (an import's lit tags, G11; Save as new item's copied tags, G26), or the row of the item an
+    /// import's file already was in the stash as (G11). Returns the tags the item gained, as written: those it did not
+    /// carry yet, which for a new row is every one. The tags pass through <see cref="Words"/> and the one spelling as any
+    /// other tag does.
     /// </summary>
-    public static IReadOnlyList<string> AddToNewItem(StoreContext store, long id, IReadOnlyList<string> tags)
+    public static IReadOnlyList<string> AddMissing(StoreContext store, long id, IReadOnlyList<string> tags)
     {
         var words = Words(string.Join(' ', tags));
         if (words.Count == 0)
@@ -74,9 +77,26 @@ internal static class ItemTags
             return [];
         }
 
-        var spelled = Spelled(store, words);
-        Insert(store, id, spelled);
-        return spelled;
+        var carried = store.Query("SELECT tag FROM tags WHERE item_id = $id", r => r.GetString(0), ("$id", id));
+        var gained = Spelled(store, words).Where(tag => !carried.Contains(tag, StringComparer.OrdinalIgnoreCase)).ToList();
+        Insert(store, id, gained);
+        return gained;
+    }
+
+    /// <summary>
+    /// An import's Undo of the tags it gave items already in the stash (G12), inside the caller's transaction (G28):
+    /// each tag taken off its item in the spelling <see cref="AddMissing"/> wrote, so a tag no item carries any more
+    /// ceases to exist (G17); a tag the item no longer carries, or an item gone, leaves nothing to take.
+    /// </summary>
+    public static void TakeBackImported(StoreContext store, IReadOnlyList<(long Item, IReadOnlyList<string> Tags)> given)
+    {
+        foreach (var (id, tags) in given)
+        {
+            foreach (var tag in tags)
+            {
+                Delete(store, id, tag);
+            }
+        }
     }
 
     /// <summary>
@@ -140,6 +160,9 @@ internal static class ItemTags
     /// <summary>Every spelling in <c>tags</c>, marked rows included, the first stored first.</summary>
     private static List<string> StoredTags(StoreContext store) =>
         store.Query("SELECT tag FROM tags GROUP BY tag ORDER BY MIN(rowid)", r => r.GetString(0));
+
+    private static void Delete(StoreContext store, long id, string spelling) =>
+        store.Execute("DELETE FROM tags WHERE item_id = $id AND tag = $tag", ("$id", id), ("$tag", spelling));
 
     private static void Insert(StoreContext store, long id, IReadOnlyList<string> tags)
     {

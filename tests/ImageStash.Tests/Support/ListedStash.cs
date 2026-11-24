@@ -92,7 +92,7 @@ public sealed class ListedStash : IDisposable
             () => WayInRunning = Screenshot.Take(),
             () => WayInRunning = RecordClip.StartOrStop(),
             () => WayInRunning = StashClipboardImage.Stash(),
-            () => WayInRunning = Import.Pick(() => Dialogs.OpenFiles(null!, "Import files", Import.PickerFilters), _ => { }));
+            () => WayInRunning = Import.Pick(title => Dialogs.OpenFiles(null!, title, Import.PickerFilters), _ => { }));
     }
 
     /// <summary>The acts the empty stash's rows run, as the window and the app hand them: the paste, the captures, Stash clipboard image, the picker.</summary>

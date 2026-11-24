@@ -671,7 +671,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
 
     /// <summary><c>Ctrl+O</c> and Import files…: the window's own picker, which leaves the flyout up while it is open (G2, F4).</summary>
     private void ImportFiles() =>
-        _ = import.Pick(() => dialogs.OpenFiles(this, "Import files", Import.PickerFilters), DialogShown);
+        _ = import.Pick(title => dialogs.OpenFiles(this, title, Import.PickerFilters), DialogShown);
 
     /// <summary>
     /// Enter: the handoff on the selection, once the matches of what was typed have arrived, so a key pressed right after

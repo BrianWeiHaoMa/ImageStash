@@ -9,7 +9,7 @@ namespace ImageStash.Tests.Store;
 
 /// <summary>
 /// Store's side of an import: the commit and its rename (G28, R9, R2), a live failure (State), duplicates (G12), the
-/// extension (State: File names), identity, the tags a new item gets (G11), and the summon's listing answered while the
+/// extension (State: File names), identity, the tags an import gives (G11), and the summon's listing answered while the
 /// place or the comparison waits on a held file (G1).
 /// </summary>
 [TestClass]
@@ -129,7 +129,7 @@ public sealed class ImportCommitTests
     }
 
     [TestMethod]
-    public async Task AnItemAlreadyInTheStashGetsNoTag()
+    public async Task AnItemAlreadyInTheStashGetsTheTagsItLacks()
     {
         using var stash = new TestStash();
         var store = await stash.OpenCleanly();
@@ -140,7 +140,7 @@ public sealed class ImportCommitTests
         var duplicate = await store.CommitImport(TestStash.Candidate(await stash.Stage("again.png", bytes), "again", bytes) with { Tags = ["dog"] });
 
         Assert.IsTrue(duplicate.Value!.AlreadyInStash);
-        CollectionAssert.AreEqual(new[] { (existing.Id, "kept") }, stash.TagRows());
+        CollectionAssert.AreEqual(new[] { (existing.Id, "dog"), (existing.Id, "kept") }, stash.TagRows(), "the item a file already was in the stash as gets the lit tag too (G11)");
     }
 
     [TestMethod]

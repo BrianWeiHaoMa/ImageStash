@@ -31,11 +31,17 @@ public sealed record ImportedFile(string Name, ImportResultKind Result, StashIte
     /// </summary>
     public static ImportedFile FromCommit(string name, Outcome<ImportResult> committed) => committed switch
     {
-        { Value: { AlreadyInStash: true } found } => new(name, ImportResultKind.AlreadyInStash, found.Item, Failure: committed.Failure),
-        { Succeeded: true, Value: { } added } => new(name, ImportResultKind.Added, added.Item),
-        { Value: { Listed: true } placed } => new(name, ImportResultKind.Failed, placed.Item, Failure: committed.Failure),
+        { Value: { AlreadyInStash: true } found } => new(name, ImportResultKind.AlreadyInStash, found.Item, Failure: committed.Failure) { GainedTags = found.GainedTags },
+        { Succeeded: true, Value: { } added } => new(name, ImportResultKind.Added, added.Item) { GainedTags = added.GainedTags },
+        { Value: { Listed: true } placed } => new(name, ImportResultKind.Failed, placed.Item, Failure: committed.Failure) { GainedTags = placed.GainedTags },
         _ => new(name, ImportResultKind.Failed, Failure: committed.Failure),
     };
+
+    /// <summary>
+    /// The lit tags <see cref="Item"/> gained from this file, as the store committed them (G11): every one for an item
+    /// added, and for one already in the stash those it did not carry yet, which the batch's Undo takes back (G12).
+    /// </summary>
+    public IReadOnlyList<string> GainedTags { get; init; } = [];
 
     /// <summary>Whether the batch put this file's item in the stash, so its Undo removes it (G12).</summary>
     public bool PutInStash => Item is not null && Result is ImportResultKind.Added or ImportResultKind.Failed;
@@ -51,12 +57,14 @@ public sealed record ImportedFile(string Name, ImportResultKind Result, StashIte
 /// The window's imports (G11, G12, G13): a drop's files, a folder's own files, the files chosen with Import files…, or
 /// what a paste found on the clipboard (its files, or its picture as one PNG item), become items one file at a time
 /// through Store's import commit, one batch at a time. While tag chips are lit at the drop, at <c>Ctrl+O</c> or at the
-/// paste, every item the batch adds gets their tags in its own insert, however long the batch waits behind another whose
-/// end clears the search (G11, G12). While a batch runs its busy
+/// paste, every item the batch adds gets their tags in its own insert, and every item a file of it already was in the
+/// stash as gets those it lacks, however long the batch waits behind another whose end clears the search (G11, G12).
+/// While a batch runs its busy
 /// state names it and nothing shows as added before its commit returned (G35, R9); afterwards the search is cleared,
 /// All shows the new items first and selected, and a notice counts what became of the files, names every file that was
-/// not added with its reason, and offers an Undo that removes everything the batch added. Sources are only ever copied
-/// (G11); nothing here writes into the stash but a stream into the <c>.work\</c> path Store allocated (R2).
+/// not added with its reason and the tags the lit chips gave, and offers an Undo that takes back everything the batch
+/// did. Sources are only ever copied (G11); nothing here writes into the stash but a stream into the <c>.work\</c> path
+/// Store allocated (R2).
 /// </summary>
 public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRetry)
 {
@@ -80,6 +88,15 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
         new("Pictures (GIF, PNG, JPG, WebP)", Enum.GetValues<ImageFormat>().SelectMany(ImageFormatExtensions.Of).Select(extension => "*" + extension).ToList()),
         new("All files", ["*.*"]),
     ];
+
+    /// <summary>
+    /// Import files…'s picker title: "Import files", naming while tag chips are lit the tags the chosen files will get,
+    /// "Import files (tagged #cat)" (G11).
+    /// </summary>
+    public static string PickerTitle(IReadOnlyList<string> litTags) => litTags.Count == 0 ? PickAct : $"{PickAct} (tagged {Tagged(litTags)})";
+
+    /// <summary>Tags as an import's words name them, each after a <c>#</c> as its chip shows it: "#cat #dog".</summary>
+    public static string Tagged(IEnumerable<string> tags) => string.Join(" ", tags.Select(tag => "#" + tag));
 
     /// <summary>The results a notice's heading counts after the added files, in its order, and how it counts each (G12).</summary>
     private static readonly (ImportResultKind Kind, string Words)[] Counted =
@@ -133,10 +150,11 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
     }
 
     /// <summary>
-    /// <c>Ctrl+O</c> and Import files…: the picker, while <paramref name="dialogUp"/> says a dialog is up so the flyout
-    /// stays (G2), however it returns; the chosen files are imported as a drop's would be (G12).
+    /// <c>Ctrl+O</c> and Import files…: the picker, given its title (<see cref="PickerTitle"/>, the tags lit at the act),
+    /// while <paramref name="dialogUp"/> says a dialog is up so the flyout stays (G2), however it returns; the chosen
+    /// files are imported as a drop's would be (G12).
     /// </summary>
-    public async Task<IReadOnlyList<ImportedFile>> Pick(Func<Task<IReadOnlyList<string>?>> pick, Action<bool> dialogUp)
+    public async Task<IReadOnlyList<ImportedFile>> Pick(Func<string, Task<IReadOnlyList<string>?>> pick, Action<bool> dialogUp)
     {
         using var acting = UserAct.Begin(PickAct);
         var litTags = listing.LitTags;
@@ -150,7 +168,7 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
         dialogUp(true);
         try
         {
-            paths = await pick();
+            paths = await pick(PickerTitle(litTags));
         }
         catch (Exception e)
         {
@@ -181,7 +199,8 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
 
     /// <summary>
     /// The files a paste found on the clipboard, imported as a drop's would be (G13, G12) after any batch already
-    /// running, each item getting <paramref name="litTags"/>, the tags lit when the user pasted.
+    /// running, each item added, or already in the stash, getting <paramref name="litTags"/>, the tags lit when the user
+    /// pasted.
     /// </summary>
     public Task<IReadOnlyList<ImportedFile>> Paste(IReadOnlyList<DroppedItem> files, IReadOnlyList<string> litTags) => Run(files, null, litTags);
 
@@ -239,9 +258,11 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
     /// <summary>
     /// The notice for a finished batch (G12): its heading counts the files added, already in the stash, skipped,
     /// unreadable and failed ("Added 38 · 1 already in your stash · 1 skipped", or "Added 3 to your stash" when nothing
-    /// else happened); its details name every file that was not added with its reason, a failure beside a duplicate
-    /// included, and then the added items by name when they are three or fewer. A file the batch put in the stash whose
-    /// last step failed is counted and named as failed, never as added (R9).
+    /// else happened), the added count naming the tags the lit chips gave the items added ("Added 3 to your stash, tagged
+    /// #cat"); its details name every file that was not added with its reason, a duplicate by its item's name with the
+    /// tags its item gained ("…as “cat”, now tagged #funny"), a failure beside a duplicate included, and then the added
+    /// items by name when they are three or fewer. A file the batch put in the stash whose last step failed is counted
+    /// and named as failed, never as added, and a tag is named only as the store committed it (R9).
     /// </summary>
     public static (string Heading, string Details) NoticeWords(IReadOnlyList<ImportedFile> files)
     {
@@ -250,8 +271,12 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
             return ("Nothing was added: there was no file in what was dropped.", "");
         }
 
-        var added = files.Where(file => file.Result == ImportResultKind.Added).Select(file => file.Item!).ToList();
-        var counted = new List<string> { added.Count > 0 ? $"Added {added.Count}" : "Nothing was added" };
+        var addedFiles = files.Where(file => file.Result == ImportResultKind.Added).ToList();
+        var added = addedFiles.Select(file => file.Item!).ToList();
+        // Every item a batch adds gets the same lit tags; only those every one of them gained are said of them all.
+        var addedTags = addedFiles.Count == 0 ? [] : addedFiles[0].GainedTags.Where(tag => addedFiles.All(file => file.GainedTags.Contains(tag))).ToList();
+        var tagged = addedTags.Count > 0 ? $", tagged {Tagged(addedTags)}" : "";
+        var counted = new List<string> { added.Count > 0 ? $"Added {added.Count}{tagged}" : "Nothing was added" };
         foreach (var (kind, words) in Counted)
         {
             var count = files.Count(file => file.Result == kind);
@@ -261,10 +286,10 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
             }
         }
 
-        var heading = added.Count > 0 && counted.Count == 1 ? $"Added {added.Count} to your stash" : string.Join(" · ", counted);
+        var heading = added.Count > 0 && counted.Count == 1 ? $"Added {added.Count} to your stash{tagged}" : string.Join(" · ", counted);
         var parts = new List<string>();
         parts.AddRange(files.Where(file => file.Result == ImportResultKind.AlreadyInStash)
-            .Select(file => $"{file.Name} was already in your stash as “{file.Item!.Name}”."));
+            .Select(file => $"{file.Name} was already in your stash as {Notices.Describe([file.Item!])}{(file.GainedTags.Count > 0 ? $", now tagged {Tagged(file.GainedTags)}" : "")}."));
         var skipped = files.Where(file => file.Result == ImportResultKind.Skipped).ToList();
         if (skipped.Count > 0)
         {
@@ -297,7 +322,7 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
         return file.Failure.Subject == file.Name ? sentence : $"{file.Name}: {sentence}";
     }
 
-    /// <param name="litTags">The tags lit at the user's act, read then, which every item added gets.</param>
+    /// <param name="litTags">The tags lit at the user's act, read then, which every item added or already in the stash gets.</param>
     private Task<IReadOnlyList<ImportedFile>> Run(IReadOnlyList<DroppedItem> items, IDisposable? held, IReadOnlyList<string> litTags) =>
         Batch(async store =>
         {
@@ -323,7 +348,8 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
     /// <summary>
     /// One batch, after any already running: its busy state while <paramref name="steps"/> run, then its end announced,
     /// the search cleared, All with the new items first and selected, and the notice for every file, followed by
-    /// <paramref name="also"/> when given, with an Undo that removes everything the batch put in the stash (G12, R9).
+    /// <paramref name="also"/> when given, with an Undo, offered when the batch put an item in the stash or gave a tag to
+    /// one already there, that takes back both (G12, R9).
     /// </summary>
     private async Task<IReadOnlyList<ImportedFile>> Batch(Func<StashStore, Task<List<ImportedFile>>> steps, string? also)
     {
@@ -335,6 +361,9 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
             var results = await steps(store);
             var added = results.Where(file => file.Result == ImportResultKind.Added).Select(file => file.Item!.Id).ToList();
             var batch = results.Where(file => file.PutInStash).Select(file => file.Item!.Id).ToList();
+            IReadOnlyList<(long Item, IReadOnlyList<string> Tags)> given = results.Where(file => file.Result == ImportResultKind.AlreadyInStash && file.GainedTags.Count > 0)
+                .Select(file => (file.Item!.Id, file.GainedTags)).ToList();
+            var undoes = batch.Count > 0 || given.Count > 0;
             Finishing?.Invoke();
             await listing.ShowScope(Scope.All);
             if (added.Count > 0)
@@ -344,7 +373,7 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
 
             var (heading, details) = NoticeWords(results);
             var text = also is null ? details : $"{details} {also}".TrimStart();
-            notices.Raise(text, batch.Count > 0 ? "Undo" : null, batch.Count > 0 ? () => Undo(store, batch) : null, namesAProblem: results.Any(file => file.NamesAProblem), heading: heading);
+            notices.Raise(text, undoes ? "Undo" : null, undoes ? () => Undo(store, batch, given) : null, namesAProblem: results.Any(file => file.NamesAProblem), heading: heading);
             return results;
         }
         finally
@@ -381,10 +410,14 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
         return ImportedFile.FromCommit(file.Name, await store.CommitImport(candidate));
     }
 
-    /// <summary>The notice's Undo: everything the batch added leaves through Store, its files to the Recycle Bin (G12, G29).</summary>
-    private async Task<Outcome> Undo(StashStore store, IReadOnlyList<long> batch)
+    /// <summary>
+    /// The notice's Undo: the tags the batch gave items already in the stash come off them, and everything the batch
+    /// added leaves through Store, its files to the Recycle Bin (G12, G29); the listing then shows what the store holds,
+    /// a tag no item carries any more gone from the chips (G17).
+    /// </summary>
+    private async Task<Outcome> Undo(StashStore store, IReadOnlyList<long> batch, IReadOnlyList<(long Item, IReadOnlyList<string> Tags)> given)
     {
-        var removed = await store.Remove(batch);
+        var removed = await store.UndoImport(batch, given);
         await listing.Refresh();
         var refused = removed.Where(outcome => !outcome.Succeeded).Select(outcome => outcome.Failure!).ToList();
         foreach (var failure in refused.Skip(1))

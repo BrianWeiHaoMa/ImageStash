@@ -200,7 +200,7 @@ internal static class ItemSaveAsNewItem
             ("$finished_frame_count", finished?.FrameCount),
             ("$finished_duration_ms", finished?.DurationMs),
             ("$steps", PendingStep.Encode(steps)))!;
-        var tags = ItemTags.AddToNewItem(store, id, store.Query("SELECT tag FROM tags WHERE item_id = $id ORDER BY rowid", r => r.GetString(0), ("$id", source.Files.Id)));
+        var tags = ItemTags.AddMissing(store, id, store.Query("SELECT tag FROM tags WHERE item_id = $id ORDER BY rowid", r => r.GetString(0), ("$id", source.Files.Id)));
         var item = new StashItem(id, name, tags, false, addedAt, finishedFile, store.Folder.InRoot(finishedFile), finished ?? source.OriginalFacts, 0, Edited: !layers.IsEmpty);
         return (item, steps);
     }

@@ -354,7 +354,7 @@ public sealed class ImportTests
     }
 
     [TestMethod]
-    public async Task WhileATagChipIsLitEveryItemADropOrCtrlOAddsGetsItsTagAndADuplicateGetsNone()
+    public async Task WhileATagChipIsLitEveryItemADropOrCtrlOAddsGetsItsTagAndADuplicatesItemGetsItToo()
     {
         using var importing = await ListedStash.Open();
         var dogged = await importing.Stash.Import("dogged");
@@ -373,10 +373,10 @@ public sealed class ImportTests
         await importing.Listing.SetQuery("cat");
         var again = (await importing.Import.Drop(ListedStash.Contents([MediaFixtures.Path("still.png")]))).Single();
         Assert.AreEqual(ImportResultKind.AlreadyInStash, again.Result);
-        CollectionAssert.AreEqual(new[] { "dog" }, (await TagsOf(importing, dropped)).ToList(), "a duplicate gets no tag");
+        CollectionAssert.AreEqual(new[] { "dog", "cat" }, (await TagsOf(importing, dropped)).ToList(), "the item a duplicate already was gets the lit tag too");
 
         await importing.Listing.SetQuery("#dog");
-        var picked = (await importing.Import.Pick(() => Task.FromResult<IReadOnlyList<string>?>([MediaFixtures.Path("photo.jpg")]), _ => { })).Single().Item!;
+        var picked = (await importing.Import.Pick(_ => Task.FromResult<IReadOnlyList<string>?>([MediaFixtures.Path("photo.jpg")]), _ => { })).Single().Item!;
         CollectionAssert.AreEqual(new[] { "dog" }, (await TagsOf(importing, picked)).ToList(), "Ctrl+O while it is lit (G11)");
 
         await importing.Listing.SetQuery("do");
@@ -430,13 +430,13 @@ public sealed class ImportTests
         var dialogUp = new List<bool>();
         var chosen = new[] { MediaFixtures.Path("still.png"), MediaFixtures.Path("animated.gif") };
 
-        var picked = await importing.Import.Pick(() =>
+        var picked = await importing.Import.Pick(_ =>
         {
             Assert.IsTrue(dialogUp[^1], "the flag is up before the picker opens");
             return Task.FromResult<IReadOnlyList<string>?>(chosen);
         }, dialogUp.Add);
-        var cancelled = await importing.Import.Pick(() => Task.FromResult<IReadOnlyList<string>?>(null), dialogUp.Add);
-        var failed = await importing.Import.Pick(() => throw new InvalidOperationException("the dialog broke"), dialogUp.Add);
+        var cancelled = await importing.Import.Pick(_ => Task.FromResult<IReadOnlyList<string>?>(null), dialogUp.Add);
+        var failed = await importing.Import.Pick(_ => throw new InvalidOperationException("the dialog broke"), dialogUp.Add);
 
         CollectionAssert.AreEqual(new[] { true, false, true, false, true, false }, dialogUp);
         CollectionAssert.AreEqual(new[] { "still", "animated" }, picked.Select(file => file.Item!.Name).ToList(), "chosen files are imported as a drop's would be");
@@ -462,7 +462,7 @@ public sealed class ImportTests
         CollectionAssert.AreEquivalent(new[] { "dog", "cat" }, (await TagsOf(importing, dropped)).ToList(), "a drop (G11)");
 
         await importing.Listing.SetQuery("dog cat");
-        var picked = (await importing.Import.Pick(() => Task.FromResult<IReadOnlyList<string>?>([MediaFixtures.Path("transparent.png")]), _ => { })).Single().Item!;
+        var picked = (await importing.Import.Pick(_ => Task.FromResult<IReadOnlyList<string>?>([MediaFixtures.Path("transparent.png")]), _ => { })).Single().Item!;
         CollectionAssert.AreEquivalent(new[] { "dog", "cat" }, (await TagsOf(importing, picked)).ToList(), "Ctrl+O (G11)");
 
         await importing.Listing.SetQuery("dog cat");
@@ -495,7 +495,7 @@ public sealed class ImportTests
         var released = new Released();
 
         await import.Drop(new DropContents([ListedStash.File(MediaFixtures.Path("still.png"))], false, false, [released]));
-        await import.Pick(() => { picked = true; return Task.FromResult<IReadOnlyList<string>?>(null); }, _ => { });
+        await import.Pick(_ => { picked = true; return Task.FromResult<IReadOnlyList<string>?>(null); }, _ => { });
         opening.StashFailed(new Failure("Open the stash", "stash.db", "it is broken"));
         await import.Drop(new DropContents([ListedStash.File(MediaFixtures.Path("still.png"))], false, false, []));
 

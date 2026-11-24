@@ -16,7 +16,14 @@ public sealed record ImportCandidate(string StagedPath, string Name, MediaFacts 
 /// <see cref="Listed"/> is false only for an item committed whose file never reached the root: no query returns it,
 /// and the next start removes it (State: A live failure).
 /// </summary>
-public sealed record ImportResult(StashItem Item, bool AlreadyInStash, bool Listed = true);
+public sealed record ImportResult(StashItem Item, bool AlreadyInStash, bool Listed = true)
+{
+    /// <summary>
+    /// The candidate's tags the commit gave <see cref="Item"/>, as committed (G11): every one for a new item, and for an
+    /// item already in the stash those it did not carry yet; none when that write was refused.
+    /// </summary>
+    public IReadOnlyList<string> GainedTags { get; init; } = [];
+}
 
 /// <summary>
 /// Store's steps of an import (State: the import bullet, G12, G28): the duplicate question over the staged bytes, then
@@ -33,9 +40,10 @@ internal static class ImportCommit
 
     /// <summary>
     /// Adds the candidate as a new item and returns it only once its file is in the root under P1's name and the step
-    /// is cleared (R9); or, for a file whose bytes an item's original already holds, discards the staged file and returns
-    /// that item, with a failure naming the staged copy when it cannot be deleted. A failure before the commit discards
-    /// the staged file too, so it leaves nothing. A failure after the
+    /// is cleared (R9); or, for a file whose bytes an item's original already holds, gives that item the candidate's tags
+    /// it does not carry yet, discards the staged file and returns the item, with a failure naming the refused tag write
+    /// or else the staged copy that cannot be deleted. A failure before the commit discards the staged file too, so it
+    /// leaves nothing. A failure after the
     /// commit carries the item as committed: no query returns it, its pending step and staged file stay, and the next
     /// start removes them (State: A live failure).
     /// </summary>
@@ -57,11 +65,19 @@ internal static class ImportCommit
 
         if (duplicate.Value is not null)
         {
-            // The answer stands; a staged copy that cannot be deleted is named, and the next start's clearing of
-            // .work\ removes it.
-            var found = new ImportResult(duplicate.Value, AlreadyInStash: true);
+            // The answer stands whatever fails after it. The lit tags the item lacks are one transaction, so a kill leaves
+            // all of them or none (G28), and a refused write is this file's failure, claiming no tag (R9); a staged copy
+            // that cannot be deleted is named only beside no such failure, the next start's clearing of .work\ removing it.
+            var tagged = candidate.Tags is { Count: > 0 } tags
+                ? store.Change(ItemTags.AddAction, () => ItemTags.AddMissing(store, duplicate.Value.Id, tags))
+                : Outcome<IReadOnlyList<string>>.Of([]);
+            var found = tagged.Value is { Count: > 0 } gained
+                ? new ImportResult(duplicate.Value with { Tags = [.. duplicate.Value.Tags, .. gained], CommitsWhenRead = store.Commits }, AlreadyInStash: true) { GainedTags = gained }
+                : new ImportResult(duplicate.Value, AlreadyInStash: true);
             var discarded = Discard(store, candidate);
-            return discarded.Succeeded ? Outcome<ImportResult>.Of(found) : Outcome<ImportResult>.FailAfterCommit(discarded.Failure with { Subject = candidate.Name + extension }, found);
+            return !tagged.Succeeded ? Outcome<ImportResult>.FailAfterCommit(tagged.Failure, found)
+                : discarded.Succeeded ? Outcome<ImportResult>.Of(found)
+                : Outcome<ImportResult>.FailAfterCommit(discarded.Failure with { Subject = candidate.Name + extension }, found);
         }
 
         var workName = Path.GetFileName(candidate.StagedPath);
@@ -89,7 +105,7 @@ internal static class ImportCommit
                 ("$sha256", candidate.Sha256),
                 ("$pending", PendingStep.Encode([PendingStep.Place(workName, fileName)])))!;
             // In the insert's own transaction, so a kill leaves the item with its tags or not at all (G28).
-            var tags = ItemTags.AddToNewItem(store, id, candidate.Tags ?? []);
+            var tags = ItemTags.AddMissing(store, id, candidate.Tags ?? []);
             return (Id: id, FileName: fileName, Tags: tags);
         });
         if (!inserted.Succeeded)
@@ -107,7 +123,10 @@ internal static class ImportCommit
                 CommitsWhenRead = store.Commits,
                 FileStepsWhenRead = store.FileSteps,
             },
-            AlreadyInStash: false);
+            AlreadyInStash: false)
+        {
+            GainedTags = itemTags,
+        };
         var renamed = store.RetryHeldFile(Action, candidate.StagedPath, () => File.Move(candidate.StagedPath, added.Item.FilePath));
         if (!renamed.Succeeded)
         {
