@@ -84,7 +84,7 @@ public sealed class TagListsTests
         Assert.IsTrue(afterTaking.All(item => !item.Tags.Contains("half")), "the second click, on the same copies the menu opened on, took it off all three (G17)");
         Assert.IsFalse(TagLists.AddTagEntries([new("half", 0)], afterTaking).Single(entry => entry.Tag == "half").Marked);
         Assert.IsEmpty((await listed.Stash.Store!.TagCounts()).Value!, "carried by none, the tag ceased to exist (G17)");
-        Assert.IsEmpty(listed.Listing.Chips, "and left the chip row (G4)");
+        Assert.AreEqual(new TagCount("half", 0), listed.Listing.Chips.Single(), "the chip row holds its inactive place");
         CollectionAssert.AreEqual(new[] { "Type a tag…" }, TagLists.AddTagEntries((await listed.Stash.Store!.TagCounts()).Value!, afterTaking).Select(entry => entry.Label).ToList(), "so the next opening does not list it");
         Assert.IsEmpty(listed.Notices.Shown, "a change that succeeded says nothing more");
         listed.Stash.Close();
@@ -96,9 +96,10 @@ public sealed class TagListsTests
     {
         using var listed = await ListedStash.Open();
         var items = new[] { await listed.Stash.Import("kept"), await listed.Stash.Import("also kept"), await listed.Stash.Import("gone") };
-        await listed.Stash.Store!.AddTag([items[2]], "late");
+        var otherCarrier = await listed.Stash.Import("other carrier");
+        await listed.Stash.Store!.AddTag([items[2], otherCarrier], "late");
         await listed.Listing.ShowScope(Scope.All);
-        var opened = listed.Listing.Items.ToList();
+        var opened = await listed.Organising.Present(items);
         await listed.Deletion.Delete([items[2]]);
         listed.Notices.Close(listed.Notices.Shown.Single());
 
@@ -110,6 +111,23 @@ public sealed class TagListsTests
         CollectionAssert.AreEquivalent(new[] { items[0].Id, items[1].Id }, present.Select(item => item.Id).ToList(), "the deleted item is not among those the lists read");
         Assert.IsTrue(present.All(item => item.Tags.SequenceEqual(["late"])), "the others carry it");
         Assert.IsTrue(TagLists.AddTagEntries((await listed.Stash.Store!.TagCounts()).Value!, present).Single(entry => entry.Tag == "late").Marked, "the mark is the store's truth for the items that remain");
+    }
+
+    [TestMethod]
+    public async Task AStaleAddTagEntryCannotRestoreATagThatLostItsLastCarrier()
+    {
+        using var listed = await ListedStash.Open();
+        var target = await listed.Stash.Import("target");
+        var carrier = await listed.Stash.Import("carrier");
+        var store = listed.Stash.Store!;
+        Assert.IsTrue((await store.AddTag([carrier], "picked")).Single().Succeeded);
+        var entry = TagLists.AddTagEntries((await store.TagCounts()).Value!, [target]).Single(entry => entry.Tag == "picked");
+        Assert.IsTrue((await store.RemoveTag([carrier], "picked")).Single().Succeeded);
+
+        var picked = await TagLists.Click(listed.Organising, entry.Action, [target], entry.Tag!);
+
+        Assert.AreEqual("Add a tag failed: target, no item carries #picked any more", picked.Failure?.Sentence);
+        Assert.IsEmpty((await store.TagCounts()).Value!);
     }
 
     [TestMethod]

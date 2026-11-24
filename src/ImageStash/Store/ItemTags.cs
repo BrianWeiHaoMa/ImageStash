@@ -30,9 +30,18 @@ internal static class ItemTags
     /// Gives each listed item the tags <paramref name="text"/> commits; no words change nothing (G17: nothing requires
     /// a tag). An item already carrying a tag is left as it is.
     /// </summary>
-    public static IReadOnlyList<Outcome> Add(StoreContext store, IReadOnlyList<StashItem> items, string text)
+    public static IReadOnlyList<Outcome> Add(StoreContext store, IReadOnlyList<StashItem> items, string text) =>
+        Add(store, items, Words(text));
+
+    /// <summary>Assigns a picked or dropped tag only while it still has a carrier at the tagging write (G17).</summary>
+    public static IReadOnlyList<Outcome> AddExisting(StoreContext store, IReadOnlyList<StashItem> items, string tag) =>
+        Add(store, items, [tag], () => TagRows(store).Any(row => string.Equals(row.Tag, tag, StringComparison.OrdinalIgnoreCase)
+            && StashItem.IsListed(store.Folder, row.PendingSteps))
+            ? null
+            : $"no item carries #{tag} any more");
+
+    private static IReadOnlyList<Outcome> Add(StoreContext store, IReadOnlyList<StashItem> items, IReadOnlyList<string> words, Func<string?>? refusedBecause = null)
     {
-        var words = Words(text);
         if (words.Count == 0)
         {
             return items.Select(_ => Outcome.Done).ToList();
@@ -45,7 +54,7 @@ internal static class ItemTags
             {
                 Insert(store, id, tags);
             }
-        });
+        }, refusedBecause);
     }
 
     /// <summary>Takes the tag, in any spelling, off each listed item; an item not carrying it is left as it is.</summary>
@@ -106,9 +115,7 @@ internal static class ItemTags
     /// </summary>
     public static Outcome<IReadOnlyList<TagCount>> Counts(StoreContext store)
     {
-        var rows = store.Read(CountAction, () => store.Query(
-            $"SELECT t.item_id, t.tag, i.pending_steps FROM tags t JOIN items i ON i.id = t.item_id WHERE {StashItem.NotDeleted} ORDER BY t.rowid",
-            r => (Id: r.GetInt64(0), Tag: r.GetString(1), PendingSteps: r.IsDBNull(2) ? null : r.GetString(2))));
+        var rows = store.Read(CountAction, () => TagRows(store));
         if (!rows.Succeeded)
         {
             return rows.Failure;
@@ -140,6 +147,10 @@ internal static class ItemTags
             .ThenBy(count => count.Tag, StringComparer.OrdinalIgnoreCase)
             .ToList());
     }
+
+    private static List<(long Id, string Tag, string? PendingSteps)> TagRows(StoreContext store) => store.Query(
+        $"SELECT t.item_id, t.tag, i.pending_steps FROM tags t JOIN items i ON i.id = t.item_id WHERE {StashItem.NotDeleted} ORDER BY t.rowid",
+        r => (r.GetInt64(0), r.GetString(1), r.IsDBNull(2) ? null : r.GetString(2)));
 
     /// <summary>
     /// The words as the tags they are: each in the spelling first stored for it across every row's tags, those of rows

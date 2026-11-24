@@ -252,6 +252,27 @@ public sealed class HandoffPasteTests
     }
 
     [TestMethod]
+    public async Task AWindowThatStaysAfterPasteKeepsItsRecentOrderAndRecordsTheUse()
+    {
+        using var handing = await Handing.Open("photo.jpg", "animated.gif");
+        var (first, second) = (handing.Items[0], handing.Items[1]);
+        var store = handing.Stash.Store!;
+        await store.RecordUses([first], handing.Stash.Clock.Now);
+        handing.Stash.Clock.Now += TimeSpan.FromSeconds(1);
+        await store.RecordUses([second], handing.Stash.Clock.Now);
+        await handing.Listing.ShowScope(Scope.Recent);
+        handing.Listing.Focus(first.Id);
+        handing.PasteHidesFlyout = false;
+        handing.Stash.Clock.Now += TimeSpan.FromSeconds(1);
+
+        Assert.IsTrue((await handing.Paste(handing.Listing.SelectedItems, RecordingTarget.Relay)).Succeeded);
+
+        CollectionAssert.AreEqual(new[] { second.Id, first.Id }, handing.Listing.Items.Select(item => item.Id).ToArray());
+        CollectionAssert.AreEqual(new[] { first.Id }, handing.Listing.Selection.ToArray());
+        Assert.AreEqual(first.Id, (await store.Recent()).Value![0].Id);
+    }
+
+    [TestMethod]
     public async Task AUseTheStoreRefusesLeavesTheHandoffStandingAndTheHiddenFlyoutOnRecent()
     {
         using var handing = await Handing.Open();

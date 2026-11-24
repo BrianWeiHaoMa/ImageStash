@@ -69,7 +69,7 @@ public sealed class PreviewSteppingTests
     }
 
     [TestMethod]
-    public async Task InRecentTheStepsFollowTheOrderOfUseAndACopyOfTheItemShownMovesItToTheHeadForTheNextStep()
+    public async Task InRecentTheStepsFollowTheDisplayedOrderUntilTheNextSummon()
     {
         using var listed = await ListedStash.Open();
         // Real pictures: a copy puts a still's bitmap on the clipboard too.
@@ -92,12 +92,18 @@ public sealed class PreviewSteppingTests
         OpenOn(listed, recent[1]);
         await Step(listed, Key.Right, recent[2]);
 
-        // Ctrl+C in the preview copies the item shown, as the preview's copy does: it moves to Recent's head.
+        // A copy in the preview records use while stepping still follows the displayed list (G4, G10, G19).
         listed.Stash.Clock.Now += TimeSpan.FromMinutes(1);
         Assert.IsTrue((await listed.Handoff.Copy(null!, [listed.PreviewItem!])).Succeeded);
         await listed.Listing.Settle();
-        Assert.AreEqual(recent[2].Id, listed.Listing.Items[0].Id, "the copy moved it to the head");
+        Assert.AreEqual(recent[2].Id, (await listed.Stash.Store!.Recent()).Value![0].Id, "the copy recorded the latest use");
+        CollectionAssert.AreEqual(recent.Select(item => item.Id).ToArray(), listed.Listing.Items.Select(item => item.Id).ToArray());
+        await Unmoved(listed, Key.Right, recent[2]);
+        await Step(listed, Key.Left, recent[1]);
+        await Step(listed, Key.Right, recent[2]);
 
+        await listed.Summon(pinned: true);
+        Assert.AreEqual(recent[2].Id, listed.Listing.Items[0].Id, "the summon takes the latest order");
         await Unmoved(listed, Key.Left, recent[2]);
         await Step(listed, Key.Right, recent[0]);
     }

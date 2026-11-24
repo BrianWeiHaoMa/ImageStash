@@ -195,6 +195,12 @@ public sealed class StashStore : IDisposable
     /// <summary>Every tag the stash's items carry, with how many carry it, the most carried first (G4).</summary>
     public Task<Outcome<IReadOnlyList<TagCount>>> TagCounts() => thread.Read(() => ItemTags.Counts(store));
 
+    /// <summary>The in-memory store state against which a listing's tag counts were read.</summary>
+    internal (long Commits, long FileSteps) ListingVersion => (store.Commits, store.FileSteps);
+
+    internal Task<(Outcome<IReadOnlyList<TagCount>> Counts, (long Commits, long FileSteps) Version)> CountListingTags() =>
+        thread.Read(() => (ItemTags.Counts(store), ListingVersion));
+
     /// <summary>How many items the whole stash holds, counted as an export's manifest counts them, whatever the window shows (G36).</summary>
     public Task<Outcome<int>> Count() => thread.Read(() => store.Read("Count the stash", () => StashItem.CountListed(store)));
 
@@ -203,6 +209,9 @@ public sealed class StashStore : IDisposable
     /// item no longer in the stash named as it was handed in.
     /// </summary>
     public Task<IReadOnlyList<Outcome>> AddTag(IReadOnlyList<StashItem> items, string text) => thread.Run(() => ItemTags.Add(store, items, text));
+
+    internal Task<IReadOnlyList<Outcome>> AddExistingTag(IReadOnlyList<StashItem> items, string tag) =>
+        thread.Run(() => ItemTags.AddExisting(store, items, tag));
 
     /// <summary>Takes <paramref name="tag"/>, in any spelling, off each item; one outcome per item, in order.</summary>
     public Task<IReadOnlyList<Outcome>> RemoveTag(IReadOnlyList<StashItem> items, string tag) => thread.Run(() => ItemTags.Remove(store, items, tag));

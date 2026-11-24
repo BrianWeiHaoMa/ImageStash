@@ -73,6 +73,36 @@ public sealed class MovingTests
     }
 
     [TestMethod]
+    public async Task MovingKeepsTheDisplayedRecentAndTagOrderAndListsRecordsFromTheNewFolder()
+    {
+        using var listed = await ListedStash.Open(SetClock.Ahead);
+        var stash = listed.Stash;
+        var store = stash.Store!;
+        var now = stash.Clock.Now;
+        var first = await stash.Import("first");
+        var second = await stash.Import("second");
+        var extra = await stash.Import("extra");
+        Assert.IsTrue((await store.RecordUses([second], now)).Succeeded);
+        Assert.IsTrue((await store.RecordUses([first], now.AddSeconds(1))).Succeeded);
+        Assert.IsTrue((await store.AddTag([first], "cat")).Single().Succeeded);
+        Assert.IsTrue((await store.AddTag([second], "dog")).Single().Succeeded);
+        await listed.Listing.ShowScope(Scope.Recent);
+        Assert.IsTrue((await store.RecordUses([second], now.AddSeconds(2))).Succeeded);
+        Assert.IsTrue((await listed.Organising.AddTag([extra], "dog")).Succeeded);
+        var chosen = Chose(listed);
+
+        var moved = await Page(listed).Move(null!);
+
+        Assert.IsTrue(moved.Succeeded, moved.Failure?.Sentence);
+        CollectionAssert.AreEqual(new[] { first.Id, second.Id }, listed.Listing.Items.Select(item => item.Id).ToArray());
+        CollectionAssert.AreEqual(new[] { "cat", "dog" }, listed.Listing.Chips.Select(tag => tag.Tag).ToArray());
+        Assert.IsTrue(listed.Listing.Items.All(item => Path.GetDirectoryName(item.FilePath) == chosen));
+        await listed.Summon(pinned: true);
+        CollectionAssert.AreEqual(new[] { second.Id, first.Id }, listed.Listing.Items.Select(item => item.Id).ToArray());
+        CollectionAssert.AreEqual(new[] { "dog", "cat" }, listed.Listing.Chips.Select(tag => tag.Tag).ToArray());
+    }
+
+    [TestMethod]
     public async Task ACancelledPickerAsksNothingOfTheStoreShowsNoBusyStateAndSaysNothing()
     {
         using var listed = await ListedStash.Open();

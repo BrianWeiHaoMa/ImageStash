@@ -57,6 +57,10 @@ public sealed class Organising(Listing listing, Notices notices)
     public Task<Outcome> AddTag(IReadOnlyList<StashItem> items, string text) =>
         OneAtATime(ItemTags.AddAction, () => Change(items, ItemTags.AddAction, store => store.AddTag(items, text)));
 
+    /// <summary>Applies the tag of a chip drop, which can only give an existing tag (G17).</summary>
+    internal Task<Outcome> AddExistingTag(IReadOnlyList<StashItem> items, string tag) =>
+        OneAtATime(ItemTags.AddAction, () => Change(items, ItemTags.AddAction, store => store.AddExistingTag(items, tag)));
+
     /// <summary>Takes <paramref name="tag"/>, in any spelling, off every item.</summary>
     public Task<Outcome> RemoveTag(IReadOnlyList<StashItem> items, string tag) =>
         OneAtATime(ItemTags.RemoveAction, () => Change(items, ItemTags.RemoveAction, store => store.RemoveTag(items, tag)));
@@ -69,7 +73,7 @@ public sealed class Organising(Listing listing, Notices notices)
     public Task<Outcome> ToggleTag(IReadOnlyList<StashItem> items, string tag) => OneAtATime(TagAct, async () =>
         AllCarry(await Present(items), tag)
             ? await Change(items, ItemTags.RemoveAction, store => store.RemoveTag(items, tag))
-            : await Change(items, ItemTags.AddAction, store => store.AddTag(items, tag)));
+            : await Change(items, ItemTags.AddAction, store => store.AddExistingTag(items, tag)));
 
     /// <summary>
     /// The items as the listing shows them now, or as the store holds them once the listing no longer lists them; an

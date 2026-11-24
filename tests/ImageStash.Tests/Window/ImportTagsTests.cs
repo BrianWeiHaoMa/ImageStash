@@ -185,7 +185,7 @@ public sealed class ImportTagsTests
     }
 
     [TestMethod]
-    public async Task AfterTheUndoATagOnlyTheBatchsPicturesCarriedIsGoneFromTheChipsAndTheEveryTagList()
+    public async Task AfterUndoATagOnlyTheBatchCarriedLeavesAnInactivePlaceAndIsGoneFromThePicker()
     {
         using var importing = await ListedStash.Open();
         var old = await importing.Stash.ImportFixture("old", "still.png");
@@ -201,7 +201,7 @@ public sealed class ImportTagsTests
 
         Assert.IsEmpty(await TagsOf(importing, old));
         Assert.IsEmpty(importing.Listing.Tags, "a tag no item carries ceases to exist (G17)");
-        Assert.IsEmpty(importing.Listing.Chips);
+        Assert.AreEqual(new TagCount("fresh", 0), importing.Listing.Chips.Single());
     }
 
     [TestMethod]

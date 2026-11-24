@@ -14,10 +14,16 @@ internal static class ItemFactChange
     /// Runs <paramref name="change"/> on the identities of the listed items among <paramref name="items"/>, each once;
     /// one outcome per item, in order, a repeated identity answered as its first. A refused store fails every item.
     /// </summary>
-    public static IReadOnlyList<Outcome> Apply(StoreContext store, string action, IReadOnlyList<StashItem> items, Action<IReadOnlyList<long>> change)
+    public static IReadOnlyList<Outcome> Apply(StoreContext store, string action, IReadOnlyList<StashItem> items, Action<IReadOnlyList<long>> change, Func<string?>? refusedBecause = null)
     {
         var changed = store.Change(action, () =>
         {
+            if (refusedBecause?.Invoke() is { } reason)
+            {
+                return items.DistinctBy(item => item.Id).ToDictionary(item => item.Id,
+                    item => new Failure(action, ItemQueries.Named(item.Name, item.FileName), reason));
+            }
+
             var listed = new List<long>();
             var notListed = new Dictionary<long, Failure>();
             foreach (var item in items.DistinctBy(item => item.Id))

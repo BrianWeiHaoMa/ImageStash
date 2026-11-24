@@ -284,7 +284,8 @@ public sealed class Moving
         if (opening.Store is { } fresh)
         {
             Moved?.Invoke(fresh);
-            var listed = listing.StashOpened(fresh);
+            // A Move still has its original store listed. An import withdrew its listing before it copied.
+            var listed = ReferenceEquals(listing.Store, old) ? listing.StashMoved(fresh) : listing.StashOpened(fresh);
             old.Dispose();
             await listed;
             return Outcome.Done;

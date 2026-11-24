@@ -68,6 +68,7 @@ public sealed class ThumbnailGrid : Control
     private TopLevel? window;
     private long? shownFocus;
     private int? shownFocusPlace;
+    private int shownRecentReorders;
 
     /// <summary>Where the pointer last was over the grid, in the window's coordinates, which scrolling does not move; null once it left.</summary>
     private Point? pointer;
@@ -420,12 +421,13 @@ public sealed class ThumbnailGrid : Control
     {
         InvalidateMeasure();
         InvalidateVisual();
-        // A use moves the selected item to the top of Recent, and the selection stays what shows (G1, G7); any lesser
-        // shift, as an item added before it, leaves the view where the user scrolled it.
+        // A fresh Recent order can move the selected item to the top. Bring it into view even when its identity is unchanged (G1, G7).
         var place = listing.Focused is { } focused ? listing.PlaceOf(focused) : null;
         var movedToTheTop = place == 0 && shownFocusPlace is > 0;
+        var reordered = shownRecentReorders != listing.RecentReorders;
         shownFocusPlace = place;
-        if (listing.Focused != shownFocus || movedToTheTop)
+        shownRecentReorders = listing.RecentReorders;
+        if (listing.Focused != shownFocus || movedToTheTop || reordered)
         {
             shownFocus = listing.Focused;
             Dispatcher.UIThread.Post(BringFocusedIntoView, DispatcherPriority.Background);

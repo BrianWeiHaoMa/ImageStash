@@ -1,6 +1,9 @@
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using ImageStash.Store;
 using ImageStash.Tests.Support;
 using ImageStash.Window;
@@ -125,6 +128,128 @@ public sealed class ChipRowTests
             Assert.AreEqual(ChipRow.NarrowestChip, tagChip.Padding.Left + tagChip.Padding.Right,
                 "the row measures a tag chip and counts how many to make by the padding the chip is built with");
         });
+    }
+
+    [TestMethod]
+    public async Task TheFirstOverflowDoesNotChangeWhichTagPlacesFit()
+    {
+        using var listed = await ListedStash.Open();
+        var item = await listed.Stash.Import("a picture with three tags");
+        await listed.Organising.AddTag([item], "one two");
+        await listed.Listing.ShowScope(Scope.All);
+        var before = Places(listed.Listing, overflow: false);
+        // Use a separate view of the same store to measure the new layout on the control thread.
+        var after = new Listing(listed.Failures.Add);
+        await after.StashOpened(listed.Stash.Store!);
+        await after.ShowScope(Scope.All);
+        await listed.Stash.Store!.AddTag([item], "z");
+        await after.Refresh();
+        CollectionAssert.AreEqual(before, Places(after, overflow: true));
+
+        static Rect[] Places(Listing listing, bool overflow)
+        {
+            Rect[] places = [];
+            ControlThread.Run(() =>
+            {
+                var row = Row(listing);
+                var size = new Size(294, 40);
+                // Supply measured chip widths because the portable test thread has no theme or font manager.
+                row.Measure(size);
+                Dispatcher.UIThread.RunJobs();
+                var tags = row.Children.OfType<Button>().Where(chip => chip.Content is string).ToArray();
+                foreach (var chip in tags)
+                {
+                    chip.Width = (string)chip.Content! == "#z" ? 36 : 50;
+                }
+
+                var picker = row.Children.OfType<Button>().Last();
+                picker.Width = 40;
+                row.Measure(size);
+                row.Arrange(new Rect(size));
+                Assert.AreEqual(overflow, picker.IsHitTestVisible);
+                CollectionAssert.AreEqual(new[] { "#one", "#two" }, tags.Where(chip => chip.IsHitTestVisible).Select(chip => (string)chip.Content!).ToArray());
+                places = tags.Take(2).Select(chip => chip.Bounds).ToArray();
+            });
+            return places;
+        }
+    }
+
+    [TestMethod]
+    public async Task ADropOnAChipWhoseLastCarrierIsGoneCannotCreateTheTag()
+    {
+        using var listed = await ListedStash.Open();
+        var store = listed.Stash.Store!;
+        var carrier = await listed.Stash.Import("only carrier");
+        var dropped = await listed.Stash.Import("dropped");
+        Assert.IsTrue((await store.AddTag([carrier], "reaction")).Single().Succeeded);
+        await listed.Listing.ShowScope(Scope.All);
+        // Keep the control's read at the drop boundary while Organising refreshes its listing on completion.
+        var shown = new Listing(listed.Failures.Add);
+        await shown.StashOpened(store);
+        await shown.ShowScope(Scope.All);
+        // The other tagging action has committed, with its listing refresh still to come.
+        Assert.IsTrue((await store.RemoveTag([carrier], "reaction")).Single().Succeeded);
+        var drag = new OwnDrag([dropped]);
+        var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnChanged()
+        {
+            if (!listed.Organising.Changing)
+            {
+                finished.TrySetResult();
+            }
+        }
+
+        listed.Organising.Changed += OnChanged;
+        try
+        {
+            ControlThread.Run(() =>
+            {
+                var row = new ChipRow(shown, listed.Organising, () => drag, _ => { });
+                var chip = row.Children.OfType<Button>().Single(button => button.Content as string == "#reaction");
+                using var data = new DataTransfer();
+                chip.RaiseEvent(new DragEventArgs(DragDrop.DropEvent, data, chip, new Point(1, 1), KeyModifiers.None)
+                    { DragEffects = DragDropEffects.Copy });
+            });
+            await finished.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        finally
+        {
+            listed.Organising.Changed -= OnChanged;
+        }
+
+        Assert.IsTrue(drag.TakenByChip, "the internal drop is consumed and records no outside use");
+        Assert.IsEmpty((await store.TagCounts()).Value!, "the stale chip cannot recreate the tag");
+        Assert.AreEqual("Add a tag failed: dropped, no item carries #reaction any more", listed.Notices.Shown.Single().Text);
+        Assert.IsEmpty(listed.Listing.LitTags);
+        Assert.AreEqual(new TagCount("reaction", 0), listed.Listing.Chips.Single(), "its place remains inactive");
+        Assert.IsTrue((await listed.Organising.AddTag([dropped], "reaction")).Succeeded);
+        Assert.AreEqual("reaction", (await store.Item(dropped.Id)).Value!.Tags.Single(), "deliberately entering the tag can create it");
+        ControlThread.Run(() =>
+        {
+            var row = Row(listed.Listing, listed.Organising);
+            var chip = row.Children.OfType<Button>().Single(button => button.Content as string == "#reaction");
+            Assert.IsTrue(chip.IsEnabled, "the revived tag can be used again");
+        });
+    }
+
+    [TestMethod]
+    public async Task ALiveChipCanStartAWholeStashSearchFromAnEmptyScope()
+    {
+        using var listed = await ListedStash.Open();
+        var tagged = await listed.Stash.Import("a picture");
+        await listed.Organising.AddTag([tagged], "reaction");
+        await listed.Listing.ShowScope(Scope.Favorites);
+        Assert.IsEmpty(listed.Listing.Items);
+        var query = "";
+        ControlThread.Run(() =>
+        {
+            var row = new ChipRow(listed.Listing, listed.Organising, () => null, text => query = text);
+            var chip = row.Children.OfType<Button>().Single(button => button.Content as string == "#reaction");
+            Assert.IsTrue(chip.IsEnabled);
+            chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        });
+        Assert.AreEqual("reaction", query);
+        Assert.AreEqual(tagged.Id, (await listed.Stash.Store!.Search(query)).Value!.Single().Id);
     }
 
     private static ChipRow Row(Listing listing, Organising? organising = null) =>

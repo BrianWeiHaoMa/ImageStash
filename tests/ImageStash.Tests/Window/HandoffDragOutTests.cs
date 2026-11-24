@@ -35,7 +35,7 @@ public sealed class HandoffDragOutTests
     }
 
     [TestMethod]
-    public async Task RecentReordersAfterALandedDropWithTheSelectionKept()
+    public async Task RecentKeepsItsOrderAfterALandedDropUntilRecentIsChosenAgain()
     {
         using var handing = await Handing.Open("photo.jpg", "animated.gif");
         var (first, second) = (handing.Items[0], handing.Items[1]);
@@ -48,7 +48,10 @@ public sealed class HandoffDragOutTests
 
         await handing.Handoff.DragOut(handing.Listing.SelectedItems, handing.Drag, _ => { }, () => { });
 
-        CollectionAssert.AreEqual(new[] { first.Id, second.Id }, handing.Listing.Items.Select(item => item.Id).ToList(), "Recent while it shows (G4)");
+        CollectionAssert.AreEqual(new[] { second.Id, first.Id }, handing.Listing.Items.Select(item => item.Id).ToList(), "Recent while it shows (G4)");
+        Assert.AreEqual(first.Id, (await handing.Stash.Store!.Recent()).Value![0].Id, "the drop already recorded its use");
+        await handing.Listing.ShowScope(Scope.Recent);
+        Assert.AreEqual(first.Id, handing.Listing.Items[0].Id, "choosing the same scope takes the latest order");
         CollectionAssert.AreEqual(new[] { first.Id }, handing.Listing.Selection.ToList());
     }
 

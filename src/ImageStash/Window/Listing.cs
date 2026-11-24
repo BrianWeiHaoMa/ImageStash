@@ -30,7 +30,7 @@ public enum Direction
 }
 
 /// <summary>
-/// What the stash window shows, held once: the stash's state, the scope, the query, the items in the store's order,
+/// What the stash window shows, held once: the stash's state, the scope, the query, the ordered items,
 /// the tag chips, the selection and the focused item (Composition: Window owns the selection). The window's controls read it and
 /// never keep a copy. Nothing of the stash is read until <see cref="StashOpened"/> hands over the store, so a window
 /// summoned while the stash opens shows the opening and nothing else (G35, State: Every change). A load runs the
@@ -52,6 +52,9 @@ public sealed class Listing
 
     /// <summary>Every tag the stash's items carry, as the latest load read it; never kept across a change (G17).</summary>
     private IReadOnlyList<TagCount> tags = [];
+    private (long Commits, long FileSteps)? tagsVersion;
+    private ListingOrder order = new();
+    private StashStore? withdrawnStore;
     private Dictionary<long, int> indexOf = [];
     private bool resetPending = true;
 
@@ -145,7 +148,15 @@ public sealed class Listing
     public int Replacements { get; private set; }
 
     /// <summary>The stash has been replaced by an import, which has passed its record (State: Import stash…); only <see cref="Transferring"/> tells it.</summary>
-    internal void StashReplaced() => Replacements++;
+    internal void StashReplaced()
+    {
+        lock (gate)
+        {
+            Replacements++;
+            withdrawnStore = null;
+            order = new ListingOrder();
+        }
+    }
 
     /// <summary>The stash, once it has opened; until then nothing may reach it.</summary>
     public StashStore? Store => store;
@@ -167,11 +178,12 @@ public sealed class Listing
 
     public IReadOnlyList<StashItem> Items { get; private set; } = [];
 
+    /// <summary>How many times the visible Recent order changed at a summon or scope choice.</summary>
+    internal int RecentReorders { get; private set; }
+
     /// <summary>
-    /// The tag chips for what the listing holds, all of them, in order (G4, G5): with no query, every tag the stash's
-    /// items carry, the most carried first; while a query has words, the lit ones, then the tags that would narrow the
-    /// matches further. The row shows them in order up to the first that does not fit. Loaded with the items, read fresh
-    /// at every load.
+    /// The tag chips in display order (G4, G5). With no query a zero count marks an inactive place. The row fits as many
+    /// whole chips as it can. <see cref="Tags"/> is the live list for pickers and import.
     /// </summary>
     public IReadOnlyList<TagCount> Chips { get; private set; } = [];
 
@@ -214,22 +226,33 @@ public sealed class Listing
     /// The stash opened, at start or at the folder a Move switched to: every part reads it from here on, and a load of
     /// the store it replaces is abandoned (G30).
     /// </summary>
-    public Task StashOpened(StashStore opened)
+    public Task StashOpened(StashStore opened) => UseStore(opened, keepOrder: false);
+
+    /// <summary>Move kept the items and gave their files a new location.</summary>
+    internal Task StashMoved(StashStore opened) => UseStore(opened, keepOrder: true);
+
+    private Task UseStore(StashStore opened, bool keepOrder)
     {
-        if (store is not null && !ReferenceEquals(store, opened))
+        lock (gate)
         {
-            // The items listed from the store a Move replaced name its files: none is handed over, or dragged out, again.
-            lock (gate)
+            if (!ReferenceEquals(store ?? withdrawnStore, opened))
             {
+                // A Move has changed the file paths. Clear the old listing before any caller can use them.
                 Items = [];
                 indexOf = [];
                 selection = [];
                 selectionByImport = false;
                 Focused = null;
+                ClearTagCounts();
+                if (!keepOrder)
+                {
+                    order = new ListingOrder();
+                }
             }
-        }
 
-        store = opened;
+            withdrawnStore = null;
+            store = opened;
+        }
         State = StashState.Open;
         OpenFailure = null;
         Raise();
@@ -263,7 +286,7 @@ public sealed class Listing
     /// </summary>
     public Task Withdraw()
     {
-        LetGoOfTheStore();
+        LetGoOfTheStore(keepOrder: true);
         State = StashState.Replacing;
         OpenFailure = null;
         Raise();
@@ -272,20 +295,33 @@ public sealed class Listing
     }
 
     /// <summary>Nothing of the store held is listed or read from here on, and every load started is settled.</summary>
-    private void LetGoOfTheStore()
+    private void LetGoOfTheStore(bool keepOrder = false)
     {
         lock (gate)
         {
+            // The order contains only identities and tag names. It can be resumed if the same stash reopens.
+            withdrawnStore = keepOrder ? store : null;
+            if (!keepOrder)
+            {
+                order = new ListingOrder();
+            }
+
             store = null;
             Items = [];
             indexOf = [];
             selection = [];
             selectionByImport = false;
             Focused = null;
-            tags = [];
-            Chips = [];
-            applied = started;
+            ClearTagCounts();
+            applied = ++started;
         }
+    }
+
+    private void ClearTagCounts()
+    {
+        tags = [];
+        Chips = [];
+        tagsVersion = null;
     }
 
     /// <summary>
@@ -296,9 +332,23 @@ public sealed class Listing
     {
         using var acting = UserAct.Begin(ScopeAct);
         CountChange(byPerson);
-        Query = "";
-        Scope = scope;
-        resetPending = false;
+        lock (gate)
+        {
+            Query = "";
+            Scope = scope;
+            resetPending = false;
+            if (scope == Scope.Recent)
+            {
+                // A paste that hid the flyout chooses Recent with its first item selected.
+                order.RequestRecentOrder();
+            }
+
+            if (byPerson)
+            {
+                order.RequestTagOrder();
+            }
+        }
+
         QueryCleared?.Invoke();
         return Load(keepSelection: false);
     }
@@ -313,13 +363,22 @@ public sealed class Listing
     }
 
     /// <summary>Loads what is showing again, keeping the selection where its items still exist.</summary>
-    public Task Refresh() => Load(keepSelection: true);
+    public Task Refresh()
+    {
+        lock (gate)
+        {
+            if (Scope == Scope.Recent)
+            {
+                order.RecentChanged();
+            }
+        }
+
+        return Load(keepSelection: true);
+    }
 
     /// <summary>
-    /// A summon shows what the listing holds, which every change has kept current, and reloads nothing (G1): the scope,
-    /// the search and the selection as they were left, a paste's start on Recent included (<see cref="Handoff"/>); only a
-    /// load the store refused, while another program held it (E3), is asked for again, and the first show after start
-    /// judges Recent or All once more, the stash as it then stands (G1). A summon of the hidden
+    /// A summon applies the latest Recent and tag order and keeps the scope, search and selection (G1, G4).
+    /// The first show after start judges Recent or All once more. A summon of the hidden
     /// <paramref name="flyout"/> keeps, of several items an import selected, the first alone (G1, G12), whether the import
     /// ended before the hide or while the flyout was hidden; the pinned window brought forward keeps them all.
     /// </summary>
@@ -328,12 +387,31 @@ public sealed class Listing
         using var acting = UserAct.Begin(SummonAct);
         bool collapsed;
         bool judge;
+        bool read;
+        bool chipsChanged = false;
         lock (gate)
         {
             shownSinceStart = true;
             // The first show after start: the stash may have changed since its last load, as a capture's commit does
             // before its refresh, so it is judged once more; a stash not yet listed is judged at its first load (G1).
             judge = resetPending && listedOnce;
+            order.RequestTagOrder();
+            if (Scope == Scope.Recent)
+            {
+                order.RequestRecentOrder();
+            }
+
+            read = store is not null && (judge || loadFailed || !Settled || Scope == Scope.Recent || tagsVersion != store.ListingVersion);
+            if (store is not null && !read)
+            {
+                order.CountedTags(tags);
+                chipsChanged = !IsSearch && !Chips.SequenceEqual(order.TagPlaces);
+                if (chipsChanged)
+                {
+                    Chips = order.TagPlaces;
+                }
+            }
+
             collapsed = flyout && selectionByImport && selection.Count > 1;
             if (collapsed)
             {
@@ -343,12 +421,12 @@ public sealed class Listing
             }
         }
 
-        if (collapsed)
+        if (collapsed || chipsChanged)
         {
             Raise();
         }
 
-        return judge ? Load(keepSelection: false) : loadFailed ? Refresh() : Task.CompletedTask;
+        return read ? Load(keepSelection: !judge) : Task.CompletedTask;
     }
 
     /// <summary>
@@ -585,11 +663,20 @@ public sealed class Listing
     private async Task Load(bool keepSelection)
     {
         int load;
+        string query;
+        Scope scope;
+        bool reset;
+        bool searching;
+        bool readCoveredRecent;
         lock (gate)
         {
             load = ++started;
             selectionResetWaiting |= !keepSelection;
             SelectionResets += keepSelection ? 0 : 1;
+            (query, scope, reset) = (Query, Scope, resetPending);
+            searching = ItemSearch.IsSearch(query);
+            // Search can cover Recent. Read its membership on refresh so successive arrivals still join in order.
+            readCoveredRecent = scope == Scope.Recent && searching && order.RecentReadPending;
         }
 
         if (store is not { } opened)
@@ -605,22 +692,32 @@ public sealed class Listing
             return;
         }
 
-        var (query, scope, reset) = (Query, Scope, resetPending);
         // A load whose store a Move has replaced, or let go of, is abandoned after each await: that store is closed (G30).
         var loaded = await Run(opened, query, scope, reset, () => ReferenceEquals(store, opened));
-        var counted = loaded is null || !ReferenceEquals(store, opened) ? null : await opened.TagCounts();
+        if (loaded is null || !ReferenceEquals(store, opened))
+        {
+            return;
+        }
+
+        var coveredRecent = readCoveredRecent ? await opened.Recent() : null;
+        if (!ReferenceEquals(store, opened))
+        {
+            return;
+        }
+
+        var (counted, version) = await opened.CountListingTags();
         bool judgedTooLate;
         lock (gate)
         {
             // Superseded, or abandoned, its store let go of while the tags were counted: the load that replaced it, or
             // StashFailed or Withdraw, settles the listing.
-            if (load != started || loaded is null || counted is null || !ReferenceEquals(store, opened))
+            if (load != started || !ReferenceEquals(store, opened))
             {
                 return;
             }
 
             // A judgment of the first show that the person's act overtook lists what they acted on instead (G1, G7).
-            judgedTooLate = reset && !resetPending && loaded.Items.Succeeded && !ItemSearch.IsSearch(query);
+            judgedTooLate = reset && !resetPending && loaded.Items.Succeeded && !searching;
             if (judgedTooLate)
             {
                 // Its move to the first item gives way with it, so the load listing what they acted on keeps their selection.
@@ -629,26 +726,25 @@ public sealed class Listing
             else
             {
                 applied = load;
-                loadFailed = !loaded.Items.Succeeded || !counted.Succeeded;
+                loadFailed = !loaded.Items.Succeeded || !counted.Succeeded || coveredRecent is { Succeeded: false };
                 if (loaded.Items.Succeeded)
                 {
-                    listedOnce = true;
-                    if (reset && !ItemSearch.IsSearch(query))
-                    {
-                        Scope = loaded.Scope;
-                        resetPending = !shownSinceStart;
-                    }
-
-                    stashEmpty = loaded.StashEmpty ?? stashEmpty;
-                    // A later load that keeps the selection, such as a change's refresh, never undoes an earlier one's
-                    // move to the first match it superseded (G5); one judging the first show's scope selects its first
-                    // item (G1).
-                    Apply(loaded.Items.Value!, keepSelection && !selectionResetWaiting && !reset);
-                    selectionResetWaiting = false;
+                    ApplyLoadedItems(loaded, searching, reset, keepSelection);
                 }
 
-                tags = counted.Value ?? tags;
-                Chips = ChipsFor(query, tags, Items);
+                if (coveredRecent?.Value is { } recent)
+                {
+                    order.Recent(recent);
+                }
+
+                if (counted.Value is { } currentTags)
+                {
+                    tags = currentTags;
+                    tagsVersion = version;
+                    order.CountedTags(tags);
+                }
+
+                Chips = searching ? ChipsFor(query, tags, Items) : order.TagPlaces;
             }
         }
 
@@ -666,9 +762,44 @@ public sealed class Listing
         {
             failed(counted.Failure);
         }
+        else if (coveredRecent is { Succeeded: false } missed)
+        {
+            failed(missed.Failure);
+        }
 
         Raise();
         EndSettling();
+    }
+
+    private void ApplyLoadedItems(Loaded loaded, bool searching, bool reset, bool keepSelection)
+    {
+        listedOnce = true;
+        if (reset && !searching)
+        {
+            Scope = loaded.Scope;
+            resetPending = !shownSinceStart;
+        }
+
+        stashEmpty = loaded.StashEmpty ?? stashEmpty;
+        var items = loaded.Items.Value!;
+        if (loaded.Scope == Scope.Recent && !searching)
+        {
+            if (reset)
+            {
+                order.RequestRecentOrder();
+            }
+
+            if (order.RecentReorderPending && !Items.Select(item => item.Id).SequenceEqual(items.Select(item => item.Id)))
+            {
+                RecentReorders++;
+            }
+
+            items = order.Recent(items);
+        }
+
+        // A refresh that supersedes a search or first-show reset keeps its move to the first item.
+        Apply(items, keepSelection && !selectionResetWaiting && !reset);
+        selectionResetWaiting = false;
     }
 
     /// <summary>Lets every <see cref="Settle"/> go once the latest load has been applied and shown.</summary>
@@ -690,6 +821,7 @@ public sealed class Listing
 
     private void Apply(IReadOnlyList<StashItem> items, bool keepSelection)
     {
+        var choseNothing = keepSelection && Items.Count > 0 && selection.Count == 0;
         Items = items;
         indexOf = new Dictionary<long, int>(items.Count);
         for (var i = 0; i < items.Count; i++)
@@ -698,7 +830,7 @@ public sealed class Listing
         }
 
         var kept = keepSelection ? selection.Where(indexOf.ContainsKey).ToHashSet() : [];
-        if (kept.Count > 0)
+        if (kept.Count > 0 || choseNothing)
         {
             selection = kept;
             Focused = Focused is { } f && kept.Contains(f) ? f : FirstSelected();

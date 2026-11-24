@@ -228,6 +228,68 @@ public sealed class ChipRowRoomTests
     }
 
     [TestMethod]
+    public async Task FirstOverflowKeepsTheRightmostTagTargetForSuccessiveDrops()
+    {
+        using var pointer = TestMouse.PutBackAfterwards();
+        TestMouse.MoveTo(TestMouse.Away);
+        var drags = new PresetDrags();
+        using var shown = Open(drags);
+        var items = await shown.OpenStash(shown.Picture("carrier.png"), shown.Picture("first drop.png"), shown.Picture("second drop.png"));
+        const string rightmost = "#tag-6";
+        var labels = Enumerable.Range(1, 6).Select(i => $"tag-{i}").ToArray();
+        await shown.Tag([items[0]], string.Join(' ', labels));
+        await TrayDesktop.Get(() => shown.Listing.ShowScope(Scope.All));
+        TrayDesktop.Run(() => shown.ChipRow.Measure(new Size(3000, 40)));
+        await Eventually(() => TrayDesktop.Get(() => shown.ChipRow.Children.OfType<Button>().Count(chip => ChipLabel(chip).StartsWith('#')) == labels.Length));
+        var (width, offset) = TrayDesktop.Get(() =>
+        {
+            shown.ChipRow.Measure(new Size(3000, 40));
+            var children = shown.ChipRow.Children;
+            return (children.Sum(child => child.DesiredSize.Width) + 6 * (children.Count - 1) + 4,
+                shown.Window.ClientSize.Width - shown.ChipRow.Bounds.Width);
+        });
+        TrayDesktop.Run(() => shown.Window.Width = width + offset);
+        await Eventually(() => TrayDesktop.Get(() =>
+        {
+            shown.Window.UpdateLayout();
+            return Math.Abs(shown.ChipRow.Bounds.Width - width) <= 0.5;
+        }));
+        var before = TrayDesktop.Get(() =>
+        {
+            Assert.IsFalse(shown.Chip(EveryTag).IsHitTestVisible);
+            return shown.ChipRow.Children.OfType<Button>().Where(chip => ChipLabel(chip).StartsWith('#'))
+                .Select(chip => (Chip: chip, Place: chip.Bounds)).ToArray();
+        });
+        await shown.Tag([items[0]], "z");
+        var target = await shown.DropTargetAt(rightmost);
+        TrayDesktop.Run(() =>
+        {
+            AssertWholeChipRowWithEveryTag(shown);
+            foreach (var (chip, place) in before)
+            {
+                Assert.AreSame(chip, shown.Chip(ChipLabel(chip)));
+                Assert.AreEqual(place, chip.Bounds);
+                Assert.IsTrue(chip.IsHitTestVisible);
+            }
+        });
+
+        foreach (var item in items.Skip(1))
+        {
+            var data = await shown.Files(item.FilePath);
+            drags.During = () =>
+            {
+                Assert.AreEqual(DragDropEffects.Copy, RaiseDrag(target, DragDrop.DragEnterEvent, data));
+                Assert.AreEqual(DragDropEffects.Copy, RaiseDrag(target, DragDrop.DropEvent, data));
+            };
+            ChipRowTests.Drag(shown, item);
+            await Eventually(() => shown.TagsOf(item.Id).Contains(rightmost[1..]));
+            await TrayDesktop.Get(() => shown.Listing.Settle());
+            Assert.AreSame(target, await shown.DropTargetAt(rightmost));
+            Assert.AreEqual(before[^1].Place, TrayDesktop.Get(() => shown.Chip(rightmost).Bounds));
+        }
+    }
+
+    [TestMethod]
     public async Task FavoritesRingsWhileTheWindowsOwnTilesAreOverItAndADropSetsTheirFlags()
     {
         using var pointer = TestMouse.PutBackAfterwards();

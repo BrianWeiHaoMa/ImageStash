@@ -63,6 +63,28 @@ public sealed class TagListsTests
     }
 
     [TestMethod]
+    public async Task AddTagDropsAnEntryWhenItLosesItsLastCarrierWhileTheMenuIsOpen()
+    {
+        using var shown = Open();
+        var items = await shown.OpenStash(shown.Picture("last carrier.png"), shown.Picture("other carrier.png"));
+        await shown.Tag([items[0]], "gone");
+        await shown.Tag([items[1]], "kept");
+        using var pointer = TestMouse.PutBackAfterwards();
+        var list = await OpenList(shown, items[0].Id, "Add tag", entries: 3);
+
+        await ClickEntry(list, "gone");
+
+        await Eventually(() => TrayDesktop.Get(() => Labels(list).SequenceEqual([TypeATag, "kept"])));
+        TrayDesktop.Run(() =>
+        {
+            Assert.IsTrue(MenuAndListOpen(shown, list));
+            Assert.IsFalse(shown.Chip("#gone").IsEnabled, "the row leaves the dead tag's inactive place");
+            shown.CloseMenu();
+        });
+        Assert.IsEmpty(shown.TagsOf(items[0].Id));
+    }
+
+    [TestMethod]
     public async Task AClickTheStoreRefusesForAnItemDeletedMeanwhileIsNamedAndLeavesTheTagUnmarked()
     {
         using var shown = Open();
@@ -131,7 +153,7 @@ public sealed class TagListsTests
         // The store holds the tag before the list reads it again, so the mark is waited for, never read at once.
         await Eventually(() => shown.TagsOf(items[0].Id).SequenceEqual(["tag60"]) && TrayDesktop.Get(() => Entry(list, "tag60").IsChecked));
 
-        TrayDesktop.Run(scroller.ScrollToEnd);
+        TrayDesktop.Run(scroller.ScrollToHome);
         await Eventually(() => TrayDesktop.Get(() => InView(scroller, Entry(list, "tag60"))));
 
         Assert.IsTrue(workingArea.Contains(popup), $"the list {popup} stays within the working area {workingArea} (G17)");
@@ -139,6 +161,7 @@ public sealed class TagListsTests
         {
             Assert.IsTrue(MenuAndListOpen(shown, list), "the list stays open after the click");
             Assert.IsTrue(Entry(list, "tag60").IsChecked, "and marks the tag now carried");
+            Assert.AreEqual("tag60", Labels(list)[1], "the most carried tag now follows Type a tag…");
             shown.CloseMenu();
         });
     }

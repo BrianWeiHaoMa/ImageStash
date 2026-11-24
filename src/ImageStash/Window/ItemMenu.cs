@@ -228,6 +228,18 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
         lists.AddTag?.Classes.Add(TagListHeight.ItemMenuList);
         lists.RemoveTag?.Classes.Add(TagListHeight.ItemMenuList);
         lists.Fill(TagLists.AddTagEntries([], items), TagLists.RemoveTagEntries(items));
+        var lastTags = listing.Tags;
+        void RefreshTagLists()
+        {
+            if (!lastTags.SequenceEqual(listing.Tags))
+            {
+                lastTags = listing.Tags;
+                _ = lists.Read();
+            }
+        }
+
+        listing.Changed += RefreshTagLists;
+        menu.Closed += (_, _) => listing.Changed -= RefreshTagLists;
         _ = lists.Read();
         menu.Open(target);
     }
@@ -461,7 +473,6 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
     /// </summary>
     private sealed class ShownTagLists(Listing listing, Notices notices, Organising organising, IReadOnlyList<StashItem> items, Action<IReadOnlyList<StashItem>> typeATag)
     {
-        private bool everyTag;
         private int reads;
 
         public MenuItem? AddTag { get; set; }
@@ -486,7 +497,7 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
             var read = ++reads;
             var counts = await store.TagCounts();
             var present = await organising.Present(items);
-            if (read != reads)
+            if (read != reads || !ReferenceEquals(listing.Store, store))
             {
                 return;
             }
@@ -497,13 +508,19 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
                 return;
             }
 
-            if (!everyTag)
+            if (AddTag is { } add)
             {
-                everyTag = true;
-                Fill(AddTag, TagLists.AddTagEntries(counts.Value!, present));
+                var entries = TagLists.AddTagEntries(counts.Value!, present);
+                if (!entries.Select(entry => entry.Tag).SequenceEqual(Shown(add).Select(entry => entry.Tag)))
+                {
+                    Fill(add, entries);
+                }
+                else
+                {
+                    Mark(add, present);
+                }
             }
 
-            Mark(AddTag, present);
             if (RemoveTag is null)
             {
                 return;

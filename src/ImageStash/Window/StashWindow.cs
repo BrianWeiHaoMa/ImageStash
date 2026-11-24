@@ -272,6 +272,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
             else if (editing.IsOpen)
             {
                 // G2: during an edit the shortcut brings the flyout forward instead of hiding it.
+                ReadForSummon(flyout: false);
                 activation.WithOwnActivation(() =>
                 {
                     Activate();
@@ -323,8 +324,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
     }
 
     /// <summary>
-    /// What a summon reads again, the content being kept as the last hide left it (G1): a load the store refused, and an
-    /// open preview's item, so what it says is true now, however long ago it was left (G19); the hidden
+    /// A summon takes the latest listing order (G4) and reads an open preview's item again (G19). The hidden
     /// <paramref name="flyout"/>'s summon also keeps only the first of several items an import selected (G1, G12).
     /// </summary>
     private void ReadForSummon(bool flyout)

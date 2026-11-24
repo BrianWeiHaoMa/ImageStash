@@ -33,7 +33,7 @@ public sealed class ThumbnailGridTests
     public void UseProductTheme() => TrayDesktop.UseProductTheme();
 
     [TestMethod]
-    public async Task AnItemUsedFromDeepInRecentMovesToTheTopWithTheViewFollowingItsSelection()
+    public async Task CopyDeepInRecentKeepsTheScrollOffsetUntilTheNextSummon()
     {
         using var shown = await Pile();
         var scroller = TrayDesktop.Get(() => Scroller(shown));
@@ -44,11 +44,25 @@ public sealed class ThumbnailGridTests
         TrayDesktop.Run(() => shown.Listing.Focus(deep.Id));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => scroller.Offset.Y) > scroller.Viewport.Height);
 
-        // As a handoff records its use and lists again: the item moves to the top, its selection with it (G4, G10).
-        await TrayDesktop.Get(() => shown.Listing.Store!.RecordUses([deep], DateTimeOffset.UtcNow));
+        var before = TrayDesktop.Get(() => scroller.Offset);
+        var store = shown.Listing.Store!;
+        var visibleItems = TrayDesktop.Get(() => shown.Listing.Items.ToArray());
+        var copied = await TrayDesktop.Get(() => shown.Handoff.Copy(shown.Window, shown.Listing.SelectedItems));
+        Assert.IsTrue(copied.Succeeded, copied.Failure?.Sentence);
+        Assert.AreEqual(deep.Id, (await store.Recent()).Value![0].Id);
+        var latest = visibleItems[0];
+        Assert.IsTrue((await store.RecordUses([latest], DateTimeOffset.UtcNow.AddSeconds(1))).Succeeded);
         await TrayDesktop.Get(() => shown.Listing.Refresh());
+        await Dispatcher.UIThread.InvokeAsync(shown.Window.UpdateLayout, DispatcherPriority.Background);
+        TrayDesktop.Run(() =>
+        {
+            Assert.AreEqual(before, scroller.Offset);
+            CollectionAssert.AreEqual(visibleItems.Select(item => item.Id).ToArray(), shown.Listing.Items.Select(item => item.Id).ToArray());
+            Assert.AreEqual(deep.Id, shown.Listing.Focused);
+            shown.Window.SummonFromTray();
+        });
 
-        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Items[0].Id == deep.Id && scroller.Offset.Y < scroller.Viewport.Height / 2));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Items[1].Id == deep.Id && scroller.Offset.Y < scroller.Viewport.Height / 2));
         TrayDesktop.Run(() => CollectionAssert.AreEqual(new[] { deep.Id }, shown.Listing.Selection.ToList(), "the selection it was left with, showing (G1)"));
     }
 

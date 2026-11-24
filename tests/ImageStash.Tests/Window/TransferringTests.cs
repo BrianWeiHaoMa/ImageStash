@@ -332,27 +332,53 @@ public sealed class TransferringTests
     }
 
     [TestMethod]
-    public async Task AnArchiveRefusedAtTheConfirmationChangesNothingListsTheSameStashAgainAndImportMayBeAskedAgain()
+    [DataRow(false, DisplayName = "archive becomes invalid before the confirmation")]
+    [DataRow(true, DisplayName = "archive becomes invalid after the listing is withdrawn")]
+    public async Task AnArchiveRefusedAtTheConfirmationChangesNothingListsTheSameStashAgainAndImportMayBeAskedAgain(bool whileWithdrawn)
     {
         using var listed = await ListedStash.Open();
-        await listed.Stash.Import("cat");
-        await listed.Stash.Import("dog");
-        await listed.Listing.ShowScope(Scope.All);
+        var cat = await listed.Stash.Import("cat");
+        var dog = await listed.Stash.Import("dog");
+        var store = listed.Stash.Store!;
+        var now = listed.Stash.Clock.Now;
+        await store.RecordUses([dog], now);
+        await store.RecordUses([cat], now.AddSeconds(1));
+        await listed.Listing.ShowScope(Scope.Recent);
+        await store.RecordUses([dog], now.AddSeconds(2));
+        await listed.Listing.Refresh();
         var archive = await Archive(listed, s => s with { Theme = Theme.Dark }, "one");
         var page = await listed.Offered(archive);
         var settings = listed.Settings.Current;
         var before = MovingStash.Tree(listed.Stash.Folder.Root);
-        // Changed between the offer and the confirmation: one entry now climbs out of the folder it is extracted into.
-        File.Move(ExportedStash.Rewritten(archive, archive + ".rewritten", ("../outside.png", [1])), archive, overwrite: true);
+        var rewritten = ExportedStash.Rewritten(archive, archive + ".rewritten", ("../outside.png", [1]));
+        var withdrew = false;
+        if (whileWithdrawn)
+        {
+            // Extraction finds an entry that climbs out of the staging folder.
+            listed.Listing.LetGoWhenWithdrawn(() =>
+            {
+                if (!withdrew)
+                {
+                    withdrew = true;
+                    File.Move(rewritten, archive, overwrite: true);
+                }
+                return Task.CompletedTask;
+            });
+        }
+        else
+        {
+            File.Move(rewritten, archive, overwrite: true);
+        }
 
         var refused = await page.ConfirmImport();
 
+        Assert.AreEqual(whileWithdrawn, withdrew);
         Assert.AreEqual(StashImport.Action, refused.Failure?.Action, refused.Failure?.Sentence);
         Assert.AreEqual(TransferReasons.NotAnExport, refused.Failure!.Reason);
         Assert.AreEqual(refused.Failure!.Sentence, page.WarningOf(SettingsPage.ImportTitle), "on the row (G35)");
         CollectionAssert.Contains(listed.Notices.Shown.Select(notice => notice.Text).ToList(), refused.Failure.Sentence, "and in a notice");
         Assert.AreEqual(StashState.Open, listed.Listing.State);
-        CollectionAssert.AreEquivalent(new[] { "cat", "dog" }, listed.Listing.Items.Select(item => item.Name).ToList(), "the same stash listed again");
+        CollectionAssert.AreEqual(new[] { "cat", "dog" }, listed.Listing.Items.Select(item => item.Name).ToList(), "the same stash with the same displayed order");
         Assert.AreEqual(settings, listed.Settings.Current, "the settings unchanged (G36)");
         Assert.IsEmpty(listed.Themes, "no theme applied");
         CollectionAssert.AreEqual(before, MovingStash.Tree(listed.Stash.Folder.Root), "the stash unchanged");

@@ -49,8 +49,10 @@ Start Menu or its `ImageStash.Windows.exe`, opens the stash window, as a click o
 | `Ctrl+T` | Tag the selected pictures: type a word and press Enter. In a picture's preview, it goes to the preview's tag box. |
 | `Space`, then the arrows | Preview the selected picture, then step to the previous or next one in the grid; the preview's ‹ and › do the same. |
 
-A new screenshot, recording or stashed clipboard image is in Recent, by when you made it, before you use it. Drop files
-or a folder onto the window to add them, and tag pictures to find them by a word. `Ctrl+D` makes the
+A new screenshot, recording or stashed clipboard image appears in Recent before you use it. Recent keeps its order
+while you work. Opening ImageStash again or choosing a scope applies the latest order. The tag chips also keep their
+places while the search box is empty, so you can drop several tiles on the same chip. Drop files or a folder onto the
+window to add them, and tag pictures to find them by a word. `Ctrl+D` makes the
 selected pictures favorites, or takes them off: a favorite's tile carries a small star, and so does its preview, where a
 click on the star does the same. The tray icon's right-click menu holds the captures, Pause shortcuts, Settings
 (where each shortcut can be changed) and Quit. While shortcuts are paused, Settings offers Resume. The stash footer

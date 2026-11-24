@@ -164,7 +164,8 @@ public sealed class OrganisingTests
         Assert.IsTrue(added.Succeeded);
         Assert.IsTrue(removed.Succeeded);
         CollectionAssert.AreEqual(new[] { ("happy", 2), ("Reaction", 2) }, chipsAdded, "one tag per word, as typed, no #");
-        CollectionAssert.AreEqual(new[] { ("happy", 2) }, listed.Listing.Chips.Select(chip => (chip.Tag, chip.Items)).ToList(), "a tag no item carries is gone (G17)");
+        CollectionAssert.AreEqual(new[] { ("happy", 2), ("Reaction", 0) }, listed.Listing.Chips.Select(chip => (chip.Tag, chip.Items)).ToList(), "a tag no item carries leaves an inactive place");
+        CollectionAssert.AreEqual(new[] { new TagCount("happy", 2) }, listed.Listing.Tags.ToArray(), "only the remaining tag is live (G17)");
         Assert.IsEmpty(listed.Notices.Shown);
 
         var nothing = await listed.Organising.AddTag([one], " # ");

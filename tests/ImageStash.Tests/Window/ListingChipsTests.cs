@@ -8,7 +8,7 @@ namespace ImageStash.Tests.Window;
 
 /// <summary>
 /// The tag chips, through the one listing model over a real stash: G4's tags carried by the most items and the list of
-/// every tag, G5's chips for a typed query with its lit tags, and a tag no item carries gone (G17).
+/// every tag, G5's chips for a typed query with its lit tags, and the inactive place of a tag no item carries (G17).
 /// </summary>
 [TestClass]
 public sealed class ListingChipsTests
@@ -18,7 +18,7 @@ public sealed class ListingChipsTests
     private Listing NewListing() => new(failures.Add);
 
     [TestMethod]
-    public async Task TheChipsAreTheTagsCarriedByTheMostItemsAndATagNoItemCarriesAnyMoreIsGoneUntilItsItemIsBack()
+    public async Task ChipsHoldTheirOrderAndADeadTagKeepsAnInactivePlaceUntilRevivedOrReordered()
     {
         using var listed = await ListedStash.Open();
         var stash = listed.Stash;
@@ -44,13 +44,41 @@ public sealed class ListingChipsTests
         CollectionAssert.AreEqual(new[] { ("cat", 3), ("dog", 3), ("zebra", 1) }, Chips(listed.Listing), "by count, equal counts by spelling (G4)");
         Assert.IsEmpty(listed.Listing.LitTags);
 
+        await listed.Organising.AddTag([items[5]], "dog aardvark");
+        CollectionAssert.AreEqual(new[] { ("cat", 3), ("dog", 4), ("zebra", 1), ("aardvark", 1) }, Chips(listed.Listing), "old places stay put and a new tag joins at the end");
+        CollectionAssert.AreEqual(new[] { "dog", "cat", "aardvark", "zebra" }, listed.Listing.Tags.Select(tag => tag.Tag).ToList(), "the picker uses live counts");
+
         var deleted = await listed.Deletion.Delete([items[5]]);
         Assert.IsTrue(deleted.Succeeded, deleted.Failure?.Sentence);
-        CollectionAssert.AreEqual(new[] { ("cat", 3), ("dog", 3) }, Chips(listed.Listing), "zebra's only item deleted: a tag no item carries is gone (G17)");
+        CollectionAssert.AreEqual(new[] { ("cat", 3), ("dog", 3), ("zebra", 0), ("aardvark", 0) }, Chips(listed.Listing), "the dead tags leave inactive places");
+        CollectionAssert.AreEqual(new[] { "cat", "dog" }, listed.Listing.Tags.Select(tag => tag.Tag).ToList(), "the dead tags exist only as places");
 
         await listed.Notices.Undo(listed.Notices.Shown.Single());
-        CollectionAssert.AreEqual(new[] { ("cat", 3), ("dog", 3), ("zebra", 1) }, Chips(listed.Listing), "and back with its item");
+        CollectionAssert.AreEqual(new[] { ("cat", 3), ("dog", 4), ("zebra", 1), ("aardvark", 1) }, Chips(listed.Listing), "revived in the same places");
+        await listed.Organising.RemoveTag([items[5]], "zebra");
+        await listed.Summon(pinned: true);
+        CollectionAssert.AreEqual(new[] { ("dog", 4), ("cat", 3), ("aardvark", 1) }, Chips(listed.Listing), "summoning applies the live order and drops dead places");
         Assert.IsEmpty(listed.Failures);
+    }
+
+    [TestMethod]
+    public async Task ASettledListingsSummonReadsTagsCommittedSinceItsLastRefresh()
+    {
+        using var listed = await FourTagged();
+        var listing = listed.Listing;
+        var untagged = await listed.Stash.Import("Still coming in");
+        var wasSelected = listing.Focused;
+        CollectionAssert.AreEqual(new[] { "dog", "cat", "fun" }, ChipTags(listing));
+        var store = listed.Stash.Store!;
+        var b = listing.Items.Single(item => item.Name == "B");
+
+        Assert.IsTrue((await store.AddTag([untagged, b], "cat")).All(result => result.Succeeded));
+        Assert.IsTrue(listing.Settled, "the import or tag update has not started the window's refresh");
+        CollectionAssert.AreEqual(new[] { "dog", "cat", "fun" }, ChipTags(listing));
+        await listed.Summon(pinned: true);
+
+        CollectionAssert.AreEqual(new[] { "cat", "dog", "fun" }, ChipTags(listing));
+        Assert.AreEqual(wasSelected, listing.Focused);
     }
 
     [TestMethod]

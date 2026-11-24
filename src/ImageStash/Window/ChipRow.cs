@@ -84,6 +84,7 @@ public sealed class ChipRow : Panel
     /// <summary>The width of each tag chip's words, measured once.</summary>
     private readonly Dictionary<string, double> wordWidths = [];
     private IDisposable? ring;
+    private Button? ringedChip;
 
     /// <param name="ownDrag">The window's own drag in progress, or null.</param>
     /// <param name="search">Puts text in the search box, which searches it.</param>
@@ -153,6 +154,7 @@ public sealed class ChipRow : Panel
     /// </summary>
     protected override Size ArrangeOverride(Size finalSize)
     {
+        Fit(finalSize.Width);
         var x = 0.0;
         for (var i = 0; i < Children.Count; i++)
         {
@@ -211,12 +213,17 @@ public sealed class ChipRow : Panel
     /// </summary>
     private void Fit(double width)
     {
-        fitting = Fitting(width);
-        everyTagShown = fitting < Children.Count - 1 || tagChips.Count < chipTags.Count || CannotHoldEveryTag(width);
-        if (everyTagShown)
+        // Reserve the picker even before it first appears, so adding a tag never evicts an existing target.
+        var besidePicker = width - Spacing - everyTag.DesiredSize.Width;
+        fitting = Fitting(besidePicker);
+        if (!listing.IsSearch)
         {
-            fitting = Fitting(width - Spacing - everyTag.DesiredSize.Width);
+            var visibleTags = tagChips.Take(Math.Max(0, fitting - scopes.Length - 1)).Count(entry => entry.Chip.IsEnabled);
+            everyTagShown = visibleTags < listing.Tags.Count;
+            return;
         }
+
+        everyTagShown = fitting < Children.Count - 1 || tagChips.Count < chipTags.Count || CannotHoldEveryTag(besidePicker);
     }
 
     /// <summary>
@@ -243,7 +250,7 @@ public sealed class ChipRow : Panel
         return count == scopes.Length + 1 ? scopes.Length : count;
     }
 
-    /// <summary>The lit chips, the open list's marks, and the tag chips again whenever the listing's tags changed (G17: a tag no item carries is gone).</summary>
+    /// <summary>Updates the tag places, their availability and the open list of live tags (G4, G17).</summary>
     private void Show()
     {
         foreach (var (chip, scope) in scopes)
@@ -270,9 +277,17 @@ public sealed class ChipRow : Panel
     private void LightTagChips()
     {
         var lit = listing.LitTags;
-        foreach (var (chip, tag) in tagChips)
+        for (var i = 0; i < tagChips.Count; i++)
         {
-            chip.Classes.Set("accent", lit.Contains(tag));
+            var (chip, tag) = tagChips[i];
+            var available = listing.Chips[i].Items > 0;
+            chip.IsEnabled = available;
+            chip.Opacity = available ? 1 : 0.45;
+            chip.Classes.Set("accent", lit.Contains(tag, StringComparer.OrdinalIgnoreCase));
+            if (!available)
+            {
+                EndRing(chip);
+            }
         }
     }
 
@@ -296,8 +311,13 @@ public sealed class ChipRow : Panel
     }
 
     /// <summary>A chip's click, or a pick in the list: the tag added to the search as a word, or a lit one's word taken out (G4).</summary>
-    private void ToggleWord(string tag) =>
-        search(listing.LitTags.Contains(tag) ? ItemSearch.WithoutWord(listing.Query, tag) : ItemSearch.WithWord(listing.Query, tag));
+    private void ToggleWord(string tag)
+    {
+        if (listing.Tags.FirstOrDefault(count => string.Equals(count.Tag, tag, StringComparison.OrdinalIgnoreCase)) is { } live)
+        {
+            search(listing.LitTags.Contains(live.Tag) ? ItemSearch.WithoutWord(listing.Query, live.Tag) : ItemSearch.WithWord(listing.Query, live.Tag));
+        }
+    }
 
     /// <summary>
     /// The tag chips for the first of <see cref="chipTags"/>: one more than the widest the row can be now could hold, at
@@ -305,23 +325,42 @@ public sealed class ChipRow : Panel
     /// </summary>
     private void MakeTagChips()
     {
-        Children.RemoveRange(scopes.Length, Children.Count - scopes.Length - 1);
-        tagChips.Clear();
         madeFor = Widest();
         var made = Math.Min(chipTags.Count, (int)(madeFor / (NarrowestChip + Spacing)) + 1);
-        var at = scopes.Length;
-        if (made > 0)
+        var keep = 0;
+        while (keep < made && keep < tagChips.Count && tagChips[keep].Tag == chipTags[keep])
+        {
+            keep++;
+        }
+
+        if (tagChips.Count > keep)
+        {
+            foreach (var (chip, _) in tagChips.Skip(keep))
+            {
+                EndRing(chip);
+            }
+
+            Children.RemoveRange(scopes.Length + 1 + keep, tagChips.Count - keep);
+            tagChips.RemoveRange(keep, tagChips.Count - keep);
+        }
+
+        var hasSeparator = Children.Count > scopes.Length + 1;
+        if (made == 0 && hasSeparator)
+        {
+            Children.RemoveAt(scopes.Length);
+        }
+        else if (made > 0 && !hasSeparator)
         {
             var separator = new Border { Width = SeparatorWidth, Height = 20, Margin = new Thickness(SeparatorMargin, 0) };
             separator.Bind(Border.BackgroundProperty, separator.GetResourceObservable(LookKeys.Divider));
-            Children.Insert(at++, separator);
+            Children.Insert(scopes.Length, separator);
         }
 
-        foreach (var tag in chipTags.Take(made))
+        foreach (var tag in chipTags.Skip(keep).Take(made - keep))
         {
             var chip = TagChip(tag);
             tagChips.Add((chip, tag));
-            Children.Insert(at++, chip);
+            Children.Insert(Children.Count - 1, chip);
         }
 
         LightTagChips();
@@ -390,12 +429,24 @@ public sealed class ChipRow : Panel
                 return;
             }
 
-            e.DragEffects = e.DragEffects.HasFlag(DragDropEffects.Copy) ? DragDropEffects.Copy : DragDropEffects.None;
+            e.DragEffects = chip.IsEnabled && e.DragEffects.HasFlag(DragDropEffects.Copy) ? DragDropEffects.Copy : DragDropEffects.None;
             e.Handled = true;
-            if (ring is null)
+            if (e.DragEffects == DragDropEffects.Copy && ringedChip != chip)
             {
+                if (ringedChip is { } before)
+                {
+                    EndRing(before);
+                }
+
+                // The drag ring must not grow a tag past the space reserved for its target.
+                if (tag is not null && chip.DesiredSize.Width > 0)
+                {
+                    chip.Width = chip.DesiredSize.Width;
+                }
+
                 chip.BorderThickness = new Thickness(2);
                 ring = chip.Bind(Button.BorderBrushProperty, chip.GetResourceObservable(LookKeys.AccentRing));
+                ringedChip = chip;
             }
         }
 
@@ -411,16 +462,30 @@ public sealed class ChipRow : Panel
             }
 
             drag.TakenByChip = true;
-            e.DragEffects = DragDropEffects.Copy;
             e.Handled = true;
-            _ = tag is null ? organising.SetFavorite(drag.Items, true) : organising.AddTag(drag.Items, tag);
+            e.DragEffects = chip.IsEnabled ? DragDropEffects.Copy : DragDropEffects.None;
+            if (chip.IsEnabled)
+            {
+                _ = tag is null ? organising.SetFavorite(drag.Items, true) : organising.AddExistingTag(drag.Items, tag);
+            }
         });
     }
 
     private void EndRing(Button chip)
     {
+        if (ringedChip != chip)
+        {
+            return;
+        }
+
         ring?.Dispose();
         ring = null;
+        ringedChip = null;
+        if (chip.Content is string)
+        {
+            chip.ClearValue(Button.WidthProperty);
+        }
+
         chip.ClearValue(Button.BorderBrushProperty);
         chip.ClearValue(Button.BorderThicknessProperty);
     }

@@ -9,7 +9,7 @@ namespace ImageStash.Tests.Window;
 /// <summary>
 /// The handoff's copy and its uses over a real stash with real pictures: what each selection puts on the clipboard
 /// (G8); one use per item, with its time, only once the write has completed, and none for one that failed (G10); one
-/// write at a time (G8); Recent reordered while the window stays (G4); every failure named by what the user acted on
+/// write at a time (G8); Recent holds its order while the window stays (G4); every failure named by what the user acted on
 /// (G35, E3).
 /// </summary>
 [TestClass]
@@ -126,7 +126,7 @@ public sealed class HandoffTests
     }
 
     [TestMethod]
-    public async Task RecentReordersAtOnceWithTheSelectionKept()
+    public async Task CopyRecordsUseWhileRecentKeepsItsOrderUntilSummon()
     {
         using var handing = await Handing.Open("photo.jpg", "animated.gif");
         var (first, second) = (handing.Items[0], handing.Items[1]);
@@ -140,7 +140,10 @@ public sealed class HandoffTests
 
         await handing.Copy(handing.Listing.SelectedItems);
 
-        CollectionAssert.AreEqual(new[] { first.Id, second.Id }, handing.Listing.Items.Select(item => item.Id).ToList(), "Recent while it shows (G4)");
+        CollectionAssert.AreEqual(new[] { second.Id, first.Id }, handing.Listing.Items.Select(item => item.Id).ToList(), "Recent while it shows (G4)");
+        CollectionAssert.AreEqual(new[] { first.Id, second.Id }, (await handing.Stash.Store!.Recent()).Value!.Select(item => item.Id).ToList(), "the copy already recorded its use");
+        await handing.Listing.Summoned(flyout: false);
+        CollectionAssert.AreEqual(new[] { first.Id, second.Id }, handing.Listing.Items.Select(item => item.Id).ToList(), "the next summon takes the latest order");
         CollectionAssert.AreEqual(new[] { first.Id }, handing.Listing.Selection.ToList());
         Assert.AreEqual(first.Id, handing.Listing.Focused);
     }
@@ -241,7 +244,7 @@ public sealed class HandoffTests
     [TestMethod]
     [DataRow(false)]
     [DataRow(true)]
-    public async Task UsesRecordedBesideOneThatHadNoItemLeftReorderRecent(bool drag)
+    public async Task UsesRecordedBesideOneThatHadNoItemLeftJoinRecent(bool drag)
     {
         using var handing = await Handing.Open("animated.gif", "transparent.png", "photo.jpg");
         var (older, survivor, gone) = (handing.Items[0], handing.Items[1], handing.Items[2]);
@@ -269,7 +272,8 @@ public sealed class HandoffTests
         }
 
         Assert.AreEqual("Record a use failed: photo, it is no longer in the stash", handing.Notices.Shown.Single().Text);
-        Assert.AreEqual(survivor.Id, handing.Listing.Items[0].Id, "Recent lists the item whose use was recorded first (G4, G10)");
+        CollectionAssert.AreEqual(new[] { older.Id, survivor.Id }, handing.Listing.Items.Select(item => item.Id).ToList(), "the newly used item joins the end");
+        Assert.AreEqual(survivor.Id, (await handing.Stash.Store!.Recent()).Value![0].Id, "its use is already the latest in the stash");
     }
 
     [TestMethod]
