@@ -425,7 +425,7 @@ public sealed class ListedStash : IDisposable
         var started = new ListedStash(Stash, Stash.Clock, opener: null);
         var applied = TravellingSettings.Of(started.Settings.Current);
         started.StartFailures.AddRange(await StashImport.FinishAtStart(started.Settings, Stash.RecycleBin, Stash.Folder.Root, Stash.Retry));
-        App.ApplyFinishedImport(applied, started.Settings.Current, started.ApplyTravelling);
+        StartOpening.ApplyFinishedImport(applied, started.Settings.Current, started.ApplyTravelling);
         if (started.Settings.Current.ImportPending is not null)
         {
             Assert.IsFalse(mustOpen, "an import's record still stands: " + string.Join("; ", started.StartFailures));

@@ -1,7 +1,8 @@
 <#
 .SYNOPSIS
 Checks the published folder the way a user meets it: publishes into %TEMP%, copies the folder elsewhere, runs the
-copy, launches it a second time, summons its window over a stash of 5,000 pictures that the focused check builds, then
+copy, launches it a second time, launches it by hand and starts it as Windows does at sign-in once the first has ended,
+summons its window over a stash of 5,000 pictures that the focused check builds, then
 has check-published-paste.ps1 drive the paste moment into a window of its own (the tray's posted click and Enter, the
 real Ctrl+Alt+Space and Enter, a target closed before Enter, a shortcut another program holds) and
 check-published-paste-in.ps1 paste a copied picture into the stash with the real Ctrl+V, then has
@@ -237,13 +238,13 @@ try {
     Copy-Item -Path $publish -Destination $copy -Recurse
     $first = Start-Process -FilePath $exe -PassThru
     Write-Host "launched a copy of the folder: $exe"
-    $expectedRun = '"' + $exe + '"'
+    $expectedRun = [StashWindows]::RunData($exe)
     $settled = WaitFor { (Test-Path $settingsFile) -and (RunAsExpected) } 20
     if ($null -eq $expectRun) {
         Write-Host "skipped: $settingsFile could not be read, so ImageStash leaves the Run value as it is"
     }
     elseif ($expectRun) {
-        Check $settled "the Run value ImageStash names the copy's executable: $(RunValue)"
+        Check $settled "the Run value ImageStash names the copy's executable, then the argument that marks the start at sign-in (F1, G3, S8): $(RunValue)"
     }
     else {
         Check $settled 'the Run value ImageStash is absent, as the existing settings turn Start with Windows off'
@@ -317,13 +318,21 @@ try {
     }
     Check (-not $fresh.HasExited) 'after the first ended, a fresh launch keeps running'
     Check (WaitFor { Test-Path $openWithMarker -PathType Leaf } 20) "after the first ended, the fresh launch made $openWithMarker again at its start"
-    $running = $fresh
+    # Settings from an earlier run, so no first run: a launch by hand shows the window as a tray click would, above the
+    # tray; a start as Windows makes it at sign-in, with the Run value's argument, shows none (G3).
+    Check (WaitFor { [StashWindows]::Showing($fresh.Id) -eq 'flyout' } 5) "the fresh launch by hand shows the stash window above the tray as a tray click would, and no other (G3, F4): '$([StashWindows]::Showing($fresh.Id))'"
+    Stop-Process -Id $fresh.Id -Force
+    $fresh.WaitForExit()
+    $signedIn = Start-Process -FilePath $exe -ArgumentList ([StashWindows]::SignInArgument) -PassThru
+    Start-Sleep -Seconds 3
+    Check ((-not $signedIn.HasExited) -and ([StashWindows]::Showing($signedIn.Id) -eq '')) "started as Windows starts it at sign-in, it keeps running and shows no window (G3): '$([StashWindows]::Showing($signedIn.Id))'"
+    $running = $signedIn
     $pasteStore = ''
 
     if ($createdAppData) {
         # A stash folder that cannot be created: start names it in the tray tooltip and keeps running with Quit (G35).
-        Stop-Process -Id $fresh.Id -Force
-        $fresh.WaitForExit()
+        Stop-Process -Id $signedIn.Id -Force
+        $signedIn.WaitForExit()
         $blocker = Join-Path $appData 'blocker'
         Set-Content -Path $blocker -Value 'a file where a folder should be'
         $settings = Get-Content -Raw -Path $settingsFile | ConvertFrom-Json
@@ -334,11 +343,13 @@ try {
         $blocked = Start-Process -FilePath $exe -PassThru
         Start-Sleep -Seconds 3
         Check (-not $blocked.HasExited) 'with a stash folder that cannot be created, ImageStash keeps running'
+        Check ([StashWindows]::Showing($blocked.Id) -eq 'flyout') "launched by hand, it still shows the window above the tray as a tray click would, though the stash did not open (G3): '$([StashWindows]::Showing($blocked.Id))'"
         Check ((Get-Item $blocker) -is [IO.FileInfo]) 'the file in the way of the stash folder is left as it was'
         Check (-not (Test-Path $stash)) 'it opened no stash at the default location instead'
 
         # E4 with G1: 5,000 pictures in the stash the focused check builds and leaves here when asked; settings from
-        # an earlier run, so start shows no window; then the tray icon's click shows it within the second.
+        # an earlier run and a start as Windows makes it at sign-in, so it shows no window; then the tray icon's click
+        # shows it within the second.
         Stop-Process -Id $blocked.Id -Force
         $blocked.WaitForExit()
         Remove-Item -Path $blocker -Force
@@ -354,10 +365,10 @@ try {
         $settings = Get-Content -Raw -Path $settingsFile | ConvertFrom-Json
         $settings.stashFolder = $large
         $settings | ConvertTo-Json -Depth 5 | Set-Content -Path $settingsFile -Encoding UTF8
-        $big = Start-Process -FilePath $exe -PassThru
+        $big = Start-Process -FilePath $exe -ArgumentList ([StashWindows]::SignInArgument) -PassThru
         # The stash opens at start, before a summon reads it (State: Every change); 5,000 rows take a moment.
         Start-Sleep -Seconds 3
-        Check ((-not $big.HasExited) -and ([StashWindows]::Showing($big.Id) -eq '')) 'over 5,000 pictures, with settings from an earlier run, start shows no window'
+        Check ((-not $big.HasExited) -and ([StashWindows]::Showing($big.Id) -eq '')) 'over 5,000 pictures, with settings from an earlier run, a start as Windows makes it at sign-in shows no window (G3)'
         $running = $big
         $pasteStore = Join-Path $large 'stash.db'
     }
@@ -459,7 +470,8 @@ Write-Host '     field keeps its grey edge all round with its bottom edge in the
 Write-Host '  4. a left-click on the icon, Open ImageStash, and launching the executable again each show the window above the icon within a'
 Write-Host '     second, the search box focused with its text selected, showing what it was left on (Recent at the first show, or All while Recent'
 Write-Host '     is empty, with its first item selected); with the pinned window behind another window, Open ImageStash brings it to the front where it'
-Write-Host '     is, every time; Close hides it and ImageStash keeps running (G1, G3, G34);'
+Write-Host '     is, every time; Close hides it and ImageStash keeps running; after Quit, starting the executable again shows the window the same'
+Write-Host '     way, while the start Windows makes at the next sign-in waits in the tray and shows nothing (G1, G3, G34);'
 Write-Host '  5. one drop from File Explorer of a JPG, a transparent PNG, an animated GIF, an animated WebP, an MP4 and a link: the card counts four'
 Write-Host '     and two before release; four are added once, selected, first in All, and the MP4 and the link are refused by name; the same GIF'
 Write-Host '     again is already in the stash; Undo of a two-file drop leaves the four; a picture dragged out of Edge or Chrome is added, and a'

@@ -167,8 +167,11 @@ public sealed class StashWindowPathTests
     /// window keeps ImageStash running, and nothing has read the clipboard (G2, G3, N9); (2) the Stash clipboard image row
     /// reads F5's default, Win+Alt+V, the tray's tooltip names the open shortcut, and once the open shortcut is remapped
     /// as a Settings field remaps it, the tooltip and the empty stash's line, drawn again, both read the new one (F5,
-    /// G33, G34); (4) with a picture on the clipboard, a click on the Paste row adds one item, and the grid takes the
-    /// empty stash's place (G13, G2). The paste stays the walk's last act.
+    /// G33, G34); (3) the Run entry the start writes carries an argument, and through the start's own dispatch over this
+    /// stash a start given that entry's arguments asks for the pinned window on this first run and for none on a later
+    /// one, while a start given none asks for the pinned window once on this first run and for the tray's summon on a
+    /// later one (G2, G3, State: Settings); (4) with a picture on the clipboard, a click on the Paste row adds one item,
+    /// and the grid takes the empty stash's place (G13, G2). The paste stays the walk's last act.
     /// </summary>
     [TestMethod]
     public async Task AFirstRunsEmptyStashNamesTheOpenShortcutAndItsPasteRowAddsTheClipboardsPicture()
@@ -205,6 +208,23 @@ public sealed class StashWindowPathTests
         Assert.AreEqual("ImageStash · Ctrl+Alt+F9", tray.ToolTip, "the tooltip reads the new one at once");
         StringAssert.Contains(shown.ReadLines()[^1], "from any app with Ctrl+Alt+F9", "and so does the empty stash's line, drawn again as the window draws it");
         Assert.AreEqual((0, 0), (listed.Clipboard.Reads, listed.Clipboard.ImageReads), "still nothing has read the clipboard (N9)");
+
+        // (3) The Run entry as the start writes it; that entry's arguments, and none, given to the start's dispatch.
+        var run = new RecordingStartWithWindows();
+        Assert.IsTrue(App.ApplyStartWithWindows(new SettingsLoad(listed.Settings.Current, null, AsSaved: true), run, @"C:\Program Files\ImageStash\ImageStash.Windows.exe").Succeeded);
+        Assert.IsNotNull(run.Argument, "the Run entry carries the argument that marks the start at sign-in (State: Settings)");
+        string[] atSignIn = [run.Argument];
+        var firstRun = new SettingsLoad(listed.Settings.Current, null, AsSaved: true, FirstRun: true);
+        var later = firstRun with { FirstRun = false };
+        Func<string, Task<StoreOpening>> thisStash = _ => Task.FromResult(new StoreOpening(listed.Listing.Store, []));
+        CollectionAssert.AreEqual(new[] { StartShows.Pinned }, (await StartShows.Run(atSignIn, firstRun, listed.Settings, listed.Stash, thisStash)).Shows,
+            "signed in on this first run: pinned, over its empty stash (G2, G3)");
+        Assert.IsEmpty((await StartShows.Run(atSignIn, later, listed.Settings, listed.Stash, thisStash)).Shows, "signed in on a later run: no window (G3)");
+        CollectionAssert.AreEqual(new[] { StartShows.Pinned }, (await StartShows.Run([], firstRun, listed.Settings, listed.Stash, thisStash)).Shows,
+            "launched by hand on this first run: pinned, once (G2, G3)");
+        CollectionAssert.AreEqual(new[] { StartShows.Tray }, (await StartShows.Run([], later, listed.Settings, listed.Stash, thisStash)).Shows,
+            "launched by hand on a later run: as a tray click shows it (G3)");
+        Assert.IsTrue(listed.Listing.IsEmptyStash, "still the empty stash");
 
         // (4) A picture on the clipboard; a click on the Paste row.
         listed.Clipboard.Reading = Outcome<ClipboardReading>.Of(new ClipboardReading([], MediaFixtures.Bytes("transparent.png"), null, false));

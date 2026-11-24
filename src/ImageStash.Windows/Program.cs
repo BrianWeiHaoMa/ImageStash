@@ -7,7 +7,8 @@ namespace ImageStash.Windows;
 
 /// <summary>
 /// The entry point: holds the session's instance before anything else, builds the seams, and starts Avalonia,
-/// whose <see cref="App"/> runs the rest of the start sequence.
+/// whose <see cref="App"/> runs the rest of the start sequence, handed the arguments that tell the start at sign-in
+/// from a launch by hand (G3).
 /// </summary>
 public static class Program
 {
@@ -17,7 +18,7 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        instance = HoldInstance();
+        instance = HoldInstance(args);
         if (instance is null)
         {
             return 0;
@@ -40,23 +41,25 @@ public static class Program
         }
     }
 
-    /// <summary>The session's instance, or null after asking the running one to show its window; touches no folder (G3, E2).</summary>
-    private static WindowsOneInstance? HoldInstance()
+    /// <summary>
+    /// The session's instance, or null once another process holds it, which a launch by hand has asked to show its window
+    /// and the start at sign-in has not; touches no folder (G3, E2).
+    /// </summary>
+    private static WindowsOneInstance? HoldInstance(string[] args)
     {
         var one = new WindowsOneInstance(WindowsOneInstance.SessionName);
-        if (one.TryHold())
+        if (Launch.HoldInstance(one, args))
         {
             return one;
         }
 
-        one.SignalRunning();
         one.Dispose();
         return null;
     }
 
     /// <summary>With no window ImageStash keeps running until Quit (F4).</summary>
     private static int StartAvalonia(PlatformSeams seams, string[] args) =>
-        AppBuilder.Configure(() => new App(seams))
+        AppBuilder.Configure(() => new App(seams, args))
             .UsePlatformDetect()
             .StartWithClassicDesktopLifetime(args, ShutdownMode.OnExplicitShutdown);
 }

@@ -216,6 +216,14 @@ function StartFromShortcut {
     if ($copies.Count -eq 1) { $copies[0] } else { $null }
 }
 
+# The installed copy started as Windows starts it at sign-in, with the Run value's argument; $null as above.
+function StartAsSignIn {
+    Start-Process -FilePath $installedExe -ArgumentList ([StashWindows]::SignInArgument)
+    $null = WaitFor { (InstalledCopies).Count -eq 1 } 10000
+    $copies = @(InstalledCopies)
+    if ($copies.Count -eq 1) { $copies[0] } else { $null }
+}
+
 # A tray click on <process>, posted once its platform window exists (a click posted before its start completes waits
 # in its queue); the milliseconds until a window showed, or -1.
 function SummonByTray($process) {
@@ -333,8 +341,8 @@ try {
     $pinned = WaitFor { [StashWindows]::Showing($copy.Id) -eq 'pinned' } 20000
     Check $pinned "on the first run its one window shows pinned (G2): '$([StashWindows]::Showing($copy.Id))' after $($clock.ElapsedMilliseconds) ms"
     Check (WaitFor { (Test-Path -LiteralPath (Join-Path $appData 'settings.json')) -and (Test-Path -LiteralPath (Join-Path $stash 'stash.db')) } 20000) "it made $appData\settings.json and stash\stash.db (F6)"
-    $runValue = "String|`"$installedExe`""
-    Check (WaitFor { (StoredRunValue) -eq $runValue } 20000) "the Run value ImageStash names the installed executable, Start with Windows on by default (F1, G32): $(StoredRunValue)"
+    $runValue = 'String|' + [StashWindows]::RunData($installedExe)
+    Check (WaitFor { (StoredRunValue) -eq $runValue } 20000) "the Run value ImageStash names the installed executable, then the argument that marks the start at sign-in, Start with Windows on by default (F1, G32, G3): $(StoredRunValue)"
 
     # G13, G16, R9: one picture through the product, snapshotted only once the product has said it is in the stash.
     $picture = New-Object Drawing.Bitmap 48, 32
@@ -384,11 +392,18 @@ try {
     }
     Check ((StoredRunValue) -eq $runValue) 'the Run value is unchanged (F1)'
 
-    # G2, G1, G31, G28: started again, the first run is over, so nothing shows until the tray's click lists the item.
+    # G3, G2: started again by hand, the first run over, it shows the window as a tray click would, above the tray.
     $copy = StartFromShortcut
     Check ($null -ne $copy) 'the shortcut started the upgraded copy'
     if ($null -eq $copy) { throw 'nothing further can be checked without the installed copy running' }
-    Check (-not (WaitFor { [StashWindows]::Showing($copy.Id) -ne '' } 3000)) "for three seconds after its start it shows no window: the first run is over (G2): '$([StashWindows]::Showing($copy.Id))'"
+    Check (WaitFor { [StashWindows]::Showing($copy.Id) -eq 'flyout' } 5000) "launched by hand, it shows the stash window above the tray as a tray click would, and no other (G3, F4): '$([StashWindows]::Showing($copy.Id))'"
+
+    # G3, G1, G31, G28: started as Windows starts it at sign-in, nothing shows until the tray's click lists the item.
+    StopCopies
+    $copy = StartAsSignIn
+    Check ($null -ne $copy) 'started as at sign-in, the upgraded copy runs'
+    if ($null -eq $copy) { throw 'nothing further can be checked without the installed copy running' }
+    Check (-not (WaitFor { [StashWindows]::Showing($copy.Id) -ne '' } 3000)) "for three seconds after that start it shows no window: the first run is over (G2, G3): '$([StashWindows]::Showing($copy.Id))'"
     $took = SummonByTray $copy
     Check (($took -ge 0) -and ($took -le 1000)) "a tray click shows its window within a second (G1): $took ms"
     Check (WaitFor { (Elements $copy '1 item' ([Windows.Automation.ControlType]::Text)).Count -eq 1 } 10000) 'the window lists the one item (G31, G28)'

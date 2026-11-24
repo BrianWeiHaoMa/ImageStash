@@ -31,8 +31,9 @@ On a Windows 11 PC (x64), download one of these from the
 
 The download is not signed, so Windows warns before you run it the first time: where it says "Windows protected your
 PC", choose **More info**, then **Run anyway**. A PC with Smart App Control turned on blocks it, and is not supported.
-Once running, ImageStash sits in the tray (among the hidden icons at first) and starts with Windows; Settings turns
-that off.
+Once running, ImageStash sits in the tray (among the hidden icons at first) and starts with Windows, quietly, showing
+nothing; Settings turns that off. Starting it yourself, from the Start Menu or its `ImageStash.Windows.exe`, opens its
+window, as a click on its tray icon does, whether or not it was already running.
 
 ## Quick start
 

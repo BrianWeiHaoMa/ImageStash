@@ -54,6 +54,22 @@ public sealed class TrayMenuTests
     }
 
     [TestMethod]
+    public void AnOutcomeThatFailedIsNamedInTheTooltipAndOneThatSucceededIsNot()
+    {
+        var tray = new RecordingTray(toolTipLength: 1000);
+        var menu = new TrayMenu(tray, () => { }, () => { }, () => { }, () => { }, () => { }, () => { });
+        menu.Show(Shortcuts());
+        var before = tray.ToolTip;
+
+        menu.NameIfFailed(Outcome.Done);
+        Assert.AreEqual(before, tray.ToolTip, "nothing named for a success");
+        var refused = new Failure("Start with Windows", "Run entry ImageStash", "Windows refused the change");
+        menu.NameIfFailed(refused);
+
+        Assert.AreEqual(refused.Sentence, tray.ToolTip, "the failure named as Name names it (G35)");
+    }
+
+    [TestMethod]
     public void OnlyOpenImageStashAndSettingsActAgainOnceTheMenuHasClosedAndALeftClickDoesNot()
     {
         var tray = new RecordingTray();

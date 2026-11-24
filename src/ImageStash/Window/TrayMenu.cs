@@ -135,6 +135,15 @@ public sealed class TrayMenu
     /// <summary>Adds a failure to the tooltip, newest first, until the next start.</summary>
     public void Name(Failure failure) => Add(failure, shortcutUnavailable: false);
 
+    /// <summary>Names <paramref name="outcome"/>'s failure as <see cref="Name"/> does, when it failed.</summary>
+    public void NameIfFailed(Outcome outcome)
+    {
+        if (!outcome.Succeeded)
+        {
+            Name(outcome.Failure);
+        }
+    }
+
     /// <summary>
     /// Adds a shortcut that is unavailable, and why, whose reason the tooltip keeps longest, until the shortcuts no longer
     /// give that reason for it (G33).

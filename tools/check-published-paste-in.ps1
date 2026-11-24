@@ -157,7 +157,8 @@ try {
         Stop-Process -Id $process.Id -Force
         $process.WaitForExit()
     }
-    $copy = Start-Process -FilePath $Exe -PassThru
+    # As Windows starts it at sign-in, so the open shortcut below shows the flyout rather than hiding a launch's (G3).
+    $copy = Start-Process -FilePath $Exe -ArgumentList ([StashWindows]::SignInArgument) -PassThru
     # The stash opens at start, before a summon reads it (State: Every change); 5,000 rows take a moment.
     Start-Sleep -Seconds 3
     $items = [int][CopyReadBack]::Query($Store, 'SELECT COUNT(*) FROM items')

@@ -4,7 +4,10 @@ using Microsoft.Win32;
 
 namespace ImageStash.Windows.Seams;
 
-/// <summary>A value in the current user's <c>Run</c> key, which starts it at that user's sign-in without administrator rights (S8).</summary>
+/// <summary>
+/// A value in the current user's <c>Run</c> key, which starts it at that user's sign-in without administrator rights (S8):
+/// a command line, the path in quotes so a folder whose path holds a space still starts, then the argument.
+/// </summary>
 public sealed class WindowsStartWithWindows : IStartWithWindows
 {
     public const string ProductValueName = "ImageStash";
@@ -15,10 +18,10 @@ public sealed class WindowsStartWithWindows : IStartWithWindows
     /// <param name="valueName">The Run value's name; checks pass a name of their own so the product's entry is untouched.</param>
     public WindowsStartWithWindows(string valueName) => this.valueName = valueName;
 
-    public Outcome Set(string executablePath) => Change("Start with Windows", () =>
+    public Outcome Set(string executablePath, string argument) => Change("Start with Windows", () =>
     {
         using var key = Registry.CurrentUser.CreateSubKey(RunKey, writable: true);
-        key.SetValue(valueName, $"\"{executablePath}\"", RegistryValueKind.String);
+        key.SetValue(valueName, $"\"{executablePath}\" {argument}", RegistryValueKind.String);
     });
 
     public Outcome Clear() => Change("Stop starting with Windows", () =>

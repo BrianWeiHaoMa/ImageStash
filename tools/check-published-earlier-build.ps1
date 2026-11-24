@@ -315,7 +315,8 @@ try {
     $usesWritten = Query "SELECT group_concat(line, char(10)) FROM (SELECT item_id || '|' || used_at AS line FROM uses ORDER BY item_id, used_at)"
 
     # G31, F11, Done when 4: the current build opens them unchanged.
-    $current = Start-Process -FilePath $Exe -PassThru
+    # As Windows starts it at sign-in, so it shows no window over the earlier build's settings (G3).
+    $current = Start-Process -FilePath $Exe -ArgumentList ([StashWindows]::SignInArgument) -PassThru
     $running = $current.Id
     Check (WaitFor { (StoreVersion) -eq 3 } 20000) "the current build migrated the store to user version 3, its journal gone (F11): $(StoreVersion)"
     Start-Sleep -Seconds 2

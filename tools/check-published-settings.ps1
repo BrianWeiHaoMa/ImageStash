@@ -326,12 +326,12 @@ try {
 
     # F1, G32, State Settings: Start with Windows takes effect at once, in the Run value and the file.
     $toggle = (One (Elements (PageElement) 'Start with Windows' $button) 'the Start with Windows switch').GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern)
-    Need (($toggle.Current.ToggleState -eq 'On') -and ((RunValue) -eq ('"' + $Exe + '"'))) "Start with Windows is on and the Run value names the copy: $(RunValue)"
+    Need (($toggle.Current.ToggleState -eq 'On') -and ((RunValue) -eq [StashWindows]::RunData($Exe))) "Start with Windows is on and the Run value names the copy with the sign-in argument: $(RunValue)"
     $toggle.Toggle()
     Check (WaitFor { $null -eq (RunValue) } 1000) 'Start with Windows switched off removed the Run value ImageStash within a second (F1, G32)'
     Check (WaitFor { (Settings).startWithWindows -eq $false } 1500) 'and settings.json holds startWithWindows false'
     $toggle.Toggle()
-    Check (WaitFor { (RunValue) -eq ('"' + $Exe + '"') } 1000) "switched on, the Run value ImageStash names the copy's executable again within a second (F1, G32): $(RunValue)"
+    Check (WaitFor { (RunValue) -eq [StashWindows]::RunData($Exe) } 1000) "switched on, the Run value ImageStash names the copy's executable and the sign-in argument again within a second, as the start writes it (F1, G32, G3): $(RunValue)"
     Check (WaitFor { (Settings).startWithWindows -eq $true } 1500) 'and settings.json holds startWithWindows true'
 
     # F10, G32: Theme written at once; its look is the person's.

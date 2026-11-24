@@ -5,8 +5,8 @@ using ImageStash.Window;
 namespace ImageStash.Tests;
 
 /// <summary>
-/// F1: start registers ImageStash while Start with Windows is on, removes it while off, and leaves it alone while the
-/// setting is unknown. G35: a stash that cannot be opened at start is named in the tray tooltip; a settings write refused
+/// F1: start registers ImageStash while Start with Windows is on, with the argument that marks the start at sign-in
+/// (State: Settings), removes it while off, and leaves it alone while the setting is unknown. G35: a stash that cannot be opened at start is named in the tray tooltip; a settings write refused
 /// after its retry is named in the stash window's notices, and on the Settings page while it is open.
 /// </summary>
 [TestClass]
@@ -42,7 +42,7 @@ public sealed class AppTests
         Assert.IsNotNull(keeper.Current.ImportPending, "a record on disk at the start");
 
         CollectionAssert.AreEqual(Array.Empty<Failure>(), (await StashImport.FinishAtStart(keeper, listed.Stash.RecycleBin, listed.Stash.Folder.Root, ShortRetry)).ToList());
-        var outcome = App.ApplyFinishedImport(applied, keeper.Current, settings => App.ApplyTravelling(settings, themes.Add, shortcuts, run, Executable));
+        var outcome = StartOpening.ApplyFinishedImport(applied, keeper.Current, settings => App.ApplyTravelling(settings, themes.Add, shortcuts, run, Executable));
 
         Assert.IsTrue(outcome.Succeeded, outcome.Failure?.Sentence);
         CollectionAssert.AreEqual(new[] { Theme.Dark }, themes, "the imported theme in effect (G36, F10)");
@@ -61,7 +61,7 @@ public sealed class AppTests
         var registrations = seam.Registrations;
 
         await StashImport.FinishAtStart(keeper, listed.Stash.RecycleBin, listed.Stash.Folder.Root, ShortRetry);
-        var outcome = App.ApplyFinishedImport(applied, keeper.Current, settings => App.ApplyTravelling(settings, themes.Add, shortcuts, run, Executable));
+        var outcome = StartOpening.ApplyFinishedImport(applied, keeper.Current, settings => App.ApplyTravelling(settings, themes.Add, shortcuts, run, Executable));
 
         Assert.IsTrue(outcome.Succeeded);
         Assert.IsEmpty(themes);
@@ -80,13 +80,27 @@ public sealed class AppTests
     }
 
     [TestMethod]
-    public void OnRegistersTheRunningExecutable()
+    public void OnRegistersTheRunningExecutableWithTheArgumentThatMarksTheStartAtSignIn()
     {
         var seam = new RecordingStartWithWindows();
 
         App.ApplyStartWithWindows(new SettingsLoad(new Settings(), null, AsSaved: true), seam, Executable);
 
-        CollectionAssert.AreEqual(new[] { $"set {Executable}" }, seam.Calls);
+        CollectionAssert.AreEqual(new[] { $"set {Executable} {Launch.SignInArgument}" }, seam.Calls);
+    }
+
+    [TestMethod]
+    public void AnImportTurningStartWithWindowsOnRegistersWhatTheStartRegisters()
+    {
+        using var stash = new TestStash();
+        var (_, shortcuts, _, run, _) = Started(stash);
+        var started = new RecordingStartWithWindows();
+        App.ApplyStartWithWindows(new SettingsLoad(new Settings(), null, AsSaved: true), started, Executable);
+
+        var outcome = App.ApplyTravelling(new Settings { StartWithWindows = true }, _ => { }, shortcuts, run, Executable);
+
+        Assert.IsTrue(outcome.Succeeded);
+        CollectionAssert.AreEqual(started.Calls, run.Calls, "so the next sign-in is quiet (G3, G36)");
     }
 
     [TestMethod]
@@ -107,7 +121,7 @@ public sealed class AppTests
 
         App.ApplyStartWithWindows(Settings.Load(Path.Combine(scratch.Path, "ImageStash"), ShortRetry), seam, Executable);
 
-        CollectionAssert.AreEqual(new[] { $"set {Executable}" }, seam.Calls);
+        CollectionAssert.AreEqual(new[] { $"set {Executable} {Launch.SignInArgument}" }, seam.Calls);
     }
 
     [TestMethod]
@@ -146,8 +160,8 @@ public sealed class AppTests
     {
         var locations = new TestLocations(@"C:\Default\stash", @"C:\Default");
 
-        var atDefault = App.StashLocation(new SettingsLoad(new Settings(), null, AsSaved: true), locations);
-        var moved = App.StashLocation(new SettingsLoad(new Settings { StashFolder = @"D:\Moved" }, null, AsSaved: true), locations);
+        var atDefault = StartOpening.StashLocation(new SettingsLoad(new Settings(), null, AsSaved: true), locations);
+        var moved = StartOpening.StashLocation(new SettingsLoad(new Settings { StashFolder = @"D:\Moved" }, null, AsSaved: true), locations);
 
         Assert.AreEqual(@"C:\Default\stash", atDefault.Value);
         Assert.AreEqual(@"D:\Moved", moved.Value);
@@ -158,7 +172,7 @@ public sealed class AppTests
     {
         var unread = new SettingsLoad(new Settings(), new Failure("Read settings", Settings.FileName, "held"), AsSaved: false);
 
-        var location = App.StashLocation(unread, new TestLocations(@"C:\Default\stash", @"C:\Default"));
+        var location = StartOpening.StashLocation(unread, new TestLocations(@"C:\Default\stash", @"C:\Default"));
 
         Assert.IsFalse(location.Succeeded);
         Assert.AreEqual("Open the stash", location.Failure.Action);
@@ -175,7 +189,7 @@ public sealed class AppTests
         trayMenu.Show(new GlobalShortcuts(StartedShortcuts.SettingsInMemory(), GlobalShortcuts.Bindings(() => { }, () => { }, () => { }, () => { }), new RecordingShortcuts(), trayMenu.Name, action => action()));
 
         var opening = await StashStore.Open(notAFolder, new TestRecycleBin(scratch.File("recycled")), ShortRetry, new SetClock());
-        var store = App.NameOpening(opening, trayMenu);
+        var store = StartOpening.NameOpening(opening, trayMenu);
 
         Assert.IsNull(store);
         Assert.StartsWith($"Open the stash failed: {notAFolder}, ", tray.ToolTip);
@@ -195,22 +209,30 @@ public sealed class AppTests
 
         Assert.IsTrue(firstRun.FirstRun);
         Assert.IsTrue(listing.NoMatch, "the query typed while the stash opened is what the grid shows");
-        Assert.IsTrue(await App.OpensPinnedAtStart(firstRun, store));
+        Assert.IsTrue(await StartOpening.OpensPinnedAtStart(firstRun, store));
     }
 
+    /// <summary>
+    /// G3: "Launching it while it does not run opens the stash window the same way, or pinned on G2's first run": a later
+    /// start, or a first run whose stash holds items, opens nothing pinned, and started by hand shows the window as a tray
+    /// click would.
+    /// </summary>
     [TestMethod]
-    public async Task ALaterStartOrAStashWithItemsOpensNoWindow()
+    public async Task ALaterStartOrAStashWithItemsOpensNoPinnedWindowAndALaunchByHandShowsItAsATrayClickWould()
     {
         using var scratch = new ScratchFolder();
         using var stash = new TestStash();
         Settings.Load(scratch.Path, ShortRetry);
         var later = Settings.Load(scratch.Path, ShortRetry);
         var store = await stash.OpenCleanly();
+        Func<string, Task<StoreOpening>> opened = _ => Task.FromResult(new StoreOpening(store, []));
 
         Assert.IsFalse(later.FirstRun);
-        Assert.IsFalse(await App.OpensPinnedAtStart(later, store));
+        Assert.IsFalse(await StartOpening.OpensPinnedAtStart(later, store));
+        CollectionAssert.AreEqual(new[] { StartShows.Tray }, (await StartShows.Run([], later, MovingStash.Keeper(stash, []), stash, opened)).Shows);
         await stash.Import("cat");
-        Assert.IsFalse(await App.OpensPinnedAtStart(later with { FirstRun = true }, store));
+        Assert.IsFalse(await StartOpening.OpensPinnedAtStart(later with { FirstRun = true }, store));
+        CollectionAssert.AreEqual(new[] { StartShows.Tray }, (await StartShows.Run([], later with { FirstRun = true }, MovingStash.Keeper(stash, []), stash, opened)).Shows);
     }
 
     [TestMethod]

@@ -1,7 +1,8 @@
 <#
 .SYNOPSIS
 The StashWindows type the published checks and the installer check share, dot-sourced by each: a running copy's
-windows as Windows sees them, and clicks posted to its tray icon.
+windows as Windows sees them, clicks posted to its tray icon, and the argument that starts a copy as Windows starts it
+at sign-in, with the Run value that carries it.
 #>
 # The process's top-level windows as Windows sees them: its visible ones, and Avalonia's hidden platform window, which
 # receives the tray icon's messages (Avalonia 12.1.4 TrayIconImpl: WM_USER + 1024, wParam the icon's ID, 1 for the
@@ -16,6 +17,13 @@ using System.Threading;
 
 public static class StashWindows
 {
+    // The argument the Run value carries after the executable's path, marking the start Windows makes at sign-in, which
+    // shows no window but a first run's (G3): the product's Launch.SignInArgument, src/ImageStash/Launch.cs.
+    public const string SignInArgument = "--at-sign-in";
+
+    // The Run value's data for <exe> as the product writes it: the path in quotes, a space, the argument (S8).
+    public static string RunData(string exe) { return "\"" + exe + "\" " + SignInArgument; }
+
     private delegate bool EnumProc(IntPtr window, IntPtr data);
 
     [DllImport("user32.dll")] private static extern bool EnumWindows(EnumProc proc, IntPtr data);

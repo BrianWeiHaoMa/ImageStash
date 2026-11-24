@@ -274,7 +274,7 @@ public sealed class SettingsWindowTests
                 settings.Run.Refusal = null;
                 Control(window, SettingsPage.StartWithWindowsTitle).SetValue(ToggleSwitch.IsCheckedProperty, true);
                 Assert.IsNull(WarningUnder(window, SettingsPage.StartWithWindowsTitle), "gone with the row's next success");
-                CollectionAssert.AreEqual(new[] { "clear", $"set {SettingsFolder.Executable}" }, settings.Run.Calls);
+                CollectionAssert.AreEqual(new[] { "clear", $"set {SettingsFolder.Executable} {Launch.SignInArgument}" }, settings.Run.Calls);
             });
         }
         finally

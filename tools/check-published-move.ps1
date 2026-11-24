@@ -589,7 +589,8 @@ try {
     $items = Count 'SELECT COUNT(*) FROM items'
     ChooseInTrayMenu 'Quit ImageStash'
     Need (WaitFor { @(Get-Process -Id $running -ErrorAction SilentlyContinue).Count -eq 0 } 10000) "the tray's Quit ImageStash ended the copy"
-    $again = Start-Process -FilePath $Exe -PassThru
+    # As Windows starts it at sign-in, showing no window, so the summon below is the one that shows it (G3).
+    $again = Start-Process -FilePath $Exe -ArgumentList ([StashWindows]::SignInArgument) -PassThru
     $running = $again.Id
     Start-Sleep -Seconds 3
     Check (-not $again.HasExited) 'the copy started again'

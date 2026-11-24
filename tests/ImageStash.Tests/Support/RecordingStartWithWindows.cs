@@ -10,9 +10,13 @@ public sealed class RecordingStartWithWindows : IStartWithWindows
     /// <summary>What every call answers while set, as Windows refusing the Run entry's change; done while null.</summary>
     public Failure? Refusal { get; set; }
 
-    public Outcome Set(string executablePath)
+    /// <summary>The argument the last set registered beside the executable, as a start at sign-in would then be given it.</summary>
+    public string? Argument { get; private set; }
+
+    public Outcome Set(string executablePath, string argument)
     {
-        Calls.Add($"set {executablePath}");
+        Calls.Add($"set {executablePath} {argument}");
+        Argument = argument;
         return Refusal is { } refused ? refused : Outcome.Done;
     }
 

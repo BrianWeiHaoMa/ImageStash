@@ -135,9 +135,9 @@ public sealed class PresetStartWithWindows : IStartWithWindows
     /// <summary>What every call answers while set; done while null.</summary>
     public Failure? Refusal { get; set; }
 
-    public Outcome Set(string executablePath)
+    public Outcome Set(string executablePath, string argument)
     {
-        Calls.Add($"set {executablePath}");
+        Calls.Add($"set {executablePath} {argument}");
         return Refusal is { } refused ? refused : Outcome.Done;
     }
 

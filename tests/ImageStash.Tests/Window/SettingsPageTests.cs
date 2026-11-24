@@ -199,7 +199,11 @@ public sealed class SettingsPageTests
         Assert.IsFalse(Saved(scratch).StartWithWindows);
 
         Assert.IsTrue(page.SetStartWithWindows(true).Succeeded);
-        CollectionAssert.AreEqual(new[] { "clear", $"set {Executable}" }, run.Calls, "the running executable registered now (F1)");
+        var started = new RecordingStartWithWindows();
+        App.ApplyStartWithWindows(new SettingsLoad(new Settings(), null, AsSaved: true), started, Executable);
+        CollectionAssert.AreEqual(new[] { "clear", $"set {Executable} {Launch.SignInArgument}" }, run.Calls,
+            "the running executable registered now (F1), with the argument that keeps the next sign-in quiet (G3)");
+        Assert.AreEqual(started.Calls.Single(), run.Calls[^1], "as the start registers it");
         await keeper.Flush();
         Assert.IsTrue(Saved(scratch).StartWithWindows);
         Assert.IsNull(page.WarningOf(SettingsPage.StartWithWindowsTitle));

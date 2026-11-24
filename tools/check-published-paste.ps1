@@ -544,7 +544,8 @@ try {
     $holder = StartPowerShell $holderScript @($holderLog)
     $null = WaitFor { (Lines $holderLog).Count -gt 0 } 60000
     Check ((Lines $holderLog | Select-Object -First 1) -eq 'registered') "another program registered Ctrl+Alt+Space first: $(Lines $holderLog | Select-Object -First 1)"
-    $restarted = Start-Process -FilePath $Exe -PassThru
+    # As Windows starts it at sign-in, from a hidden window, so the tray click below is timed from nothing showing (G3, G1).
+    $restarted = Start-Process -FilePath $Exe -ArgumentList ([StashWindows]::SignInArgument) -PassThru
     Start-Sleep -Seconds 3
     $showing = [StashWindows]::Showing($restarted.Id)
     Check (-not $restarted.HasExited) "ImageStash started after it and keeps running, showing '$showing'"

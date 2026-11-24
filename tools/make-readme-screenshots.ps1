@@ -439,7 +439,8 @@ try {
     Need (WaitFor { $chat.Refresh(); $chat.MainWindowHandle -ne [IntPtr]::Zero } 30000) 'the chat window did not show'
     $chatWindow = $chat.MainWindowHandle
 
-    $copy = Start-Process -FilePath $exe -PassThru
+    # As Windows starts it at sign-in, so the tray click below is what shows the window (G3).
+    $copy = Start-Process -FilePath $exe -ArgumentList ([StashWindows]::SignInArgument) -PassThru
     Write-Host "started the published copy over the demo stash: $exe"
     # A tray click shows the window once the stash is open; Esc hides it again, the search being empty.
     $shownAfter = -1
