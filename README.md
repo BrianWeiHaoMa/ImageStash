@@ -32,10 +32,10 @@ On a Windows 11 PC (x64), download one of these from the
 
 The download is not signed, so Windows warns before you run it the first time: where it says "Windows protected your
 PC", choose **More info**, then **Run anyway**. A PC with Smart App Control turned on blocks it, and is not supported.
-Once running, ImageStash sits in the tray (among the hidden icons at first) and starts with Windows, quietly, showing
-nothing unless another app holds one of its shortcuts, which a notification above the tray then says; Settings turns
-starting with Windows off. Starting it yourself, from the Start Menu or its `ImageStash.Windows.exe`, opens its
-window, as a click on its tray icon does, whether or not it was already running.
+ImageStash starts with Windows and sits in the tray (among the hidden icons at first). You can turn off Start with
+Windows in Settings. The first run with an empty stash opens the pinned window. If a shortcut is unavailable, a
+notification above the tray says why and offers to open its Settings row. Starting ImageStash yourself, from the
+Start Menu or its `ImageStash.Windows.exe`, opens the stash window, as a click on its tray icon does.
 
 ## Quick start
 
