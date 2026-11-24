@@ -148,12 +148,14 @@ public sealed class App : Application
             LocalClock.Instance, HeldFileRetry.Duration);
         window = new StashWindow(listing, notices, keeper, new Import(listing, notices, HeldFileRetry.Duration), handoff, editing, openWith, moving, seams);
         window.Follow(notification, captured);
-        var capture = new CaptureSession(seams.Screen, new RegionOverlay(), new RecordingFrame(seams.QuietWindows, seams.Screen, trayMenu.Name),
+        var capture = new CaptureSession(seams.Screen, new RegionOverlay(), new RecordingFrame(seams.QuietWindows, seams.Screen, trayMenu.Name, LocalClock.Instance),
             GifEncoder.Opener(HeldFileRetry.Duration), LocalClock.Instance, failure => notifications.Raise(failure));
         screenshot = new Screenshot(listing, notifications, captured, handoff, capture, keeper, window.CaptureHiding, window, HeldFileRetry.Duration);
         window.ScreenshotRequested += TakeScreenshot;
         // Made once: it follows the session's recording for the tray from here on.
         recordClip = new RecordClip(listing, notifications, captured, handoff, capture, keeper, window.CaptureHiding, window, trayMenu.SetRecording, HeldFileRetry.Duration);
+        // The bar names the record shortcut while it would act (G33); the shortcuts are made before the window.
+        recordClip.FollowShortcuts(shortcuts!);
         window.RecordRequested += RecordClip;
         window.SettingsRequested += OpenSettings;
         window.StashClipboardImageRequested += StashFromTray;

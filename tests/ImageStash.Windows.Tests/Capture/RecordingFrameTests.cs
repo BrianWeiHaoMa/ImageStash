@@ -17,10 +17,10 @@ namespace ImageStash.Windows.Tests.Capture;
 /// windows taking the recording's look: shown over a chat of the check's own, they leave the chat in front with the
 /// keystrokes, and a click inside the region reaches the chat; the band and the label are the frame's, the region inside
 /// it a hole; the label names the size alone while the region waits and REC with it once it records; the bar offers
-/// Record and Cancel while the region waits and the readings, Stop and Cancel once it records, Stop and Cancel standing
-/// where they stood while the readings narrow and widen; the frame and the bar are
+/// Cancel, "Up to" and Record while the region waits and Cancel, the readings and Stop in Record's place once it
+/// records, Stop and Cancel standing where they stood while the readings narrow and widen; the frame and the bar are
 /// in no grab in either look, which shows what lies beneath them; the bar goes over the region's bottom edge when there
-/// is room on neither side, and, wider once it records, is placed again by its rule within the working area; a real
+/// is room on neither side, and keeps its place and size, within the working area, once it records; a real
 /// click on Record, Stop or Cancel runs its action and leaves the chat in front; a shape Windows refuses for either look
 /// is that look's failure with nothing left shown; Saving leaves no button; Close leaves no window. These checks show a
 /// chat at (100, 100) with the frame over it, a pattern at (560, 160) with the frame over it, a pattern at the bottom of
@@ -93,7 +93,7 @@ public sealed class RecordingFrameTests
         Assert.IsGreaterThanOrEqualTo(region.Bottom, Rectangle(bar).Y, "the bar beneath the region");
         foreach (var button in TrayDesktop.Get(() => new[] { desk.Frame.Bar!.StopButton!, desk.Frame.Bar!.CancelButton! }))
         {
-            Assert.AreEqual(bar, Under(TestMouse.Centre(button)), $"{TrayDesktop.Get(() => Avalonia.Automation.AutomationProperties.GetName(button))} lies inside the bar's window, sized again for the wider look");
+            Assert.AreEqual(bar, Under(TestMouse.Centre(button)), $"{TrayDesktop.Get(() => Avalonia.Automation.AutomationProperties.GetName(button))} lies inside the bar's window, which kept its place and size");
         }
 
         TestMouse.Click(TestMouse.Centre(TrayDesktop.Get(() => desk.Frame.Bar!.StopButton!)));
@@ -190,7 +190,7 @@ public sealed class RecordingFrameTests
     }
 
     [TestMethod]
-    public async Task AtTheWorkingAreasBottomRightTheBarStaysWithinItWaitingAndIsPlacedAgainForItsWiderLookOnceItRecords()
+    public async Task AtTheWorkingAreasBottomRightTheBarStaysWithinItWaitingAndKeepsItsPlaceOnceItRecords()
     {
         var area = TrayDesktop.Get(() => new WindowsScreen().Displays().Single(display => display.IsPrimary).WorkingArea);
         // Right edge on the working area's, bottom a few pixels above its bottom: no room below, room above.
@@ -205,8 +205,10 @@ public sealed class RecordingFrameTests
         desk.Record();
         await Task.Delay(300);
         var recording = Rectangle(bar);
-        Assert.IsGreaterThan(waiting.Width, recording.Width, $"the recording's look is wider: {waiting.Width} then {recording.Width}");
-        Assert.IsTrue(Within(recording, area) && recording.Bottom <= region.Y, $"placed again for its new size: still above the region and wholly within the working area, never run past its edge from where the narrower bar stood (G15): {recording} in {area}");
+        // The bar is laid out once, Record becoming Stop in the same place, so the pointer that clicked Record rests on
+        // Stop: it was placed again for a wider look before, which moved every control.
+        Assert.AreEqual(waiting, recording, "the same place and size once it records");
+        Assert.IsTrue(Within(recording, area) && recording.Bottom <= region.Y, $"still above the region and wholly within the working area (G15): {recording} in {area}");
         foreach (var button in TrayDesktop.Get(() => new[] { desk.Frame.Bar!.StopButton!, desk.Frame.Bar!.CancelButton! }))
         {
             var centre = TestMouse.Centre(button);
@@ -228,15 +230,15 @@ public sealed class RecordingFrameTests
         using var desk = await FrameDesk.Open();
         var primary = desk.Screen.Displays().Single(display => display.IsPrimary);
 
-        var shown = TrayDesktop.Get(() => new RecordingFrame(new ShapeRefused(new WindowsQuietWindows(desk.Tray), from: 1), desk.Screen, desk.Named.Add)
-            .Show(new SelectedRegion(primary, DisplayPlaces.Rect(primary, 150, 160, 300, 150)), TimeSpan.FromSeconds(30), () => { }, () => { }, () => { }));
+        var shown = TrayDesktop.Get(() => new RecordingFrame(new ShapeRefused(new WindowsQuietWindows(desk.Tray), from: 1), desk.Screen, desk.Named.Add, new PacedClock())
+            .Show(new SelectedRegion(primary, DisplayPlaces.Rect(primary, 150, 160, 300, 150)), TimeSpan.FromSeconds(30), null, () => { }, () => { }, () => { }));
 
         Assert.AreEqual(new Failure("Record a clip", RecordingFrame.Title, "Windows would not show the frame around the region"), shown.Failure, "a frame shown whole would cover the region (G15)");
         await Eventually(() => FindWindowW(null, RecordingFrame.Title) == 0 && FindWindowW(null, RecordingBar.Title) == 0);
         desk.Chat.KeepsTheKeystrokes("after the refusal");
 
-        var refusedLater = TrayDesktop.Get(() => new RecordingFrame(new ShapeRefused(new WindowsQuietWindows(desk.Tray), from: 2), desk.Screen, desk.Named.Add));
-        var waited = TrayDesktop.Get(() => refusedLater.Show(new SelectedRegion(primary, DisplayPlaces.Rect(primary, 150, 160, 300, 150)), TimeSpan.FromSeconds(30), () => { }, () => { }, () => { }));
+        var refusedLater = TrayDesktop.Get(() => new RecordingFrame(new ShapeRefused(new WindowsQuietWindows(desk.Tray), from: 2), desk.Screen, desk.Named.Add, new PacedClock()));
+        var waited = TrayDesktop.Get(() => refusedLater.Show(new SelectedRegion(primary, DisplayPlaces.Rect(primary, 150, 160, 300, 150)), TimeSpan.FromSeconds(30), null, () => { }, () => { }, () => { }));
         Assert.IsTrue(waited.Succeeded, waited.Failure?.Sentence);
         await Eventually(() => FindWindowW(null, RecordingFrame.Title) != 0 && FindWindowW(null, RecordingBar.Title) != 0);
         var recorded = TrayDesktop.Get(() => refusedLater.Recording(new FixedReadings()));
@@ -286,29 +288,33 @@ public sealed class RecordingFrameTests
     [TestMethod]
     [DataRow("Light")]
     [DataRow("Dark")]
-    public void HoveredOrPressedRecordAndStopStayRedWithWhiteWordsAndCancelsGlyphReadsOnItsGround(string theme) => TrayDesktop.Run(() =>
+    public void HoveredOrPressedRecordAndStopStayRedWithWhiteWordsAndCancelsWordReadsOnItsGround(string theme) => TrayDesktop.Run(() =>
     {
         Application.Current!.RequestedThemeVariant = theme == "Light" ? ThemeVariant.Light : ThemeVariant.Dark;
-        var bar = new RecordingBar(TimeSpan.FromSeconds(30), () => { }, () => { }, () => { });
+        var bar = new RecordingBar(TimeSpan.FromSeconds(30), null, () => { }, () => { }, () => { }, TimeProvider.System, RecordingBar.DefaultDoubleClick);
         var window = new Avalonia.Controls.Window { Width = 300, Height = 60, ShowActivated = false, Position = new PixelPoint(-8000, 700), Content = bar };
         window.Show();
         try
         {
-            var record = bar.RecordButton!;
             var cancel = bar.CancelButton!;
-            bar.Recording();
-            foreach (var key in new[] { "ButtonBackgroundPointerOver", "ButtonBackgroundPressed" })
+            // Record, then the same button as Stop once it records: each look read in its own state.
+            foreach (var look in new[] { "Record", "Stop" })
             {
-                foreach (var red in new[] { record, bar.StopButton! })
+                if (look == "Stop")
                 {
-                    var ground = Color(red.Resources[key]);
-                    Assert.IsGreaterThan(ground.G * 2, (int)ground.R, $"{key} is a red under the {theme} theme: {ground}");
-                    Assert.IsGreaterThanOrEqualTo(0.4, Math.Abs(Lightness(Colors.White) - Lightness(ground)), $"white words read on {ground} under the {theme} theme");
+                    bar.Recording();
                 }
 
-                var words = key.Replace("Background", "Foreground");
-                Assert.AreEqual(Colors.White, Color(record.Resources[words]));
-                Assert.IsGreaterThanOrEqualTo(0.4, Math.Abs(Lightness(Color(cancel.Resources[words])) - Lightness(Color(cancel.Resources[key]))), $"Cancel's glyph under the {theme} theme");
+                var red = bar.RecordButton ?? bar.StopButton!;
+                foreach (var key in new[] { "ButtonBackgroundPointerOver", "ButtonBackgroundPressed" })
+                {
+                    var ground = Color(red.Resources[key]);
+                    Assert.IsGreaterThan(ground.G * 2, (int)ground.R, $"{look}'s {key} is a red under the {theme} theme: {ground}");
+                    Assert.IsGreaterThanOrEqualTo(0.4, Math.Abs(Lightness(Colors.White) - Lightness(ground)), $"white words read on {ground} under the {theme} theme");
+                    var words = key.Replace("Background", "Foreground");
+                    Assert.AreEqual(Colors.White, Color(red.Resources[words]), $"{look}'s words");
+                    Assert.IsGreaterThanOrEqualTo(0.4, Math.Abs(Lightness(Color(cancel.Resources[words])) - Lightness(Color(cancel.Resources[key]))), $"Cancel's word under the {theme} theme");
+                }
             }
         }
         finally
@@ -325,13 +331,13 @@ public sealed class RecordingFrameTests
 
     private static void StandStill(long cap)
     {
-        var bar = new RecordingBar(TimeSpan.FromMilliseconds(cap), () => { }, () => { }, () => { });
+        var bar = new RecordingBar(TimeSpan.FromMilliseconds(cap), "Ctrl+Shift+PrtScn", () => { }, () => { }, () => { }, TimeProvider.System, RecordingBar.DefaultDoubleClick);
         var window = new Avalonia.Controls.Window { ShowActivated = false, Position = new PixelPoint(-8000, 700), Content = bar };
         window.Show();
         try
         {
             bar.Recording();
-            // Sized as the frame sizes the bar's window once it records: to the bar measured at its widest readings.
+            // Sized as the frame sizes the bar's window at the wait, which it keeps once it records.
             bar.Measure(Size.Infinity);
             (window.Width, window.Height) = (bar.DesiredSize.Width, bar.DesiredSize.Height);
             Point[]? first = null;
@@ -415,7 +421,8 @@ public sealed class RecordingFrameTests
             this.tray = tray;
             Chat = chat;
             Pattern = pattern;
-            Frame = TrayDesktop.Get(() => new RecordingFrame(new WindowsQuietWindows(tray), Screen, Named.Add));
+            // Each click read a second after the last, so Stop clicked soon after Record still acts.
+            Frame = TrayDesktop.Get(() => new RecordingFrame(new WindowsQuietWindows(tray), Screen, Named.Add, new PacedClock()));
         }
 
         public TargetApp Chat { get; }
@@ -455,7 +462,7 @@ public sealed class RecordingFrameTests
         public void Show(PixelRect region) => TrayDesktop.Run(() =>
         {
             var primary = Screen.Displays().Single(display => display.IsPrimary);
-            var shown = Frame.Show(new SelectedRegion(primary, region), TimeSpan.FromSeconds(30),
+            var shown = Frame.Show(new SelectedRegion(primary, region), TimeSpan.FromSeconds(30), null,
                 () => Interlocked.Increment(ref records), () => Interlocked.Increment(ref stops), () => Interlocked.Increment(ref cancels));
             Assert.IsTrue(shown.Succeeded, shown.Failure?.Sentence);
         });

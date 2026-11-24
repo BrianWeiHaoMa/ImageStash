@@ -53,6 +53,9 @@ public sealed class CaptureSession(IScreen screen, IRegionSelection selection, I
     // and a Cancel that comes after Record but before the recording has started ends it before it starts.
     private bool cancelled;
 
+    // UI thread. The record shortcut's words the bar names, as the window last told them; null for none.
+    private string? shortcut;
+
     /// <summary>
     /// True from the start of a screenshot until its commit has run, or it was cancelled or failed; and during a
     /// recording's selection, until its overlay has closed.
@@ -200,6 +203,20 @@ public sealed class CaptureSession(IScreen screen, IRegionSelection selection, I
     }
 
     /// <summary>
+    /// The record shortcut the bar names from now on, as words (G15, G33): its text while a press of it would start and
+    /// stop the recording, or null for none. Told by the window, which owns the shortcuts; the bar of a recording in
+    /// progress follows at once, and every later recording's bar names it as it shows.
+    /// </summary>
+    public void NameShortcut(string? words)
+    {
+        shortcut = words;
+        if (RecordingWaiting || RecordingSampling)
+        {
+            frame.NameShortcut(words);
+        }
+    }
+
+    /// <summary>
     /// While the region waits to be recorded: it starts, its name and its timeline from this moment (F12, G15). Otherwise
     /// nothing; while it samples, Stop is what ends it.
     /// </summary>
@@ -258,7 +275,7 @@ public sealed class CaptureSession(IScreen screen, IRegionSelection selection, I
     {
         // The press that answers returns before the recording starts, so its own handler is never reentered by the start.
         (waiting, cancelled) = (new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously), false);
-        if (Shown(() => frame.Show(region, cap, StartRecording, StopRecording, CancelRecording), "the screen").Failure is { } unseen)
+        if (Shown(() => frame.Show(region, cap, shortcut, StartRecording, StopRecording, CancelRecording), "the screen").Failure is { } unseen)
         {
             return unseen;
         }

@@ -102,6 +102,7 @@ public sealed class ListedStash : IDisposable
         Moving.WaitForTray(Screenshot, RecordClip, StashClipboardImage, CaptureNotification, OpenWith, Notifications);
         Shortcuts = new GlobalShortcuts(Settings, GlobalShortcuts.Bindings(() => { }, () => { }, () => { }, () => { }), ShortcutsSeam, Unavailable.Add, action => action());
         Shortcuts.Start();
+        RecordClip.FollowShortcuts(Shortcuts);
         Transferring = new Transferring(Listing, Notices, Settings, Dialogs, stash.RecycleBin, Handoff, OpenWith, Moving, ApplyTravelling, stash.Clock, TestStash.ShortRetry);
         WaysIn = new WaysInActs(
             () => WayInRunning = Paste.Paste(),

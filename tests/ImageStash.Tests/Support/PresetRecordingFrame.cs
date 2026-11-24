@@ -10,6 +10,7 @@ namespace ImageStash.Tests.Support;
 public sealed class PresetRecordingFrame : IRecordingFrame
 {
     private readonly List<string> calls = [];
+    private readonly List<string?> shortcutsNamed = [];
 
     /// <summary>Every call so far, in order: "show" (the wait), "record" (the recording look), "saving" and "close".</summary>
     public IReadOnlyList<string> Calls
@@ -26,6 +27,18 @@ public sealed class PresetRecordingFrame : IRecordingFrame
     /// <summary>The region, cap and buttons of the last showing; null before the first.</summary>
     public (SelectedRegion Region, TimeSpan Cap, Action Record, Action Stop, Action Cancel)? Shown { get; private set; }
 
+    /// <summary>The record shortcut's words the bar was handed, at its showing and at every change since, in order.</summary>
+    public IReadOnlyList<string?> ShortcutsNamed
+    {
+        get
+        {
+            lock (calls)
+            {
+                return shortcutsNamed.ToList();
+            }
+        }
+    }
+
     /// <summary>The readings the recording look was last handed; null before the first.</summary>
     public IRecordingReadings? Readings { get; private set; }
 
@@ -38,9 +51,14 @@ public sealed class PresetRecordingFrame : IRecordingFrame
     /// <summary>What the recording look answers: done unless a check sets the platform's refusal.</summary>
     public Outcome RecordingAnswer { get; set; } = Outcome.Done;
 
-    public Outcome Show(SelectedRegion region, TimeSpan cap, Action record, Action stop, Action cancel)
+    public Outcome Show(SelectedRegion region, TimeSpan cap, string? shortcut, Action record, Action stop, Action cancel)
     {
         Shown = (region, cap, record, stop, cancel);
+        lock (calls)
+        {
+            shortcutsNamed.Add(shortcut);
+        }
+
         Call("show");
         return ShowAnswer;
     }
@@ -50,6 +68,14 @@ public sealed class PresetRecordingFrame : IRecordingFrame
         Readings = readings;
         Call("record");
         return RecordingAnswer;
+    }
+
+    public void NameShortcut(string? shortcut)
+    {
+        lock (calls)
+        {
+            shortcutsNamed.Add(shortcut);
+        }
     }
 
     public void Saving() => Call("saving");

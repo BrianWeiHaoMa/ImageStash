@@ -2,6 +2,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ImageStash.Seams;
@@ -14,19 +15,23 @@ public interface IRecordingFrame
     /// <summary>
     /// Shows <paramref name="region"/> waiting to be recorded: the thin red frame around it, labelled with its size and
     /// no REC, and the bar beside it offering Record, which runs <paramref name="record"/>, and Cancel, which runs
-    /// <paramref name="cancel"/>, on the UI thread; the bar's Stop, once <see cref="Recording"/> offers it, runs
+    /// <paramref name="cancel"/>, on the UI thread, and naming <paramref name="shortcut"/>, the record shortcut's words
+    /// while it would act, or none when null; the bar's Stop, once <see cref="Recording"/> offers it, runs
     /// <paramref name="stop"/>, and <paramref name="cap"/> is the length it reads the time against. Neither takes the
     /// activation, and neither is in any grab (G15). A failure, with nothing left shown, when the platform will not show
     /// the frame as G15 needs it.
     /// </summary>
-    Outcome Show(SelectedRegion region, TimeSpan cap, Action record, Action stop, Action cancel);
+    Outcome Show(SelectedRegion region, TimeSpan cap, string? shortcut, Action record, Action stop, Action cancel);
 
     /// <summary>
-    /// The recording has started: the frame's label carries REC, and the same bar, placed again for its new size, reads
-    /// the time against the cap and the size so far from <paramref name="readings"/> and offers Stop and Cancel instead
-    /// of Record (G15). A failure, with nothing left shown, when the platform will not show the frame so.
+    /// The recording has started: the frame's label carries REC, and the same bar, in the same place and of the same
+    /// size, reads the time against the cap and the size so far from <paramref name="readings"/> and offers Stop in
+    /// Record's place (G15). A failure, with nothing left shown, when the platform will not show the frame so.
     /// </summary>
     Outcome Recording(IRecordingReadings readings);
+
+    /// <summary>From now on the bar names <paramref name="shortcut"/>, the record shortcut's words, or none when null; nothing while the bar does not show.</summary>
+    void NameShortcut(string? shortcut);
 
     /// <summary>The bar names the saving of the clip instead, offering no Stop or Cancel (G35).</summary>
     void Saving();
@@ -43,14 +48,16 @@ public sealed record FrameLayout(PixelRect Window, IReadOnlyList<PixelRect> Part
 /// and its label, shown only in a red band around the region and the label, "W × H" while the region waits and
 /// "● REC · W × H" once it records, through the Quiet-windows seam's <see cref="IQuietWindows.ShowOnly"/>, so the region
 /// beneath stays live and clickable (Windows makes any borderless window at least 32 × 39 pixels, so four thin windows
-/// cannot be the band); the bar is a second window placed by <see cref="RecordingBar.Place"/>, the same window for both
-/// of its looks, placed again when it changes. Both are left out of every capture before they are first shown, which
+/// cannot be the band); the bar is a second window placed by <see cref="RecordingBar.Place"/> once, at the wait, the
+/// same window, place and size for both of its looks, so Stop is where Record was clicked (G15). Both are left out of
+/// every capture before they are first shown, which
 /// holds for the window's life, a refusal named through <paramref name="named"/> and the window shown anyway, and both
 /// are shown without activation, so Esc and every key reach the app being recorded (G15, S4, G35); neither opens a
 /// popup. A frame Windows refuses its shape is that showing's failure, both windows closed, since a frame shown whole
 /// would cover the region and none would leave it unmarked.
 /// </summary>
-public sealed class RecordingFrame(IQuietWindows quietWindows, IScreen screen, Action<Failure> named) : IRecordingFrame
+/// <param name="clock">What the bar reads a double-click's time on, from the click on Record to a click on Stop.</param>
+public sealed class RecordingFrame(IQuietWindows quietWindows, IScreen screen, Action<Failure> named, TimeProvider clock) : IRecordingFrame
 {
     public const string Title = "ImageStash recording";
 
@@ -125,13 +132,14 @@ public sealed class RecordingFrame(IQuietWindows quietWindows, IScreen screen, A
     /// </summary>
     public static Size WindowSize(PixelSize place, double scaling) => new(place.Width / scaling, place.Height / scaling);
 
-    public Outcome Show(SelectedRegion region, TimeSpan cap, Action record, Action stop, Action cancel)
+    public Outcome Show(SelectedRegion region, TimeSpan cap, string? shortcut, Action record, Action stop, Action cancel)
     {
         Close();
         // A click on Record or Stop is answered once its own event is over, so the bar is not changed under it. Cancel
         // changes nothing on the bar at once and acts at the click, so a clip the cap ends while the click is handled is
         // still discarded, never saved by the cap's step queued ahead of a posted Cancel (G15).
-        var bar = new RecordingBar(cap, () => Dispatcher.UIThread.Post(record), () => Dispatcher.UIThread.Post(stop), cancel);
+        var doubleClick = RecordingBar.DoubleClickTime(Application.Current?.PlatformSettings?.GetDoubleTapTime(PointerType.Mouse));
+        var bar = new RecordingBar(cap, shortcut, () => Dispatcher.UIThread.Post(record), () => Dispatcher.UIThread.Post(stop), cancel, clock, doubleClick);
         BarWindow = QuietWindow(RecordingBar.Title, bar, bar.Background!);
         // Rounded as the notifications are; the frame, drawn in parts around the region, keeps its square corners.
         quietWindows.RoundCorners(BarWindow);
@@ -150,15 +158,15 @@ public sealed class RecordingFrame(IQuietWindows quietWindows, IScreen screen, A
 
     public Outcome Recording(IRecordingReadings readings)
     {
-        if (shown is not { } current || Bar is not { } bar || BarWindow is not { } barWindow || FrameWindow is not { } frameWindow)
+        if (shown is not { } current || Bar is not { } bar || BarWindow is null || FrameWindow is not { } frameWindow)
         {
             return new Failure(Recorder.Action, Title, "the frame is not on the screen");
         }
 
         var (region, view) = current;
+        // Neither measured nor placed again: the bar holds the same size in both looks, and a move would take Stop from
+        // under the pointer that clicked Record (G15).
         bar.Recording();
-        // Wider now: placed again for its new size, so it stays beside the region and within the working area (G15).
-        Fit(barWindow, PlaceBar(region, bar), barWindow.RenderScaling);
         bar.Refresh(readings);
         var layout = Mark(region, view, Label(region.Rectangle));
         Fit(frameWindow, layout.Window, frameWindow.RenderScaling);
@@ -171,6 +179,8 @@ public sealed class RecordingFrame(IQuietWindows quietWindows, IScreen screen, A
         timer.Start();
         return Outcome.Done;
     }
+
+    public void NameShortcut(string? shortcut) => Bar?.NameShortcut(shortcut);
 
     public void Saving()
     {
@@ -216,7 +226,8 @@ public sealed class RecordingFrame(IQuietWindows quietWindows, IScreen screen, A
 
     /// <summary>
     /// The bar's place for its content's size at the display's scaling, beside the region in the display's working area
-    /// (G15); measured inside its window, where the theme gives its buttons their size.
+    /// and never wider than it, the shortcut's words giving way where it is narrower (G15); measured inside its window,
+    /// where the theme gives its buttons their size.
     /// </summary>
     private static PixelRect PlaceBar(SelectedRegion region, RecordingBar bar)
     {

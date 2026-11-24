@@ -17,7 +17,9 @@ namespace ImageStash.Window;
 /// clipboard as a copy puts it, recording no use (G8, G10); then the capture notification above the tray with the clip's
 /// length, saying it is on the clipboard only when it was put there (G16). While the region waits, the tray's entry
 /// reads Start recording; while the recording samples, the icon carries its red dot and the entry reads Stop recording,
-/// through <c>recording</c> (G15, G34). A stash still opening or that did not open, or a maximum length in the settings
+/// through <c>recording</c> (G15, G34). The bar names the record shortcut only while a press of it would act, read as
+/// each recording starts and again at every change of the shortcuts (G33, <see cref="FollowShortcuts"/>). A stash
+/// still opening or that did not open, or a maximum length in the settings
 /// file below one second, is refused before anything is grabbed or hidden; a press with no recording in progress while
 /// an overlay is up or while the clip is being saved does nothing, the overlay or the bar being
 /// the busy state, and one while a screenshot is being saved after its release is refused by name; a cancel says
@@ -43,6 +45,7 @@ public sealed class RecordClip
     private readonly CaptureHiding hiding;
     private readonly TopLevel owner;
     private readonly PictureImport pictures;
+    private GlobalShortcuts? shortcuts;
 
     /// <param name="recording">Told the recording's stage at every change: the tray's Start recording, and its red dot and Stop recording.</param>
     public RecordClip(Listing listing, Notices notifications, CaptureNotification captured, Handoff handoff, CaptureSession capture, SettingsKeeper settings, CaptureHiding hiding, TopLevel owner, Action<RecordingStage> recording, TimeSpan heldFileRetry)
@@ -65,6 +68,17 @@ public sealed class RecordClip
     /// it, then for that notification's Undo (State: Move).
     /// </summary>
     public bool InProgress { get; private set; }
+
+    /// <summary>
+    /// From now on the recording's bar names the record shortcut of <paramref name="shortcuts"/> while a press of it would
+    /// act, and follows each change of them (a pause, its toggle back, a rebind, one made unavailable) while it shows.
+    /// </summary>
+    public void FollowShortcuts(GlobalShortcuts shortcuts)
+    {
+        this.shortcuts = shortcuts;
+        shortcuts.Changed += NameShortcut;
+        NameShortcut();
+    }
 
     /// <summary>One press: the user's, from the shortcut, the tray menu or the window's own menu. UI thread.</summary>
     public async Task StartOrStop()
@@ -112,6 +126,8 @@ public sealed class RecordClip
         }
 
         InProgress = true;
+        // Read afresh as it starts: a shortcut can be left unregistered without a change being raised, as at start.
+        NameShortcut();
         try
         {
             await RecordAndSay(current);
@@ -121,6 +137,10 @@ public sealed class RecordClip
             InProgress = false;
         }
     }
+
+    /// <summary>The record shortcut's words, while a press of it would start and stop the recording, told to the capture for its bar.</summary>
+    private void NameShortcut() =>
+        capture.NameShortcut(shortcuts is null ? null : ActingShortcut.Of(shortcuts, ShortcutAct.Record)?.Text);
 
     /// <summary>The recording, from its selection to its end, then what it saved said above the tray.</summary>
     private async Task RecordAndSay(Settings current)

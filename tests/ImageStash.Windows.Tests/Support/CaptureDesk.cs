@@ -39,7 +39,7 @@ public sealed class CaptureDesk : IDisposable
         Notification = notification;
         Capture = capture;
         Chat = chat;
-        Frame = TrayDesktop.Get(() => new RecordingFrame(new WindowsQuietWindows(tray), new WindowsScreen(), failure => notifications.Raise(failure)));
+        Frame = TrayDesktop.Get(() => new RecordingFrame(new WindowsQuietWindows(tray), new WindowsScreen(), failure => notifications.Raise(failure), TimeProvider.System));
         Timed = new TimedFrame(Frame);
         Session = TrayDesktop.Get(() => new CaptureSession(new WindowsScreen(), Overlay, Timed, GifEncoder.Opener(HeldFileRetry.Duration), clock, failure => notifications.Raise(failure)));
         Screenshot = TrayDesktop.Get(() => new Screenshot(shown.Listing, notifications, capture, shown.Handoff, Session, shown.Settings, shown.Window.CaptureHiding, shown.Window, HeldFileRetry.Duration));
@@ -406,10 +406,10 @@ public sealed class TimedFrame(RecordingFrame frame) : IRecordingFrame
     /// <summary>The readings the recording look was last handed: the recorder the session started.</summary>
     public IRecordingReadings? Readings { get; private set; }
 
-    public Outcome Show(SelectedRegion region, TimeSpan cap, Action record, Action stop, Action cancel)
+    public Outcome Show(SelectedRegion region, TimeSpan cap, string? shortcut, Action record, Action stop, Action cancel)
     {
         (WaitingAt, StartedAt, StoppedAt) = (clock.Elapsed, null, null);
-        return frame.Show(region, cap, record, () =>
+        return frame.Show(region, cap, shortcut, record, () =>
         {
             StoppedAt = clock.Elapsed;
             stop();
@@ -421,6 +421,8 @@ public sealed class TimedFrame(RecordingFrame frame) : IRecordingFrame
         (StartedAt, Readings) = (clock.Elapsed, readings);
         return frame.Recording(readings);
     }
+
+    public void NameShortcut(string? shortcut) => frame.NameShortcut(shortcut);
 
     public void Saving() => frame.Saving();
 

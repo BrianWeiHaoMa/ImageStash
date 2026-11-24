@@ -229,12 +229,8 @@ public sealed class TrayMenu
         return Text();
     }
 
-    /// <summary>
-    /// The open shortcut while a press of it would summon the window: its setting a shortcut, Pause off, and the policy
-    /// giving no reason it is unavailable (G33); null otherwise, so the tooltip never offers a key that does nothing.
-    /// </summary>
-    private Shortcut? OpenShortcutSummoning() =>
-        shortcuts is not null && !shortcuts.Paused && shortcuts.UnavailableReason(ShortcutAct.Open) is null ? shortcuts.ShortcutOf(ShortcutAct.Open) : null;
+    /// <summary>The open shortcut while a press of it would summon the window (G33); null otherwise, so the tooltip never offers a key that does nothing.</summary>
+    private Shortcut? OpenShortcutSummoning() => shortcuts is null ? null : ActingShortcut.Of(shortcuts, ShortcutAct.Open);
 
     /// <summary>An unavailable shortcut named by the words of its entry in the menu, or by its shortest line when it has none.</summary>
     private static string ByEntry(Failure unavailable) =>
