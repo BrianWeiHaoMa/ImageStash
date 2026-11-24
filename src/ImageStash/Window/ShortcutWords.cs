@@ -46,10 +46,29 @@ public static class ShortcutWords
     /// </summary>
     public static string ToolTipLine(ShortcutProblem problem)
     {
+        var cause = ToolTipCause(problem);
+        var act = ActName(problem.Act);
+        return cause is null ? $"{act} has no shortcut set." : $"{cause}, so {act} has no shortcut.";
+    }
+
+    // While paused, the combination can identify the shortcut on a shorter line. A setting with a misplaced or
+    // duplicate combination still needs the affected act's name.
+    internal static string ToolTipLineWithCompactWhy(ShortcutProblem problem)
+    {
+        var cause = ToolTipCause(problem);
+        if (cause is null)
+        {
+            return ToolTipLine(problem);
+        }
+
+        return NeedsActName(problem) ? $"{ActName(problem.Act)}: {cause}." : $"{cause}.";
+    }
+
+    private static string? ToolTipCause(ShortcutProblem problem)
+    {
         var combination = problem.Combination;
         var reason = problem.Reason;
-        var act = ActName(problem.Act);
-        var cause = reason.Kind switch
+        return reason.Kind switch
         {
             ShortcutReasonKind.HeldByAnotherProgram => $"{combination} is used by another app",
             // Short, so the line keeps its why beside two other failures cut to their actions (G33).
@@ -63,7 +82,6 @@ public static class ShortcutWords
             ShortcutReasonKind.PlainKey => $"{combination} is needed by every app",
             _ => $"{combination} couldn't be registered{Stated(reason, " ({0})")}",
         };
-        return cause is null ? $"{act} has no shortcut set." : $"{cause}, so {act} has no shortcut.";
     }
 
     /// <summary>
@@ -92,12 +110,29 @@ public static class ShortcutWords
     /// The shortest line still saying which shortcut: its combination, or its act's name when that is shorter. Four of
     /// these, one per act, always fit the tooltip together, since each is no longer than its act's.
     /// </summary>
-    public static string ToolTipLineShortest(ShortcutProblem problem)
+    public static string ToolTipLineShortest(ShortcutProblem problem) => ToolTipLineShortest(problem, useCompactForms: false);
+
+    internal static string ToolTipLineShortest(ShortcutProblem problem, bool useCompactForms)
     {
         var byAct = $"{ActName(problem.Act)} unavailable";
         var byCombination = $"{problem.Combination} is unavailable";
-        return IsBlank(problem.Combination) || byAct.Length <= byCombination.Length ? byAct : byCombination;
+        var nameAct = IsBlank(problem.Combination) || (useCompactForms && NeedsActName(problem));
+        return nameAct || byAct.Length <= byCombination.Length ? byAct : byCombination;
     }
+
+    internal static string ToolTipUnavailableShortcuts(IEnumerable<ShortcutProblem> problems) =>
+        $"Unavailable: {string.Join(", ", problems.Select(ShortName))}";
+
+    private static string ShortName(ShortcutProblem problem)
+    {
+        var act = ActName(problem.Act);
+        return NeedsActName(problem) || IsBlank(problem.Combination) || act.Length <= problem.Combination.Length
+            ? act
+            : problem.Combination;
+    }
+
+    private static bool NeedsActName(ShortcutProblem problem) =>
+        problem.Reason.Kind is ShortcutReasonKind.NotAShortcut or ShortcutReasonKind.UsedByAnother;
 
     /// <summary>The character the layout types, or, with none printable (a dead key, a control code, white space), "a character".</summary>
     private static string Typed(ShortcutReason reason) => reason.Character is { Length: > 0 } character ? character : "a character";

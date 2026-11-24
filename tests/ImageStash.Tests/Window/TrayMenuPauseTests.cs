@@ -91,7 +91,7 @@ public sealed class TrayMenuPauseTests
     }
 
     [TestMethod]
-    public void PausedWordsJoinWholeFailuresWhenTheyFitAndGiveWayBeforeAnyReasonDoes()
+    public void PausedWordsKeepTheOtherFailureAndTheShortcutReasonAsSpaceAllows()
     {
         var started = StartedShortcuts.Start(held: [Screenshot]);
         var unavailable = started.Tray.ToolTip!;
@@ -108,6 +108,101 @@ public sealed class TrayMenuPauseTests
         StringAssert.Contains(withoutPause, longFailure.Sentence, "the other whole failure also fits");
 
         full.Shortcuts.TogglePause();
-        Assert.AreEqual(withoutPause, full.Tray.ToolTip, "the paused words give way before either reason");
+        Assert.AreEqual($"{PausedTip}\nSave failed: Settings\n{unavailable}", full.Tray.ToolTip,
+            "the other failure shortens and the shortcut keeps its full reason");
+    }
+
+    [TestMethod]
+    public void PauseIsNamedWithBothHeldCaptureDefaultsAndResumeKeepsTheirConflicts()
+    {
+        var started = StartedShortcuts.Start(held: [Screenshot, Shortcut.Parse("Ctrl+Shift+PrtScn").Value!]);
+        var running = started.Tray.ToolTip;
+        var pause = started.Tray.Entries.Single(entry => entry.Header == TrayMenu.PauseHeader).Chosen;
+
+        pause();
+
+        var paused = started.Tray.ToolTip!;
+        StringAssert.StartsWith(paused, $"{PausedTip}\n");
+        Assert.IsLessThanOrEqualTo(127, paused.Length);
+        StringAssert.Contains(paused, "Ctrl+PrtScn is used by another app");
+        StringAssert.Contains(paused, "Ctrl+Shift+PrtScn is used by another app");
+
+        pause();
+
+        Assert.AreEqual(running, started.Tray.ToolTip, "Resume clears the paused words and keeps the conflicts");
+    }
+
+    [TestMethod]
+    public void PauseAndEveryUnavailableShortcutFitWhenAllFourShortcutsAreLong()
+    {
+        var bindings = new[] { "Ctrl+Alt+Shift+Win+PrtScn", "Ctrl+Alt+Shift+Win+F9", "Ctrl+Alt+Shift+Win+F10", "Ctrl+Alt+Shift+Win+F11" };
+        var started = StartedShortcuts.Start(open: bindings[0], screenshot: bindings[1], record: bindings[2], stash: bindings[3],
+            held: bindings.Select(binding => Shortcut.Parse(binding).Value!).ToArray());
+        started.Menu.Name(new Failure("Open the stash", "stash folder", "access denied"));
+
+        started.Tray.Entries.Single(entry => entry.Header == TrayMenu.PauseHeader).Chosen();
+
+        var paused = started.Tray.ToolTip!;
+        StringAssert.StartsWith(paused, $"{PausedTip}\n");
+        Assert.IsLessThanOrEqualTo(127, paused.Length);
+        StringAssert.Contains(paused, "Unavailable: ");
+        foreach (var act in new[] { "Open ImageStash", "Take a screenshot", "Record a clip", "Stash clipboard image" })
+        {
+            StringAssert.Contains(paused, act);
+        }
+    }
+
+    [TestMethod]
+    public void ThePausedTooltipKeepsTheFailedActionBesideFourShorterBindings()
+    {
+        var started = StartedShortcuts.Start(held:
+            [Shortcut.Parse("Ctrl+Alt+Space").Value!, Screenshot, Shortcut.Parse("Ctrl+Shift+PrtScn").Value!, Shortcut.Parse("Win+Alt+V").Value!]);
+        started.Menu.Name(new Failure("Open the stash", "stash folder", "access denied"));
+
+        started.Tray.Entries.Single(entry => entry.Header == TrayMenu.PauseHeader).Chosen();
+
+        var paused = started.Tray.ToolTip!;
+        StringAssert.StartsWith(paused, $"{PausedTip}\n");
+        Assert.IsLessThanOrEqualTo(127, paused.Length);
+        StringAssert.Contains(paused, "Open the stash failed");
+        StringAssert.Contains(paused, "Unavailable: Win+Alt+V, Record a clip, Ctrl+PrtScn, Ctrl+Alt+Space");
+    }
+
+    [TestMethod]
+    public void ThePausedTooltipKeepsBothReasonsBesideTheFailedAction()
+    {
+        var started = StartedShortcuts.Start(screenshot: "Ctrl+Alt+Q", held: Shortcut.Parse("Ctrl+Shift+PrtScn").Value!);
+        started.Seam.Release(Shortcut.Parse("Ctrl+Alt+Q").Value!, ShortcutRefusal.TypesACharacter("@"));
+        started.RunPosted();
+        started.Menu.Name(new Failure("Stop starting with Windows", "Run entry", "access denied"));
+
+        started.Tray.Entries.Single(entry => entry.Header == TrayMenu.PauseHeader).Chosen();
+
+        var paused = started.Tray.ToolTip!;
+        Assert.IsLessThanOrEqualTo(127, paused.Length);
+        StringAssert.Contains(paused, "Ctrl+Alt+Q types @");
+        StringAssert.Contains(paused, "Ctrl+Shift+PrtScn is used by another app");
+        StringAssert.Contains(paused, "Stop starting with Windows failed");
+    }
+
+    [TestMethod]
+    public void ThePausedTooltipNamesTheActionWithAnImportedDuplicateBinding()
+    {
+        var shared = Shortcut.Parse("Ctrl+F4").Value!;
+        var record = Shortcut.Parse("Ctrl+Alt+Q").Value!;
+        var started = StartedShortcuts.Start(open: shared.Text, stash: shared.Text, record: record.Text,
+            held: [shared, Screenshot]);
+        started.Seam.Release(record, ShortcutRefusal.TypesACharacter("@"));
+        started.RunPosted();
+
+        started.Tray.Entries.Single(entry => entry.Header == TrayMenu.PauseHeader).Chosen();
+
+        var paused = started.Tray.ToolTip!;
+        StringAssert.StartsWith(paused, $"{PausedTip}\n");
+        Assert.IsLessThanOrEqualTo(127, paused.Length);
+        StringAssert.Contains(paused, "Stash clipboard image", "the imported duplicate needs its action name to distinguish it from the other binding");
+        StringAssert.Contains(paused, "Ctrl+F4");
+        StringAssert.Contains(paused, "Ctrl+PrtScn");
+        StringAssert.Contains(paused, "Ctrl+Alt+Q types @");
     }
 }

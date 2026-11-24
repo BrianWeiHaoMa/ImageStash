@@ -6,7 +6,7 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 
 ### Added
 
-- When you pause shortcuts, the stash footer and Settings say so and offer Resume. The tray tooltip says shortcuts are paused when there is room alongside any errors. The tray icon shows a pause badge or a warning badge for an unavailable shortcut, with the red dot taking precedence while recording.
+- When you pause shortcuts, the stash footer and Settings say so and offer Resume. The tray tooltip says shortcuts are paused and still lists unavailable shortcuts, shortening conflict details to fit. The tray icon shows a pause badge or a warning badge for an unavailable shortcut, with the red dot taking precedence while recording.
 
 - A copy now says it worked: after `Ctrl+C`, an Enter that copies (with no app to paste into), or the item menu's Copy, the footer reads "✓ Copied" with the picture's name, or how many pictures, for two seconds before its hints return. In the preview, the button that copies reads "Copied ✓" for a moment instead. A paste into a chat shows nothing of the kind: ImageStash cannot see whether it arrived.
 - `Ctrl+Z` now undoes from the keyboard: in the grid, or in a picture's preview outside its name and tag fields, it runs the Undo of the newest notice that still offers one, so a picture deleted with Del comes back with one key, and pressed again it undoes the change before that. Held down, it undoes once. In the search box it still undoes your typing, and in the editor your last edit; notifications above the tray are never undone by it. A notice's Undo button names the key in its tooltip.
