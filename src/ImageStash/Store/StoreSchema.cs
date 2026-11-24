@@ -72,6 +72,12 @@ internal static class StoreSchema
         """
         SELECT 1;
         """,
+
+        // Version 4 records whether a screenshot, a recording or Stash clipboard image added the item, which G4's Recent
+        // alone reads (F9). The rows an earlier build wrote are not rewritten and read 0: what added them was not recorded.
+        """
+        ALTER TABLE items ADD COLUMN added_by_capture INTEGER NOT NULL DEFAULT 0;
+        """,
     ];
 
     public static int CurrentVersion => Steps.Length;

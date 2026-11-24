@@ -27,7 +27,10 @@ namespace ImageStash.Tests.Window;
 /// a screenshot's notification's Edit opens the window naming the chat, Save sends nothing to any window, and Enter
 /// pastes the saved finished picture into the chat, recording one use (G8, G16, G26, N3, G10); the screenshot's card,
 /// read before that Edit, is titled as a screenshot and says on one line that it is on the clipboard and its measured
-/// size, and a clip's card leads that line with its length and offers Trim (G16, G24).
+/// size, and a clip's card leads that line with its length and offers Trim (G16, G24); the clip is on the clipboard
+/// before the stash is listed again, committed from what its recorder wrote (G15, G28, R9); then Recent lists the clip,
+/// never used, by when it was saved, ahead of the screenshot pasted before it, the screenshot still selected, and after
+/// a restart and later uses, each item by its latest use or, while it has none, by when a capture added it (G1, G4).
 /// </summary>
 [TestClass]
 public sealed class StashWindowPathTests
@@ -333,9 +336,12 @@ public sealed class StashWindowPathTests
     [TestMethod]
     public async Task CaptureToPasteAScreenshotEditedFromItsNotificationGoesIntoTheChatItWasMadeOverWithOneEnter()
     {
-        using var listed = await ListedStash.Open(SetClock.Ahead);
+        // On the recorder's stepped clock, so (3) records its clip in this stash; uses and additions at times the walk sets.
+        using var listed = await ListedStash.OpenRecording();
+        var start = listed.Stash.Clock.Now;
         var used = await listed.Stash.ImportFixture("used", "still.png");
         Assert.IsTrue((await listed.Handoff.Copy(null!, [used])).Succeeded);
+        listed.Stash.Clock.Now = start.AddSeconds(1);
         var usesBefore = listed.Uses();
         listed.Selection.Answer = new SelectedRegion(RecordingScreen.Primary, new Avalonia.PixelRect(100, 50, 30, 20));
         listed.Screen.Paint(RecordingScreen.Primary, seed: 5);
@@ -380,6 +386,7 @@ public sealed class StashWindowPathTests
         var saved = listed.Listing.Items.Single(item => item.Id == shot.Id);
         Assert.AreEqual(1, saved.RenderedRevision, "listed as saved");
 
+        listed.Stash.Clock.Now = start.AddSeconds(2);
         var enter = listed.Press(Key.Enter, KeyModifiers.None, KeyPlace.SearchBox);
         listed.Keys.Released(Key.Enter);
         Assert.AreEqual(KeyAction.Handoff, await enter);
@@ -392,34 +399,65 @@ public sealed class StashWindowPathTests
         Assert.AreEqual(usesBefore + 1, listed.Uses(), "one use recorded (G10)");
         Assert.IsEmpty(listed.Failures);
 
-        // (3) A clip recorded with Also copy on, in a stash of its own on the recorder's stepped clock until the walk records
-        // its clip in this stash, which shows All: when the clipboard is written, the store answers the clip's item with
-        // its file in place, and the listing the capture's end makes has not yet read the stash (G15, G28, R9).
-        using var recording = await ListedStash.OpenRecording();
-        recording.Selection.Answer = new SelectedRegion(RecordingScreen.Primary, new Avalonia.PixelRect(100, 50, 32, 24));
-        MediaFrame[] pictures = [recording.Screen.Paint(RecordingScreen.Primary, seed: 1), recording.Screen.Paint(RecordingScreen.Primary, seed: 2)];
-        recording.Screen.EachGrab = index => Outcome<MediaFrame>.Of(pictures[index % 2]);
-        await recording.Listing.ShowScope(Scope.All);
+        // (3) A clip recorded with Also copy on, the paste having left the hidden flyout on Recent, which lists a capture
+        // not yet used once it reads the stash: when the clipboard is written, the store answers the clip's item with its
+        // file in place, and the listing the capture's end makes has not yet read the stash (G15, G28, R9, G4).
+        listed.WindowSteps.Clear();
+        listed.Selection.Answer = new SelectedRegion(RecordingScreen.Primary, new Avalonia.PixelRect(100, 50, 32, 24));
+        MediaFrame[] pictures = [listed.Screen.Paint(RecordingScreen.Primary, seed: 1), listed.Screen.Paint(RecordingScreen.Primary, seed: 2)];
+        listed.Screen.EachGrab = index => Outcome<MediaFrame>.Of(pictures[index % 2]);
+        listed.Stash.Clock.Now = start.AddSeconds(3);
         var atTheWrite = "";
-        recording.Clipboard.AtWrite = async () => atTheWrite = await CaptureEnds.AtTheWrite(recording);
-        var acting = recording.RecordClip.StartOrStop();
-        await recording.RecordFromTheWait();
+        listed.Clipboard.AtWrite = async () => atTheWrite = await CaptureEnds.AtTheWrite(listed);
+        var acting = listed.RecordClip.StartOrStop();
+        await listed.RecordFromTheWait();
         // Four samples, at 0, 70, 140 and 210 ms, then Stop at 280 ms.
-        recording.StepRecording(210);
-        recording.Stepped!.Pass(TimeSpan.FromMilliseconds(70));
-        recording.Frame.PressStop();
+        listed.StepRecording(210);
+        listed.Stepped!.Pass(TimeSpan.FromMilliseconds(70));
+        listed.Frame.PressStop();
         await acting.WaitAsync(TimeSpan.FromSeconds(10));
-        var clip = (await recording.Stash.All()).Single();
+        listed.Clipboard.AtWrite = null;
+        var clip = (await listed.Stash.All()).MaxBy(item => item.Id)!;
+        Assert.HasCount(3, await listed.Stash.All(), "the picture used first, the screenshot and the clip");
         Assert.AreEqual("hide; in place True; listed False; 0 notifications", atTheWrite, "copied before the stash is listed again and the window is back");
         // The item's recorded facts and hash are what Media reads from the saved file (G12, G19).
-        CaptureEnds.CommittedAsRead(recording.Stash, clip, "committed from what the recorder wrote");
+        CaptureEnds.CommittedAsRead(listed.Stash, clip, "committed from what the recorder wrote");
 
         // (2) That clip's card: its line leads with the clip's length, and it offers Trim (G16).
-        var clipCard = recording.CaptureNotification.WordsOf(recording.Notifications.Shown.Single())!;
+        var clipCard = listed.CaptureNotification.WordsOf(listed.Notifications.Shown.Single())!;
         await Handing.Eventually(() => clipCard.Size is not null);
         Assert.AreEqual(("Recording stashed", $"0.3 s · On the clipboard · Ctrl+V pastes it · {FileSize.Words(new FileInfo(clip.FilePath).Length)}", "Trim"),
             (clipCard.Title, clipCard.Line, clipCard.EditLabel));
-        Assert.IsEmpty(recording.Failures);
+
+        // (4) The window summoned: Recent lists the clip, never used, by when it was saved, then the screenshot pasted in
+        // (1) by that use, then the picture used first; the screenshot still the one selected (G4, G1).
+        await listed.Summon();
+        Assert.AreEqual(Scope.Recent, listed.Listing.Scope);
+        CollectionAssert.AreEqual(new[] { clip.Id, shot.Id, used.Id }, listed.Listing.Items.Select(item => item.Id).ToList(), "G4: the unused clip by when it was added");
+        CollectionAssert.AreEqual(new[] { shot.Id }, listed.Listing.Selection.ToList(), "G1: the selection the paste left");
+        Assert.AreEqual(0, (await listed.Stash.Store!.UseHistory(clip.Id)).Value!.Count, "the clip and its copy are no use (G10)");
+
+        // Another picture used, then the stash started again: that picture, then the clip, then the screenshot.
+        listed.Stash.Clock.Now = start.AddSeconds(4);
+        Assert.IsTrue((await listed.Handoff.Copy(null!, [used])).Succeeded);
+        using var restarted = await listed.Restart();
+        await restarted.Summon();
+        CollectionAssert.AreEqual(new[] { used.Id, clip.Id, shot.Id }, restarted.Listing.Items.Select(item => item.Id).ToList(), "the mark is the store's (G4, G28)");
+        CollectionAssert.AreEqual(new[] { used.Id }, restarted.Listing.Selection.ToList(), "G1: at the first show after start, Recent's first item selected");
+
+        // Once the clip is pasted, it is first, listed by that use.
+        restarted.PasteTarget.FromPress(new ForegroundReading(false, chat));
+        restarted.Listing.Focus(clip.Id);
+        restarted.Stash.Clock.Now = start.AddSeconds(5);
+        var pasteClip = restarted.Press(Key.Enter, KeyModifiers.None, KeyPlace.Grid);
+        restarted.Keys.Released(Key.Enter);
+        Assert.AreEqual(KeyAction.Handoff, await pasteClip);
+        Assert.AreEqual(chat, restarted.Target.Pasted.Single().Target);
+        CollectionAssert.AreEqual(new[] { clip.Id, used.Id, shot.Id }, (await restarted.Stash.Store!.Recent()).Value!.Select(item => item.Id).ToList(), "G4: by its use now");
+        CollectionAssert.AreEqual(new[] { clip.Id, used.Id, shot.Id }, restarted.Listing.Items.Select(item => item.Id).ToList());
+        Assert.AreEqual(new UseHistory(1, start.AddSeconds(5)), (await restarted.Stash.Store!.UseHistory(clip.Id)).Value);
+        Assert.IsEmpty(listed.Failures);
+        Assert.IsEmpty(restarted.Failures);
     }
 
     /// <summary>An arrow pressed in the preview as the window takes it; then the item shown, and the grid's one selected item, read.</summary>

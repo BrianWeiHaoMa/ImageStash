@@ -72,6 +72,26 @@ public sealed class ScreenshotTests
     }
 
     [TestMethod]
+    public async Task TheScreenshotIsInRecentUnusedByWhenItWasTakenAndTheWindowShowingRecentListsItKeepingTheSelection()
+    {
+        using var taking = await Taking();
+        var older = await taking.Stash.Import("older");
+        await taking.Stash.Store!.RecordUses([older], taking.Stash.Clock.Now);
+        await taking.Listing.ShowScope(Scope.Recent);
+        taking.Listing.Focus(older.Id);
+        taking.Selection.AtTheRelease = () => taking.Stash.Clock.Now += TimeSpan.FromSeconds(7);
+
+        await taking.Screenshot.Take();
+
+        var shot = (await taking.Stash.All()).Single(each => each.Id != older.Id);
+        CollectionAssert.AreEqual(new[] { shot.Id, older.Id }, (await taking.Stash.Store!.Recent()).Value!.Select(each => each.Id).ToList(),
+            "G4: an item a screenshot added is listed while no use of it is recorded, placed by when it was added");
+        CollectionAssert.AreEqual(new[] { shot.Id, older.Id }, taking.Listing.Items.Select(each => each.Id).ToList(), "the window on Recent lists it first");
+        CollectionAssert.AreEqual(new[] { older.Id }, taking.Listing.Selection.ToList(), "the selection as it was left (G1)");
+        Assert.AreEqual(1L, taking.Uses(), "the older item's use alone: a capture is no use (G10)");
+    }
+
+    [TestMethod]
     public async Task TheWindowComesBackOnlyOnceTheItemIsCommittedAndListed()
     {
         using var taking = await Taking();
@@ -359,6 +379,7 @@ public sealed class ScreenshotTests
 
         Assert.AreEqual(item.Id, (await taking.Stash.All()).Single().Id);
         Assert.IsTrue(taking.Stash.SqlQueryWhileOpen("SELECT pending_steps IS NULL FROM items", r => r.GetBoolean(0)).Single(), "the step cleared at start");
+        Assert.AreEqual(item.Id, (await taking.Stash.Store!.Recent()).Value!.Single().Id, "what added it was committed with the item itself (G28, G4)");
     }
 
     /// <summary>An open stash in local time five and a half hours ahead, its screen painted and its region the one the check drags.</summary>

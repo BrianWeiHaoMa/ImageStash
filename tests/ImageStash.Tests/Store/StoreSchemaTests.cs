@@ -69,7 +69,8 @@ public sealed class StoreSchemaTests
         stash.Close();
 
         var columns = Columns(stash);
-        CollectionAssert.AreEqual(FinishedFacts, columns.Select(c => c.Name).SkipWhile(name => name != "adoption_undo").Skip(1).ToList());
+        // Version 4's column follows them (F11: a later step appends and never edits one).
+        CollectionAssert.AreEqual(FinishedFacts.Concat(VersionThreeStore.FourthStepColumns).ToList(), columns.Select(c => c.Name).SkipWhile(name => name != "adoption_undo").Skip(1).ToList());
         Assert.IsTrue(columns.Where(c => FinishedFacts.Contains(c.Name)).All(c => !c.NotNull && c.Default is null));
         CollectionAssert.IsSubsetOf(new[] { "format", "width", "height", "animated", "frame_count", "duration_ms" }, columns.Select(c => c.Name).ToList());
     }
@@ -172,11 +173,63 @@ public sealed class StoreSchemaTests
         Assert.AreEqual(1L, stash.SqlQuery("SELECT COUNT(*) FROM items", r => r.GetInt64(0)).Single());
     }
 
-
-    /// <summary>Every value of items' version 1 columns, of tags and of uses, row by row, read with the store closed.</summary>
-    private static List<string> Rows(TestStash stash)
+    [TestMethod]
+    public async Task AStoreAnEarlierBuildWroteAtVersionThreeOpensWithEveryItemAndUseAsItWasAndNoItemListedInRecentUnused()
     {
-        var itemColumns = string.Join(", ", Columns(stash).Select(c => c.Name).Where(name => !FinishedFacts.Contains(name)));
+        using var stash = new TestStash();
+        var store = await stash.OpenCleanly();
+        var used = await stash.Import("used");
+        // An earlier build's screenshot: nothing then recorded what added an item.
+        var shot = await stash.Capture("Screenshot 2026-10-16 17.30.00");
+        await store.AddTag([shot], "mood");
+        await store.RecordUses([used], stash.Clock.Now);
+        var edited = (await stash.SaveEdit(await stash.ImportFixture("edited", "transparent.png"), new LayerList([new CropLayer(new(0, 0, 4, 4))]))).Value!;
+        stash.Close();
+        VersionThreeStore.Make(stash.Folder.StoreFile);
+        var rowsBefore = Rows(stash, keeping: FinishedFacts);
+        var filesBefore = stash.FilesAndUses();
+
+        var reopened = await stash.OpenCleanly();
+        var recent = await reopened.Recent();
+        var all = await stash.All();
+        stash.Close();
+
+        Assert.AreEqual((long)StoreSchema.CurrentVersion, stash.SqlQuery("PRAGMA user_version", r => r.GetInt64(0)).Single());
+        CollectionAssert.AreEqual(rowsBefore, Rows(stash, keeping: FinishedFacts), "every value version 3 held, an edited item's render facts among them (F11, G31)");
+        CollectionAssert.AreEqual(filesBefore, stash.FilesAndUses());
+        CollectionAssert.AreEqual(new[] { edited.Id, shot.Id, used.Id }, all.Select(item => item.Id).ToList());
+        CollectionAssert.AreEqual(new[] { used.Id }, recent.Value!.Select(item => item.Id).ToList(),
+            "G4: \"unless it was added by a build that did not yet record what added an item\"");
+        CollectionAssert.AreEqual(new[] { 0L, 0L, 0L }, stash.SqlQuery("SELECT added_by_capture FROM items ORDER BY id", r => r.GetInt64(0)));
+    }
+
+    [TestMethod]
+    public async Task AVersionThreeStoreTheFourthStepCannotCompleteStaysAtVersionThreeAndDoesNotOpen()
+    {
+        using var stash = new TestStash();
+        await stash.OpenCleanly();
+        await stash.Import("kept");
+        stash.Close();
+        // The step's column already there: its one statement fails.
+        stash.Sql("PRAGMA user_version = 3");
+
+        var opening = await stash.Open();
+
+        Assert.IsNull(opening.Store, "the stash does not open while its step cannot be written (State: The store)");
+        Assert.AreEqual("Open the stash", opening.Failures.Single().Action);
+        stash.Close();
+        Assert.AreEqual(3L, stash.SqlQuery("PRAGMA user_version", r => r.GetInt64(0)).Single());
+        Assert.AreEqual(1L, stash.SqlQuery("SELECT COUNT(*) FROM items", r => r.GetInt64(0)).Single());
+    }
+
+    /// <summary>
+    /// Every value of items' version 1 columns, and of the later columns in <paramref name="keeping"/>, of tags and of uses,
+    /// row by row, read with the store closed.
+    /// </summary>
+    private static List<string> Rows(TestStash stash, string[]? keeping = null)
+    {
+        string[] later = [.. FinishedFacts, .. VersionThreeStore.FourthStepColumns];
+        var itemColumns = string.Join(", ", Columns(stash).Select(c => c.Name).Where(name => !later.Contains(name) || (keeping ?? []).Contains(name)));
         return
         [
             .. new[] { $"SELECT {itemColumns} FROM items", "SELECT * FROM tags", "SELECT * FROM uses" }.SelectMany(sql => stash.SqlQuery(

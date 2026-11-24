@@ -218,7 +218,7 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
     /// <paramref name="began"/>, read at the paste.
     /// </summary>
     public Task<IReadOnlyList<ImportedFile>> Paste(PastedPicture picture, IReadOnlyList<string> litTags, ImportBegan began) =>
-        Batch(async store => [await pictures.Save(store, picture, litTags)], StillOnly, began);
+        Batch(async store => [await pictures.Save(store, picture, litTags, byCapture: false)], StillOnly, began);
 
     /// <summary>
     /// The refusal of an import while the stash cannot take one: it is still opening, or did not open, or a Move is asked

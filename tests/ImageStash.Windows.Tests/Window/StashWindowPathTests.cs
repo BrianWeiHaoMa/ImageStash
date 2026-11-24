@@ -5,6 +5,7 @@ using Avalonia.VisualTree;
 using ImageStash.Layers;
 using ImageStash.Seams;
 using ImageStash.Window;
+using ImageStash.Windows.Seams;
 using ImageStash.Windows.Tests.Support;
 using SkiaSharp;
 using static ImageStash.Windows.Tests.Support.ShownWindow;
@@ -19,6 +20,8 @@ namespace ImageStash.Windows.Tests.Window;
 /// removes. The first run's pinned empty stash gives way to the grid once a real click on its Paste row adds the picture
 /// on the clipboard (G2, G13). A flyout whose focus goes while the pointer's primary button is held stays, takes a drag
 /// and its drop, and hides; a press with no drag hides it once the button is up, and the open shortcut at once (G2, G11).
+/// A screenshot taken while the flyout is hidden, a real drag over a pattern of the check's own, is the first tile of
+/// Recent at the next summon, unused, ahead of the picture used before it (G4, G1).
 /// </summary>
 [TestClass]
 public sealed class StashWindowPathTests
@@ -352,6 +355,34 @@ public sealed class StashWindowPathTests
             Assert.IsFalse(shown.Window.IsVisible, "the open shortcut hides it at once, waiting for nothing (G2)");
         });
         shown.QuietWindows.ButtonHeld = false;
+    }
+
+    [TestMethod]
+    public async Task AScreenshotTakenWithTheFlyoutHiddenIsRecentsFirstTileAtTheNextSummon()
+    {
+        using var desk = await CaptureDesk.Open(["used before the screenshot.png"]);
+        var used = desk.Items().Single();
+        await TrayDesktop.Get(() => desk.Shown.Listing.Store!.RecordUses([used], desk.Clock.GetUtcNow()));
+        await TrayDesktop.Get(() => desk.Shown.Listing.ShowScope(Scope.Recent));
+        TrayDesktop.Run(() => Assert.IsFalse(desk.Shown.Window.IsVisible, "the flyout hidden"));
+        using var pattern = PatternWindow.Show();
+        await pattern.OnScreen(new WindowsScreen());
+
+        var taking = desk.Take();
+        await desk.OverlayInFront();
+        await CaptureDesk.Drag(pattern.Blocks[0].Block.Position + new PixelVector(20, 20), pattern.Blocks[3].Block.Position + new PixelVector(80, 50));
+        await taking;
+        TrayDesktop.Run(desk.Shown.Window.SummonFromTray);
+        await Eventually(() => TrayDesktop.Get(() => desk.Shown.Window.IsVisible));
+
+        var shot = desk.Items().Single(each => each.Id != used.Id);
+        TrayDesktop.Run(() =>
+        {
+            Assert.AreEqual(Scope.Recent, desk.Shown.Listing.LitChip, "the summon shows Recent, as it was left (G1)");
+            CollectionAssert.AreEqual(new[] { shot.Id, used.Id }, desk.Shown.Listing.Items.Select(each => each.Id).ToList(),
+                "G4: the screenshot, never used, first, by when it was added; then the picture used before it");
+        });
+        Assert.AreEqual(1L, desk.Shown.Uses(), "the screenshot is no use (G10)");
     }
 
     private static bool CardSays(ShownWindow shown, string text) =>

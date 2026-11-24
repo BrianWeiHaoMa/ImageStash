@@ -29,8 +29,8 @@ folder exists it skips the first-run checks, the stash folder that cannot be cre
 paste phases, captures, edits and adoptions that would record a use in the user's stash, add an item to it or replace
 an item's picture, the Settings phase, which would change the user's settings, and the Move and earlier-build phases,
 which would move or replace the user's stash, printing a line beginning "skipped:" for each, and still exits 0 when
-every check it ran held. Without -EarlierCommit, a commit this repository holds whose store is at version 1, the
-earlier-build phase is skipped too; this repository's own history begins at store version 3, so it holds no such commit.
+every check it ran held. Without -EarlierCommit, a commit this repository holds whose store is at a lower version than
+this build's (any from before store version 4), the earlier-build phase is skipped too.
 
 .EXAMPLE
 powershell.exe -NoProfile -File tools/check-published.ps1
@@ -185,7 +185,7 @@ function StoreHeader {
 }
 
 # The version a store this build creates carries: StoreSchema.CurrentVersion.
-$storeVersion = 3
+$storeVersion = 4
 
 # A rollback-journal commit is complete only once its journal is deleted, after the header already reads the new version.
 function StoreAtCurrentVersion {

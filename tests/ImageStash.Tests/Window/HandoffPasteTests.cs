@@ -1,4 +1,5 @@
 using Avalonia.Input;
+using ImageStash.Capture;
 using ImageStash.Seams;
 using ImageStash.Store;
 using ImageStash.Tests.Support;
@@ -181,6 +182,40 @@ public sealed class HandoffPasteTests
             "the item just handed over first, its use recorded before Recent was read (G4, G10)");
         CollectionAssert.AreEqual(new[] { myCat.Id }, handing.Listing.Selection.ToList(), "it alone selected");
         Assert.AreEqual(myCat.Id, handing.Listing.Focused);
+    }
+
+    [TestMethod]
+    public async Task AScreenshotTakenAfterAPasteHidTheFlyoutIsFirstInRecentAtTheNextSummonAndEnterHandsOverThePastedItemStillSelected()
+    {
+        using var listed = await ListedStash.Open(SetClock.Ahead);
+        var start = listed.Stash.Clock.Now;
+        var older = await listed.Stash.ImportFixture("older", "still.png");
+        Assert.IsTrue((await listed.Stash.Store!.RecordUses([older], start)).Succeeded);
+        var pastedItem = await listed.Stash.ImportFixture("pasted", "transparent.png");
+        await listed.Listing.ShowScope(Scope.All);
+        listed.Listing.Focus(pastedItem.Id);
+        listed.PasteTarget.FromPress(new ForegroundReading(false, RecordingTarget.Relay));
+        listed.Stash.Clock.Now = start.AddSeconds(1);
+        var pasted = await listed.Handoff.HandOver(null!, listed.Listing.SelectedItems, listed.PasteTarget.Current, new PasteHide(() => true, listed.Keys));
+        Assert.IsTrue(pasted.Succeeded, pasted.Failure?.Sentence);
+        listed.Selection.Answer = new SelectedRegion(RecordingScreen.Primary, new Avalonia.PixelRect(100, 50, 30, 20));
+        listed.Stash.Clock.Now = start.AddSeconds(2);
+
+        await listed.Screenshot.Take();
+        await listed.Summon();
+
+        var shot = (await listed.Stash.All()).MaxBy(item => item.Id)!;
+        Assert.AreEqual(Scope.Recent, listed.Listing.Scope, "the paste's start on Recent kept");
+        CollectionAssert.AreEqual(new[] { shot.Id, pastedItem.Id, older.Id }, listed.Listing.Items.Select(item => item.Id).ToList(),
+            "G4: the screenshot, never used, by when it was taken, then the pasted item and the older one by their uses");
+        CollectionAssert.AreEqual(new[] { pastedItem.Id }, listed.Listing.Selection.ToList(), "G1: the selection the paste left, the capture not selected");
+
+        var enter = listed.Press(Key.Enter, KeyModifiers.None, KeyPlace.SearchBox);
+        listed.Keys.Released(Key.Enter);
+        Assert.AreEqual(KeyAction.Handoff, await enter);
+        CollectionAssert.AreEqual(new[] { pastedItem.FilePath }, listed.Clipboard.Written[^1].Content.FilePaths.ToList(), "Enter hands over the pasted item");
+        Assert.HasCount(2, listed.Target.Pasted);
+        Assert.IsEmpty(listed.Failures);
     }
 
     [TestMethod]

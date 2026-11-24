@@ -48,7 +48,8 @@ window, as a click on its tray icon does, whether or not it was already running.
 | `Ctrl+T` | Tag the selected pictures: type a word and press Enter. In a picture's preview, it goes to the preview's tag box. |
 | `Space`, then the arrows | Preview the selected picture, then step to the previous or next one in the grid; the preview's ‹ and › do the same. |
 
-Drop files or a folder onto the window to add them, and tag pictures to find them by a word. `Ctrl+D` makes the
+A new screenshot, recording or stashed clipboard image is in Recent, by when you made it, before you use it. Drop files
+or a folder onto the window to add them, and tag pictures to find them by a word. `Ctrl+D` makes the
 selected pictures favorites, or takes them off: a favorite's tile carries a small star, and so does its preview, where a
 click on the star does the same. The tray icon's right-click menu holds the captures, Settings (where each shortcut
 can be changed) and Quit.

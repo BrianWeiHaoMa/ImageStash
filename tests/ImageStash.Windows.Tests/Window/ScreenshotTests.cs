@@ -21,7 +21,7 @@ namespace ImageStash.Windows.Tests.Window;
 /// Recycle Bin (G16, G24, G29); the chat keeps the keystrokes afterwards; with Also copy off the clipboard is not
 /// touched and the notification says in the stash only. Through a real press of <c>Ctrl+PrtScn</c>, registered as
 /// ImageStash binds its shortcuts (F5): over the chat, the screen frozen within a second, a notification showing then
-/// left out of the saved pixels (S4), Recent unchanged, and a second press cancelled with Esc; over the flyout, the
+/// left out of the saved pixels (S4), Recent listing it first while it has no use (G4), and a second press cancelled with Esc; over the flyout, the
 /// flyout hidden within a second and back with its query and selection (G3); held by another program at start, named
 /// while the tray's entry still takes one (G33, G34). These checks show the pattern at (560, 160), or one under a
 /// notification shown above a point below the primary display's middle, the overlay over the primary display, and drag
@@ -80,7 +80,8 @@ public sealed class ScreenshotTests
         var rows = read.DibV5![124..];
         Assert.IsTrue(Enumerable.Range(0, region.Width * region.Height).All(pixel => rows[pixel * 4 + 3] == 255), "an opaque CF_DIBV5: every alpha byte 255");
         Assert.AreEqual(1L, desk.Shown.Uses(), "the capture records no use (G10)");
-        CollectionAssert.AreEqual(recent, await RecentIds(desk), "Recent unchanged (G4, G10)");
+        // G4: "an item that a screenshot ... added is listed there too while no use of it is recorded, placed by when it was added".
+        CollectionAssert.AreEqual(new[] { item.Id }.Concat(recent).ToList(), await RecentIds(desk), "Recent lists the screenshot first, unused, the rest as it was (G4, G10)");
         var card = await desk.CardShown(name);
         var notice = TrayDesktop.Get(() => desk.Notifications.Shown.Single(each => each.Text.StartsWith("Screenshot stashed")));
         Assert.AreEqual($"Screenshot stashed: “{name}”. On the clipboard · Ctrl+V pastes it.", notice.Text, "G16: \"says it is in the stash (and on the clipboard when it is)\"");

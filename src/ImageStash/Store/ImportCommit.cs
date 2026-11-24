@@ -7,9 +7,10 @@ namespace ImageStash.Store;
 /// A staged file in <c>.work\</c> with what Media read from it, ready to become an item (F12's name), and the tags a
 /// new item gets, the lit chip's (G11). <paramref name="SavedEvenIfInStash"/> marks a picture ImageStash saves from
 /// the clipboard rather than a file the user brings: G12's question whether it is already in the stash is asked of a
-/// file only, so a pasted picture whose bytes equal an item's original is a second item.
+/// file only, so a pasted picture whose bytes equal an item's original is a second item. <paramref name="AddedByCapture"/>
+/// marks the picture of a screenshot, a recording or Stash clipboard image, which Recent lists while it has no use (G4, F9).
 /// </summary>
-public sealed record ImportCandidate(string StagedPath, string Name, MediaFacts Facts, byte[] Sha256, IReadOnlyList<string>? Tags = null, bool SavedEvenIfInStash = false);
+public sealed record ImportCandidate(string StagedPath, string Name, MediaFacts Facts, byte[] Sha256, IReadOnlyList<string>? Tags = null, bool SavedEvenIfInStash = false, bool AddedByCapture = false);
 
 /// <summary>
 /// What an import commit did: added <see cref="Item"/>, or found the staged bytes already in the stash as it (G12).
@@ -88,9 +89,9 @@ internal static class ImportCommit
             var id = (long)store.Scalar(
                 """
                 INSERT INTO items (name, added_at, format, width, height, animated, frame_count, duration_ms,
-                                   original_file, finished_file, original_sha256, pending_steps)
+                                   original_file, finished_file, original_sha256, pending_steps, added_by_capture)
                 VALUES ($name, $added_at, $format, $width, $height, $animated, $frame_count, $duration_ms,
-                        $file, $file, $sha256, $pending)
+                        $file, $file, $sha256, $pending, $added_by_capture)
                 RETURNING id
                 """,
                 ("$name", candidate.Name),
@@ -103,7 +104,9 @@ internal static class ImportCommit
                 ("$duration_ms", candidate.Facts.DurationMs),
                 ("$file", fileName),
                 ("$sha256", candidate.Sha256),
-                ("$pending", PendingStep.Encode([PendingStep.Place(workName, fileName)])))!;
+                ("$pending", PendingStep.Encode([PendingStep.Place(workName, fileName)])),
+                // In the insert itself, so a kill leaves the capture absent or listed in Recent (G28, G4).
+                ("$added_by_capture", candidate.AddedByCapture))!;
             // In the insert's own transaction, so a kill leaves the item with its tags or not at all (G28).
             var tags = ItemTags.AddMissing(store, id, candidate.Tags ?? []);
             return (Id: id, FileName: fileName, Tags: tags);

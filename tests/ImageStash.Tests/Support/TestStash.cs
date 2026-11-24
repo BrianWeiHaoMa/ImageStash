@@ -170,6 +170,21 @@ public sealed class TestStash : IDisposable
         return committed.Item;
     }
 
+    /// <summary>
+    /// Commits the fixture <paramref name="fixture"/> as an item named <paramref name="name"/> as a capture's end commits
+    /// one: with the facts and the hash Media reads, even when its bytes equal an item's, marked as a capture's (G4).
+    /// </summary>
+    public async Task<StashItem> Capture(string name, string fixture = "still.png")
+    {
+        var bytes = MediaFixtures.Bytes(fixture);
+        var staged = await Stage("capture" + System.IO.Path.GetExtension(fixture), bytes);
+        var read = MediaDecoder.ReadFacts(staged, fixture, ShortRetry);
+        Assert.IsTrue(read.Succeeded, read.Failure?.ToString());
+        var committed = await Store!.CommitImport(new ImportCandidate(staged, name, read.Value!.Facts, read.Value.Sha256, SavedEvenIfInStash: true, AddedByCapture: true));
+        Assert.IsTrue(committed.Succeeded, committed.Failure?.ToString());
+        return committed.Value!.Item;
+    }
+
     /// <summary>Imports <paramref name="bytes"/> as <see cref="ImportPicture"/> does, answering the item added or the one already in the stash (G12).</summary>
     public async Task<ImportResult> ImportOrFind(string name, string fileName, byte[] bytes)
     {

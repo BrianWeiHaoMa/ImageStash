@@ -11,10 +11,11 @@ public static class VersionOneStore
 
     /// <summary>
     /// Takes the closed store at <paramref name="storeFile"/> back to what version 1 created: its columns without the second
-    /// step's, at version 1; a bare version number would make the migration add columns that exist.
+    /// step's or a later one's, at version 1; a bare version number would make the migration add columns that exist.
     /// </summary>
     public static void Make(string storeFile)
     {
+        VersionThreeStore.Make(storeFile);
         using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = storeFile, Pooling = false }.ToString());
         connection.Open();
         foreach (var column in SecondStepColumns)

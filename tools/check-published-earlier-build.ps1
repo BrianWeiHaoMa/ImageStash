@@ -5,22 +5,22 @@ session, last (it uses check-published-paste.ps1's PasteDesk, check-published-sc
 check-published-open-with.ps1's OpenWithDesk and stash-windows.ps1's StashWindows and check-published.ps1's CopyReadBack), over the
 check's own %LOCALAPPDATA%\ImageStash. The copy is stopped first, so the earlier build runs alone (G3, E1), and that
 folder emptied, so the earlier build meets a first run. The earlier build is the commit -EarlierCommit names, one whose
-store is at version 1, taken with git archive into -Work (no worktree, no change to .git) and published by its own
+store is at a lower version than this build's, taken with git archive into -Work (no worktree, no change to .git) and published by its own
 tools/publish.ps1. Started, it opens pinned on an empty stash; through its own window and real input it imports three
 pictures of the phase's own with a real Ctrl+V of the files, tags two "mood" through its item menu's Add tag and Type a
 tag..., makes one a favorite with Ctrl+D, copies one with Ctrl+C (a use), steps the thumbnails up with Ctrl and +, and
-has its pinned window moved and resized; then Quit ImageStash from its tray menu. Its stash.db reads user version 1 in
-its header and its settings.json version 1 with the thumbnail size, the pinned size and the pinned position off their
-defaults. The copy started again over them: the store is migrated to version 3, every column of every item, every
+has its pinned window moved and resized; then Quit ImageStash from its tray menu. Its stash.db reads its own user version,
+below this build's, in its header and its settings.json version 1 with the thumbnail size, the pinned size and the pinned
+position off their defaults. The copy started again over them: the store is migrated to version 4, every column of every item, every
 tag, use and picture file and every value of settings.json as the earlier build wrote them, the three items are found by
 name, the tag's chip and its search find the two, Favorites
 the one, Recent the used one, and pinning the window puts it at the saved size and place (G31, F11, Done when 4).
 Exits with the number of checks that failed.
 
 With -Store, the stash and settings are the check's own and every step runs; without it they are the user's, and the
-phase is skipped, since it replaces them. Without -EarlierCommit, a commit this repository holds whose store is at
-version 1, it is skipped as well: there is no earlier build to run. This repository's own history begins at store
-version 3, so it holds no such commit.
+phase is skipped, since it replaces them. Without -EarlierCommit, a commit this repository holds whose store is at a
+lower version than this build's, it is skipped as well: there is no earlier build to run. Any commit of this history from
+before the store reached version 4 serves.
 
 Stops the copy, empties the check's own %LOCALAPPDATA%\ImageStash, publishes -EarlierCommit under -Work, runs that build and
 quits it, writes three pictures under -Work, replaces the clipboard, sends real keystrokes (Ctrl+Alt+Space, Ctrl+V,
@@ -128,6 +128,9 @@ function StoreVersion {
 
 function Settings { Get-Content -Raw -LiteralPath $settingsFile | ConvertFrom-Json }
 
+# The version a store this build creates carries: StoreSchema.CurrentVersion.
+$storeVersion = 4
+
 function StashWindow { @([ScreenshotDesk]::Titled($running, 'ImageStash')) | Select-Object -First 1 }
 
 function StashInFront { $window = StashWindow; ($null -ne $window) -and ([PasteDesk]::Foreground() -eq $window) }
@@ -203,7 +206,7 @@ if (-not $Store) {
     exit 0
 }
 if (-not $EarlierCommit) {
-    Write-Host 'skipped: no -EarlierCommit names a commit whose store is at version 1, so the earlier-build phase has no earlier build to run'
+    Write-Host 'skipped: no -EarlierCommit names a commit whose store is at a lower version than this build''s, so the earlier-build phase has no earlier build to run'
     exit 0
 }
 $desktop = [Windows.Automation.AutomationElement]::RootElement
@@ -244,7 +247,10 @@ try {
 
     $earlier = Start-Process -FilePath $earlierExe -PassThru
     $running = $earlier.Id
-    Need (WaitFor { (StoreVersion) -eq 1 -and (Test-Path -LiteralPath $settingsFile) } 20000) "the earlier build made its stash, $storeFile at user version 1, and settings.json"
+    Need (WaitFor { (StoreVersion) -ge 1 -and (Test-Path -LiteralPath $settingsFile) } 20000) "the earlier build made its stash, $storeFile, and settings.json"
+    # Read from the stash it made, not fixed: any earlier build whose store is below this build's version serves (F11).
+    $earlierVersion = StoreVersion
+    Need ($earlierVersion -lt $storeVersion) "the earlier build's store is at a lower version than this build's $storeVersion`: user version $earlierVersion"
     Need (WaitFor { [StashWindows]::Showing($running) -eq 'pinned' } 10000) "on its first run it shows its stash window pinned: '$([StashWindows]::Showing($running))'"
 
     # Three pictures of the phase's own, imported by the earlier build's own Ctrl+V of the files (G13, G12).
@@ -305,7 +311,7 @@ try {
 
     # What the earlier build wrote, read before the current build sees it.
     $written = Settings
-    Check ((StoreVersion) -eq 1) "the earlier build's stash.db reads user version 1 in its header (F11): $(StoreVersion)"
+    Check ((StoreVersion) -eq $earlierVersion) "the earlier build's stash.db still reads user version $earlierVersion in its header (F11): $(StoreVersion)"
     Check (($written.version -eq 1) -and ($written.thumbnailSize -eq 'large') -and ($null -ne $written.pinnedSize) -and ($null -ne $written.pinnedPosition)) "its settings.json is version 1 with the thumbnail size, the pinned size and the pinned position off their defaults: $($written | ConvertTo-Json -Compress -Depth 5)"
     # Every column the earlier build's store has, read again from the migrated store, which only adds columns.
     $columns = Query "SELECT group_concat('quote(' || name || ')', ' || ''|'' || ') FROM pragma_table_info('items')"
@@ -318,7 +324,7 @@ try {
     # As Windows starts it at sign-in, so it shows no window over the earlier build's settings (G3).
     $current = Start-Process -FilePath $Exe -ArgumentList ([StashWindows]::SignInArgument) -PassThru
     $running = $current.Id
-    Check (WaitFor { (StoreVersion) -eq 3 } 20000) "the current build migrated the store to user version 3, its journal gone (F11): $(StoreVersion)"
+    Check (WaitFor { (StoreVersion) -eq $storeVersion } 20000) "the current build migrated the store to user version $storeVersion, its journal gone (F11): $(StoreVersion)"
     Start-Sleep -Seconds 2
     Check (-not $current.HasExited) 'the current build keeps running over them'
     Check ((Query "SELECT group_concat(line, char(10)) FROM (SELECT $columns AS line FROM items ORDER BY id)") -eq $itemsWritten) "every item is as the earlier build recorded it, in every column its store has (G31, F11)"
@@ -344,7 +350,7 @@ try {
     $files = @{}
     foreach ($row in 'earlier-red', 'earlier-green', 'earlier-blue') { $files[$row] = Join-Path $stash (Query "SELECT finished_file FROM items WHERE name = '$row'") }
     Choose (One (Elements $root 'Recent' $button) 'the Recent chip')
-    $null = WaitFor { (Counted $root) -like '1 item*' } 3000
+    Check (WaitFor { (Counted $root) -like '1 item*' } 3000) "Recent lists the one item the earlier build used and none it only added (G4): $(Counted $root)"
     Set-Clipboard -Value 'words of the earlier-build phase'
     $null = [PasteDesk]::Press([uint16[]]@(0x11, 0x43))
     Check (WaitFor { [CopyReadBack]::Clipboard() -like "files=$($files['earlier-green']) *" } 3000) "Recent lists the one the earlier build used, first, and Ctrl+C copies it (G4, G10): $(Counted $root); $([CopyReadBack]::Clipboard())"

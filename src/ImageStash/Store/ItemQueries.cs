@@ -24,7 +24,7 @@ internal static class ItemQueries
     // Newest-added first, equal times the later identity first: All's and Favorites' order, and the search's for its never-used matches (G4).
     private const string NewestAdded = "i.added_at DESC, i.id DESC";
 
-    // Latest use first, equal times the later identity first: Recent's order, and the search's for its matches with a use (G4).
+    // Latest use first, equal times the later identity first: the search's order for its matches with a use (G4).
     private const string LatestUsed = "MAX(u.used_at) DESC, i.id DESC";
 
     /// <summary>Every item, newest-added first; equal times put the later identity first.</summary>
@@ -35,11 +35,16 @@ internal static class ItemQueries
     public static Outcome<IReadOnlyList<StashItem>> Favorites(StoreContext store) =>
         Listed(store, "List favorites", $"SELECT {StashItem.Columns} FROM items i WHERE {StashItem.NotDeleted} AND i.favorite = 1 ORDER BY {NewestAdded}");
 
-    /// <summary>Every item with at least one use, by its latest use, newest first; equal times put the later identity first.</summary>
+    /// <summary>
+    /// Every item with at least one use, by its latest use, and every item a capture added that has none, by when it was
+    /// added, newest first in one order; equal times put the later identity first (G4). One statement over the whole stash (E4).
+    /// </summary>
     public static Outcome<IReadOnlyList<StashItem>> Recent(StoreContext store) =>
         Listed(store, "List recent items", $"""
-            SELECT {StashItem.Columns} FROM items i JOIN uses u ON u.item_id = i.id
-            WHERE {StashItem.NotDeleted} GROUP BY i.id ORDER BY {LatestUsed}
+            SELECT {StashItem.Columns} FROM items i LEFT JOIN uses u ON u.item_id = i.id
+            WHERE {StashItem.NotDeleted} GROUP BY i.id
+            HAVING MAX(u.used_at) IS NOT NULL OR i.added_by_capture = 1
+            ORDER BY COALESCE(MAX(u.used_at), i.added_at) DESC, i.id DESC
             """);
 
     /// <summary>
@@ -56,8 +61,8 @@ internal static class ItemQueries
             return All(store);
         }
 
-        // Every item's latest use in the one statement, never a look-up per item (E4): the items with a use as Recent orders
-        // them, then the never-used as All does. Named as All's listing is: a search reads the stash as listing it does.
+        // Every item's latest use in the one statement, never a look-up per item (E4): the items with a use by their latest,
+        // then the never-used as All does, a capture among them (G4 orders search results by uses alone). Named as All's listing is: a search reads the stash as listing it does.
         var byUse = Listed(store, "List the stash", $"""
             SELECT {StashItem.Columns} FROM items i LEFT JOIN uses u ON u.item_id = i.id
             WHERE {StashItem.NotDeleted} GROUP BY i.id

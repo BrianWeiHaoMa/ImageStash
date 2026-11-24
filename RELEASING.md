@@ -122,9 +122,9 @@ To build the assets without the suite: `powershell.exe -NoProfile -File tools/bu
 `tools/check-published.ps1 -EarlierCommit <commit>` has a phase that publishes an earlier commit, has it fill a stash
 and save settings, and opens them with the current build. The suite never passes `-EarlierCommit`, so every run prints
 `skipped: no -EarlierCommit ...`, and that one `skipped:` line is allowed. The phase needs an earlier build whose store
-is at user version 1, and every build in this history writes version 3, so no commit and no release can serve it. A
-released build can serve as a later check's earlier build only once `tools/check-published-earlier-build.ps1` accepts
-the store version of the commit it is given.
+is at a lower user version than the current build's, which it reads from the stash that build made: any commit of this
+history from before the store reached version 4 (the one that records what added an item), and any release since,
+once a later version step follows it.
 
 ## When a run fails
 

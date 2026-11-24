@@ -43,6 +43,25 @@ public sealed class RecordClipEndTests
     }
 
     [TestMethod]
+    public async Task TheClipIsInRecentUnusedByWhenItWasSavedAndTheWindowShowingRecentListsItKeepingTheSelection()
+    {
+        using var recording = await ClipRecording.Open();
+        var older = await recording.Stash.Import("older");
+        await recording.Stash.Store!.RecordUses([older], recording.Stash.Clock.Now);
+        await recording.Listing.ShowScope(Scope.Recent);
+        recording.Stash.Clock.Now += TimeSpan.FromSeconds(1);
+
+        await ClipRecording.Record(recording);
+
+        var clip = (await recording.Stash.All()).MaxBy(each => each.Id)!;
+        CollectionAssert.AreEqual(new[] { clip.Id, older.Id }, (await recording.Stash.Store!.Recent()).Value!.Select(each => each.Id).ToList(),
+            "G4: an item a recording added is listed while no use of it is recorded, placed by when it was added");
+        CollectionAssert.AreEqual(new[] { clip.Id, older.Id }, recording.Listing.Items.Select(each => each.Id).ToList());
+        CollectionAssert.AreEqual(new[] { older.Id }, recording.Listing.Selection.ToList(), "the selection as it was left (G1)");
+        Assert.AreEqual(1L, recording.Uses(), "a capture and its copy are no use (G10)");
+    }
+
+    [TestMethod]
     public async Task TheWindowComesBackOnlyOnceTheClipIsCopiedAndListedAndBeforeItsNotification()
     {
         using var recording = await ClipRecording.Open();

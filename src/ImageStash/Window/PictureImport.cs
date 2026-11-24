@@ -26,10 +26,11 @@ public sealed class PictureImport(TimeSpan heldFileRetry, Action<Failure> named)
 
     /// <summary>
     /// Saves <paramref name="picture"/> as one still PNG item, even when its bytes equal an item's original, getting
-    /// <paramref name="tags"/> in its own insert (G11); what became of it, added only once every step
-    /// has completed (R9).
+    /// <paramref name="tags"/> in its own insert (G11), and marked as a capture's when Stash clipboard image saves it
+    /// (<paramref name="byCapture"/>), never when a paste in the window does (G4); what became of it, added only once every
+    /// step has completed (R9).
     /// </summary>
-    public async Task<ImportedFile> Save(StashStore store, PastedPicture picture, IReadOnlyList<string> tags)
+    public async Task<ImportedFile> Save(StashStore store, PastedPicture picture, IReadOnlyList<string> tags, bool byCapture)
     {
         var png = picture.Png is { } bytes ? Outcome<byte[]>.Of(bytes) : await Task.Run(() => PngEncoder.Encode(picture.Frame!, picture.Name));
         var staged = png.Succeeded ? await StagePng(store, picture.Name, png.Value!) : png.Failure;
@@ -58,17 +59,17 @@ public sealed class PictureImport(TimeSpan heldFileRetry, Action<Failure> named)
             read = await Task.Run(() => MediaDecoder.ReadFacts(staged.Value!, picture.Name, heldFileRetry));
         }
 
-        return await Commit(store, picture.Name, staged.Value!, read, tags);
+        return await Commit(store, picture.Name, staged.Value!, read, tags, byCapture);
     }
 
     /// <summary>
     /// Saves the picture a capture wrote whole at <paramref name="workPath"/>, a <c>.work\</c> path Store allocated, as
-    /// one item named <paramref name="name"/>, even when its bytes equal an item's original and with no tag (G11, G12);
-    /// what became of it, as <see cref="Save"/> answers. The file is Media's own PNG or GIF, its format read from its
-    /// bytes, so nothing is re-encoded.
+    /// one item named <paramref name="name"/>, even when its bytes equal an item's original and with no tag (G11, G12),
+    /// marked as a capture's (G4); what became of it, as <see cref="Save"/> answers. The file is Media's own PNG or GIF,
+    /// its format read from its bytes, so nothing is re-encoded.
     /// </summary>
     public async Task<ImportedFile> SaveStaged(StashStore store, string name, string workPath) =>
-        await Commit(store, name, workPath, await Task.Run(() => MediaDecoder.ReadFacts(workPath, name, heldFileRetry)), tags: []);
+        await Commit(store, name, workPath, await Task.Run(() => MediaDecoder.ReadFacts(workPath, name, heldFileRetry)), tags: [], byCapture: true);
 
     /// <summary>
     /// Saves the clip a recording's encoder wrote whole at <paramref name="workPath"/>, as <see cref="SaveStaged"/> saves
@@ -76,13 +77,14 @@ public sealed class PictureImport(TimeSpan heldFileRetry, Action<Failure> named)
     /// (<see cref="GifClip.Written"/>), so the file is not opened again and every frame decoded before it becomes an item.
     /// </summary>
     public Task<ImportedFile> SaveWritten(StashStore store, string name, string workPath, MediaRead written) =>
-        Commit(store, name, workPath, Outcome<MediaRead>.Of(written), tags: []);
+        Commit(store, name, workPath, Outcome<MediaRead>.Of(written), tags: [], byCapture: true);
 
     /// <summary>
-    /// The staged picture's facts committed through Store's import commit, getting <paramref name="tags"/> in its own
-    /// insert; or, when they could not be read, its staged copy discarded and the picture unread.
+    /// The staged picture's facts committed through Store's import commit, getting <paramref name="tags"/> and the mark of
+    /// a capture's picture (<paramref name="byCapture"/>) in its own insert; or, when they could not be read, its staged
+    /// copy discarded and the picture unread.
     /// </summary>
-    private async Task<ImportedFile> Commit(StashStore store, string name, string staged, Outcome<MediaRead> read, IReadOnlyList<string> tags)
+    private async Task<ImportedFile> Commit(StashStore store, string name, string staged, Outcome<MediaRead> read, IReadOnlyList<string> tags, bool byCapture)
     {
         if (!read.Succeeded)
         {
@@ -90,7 +92,7 @@ public sealed class PictureImport(TimeSpan heldFileRetry, Action<Failure> named)
             return Unread(name, read.Failure, discarded.Failure);
         }
 
-        var candidate = new ImportCandidate(staged, name, read.Value!.Facts, read.Value.Sha256, tags, SavedEvenIfInStash: true);
+        var candidate = new ImportCandidate(staged, name, read.Value!.Facts, read.Value.Sha256, tags, SavedEvenIfInStash: true, AddedByCapture: byCapture);
         return ImportedFile.FromCommit(name, await store.CommitImport(candidate));
     }
 

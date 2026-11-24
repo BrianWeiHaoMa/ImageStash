@@ -55,6 +55,16 @@ public sealed class Listing
     private Dictionary<long, int> indexOf = [];
     private bool resetPending = true;
 
+    /// <summary>
+    /// The window has shown since the start, or its scope, search or selection was acted on, which only a window that has
+    /// shown is. Until then every load judges Recent or All again and selects its first item, and the first show judges
+    /// once more, so it finds Recent as the stash then stands, a capture made while hidden included (G1, G4).
+    /// </summary>
+    private bool shownSinceStart;
+
+    /// <summary>A load has listed the stash since it opened.</summary>
+    private bool listedOnce;
+
     /// <summary>A load that moves the selection to the first item has started and none has been applied since.</summary>
     private bool selectionResetWaiting;
     private bool loadFailed;
@@ -308,7 +318,8 @@ public sealed class Listing
     /// <summary>
     /// A summon shows what the listing holds, which every change has kept current, and reloads nothing (G1): the scope,
     /// the search and the selection as they were left, a paste's start on Recent included (<see cref="Handoff"/>); only a
-    /// load the store refused, while another program held it (E3), is asked for again. A summon of the hidden
+    /// load the store refused, while another program held it (E3), is asked for again, and the first show after start
+    /// judges Recent or All once more, the stash as it then stands (G1). A summon of the hidden
     /// <paramref name="flyout"/> keeps, of several items an import selected, the first alone (G1, G12), whether the import
     /// ended before the hide or while the flyout was hidden; the pinned window brought forward keeps them all.
     /// </summary>
@@ -316,8 +327,13 @@ public sealed class Listing
     {
         using var acting = UserAct.Begin(SummonAct);
         bool collapsed;
+        bool judge;
         lock (gate)
         {
+            shownSinceStart = true;
+            // The first show after start: the stash may have changed since its last load, as a capture's commit does
+            // before its refresh, so it is judged once more; a stash not yet listed is judged at its first load (G1).
+            judge = resetPending && listedOnce;
             collapsed = flyout && selectionByImport && selection.Count > 1;
             if (collapsed)
             {
@@ -332,7 +348,7 @@ public sealed class Listing
             Raise();
         }
 
-        return loadFailed ? Refresh() : Task.CompletedTask;
+        return judge ? Load(keepSelection: false) : loadFailed ? Refresh() : Task.CompletedTask;
     }
 
     /// <summary>
@@ -539,9 +555,26 @@ public sealed class Listing
     /// <summary>Counts one of the person's changes (<see cref="PersonsChanges"/>) when <paramref name="changed"/>.</summary>
     private void CountChange(bool changed)
     {
+        ActedOn();
         if (changed)
         {
             Interlocked.Increment(ref personsChanges);
+        }
+    }
+
+    /// <summary>
+    /// The window's scope, search or selection acted on, which only a shown window is (G1): a stash listed already stays
+    /// as listed, a judging load still in flight giving way, and one not yet listed is judged at its first load.
+    /// </summary>
+    private void ActedOn()
+    {
+        lock (gate)
+        {
+            shownSinceStart = true;
+            if (listedOnce)
+            {
+                resetPending = false;
+            }
         }
     }
 
@@ -576,6 +609,7 @@ public sealed class Listing
         // A load whose store a Move has replaced, or let go of, is abandoned after each await: that store is closed (G30).
         var loaded = await Run(opened, query, scope, reset, () => ReferenceEquals(store, opened));
         var counted = loaded is null || !ReferenceEquals(store, opened) ? null : await opened.TagCounts();
+        bool judgedTooLate;
         lock (gate)
         {
             // Superseded, or abandoned, its store let go of while the tags were counted: the load that replaced it, or
@@ -585,25 +619,43 @@ public sealed class Listing
                 return;
             }
 
-            applied = load;
-            loadFailed = !loaded.Items.Succeeded || !counted.Succeeded;
-            if (loaded.Items.Succeeded)
+            // A judgment of the first show that the person's act overtook lists what they acted on instead (G1, G7).
+            judgedTooLate = reset && !resetPending && loaded.Items.Succeeded && !ItemSearch.IsSearch(query);
+            if (judgedTooLate)
             {
-                if (reset && !ItemSearch.IsSearch(query))
-                {
-                    Scope = loaded.Scope;
-                    resetPending = false;
-                }
-
-                stashEmpty = loaded.StashEmpty ?? stashEmpty;
-                // A later load that keeps the selection, such as a change's refresh, never undoes an earlier one's move
-                // to the first match it superseded (G5).
-                Apply(loaded.Items.Value!, keepSelection && !selectionResetWaiting);
+                // Its move to the first item gives way with it, so the load listing what they acted on keeps their selection.
                 selectionResetWaiting = false;
             }
+            else
+            {
+                applied = load;
+                loadFailed = !loaded.Items.Succeeded || !counted.Succeeded;
+                if (loaded.Items.Succeeded)
+                {
+                    listedOnce = true;
+                    if (reset && !ItemSearch.IsSearch(query))
+                    {
+                        Scope = loaded.Scope;
+                        resetPending = !shownSinceStart;
+                    }
 
-            tags = counted.Value ?? tags;
-            Chips = ChipsFor(query, tags, Items);
+                    stashEmpty = loaded.StashEmpty ?? stashEmpty;
+                    // A later load that keeps the selection, such as a change's refresh, never undoes an earlier one's
+                    // move to the first match it superseded (G5); one judging the first show's scope selects its first
+                    // item (G1).
+                    Apply(loaded.Items.Value!, keepSelection && !selectionResetWaiting && !reset);
+                    selectionResetWaiting = false;
+                }
+
+                tags = counted.Value ?? tags;
+                Chips = ChipsFor(query, tags, Items);
+            }
+        }
+
+        if (judgedTooLate)
+        {
+            await Load(keepSelection: true);
+            return;
         }
 
         if (!loaded.Items.Succeeded)

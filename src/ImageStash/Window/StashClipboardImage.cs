@@ -71,7 +71,7 @@ public sealed class StashClipboardImage(Listing listing, Notices notifications, 
             return;
         }
 
-        var saved = await pictures.Save(listing.Store!, new PastedPicture(AutoName.Screenshot(at), image.Png, image.Frame), tags: []);
+        var saved = await pictures.Save(listing.Store!, new PastedPicture(AutoName.Screenshot(at), image.Png, image.Frame), tags: [], byCapture: true);
         // After any outcome: a row committed before a later step failed is listed or not as Store recorded it.
         await listing.Refresh();
         switch (saved)

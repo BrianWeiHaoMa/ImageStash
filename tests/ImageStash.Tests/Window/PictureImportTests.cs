@@ -25,8 +25,8 @@ public sealed class PictureImportTests
         var pictures = new PictureImport(TestStash.ShortRetry, named.Add);
         var png = MediaFixtures.Bytes("transparent.png");
 
-        var first = await pictures.Save(store, new PastedPicture("cat", png, null), ["reaction"]);
-        var second = await pictures.Save(store, new PastedPicture("cat", png, null), []);
+        var first = await pictures.Save(store, new PastedPicture("cat", png, null), ["reaction"], byCapture: false);
+        var second = await pictures.Save(store, new PastedPicture("cat", png, null), [], byCapture: false);
 
         Assert.AreEqual((ImportResultKind.Added, ImportResultKind.Added), (first.Result, second.Result), "never already in the stash (G12)");
         Assert.AreEqual(("cat.png", "cat 2.png"), (first.Item!.FileName, second.Item!.FileName));
@@ -46,8 +46,8 @@ public sealed class PictureImportTests
         var pictures = new PictureImport(TestStash.ShortRetry, _ => Assert.Fail("nothing to name"));
         byte[] pixels = [0, 0, 255, 255, 255, 0, 0, 128];
 
-        var bitmap = await pictures.Save(store, new PastedPicture("bitmap", null, new MediaFrame(2, 1, 0, pixels)), []);
-        var gif = await pictures.Save(store, new PastedPicture("gif", MediaFixtures.Bytes("animated.gif"), null), []);
+        var bitmap = await pictures.Save(store, new PastedPicture("bitmap", null, new MediaFrame(2, 1, 0, pixels)), [], byCapture: false);
+        var gif = await pictures.Save(store, new PastedPicture("gif", MediaFixtures.Bytes("animated.gif"), null), [], byCapture: false);
 
         Assert.AreEqual(new MediaFacts(ImageFormat.Png, 2, 1, false, 1, 0), bitmap.Item!.Facts);
         CollectionAssert.AreEqual(pixels, MediaFixtures.FirstFrame(bitmap.Item.FilePath).Pixels, "Media's one PNG encoder, alpha kept (R4)");
@@ -64,7 +64,7 @@ public sealed class PictureImportTests
         var store = await stash.OpenCleanly();
         var pictures = new PictureImport(TestStash.ShortRetry, _ => Assert.Fail("nothing to name"));
 
-        var saved = await pictures.Save(store, new PastedPicture("noise", [0x89, 0x50, 0x4E, 0x47, 1, 2, 3, 4], null), []);
+        var saved = await pictures.Save(store, new PastedPicture("noise", [0x89, 0x50, 0x4E, 0x47, 1, 2, 3, 4], null), [], byCapture: false);
 
         Assert.AreEqual(new ImportedFile("noise", ImportResultKind.Unreadable), saved);
         Assert.IsEmpty(stash.WorkFiles());
@@ -79,7 +79,7 @@ public sealed class PictureImportTests
         stash.SqlWhileOpen("CREATE TRIGGER refuse_insert BEFORE INSERT ON items BEGIN SELECT RAISE(ABORT, 'the write was refused'); END");
         var pictures = new PictureImport(TestStash.ShortRetry, _ => Assert.Fail("nothing to name"));
 
-        var saved = await pictures.Save(store, new PastedPicture("cat", MediaFixtures.Bytes("transparent.png"), null), []);
+        var saved = await pictures.Save(store, new PastedPicture("cat", MediaFixtures.Bytes("transparent.png"), null), [], byCapture: false);
 
         Assert.AreEqual(ImportResultKind.Failed, saved.Result);
         Assert.IsNull(saved.Item);
@@ -96,7 +96,7 @@ public sealed class PictureImportTests
             "CREATE TRIGGER refuse_clearing BEFORE UPDATE OF pending_steps ON items WHEN NEW.pending_steps IS NULL BEGIN SELECT RAISE(ABORT, 'the write was refused'); END");
         var pictures = new PictureImport(TestStash.ShortRetry, _ => Assert.Fail("nothing to name"));
 
-        var saved = await pictures.Save(store, new PastedPicture("cat", MediaFixtures.Bytes("transparent.png"), null), []);
+        var saved = await pictures.Save(store, new PastedPicture("cat", MediaFixtures.Bytes("transparent.png"), null), [], byCapture: false);
 
         Assert.AreEqual(ImportResultKind.Failed, saved.Result, "not added before its last step (R9)");
         Assert.AreEqual((await stash.All()).Single().Id, saved.Item!.Id, "the item as committed, in place and listed");

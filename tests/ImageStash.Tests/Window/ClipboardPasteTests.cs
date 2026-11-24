@@ -48,6 +48,21 @@ public sealed class ClipboardPasteTests
     }
 
     [TestMethod]
+    public async Task APastedPictureAndAPastedFileNamedLikeAScreenshotAreNotInRecentUntilUsed()
+    {
+        using var pasting = await ListedStash.Open(SetClock.Ahead);
+        var named = pasting.Stash.Outside("Screenshot 2026-10-16 17.29.00.png");
+        File.Copy(MediaFixtures.Path("still.png"), named);
+        pasting.Clipboard.Reading = Picture(MediaFixtures.Bytes("transparent.png"), null);
+        await pasting.Paste.Paste();
+        pasting.Clipboard.Reading = Files(named);
+        await pasting.Paste.Paste();
+
+        Assert.HasCount(2, await pasting.Stash.All());
+        Assert.IsEmpty((await pasting.Stash.Store!.Recent()).Value!, "G4: Recent lists what a screenshot, a recording or Stash clipboard image added, not a paste or an import");
+    }
+
+    [TestMethod]
     public async Task TheSamePngPastedTwiceInOneSecondIsTwoItemsOfOneNameAndTheSecondsUndoRemovesOnlyIt()
     {
         using var pasting = await ListedStash.Open(SetClock.Ahead);

@@ -47,6 +47,114 @@ public sealed class StashClipboardImageTests
     }
 
     [TestMethod]
+    public async Task TheStashedImageIsInRecentUnusedByWhenItWasAddedAndTheWindowShowingRecentListsItKeepingTheSelection()
+    {
+        using var stashing = await ListedStash.Open(SetClock.Ahead);
+        var older = await stashing.Stash.Import("older");
+        await stashing.Stash.Store!.RecordUses([older], stashing.Stash.Clock.Now);
+        await stashing.Listing.ShowScope(Scope.Recent);
+        stashing.Stash.Clock.Now += TimeSpan.FromSeconds(1);
+        stashing.Clipboard.ImageReading = Image(MediaFixtures.Bytes("transparent.png"), null);
+
+        await stashing.StashClipboardImage.Stash();
+
+        var item = (await stashing.Stash.All()).Single(each => each.Id != older.Id);
+        CollectionAssert.AreEqual(new[] { item.Id, older.Id }, (await stashing.Stash.Store!.Recent()).Value!.Select(each => each.Id).ToList(),
+            "G4: an item Stash clipboard image added is listed while no use of it is recorded, placed by when it was added");
+        CollectionAssert.AreEqual(new[] { item.Id, older.Id }, stashing.Listing.Items.Select(each => each.Id).ToList());
+        CollectionAssert.AreEqual(new[] { older.Id }, stashing.Listing.Selection.ToList(), "the selection as it was left (G1)");
+        Assert.AreEqual(1L, stashing.Uses(), "a capture is no use (G10)");
+    }
+
+    [TestMethod]
+    public async Task StashedBeforeTheWindowFirstShowsAfterAStartWithRecentEmptyTheFirstShowIsRecentWithItSelected()
+    {
+        using var before = await ListedStash.Open(SetClock.Ahead);
+        await before.Stash.Import("never used");
+        using var stashing = await before.Restart();
+        Assert.AreEqual(Scope.All, stashing.Listing.Scope, "Recent empty at the start, so All (G1)");
+        stashing.Stash.Clock.Now += TimeSpan.FromSeconds(1);
+        stashing.Clipboard.ImageReading = Image(MediaFixtures.Bytes("transparent.png"), null);
+
+        await stashing.StashClipboardImage.Stash();
+        await stashing.Summon();
+
+        var item = (await stashing.Stash.All()).MaxBy(each => each.Id)!;
+        Assert.AreEqual(Scope.Recent, stashing.Listing.Scope, "G1: \"at the first show after start, Recent (or All while Recent is empty)\"");
+        CollectionAssert.AreEqual(new[] { item.Id }, stashing.Listing.Items.Select(each => each.Id).ToList());
+        CollectionAssert.AreEqual(new[] { item.Id }, stashing.Listing.Selection.ToList(), "\"with its first item selected\"");
+    }
+
+    [TestMethod]
+    public async Task StashedBeforeTheWindowFirstShowsAfterAStartTheFirstShowSelectsItAsRecentsFirstItemAndLaterOnesKeepTheSelection()
+    {
+        using var before = await ListedStash.Open(SetClock.Ahead);
+        var used = await before.Stash.Import("used");
+        await before.Stash.Store!.RecordUses([used], before.Stash.Clock.Now);
+        using var stashing = await before.Restart();
+        stashing.Stash.Clock.Now += TimeSpan.FromSeconds(1);
+        stashing.Clipboard.ImageReading = Image(MediaFixtures.Bytes("transparent.png"), null);
+
+        await stashing.StashClipboardImage.Stash();
+        await stashing.Summon();
+
+        var first = (await stashing.Stash.All()).MaxBy(each => each.Id)!;
+        CollectionAssert.AreEqual(new[] { first.Id, used.Id }, stashing.Listing.Items.Select(each => each.Id).ToList());
+        CollectionAssert.AreEqual(new[] { first.Id }, stashing.Listing.Selection.ToList(), "G1: at the first show after start, Recent's first item selected");
+
+        // Hidden again with nothing changed by the person: the summon alone ends the first show's judging.
+        stashing.Stash.Clock.Now += TimeSpan.FromSeconds(1);
+        await stashing.StashClipboardImage.Stash();
+
+        var second = (await stashing.Stash.All()).MaxBy(each => each.Id)!;
+        CollectionAssert.AreEqual(new[] { second.Id, first.Id, used.Id }, stashing.Listing.Items.Select(each => each.Id).ToList());
+        CollectionAssert.AreEqual(new[] { first.Id }, stashing.Listing.Selection.ToList(), "G1: once shown, the selection it was left with");
+    }
+
+    [TestMethod]
+    public async Task ACaptureCommittedButNotYetListedWhenTheWindowFirstShowsAfterAStartIsInThatShow()
+    {
+        using var before = await ListedStash.Open(SetClock.Ahead);
+        await before.Stash.Import("never used");
+        using var started = await before.Restart();
+        started.Stash.Clock.Now += TimeSpan.FromSeconds(1);
+        // Committed as a capture's end commits it, the listing not yet told, as while its copy waits on a held clipboard.
+        var capture = await started.Stash.Capture("Screenshot 2026-10-16 17.30.01");
+
+        await started.Summon();
+
+        Assert.AreEqual(Scope.Recent, started.Listing.Scope, "G1: at the first show after start, Recent, which holds the capture");
+        CollectionAssert.AreEqual(new[] { capture.Id }, started.Listing.Items.Select(each => each.Id).ToList());
+        CollectionAssert.AreEqual(new[] { capture.Id }, started.Listing.Selection.ToList(), "with its first item selected");
+    }
+
+    [TestMethod]
+    public async Task ATileClickedWhileTheFirstShowIsStillBeingJudgedKeepsTheClick()
+    {
+        using var before = await ListedStash.Open(SetClock.Ahead);
+        var a = await before.Stash.Import("a");
+        var b = await before.Stash.Import("b");
+        await before.Stash.Store!.RecordUses([a, b], before.Stash.Clock.Now);
+        using var started = await before.Restart();
+        started.Stash.Clock.Now += TimeSpan.FromSeconds(1);
+        var capture = await started.Stash.Capture("Screenshot 2026-10-16 17.30.01");
+
+        Task summon;
+        using (started.Stash.HoldStore())
+        {
+            // The first show's judging read waits on the held store while the person clicks a tile already shown.
+            summon = started.Summon();
+            started.Listing.Focus(a.Id);
+        }
+
+        await summon;
+        await started.Listing.Settle();
+
+        CollectionAssert.AreEqual(new[] { a.Id }, started.Listing.Selection.ToList(), "G7: a click on a tile selects it; the judging that came after gives way");
+        CollectionAssert.AreEqual(new[] { capture.Id, b.Id, a.Id }, started.Listing.Items.Select(each => each.Id).ToList(), "Recent as the stash now stands");
+    }
+
+    [TestMethod]
     public async Task ABitmapIsEncodedAsAPngKeepingItsAlpha()
     {
         using var stashing = await ListedStash.Open(SetClock.Ahead);
