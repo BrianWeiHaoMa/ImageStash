@@ -18,6 +18,8 @@ public enum ShortcutReasonKind
     ModifiersLetGoFirst,
     /// <summary>The setting, as written, is no shortcut ImageStash understands, or is empty.</summary>
     NotAShortcut,
+    /// <summary>A key every app needs, pressed with none of Ctrl, Alt and the Windows key (<see cref="PlainKeyRefusal"/>).</summary>
+    PlainKey,
 }
 
 /// <summary>
@@ -33,6 +35,8 @@ public sealed record ShortcutReason(ShortcutReasonKind Kind, string? Character =
     public static readonly ShortcutReason ModifiersLetGoFirst = new(ShortcutReasonKind.ModifiersLetGoFirst);
 
     public static readonly ShortcutReason NotAShortcut = new(ShortcutReasonKind.NotAShortcut);
+
+    public static readonly ShortcutReason PlainKey = new(ShortcutReasonKind.PlainKey);
 
     public static ShortcutReason UsedBy(ShortcutAct other) => new(ShortcutReasonKind.UsedByAnother, Other: other);
 

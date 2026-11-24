@@ -112,14 +112,15 @@ public sealed class SettingsWindowShortcutFieldTests
                 Assert.AreEqual(Shortcut.Parse("Ctrl+PrtScn").Value, TrayDesktop.Get(() => settings.Shortcuts.ShortcutOf(ShortcutAct.Screenshot)), "never plain F9, which nobody pressed (F5)");
             }
 
-            // Enter and Backspace type their own characters in every program (G32's "types a character").
+            // Enter and Backspace alone are keys every app needs: G32 refuses "a key pressed with none of Ctrl, Alt and the
+            // Windows key held", before the layout is asked whether it types.
             foreach (var (key, name) in new[] { (VkReturn, "Enter"), (VkBack, "Back") })
             {
                 await Record(window, SettingsPage.OpenTitle);
                 TestHotKeys.Tap(key);
-                await ShownWindow.Eventually(() => TrayDesktop.Get(() => WarningUnder(window, SettingsPage.OpenTitle))?.StartsWith(name + " ") == true);
-                Assert.AreEqual($"{name} types a character on your keyboard layout, so it can't be a shortcut.", TrayDesktop.Get(() => WarningUnder(window, SettingsPage.OpenTitle)),
-                    "its control code shown as no character");
+                await ShownWindow.Eventually(() => TrayDesktop.Get(() => WarningUnder(window, SettingsPage.OpenTitle))?.Contains($" {name} alone ") == true);
+                Assert.AreEqual($"Add Ctrl, Alt or Win: {name} alone is needed by every app.", TrayDesktop.Get(() => WarningUnder(window, SettingsPage.OpenTitle)),
+                    "refused as a key every app needs (G32)");
                 Assert.IsTrue(TrayDesktop.Get(() => window.Page.ShortcutField(SettingsPage.OpenTitle)!.IsRecording), "the field still records");
                 Assert.AreEqual(open, TrayDesktop.Get(() => settings.Shortcuts.ShortcutOf(ShortcutAct.Open)));
             }
@@ -197,16 +198,6 @@ public sealed class SettingsWindowShortcutFieldTests
         {
             TrayDesktop.Run(() => window?.Close());
         }
-    }
-
-    /// <summary>A real click on the field titled <paramref name="title"/>, until it records with its page in front.</summary>
-    private static async Task Record(SettingsWindow window, string title)
-    {
-        var field = TrayDesktop.Get(() => Control(window, title));
-        TrayDesktop.Run(field.BringIntoView);
-        await Task.Delay(100);
-        TestMouse.Click(TestMouse.Centre(field));
-        await ShownWindow.Eventually(() => TrayDesktop.Get(() => window.IsActive && window.Page.ShortcutField(title)!.IsRecording));
     }
 
     /// <summary>The keys the field titled <paramref name="title"/> shows while idle.</summary>

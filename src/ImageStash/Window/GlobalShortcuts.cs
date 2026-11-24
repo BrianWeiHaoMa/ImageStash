@@ -259,7 +259,8 @@ public sealed class GlobalShortcuts
     /// <summary>
     /// A Settings field's candidate for <paramref name="act"/>, while it records (G32, G33): the act's own shortcut while
     /// it is due changes nothing, under Pause once the seam has judged it (refused then, it is unavailable as at any registration);
-    /// refused, in this order, the plain <c>Ctrl+V</c>, the combination of another of the four
+    /// refused, in this order, a key every app needs (<see cref="PlainKeyRefusal"/>, the act's own stored one included),
+    /// the plain <c>Ctrl+V</c>, the combination of another of the four
     /// whether registered or not, and whatever the seam refuses (held by another program, typing a character), each
     /// returned with the act, the candidate and why, nothing changed; otherwise the candidate is the act's shortcut from
     /// now on, registered in place of the old (released again at once under Pause, until its toggle back), written to the
@@ -277,7 +278,9 @@ public sealed class GlobalShortcuts
             }
 
             own = OwnAndDue(each, candidate);
-            if (own && !paused)
+            // A key every app needs, stored by an earlier build or an import, stays registered and written, yet its own
+            // field refuses it as any field would (G31, G32).
+            if (own && !paused && !PlainKeyRefusal.Refuses(candidate))
             {
                 return null;
             }
@@ -340,7 +343,10 @@ public sealed class GlobalShortcuts
     /// key takes the press of the combination it holds), so which combination was pressed is only likely (G32):
     /// <paramref name="candidates"/>, the likeliest first. The first another program holds is named, whatever else would
     /// refuse the likeliest, since a holder is what took the press: the four are released while a field records and nobody
-    /// takes the plain <c>Ctrl+V</c>, which is never asked of the seam; each the seam takes is let go at once. Otherwise the
+    /// takes the plain <c>Ctrl+V</c>, which is never asked of the seam; each the seam takes is let go at once. Nor is a key
+    /// every app needs asked, which would be registered for that instant (<see cref="PlainKeyRefusal"/>): where nothing
+    /// else would refuse the press, the first such reading stands for the holder nobody could ask about, and is refused as
+    /// a key every app needs, so a press another program took is never taken silently. Otherwise the
     /// likeliest is a press, as <see cref="Rebind"/> takes one, unless <paramref name="letGoFirst"/>, one of its modifiers
     /// having come up before the key: then it is judged as <see cref="Rebind"/> judges one but never bound, since nobody
     /// may have pressed it, and when nothing refuses it it is refused as let go first, unless it is the act's own, which
@@ -359,8 +365,15 @@ public sealed class GlobalShortcuts
         }
 
         ShortcutReason? likeliestRefused = null;
+        Shortcut? plain = null;
         foreach (var candidate in candidates.Distinct().Where(candidate => !candidate.Gesture.Equals(PasteKeystroke)))
         {
+            if (PlainKeyRefusal.Refuses(candidate))
+            {
+                plain ??= candidate;
+                continue;
+            }
+
             // Asked of the seam only for its judgement: bound to no act, and let go at once when it is free.
             var judged = seam.Register(candidate, () => { });
             if (judged is null)
@@ -379,7 +392,7 @@ public sealed class GlobalShortcuts
 
         if (!letGoFirst)
         {
-            return Rebind(act, likeliest);
+            return likeliestRefused is null && Refusal(each, likeliest) is null && PlainTaken() is { } taken ? taken : Rebind(act, likeliest);
         }
 
         bool own;
@@ -390,7 +403,7 @@ public sealed class GlobalShortcuts
 
         if (own && likeliestRefused is null)
         {
-            return null;
+            return PlainTaken();
         }
 
         if (Refusal(each, likeliest) is { } refused)
@@ -401,6 +414,8 @@ public sealed class GlobalShortcuts
         return likeliestRefused is null
             ? new ShortcutProblem(act, likeliest.Text, ShortcutReason.ModifiersLetGoFirst)
             : Refused(likeliest, likeliestRefused);
+
+        ShortcutProblem? PlainTaken() => plain is null ? null : new ShortcutProblem(act, plain.Text, ShortcutReason.PlainKey);
 
         ShortcutProblem Refused(Shortcut candidate, ShortcutReason reason)
         {
@@ -442,9 +457,13 @@ public sealed class GlobalShortcuts
     /// </summary>
     private static bool OwnAndDue(Bound each, Shortcut candidate) => candidate == each.Shortcut && each.Due;
 
-    /// <summary>What a field's candidate is refused for before the seam is asked: the plain <c>Ctrl+V</c>, then another of the four's combination, registered or not.</summary>
+    /// <summary>
+    /// What a field's candidate is refused for before the seam is asked: a key every app needs, the plain <c>Ctrl+V</c>,
+    /// then another of the four's combination, registered or not. Never asked at start or of an import's settings (G31, G33).
+    /// </summary>
     private ShortcutReason? Refusal(Bound each, Shortcut candidate) =>
-        candidate.Gesture.Equals(PasteKeystroke) ? ShortcutReason.PasteKeystroke
+        PlainKeyRefusal.Refuses(candidate) ? ShortcutReason.PlainKey
+        : candidate.Gesture.Equals(PasteKeystroke) ? ShortcutReason.PasteKeystroke
         : bound.FirstOrDefault(other => other != each && other.Shortcut == candidate) is { } other ? ShortcutReason.UsedBy(other.Binding.Act)
         : null;
 
@@ -593,7 +612,8 @@ public sealed class GlobalShortcuts
 
     private Bound Of(ShortcutAct act) => bound.Single(each => each.Binding.Act == act);
 
-    private static string TextIn(Shortcuts texts, ShortcutAct act) => act switch
+    /// <summary><paramref name="act"/>'s setting in <paramref name="texts"/>; of <c>new Shortcuts()</c>, F5's default.</summary>
+    public static string TextIn(Shortcuts texts, ShortcutAct act) => act switch
     {
         ShortcutAct.Open => texts.Open,
         ShortcutAct.Screenshot => texts.Screenshot,

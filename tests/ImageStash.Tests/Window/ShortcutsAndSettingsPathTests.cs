@@ -49,5 +49,27 @@ public sealed class ShortcutsAndSettingsPathTests
         Assert.IsTrue(listed.ShortcutsSeam.Press(Shortcut.Parse("Ctrl+Shift+F8").Value!), "registered");
         Assert.IsTrue(listed.ShortcutsSeam.Press(StashClipboardImage), "and the others registered again");
         CollectionAssert.AreEqual(new[] { ShortcutAct.Screenshot, ShortcutAct.StashClipboardImage }, listed.ShortcutActsRun);
+
+        // (2) Recording again, Delete alone is refused in its own words before anything is registered, and the field
+        // still records; after Esc, with the default no longer held, the row's Reset puts it back, and leaves the row.
+        Assert.IsTrue(field.ResetOffered, "a row off its default offers Reset");
+        field.Begin();
+        var asked = listed.ShortcutsSeam.Asked.Count;
+        field.Press(Key.Delete, KeyModifiers.None);
+
+        Assert.AreEqual("Add Ctrl, Alt or Win: Delete alone is needed by every app.", page.WarningOf(SettingsPage.TakeScreenshotTitle), "G32 as amended");
+        Assert.HasCount(asked, listed.ShortcutsSeam.Asked, "nothing asked of the seam");
+        Assert.IsEmpty(listed.ShortcutsSeam.Registered, "nothing registered");
+        Assert.IsTrue(field.IsRecording, "the field still records");
+
+        field.Cancel();
+        listed.ShortcutsSeam.Free(TakeScreenshot);
+        field.Reset();
+
+        Assert.IsTrue(listed.ShortcutsSeam.Press(TakeScreenshot), "Ctrl+PrtScn registered");
+        Assert.AreEqual("Ctrl+PrtScn", listed.Settings.Current.Shortcuts.Screenshot, "and written");
+        Assert.IsFalse(field.ResetOffered, "Reset offered no more");
+        Assert.IsNull(page.WarningOf(SettingsPage.TakeScreenshotTitle));
+        Assert.HasCount(4, listed.ShortcutsSeam.Registered, "every shortcut registered, no field recording");
     }
 }

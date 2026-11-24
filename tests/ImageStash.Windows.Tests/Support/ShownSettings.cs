@@ -42,6 +42,16 @@ public static class ShownSettings
         return warning.IsVisible ? warning.GetVisualDescendants().OfType<TextBlock>().Last().Text : null;
     }
 
+    /// <summary>A real click on the field titled <paramref name="title"/>, until it records with its page in front.</summary>
+    public static async Task Record(SettingsWindow window, string title)
+    {
+        var field = TrayDesktop.Get(() => Control(window, title));
+        TrayDesktop.Run(field.BringIntoView);
+        await Task.Delay(100);
+        TestMouse.Click(TestMouse.Centre(field));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => window.IsActive && window.Page.ShortcutField(title)!.IsRecording));
+    }
+
     /// <summary>Whether the page's outer frame lies wholly inside the primary display's working area (E1).</summary>
     public static bool InsideWorkingArea(SettingsWindow window) =>
         window.Screens.Primary!.WorkingArea.Contains(CaptureDesk.Outer(window));

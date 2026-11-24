@@ -63,14 +63,15 @@ public sealed class EmptyStashWaysInTests
         using var listed = await ListedStash.Open();
         var shown = EmptyStashShown.Over(listed);
 
-        // Rebound as a Settings field rebinds them, the window told as the app tells it.
+        // Rebound as a Settings field rebinds them, the window told as the app tells it. With Ctrl: a field refuses "a key
+        // pressed with none of Ctrl, Alt and the Windows key held" (G32), so Shift+F8 alone is no longer taken.
         using (listed.Shortcuts.Suspend())
         {
-            Assert.IsNull(listed.Shortcuts.Rebind(ShortcutAct.Screenshot, Shortcut.Parse("shift+f8").Value!));
+            Assert.IsNull(listed.Shortcuts.Rebind(ShortcutAct.Screenshot, Shortcut.Parse("ctrl+shift+f8").Value!));
             Assert.IsNull(listed.Shortcuts.Rebind(ShortcutAct.Open, Shortcut.Parse("Ctrl+Alt+F9").Value!));
         }
 
-        AssertRows(shown, ("Paste a copied image", "Ctrl+V"), ("Take a screenshot", "Shift+F8"), ("Record a clip", "Ctrl+Shift+PrtScn"),
+        AssertRows(shown, ("Paste a copied image", "Ctrl+V"), ("Take a screenshot", "Ctrl+Shift+F8"), ("Record a clip", "Ctrl+Shift+PrtScn"),
             ("Stash the clipboard image", listed.Settings.Current.Shortcuts.StashClipboardImage), ("Import files", "Ctrl+O"));
         Assert.AreEqual("Open ImageStash from any app with Ctrl+Alt+F9, or from its icon in the tray. Closing this window keeps it running.", shown.ReadLines()[^1],
             "the line names the open shortcut as the settings now read it");
@@ -79,7 +80,7 @@ public sealed class EmptyStashWaysInTests
         listed.Settings.Change(s => s with { Shortcuts = s.Shortcuts with { Record = "nonsense", StashClipboardImage = "" } });
         shown.ShortcutsChanged();
 
-        AssertRows(shown, ("Paste a copied image", "Ctrl+V"), ("Take a screenshot", "Shift+F8"), ("Record a clip", null), ("Stash the clipboard image", null), ("Import files", "Ctrl+O"));
+        AssertRows(shown, ("Paste a copied image", "Ctrl+V"), ("Take a screenshot", "Ctrl+Shift+F8"), ("Record a clip", null), ("Stash the clipboard image", null), ("Import files", "Ctrl+O"));
 
         listed.Settings.Change(s => s with { Shortcuts = s.Shortcuts with { Open = "nonsense" } });
         shown.ShortcutsChanged();

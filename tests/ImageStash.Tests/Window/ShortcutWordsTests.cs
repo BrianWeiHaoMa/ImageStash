@@ -26,6 +26,7 @@ public sealed class ShortcutWordsTests
     [DataRow("not a shortcut", "\"Ctrl+PrtScn\" isn't a shortcut ImageStash understands. Press a new one.")]
     [DataRow("stated", "Ctrl+PrtScn couldn't be registered: The parameter is incorrect. Press a different combination.")]
     [DataRow("stated blank", "Ctrl+PrtScn couldn't be registered. Press a different combination.")]
+    [DataRow("plain", "Add Ctrl, Alt or Win: Ctrl+PrtScn is needed by every app.")]
     public void TheRowSaysWhatWasRefusedWhyAndWhatToDo(string reason, string sentence)
     {
         Assert.AreEqual(sentence, ShortcutWords.Row(new ShortcutProblem(ShortcutAct.Record, "Ctrl+PrtScn", Reason(reason))));
@@ -42,6 +43,7 @@ public sealed class ShortcutWordsTests
     [DataRow("not a shortcut", "\"Ctrl+PrtScn\" isn't a shortcut ImageStash understands, so Record a clip has no shortcut.")]
     [DataRow("stated", "Ctrl+PrtScn couldn't be registered (The parameter is incorrect), so Record a clip has no shortcut.")]
     [DataRow("stated blank", "Ctrl+PrtScn couldn't be registered, so Record a clip has no shortcut.")]
+    [DataRow("plain", "Ctrl+PrtScn is needed by every app, so Record a clip has no shortcut.")]
     public void TheTooltipLineSaysTheCombinationWhyAndWhichActHasNoShortcut(string reason, string line)
     {
         Assert.AreEqual(line, ShortcutWords.ToolTipLine(new ShortcutProblem(ShortcutAct.Record, "Ctrl+PrtScn", Reason(reason))));
@@ -70,6 +72,15 @@ public sealed class ShortcutWordsTests
                 }
             }
         }
+    }
+
+    [TestMethod]
+    [DataRow("Delete", "Add Ctrl, Alt or Win: Delete alone is needed by every app.")]
+    [DataRow("F2", "Add Ctrl, Alt or Win: F2 alone is needed by every app.")]
+    [DataRow("Shift+Delete", "Add Ctrl, Alt or Win: Shift+Delete is needed by every app.")]
+    public void APlainKeysRowNamesTheKeyAndWhatToAdd(string combination, string sentence)
+    {
+        Assert.AreEqual(sentence, ShortcutWords.Row(new ShortcutProblem(ShortcutAct.Screenshot, combination, ShortcutReason.PlainKey)));
     }
 
     [TestMethod]
@@ -124,6 +135,7 @@ public sealed class ShortcutWordsTests
         "not a shortcut" => ShortcutReason.NotAShortcut,
         "stated" => ShortcutReason.Of(ShortcutRefusal.Stated("The parameter is incorrect.")),
         "stated blank" => ShortcutReason.Of(ShortcutRefusal.Stated("  ")),
+        "plain" => ShortcutReason.PlainKey,
         _ => throw new ArgumentOutOfRangeException(nameof(name)),
     };
 }

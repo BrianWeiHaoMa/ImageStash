@@ -7,8 +7,8 @@ tray menu, opened with a posted right-click, lists Settings between Pause shortc
 Settings, chosen through UI Automation, brings a window titled "ImageStash settings" to the front with G32's rows named
 in order and the stash folder in use. A PowerShell of the phase's own holds Ctrl+Shift+F8: the Take a screenshot field,
 clicked with real input, refuses the real Ctrl+Shift+F8 on the spot, its row reading "Ctrl+Shift+F8 is already used by
-another app. Press a different combination.", and keeps recording, so the real Shift+A ("Shift+A types A on your
-keyboard layout, so it can't be a shortcut.") and Ctrl+V ("Ctrl+V is the paste key ImageStash presses, so it can't be a
+another app. Press a different combination.", and keeps recording, so the real Shift+A ("Add Ctrl, Alt or Win: Shift+A
+is needed by every app.") and Ctrl+V ("Ctrl+V is the paste key ImageStash presses, so it can't be a
 shortcut.") are its retries, each refused on the spot, the field still recording and reading Ctrl+PrtScn, neither
 Shift+A nor Ctrl+V left registered; Esc then ends the recording, the row's refusal gone, settings.json's shortcuts
 unchanged, and the real Ctrl+PrtScn shows the screenshot's overlay again. With the holder gone the real Ctrl+Shift+F8
@@ -47,8 +47,8 @@ $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $rows = "Open ImageStash | Take a screenshot | Record a clip | Stash clipboard image | Also copy it to the clipboard | Maximum length | Show the mouse pointer | " +
     "Where your stash is stored | Open folder | Export stash$([char]0x2026) | Import stash$([char]0x2026) | Start with Windows | Theme | Thumbnail size"
 $held = 'Ctrl+Shift+F8 is already used by another app. Press a different combination.'
-# The character the layout in use types for Shift+A, an uppercase A on the Latin layouts the check is run on.
-$typesACharacter = "Shift+A types A on your keyboard layout, so it can't be a shortcut."
+# A letter with Shift and none of Ctrl, Alt and Win: a key every app needs, refused before the layout is asked (G32).
+$plainKey = 'Add Ctrl, Alt or Win: Shift+A is needed by every app.'
 $pasteKeystroke = "Ctrl+V is the paste key ImageStash presses, so it can't be a shortcut."
 $grabbed = 'Win+Alt+V is already used by another app. Press a different combination.'
 
@@ -289,7 +289,7 @@ try {
     Start-Sleep -Milliseconds 300
     Need (Recording 'Take a screenshot') 'the refusal left the field recording, its Stop recording a shortcut button showing (G32)'
     $null = [PasteDesk]::Press([uint16[]]@(0x10, 0x41))
-    Check (WaitFor { WarnedUnder 'Take a screenshot' 'Record a clip' $typesACharacter } 1000) "the retry Shift+A refused on the spot, the row reading '$typesACharacter' (G32, G35)"
+    Check (WaitFor { WarnedUnder 'Take a screenshot' 'Record a clip' $plainKey } 1000) "the retry Shift+A refused on the spot, the row reading '$plainKey' (G32, G35)"
     Need (Recording 'Take a screenshot') 'the field still records after the second refusal'
     $null = [PasteDesk]::Press([uint16[]]@(0x11, 0x56))
     Check (WaitFor { WarnedUnder 'Take a screenshot' 'Record a clip' $pasteKeystroke } 1000) "the retry Ctrl+V refused on the spot, the row reading '$pasteKeystroke' (G32, G8, G35)"

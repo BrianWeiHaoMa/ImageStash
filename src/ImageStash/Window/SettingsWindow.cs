@@ -13,7 +13,8 @@ namespace ImageStash.Window;
 /// <summary>
 /// Settings, F4's one separate page: a normal window titled "ImageStash settings" that draws its
 /// <see cref="SettingsPage"/> as one scrolling page of grouped rows (L2), each control named by its row's
-/// title, a failed act's sentence under its row, and the start's read failure and a refused write at the top (G35); while
+/// title, a shortcut row's Reset beside its field (<see cref="ShortcutResetButton"/>), a failed act's sentence under
+/// its row, and the start's read failure and a refused write at the top (G35); while
 /// a Move is asked, its busy state under the stash folder's path, and while an export or an import is, its busy state
 /// under its row, every control disabled until it has ended; an import's offer inside the Import row (F4). One
 /// is open at a time, brought forward when asked again (<see cref="Open"/>), on the row of a shortcut that is
@@ -51,6 +52,7 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
     private readonly ComboBox thumbnailSize;
     private readonly Dictionary<string, (Border Row, TextBlock Words)> warnings = [];
     private readonly Dictionary<string, ShortcutField> shortcutFields = [];
+    private readonly List<ShortcutResetButton> shortcutResets = [];
     private readonly Border readFailure;
     private readonly TextBlock readFailureWords = new() { TextWrapping = TextWrapping.Wrap };
     private readonly Border writeFailure;
@@ -254,6 +256,11 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
                 field.Show();
             }
 
+            foreach (var reset in shortcutResets)
+            {
+                reset.Show();
+            }
+
             foreach (var (title, (row, words)) in warnings)
             {
                 var warning = page.WarningOf(title);
@@ -293,7 +300,7 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
             SettingsPage.StartWithWindowsTitle => startWithWindows,
             SettingsPage.ThemeTitle => (Control)theme,
             SettingsPage.ThumbnailSizeTitle => thumbnailSize,
-            _ when page.ShortcutField(row.Title) is { } recording => shortcutFields[row.Title] = new ShortcutField(recording),
+            _ when page.ShortcutField(row.Title) is { } recording => ShortcutControls(recording),
             _ => throw new InvalidOperationException($"No control draws the row “{row.Title}”."),
         };
         if (row.Title == SettingsPage.StashFolderTitle)
@@ -321,6 +328,15 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
         var drawn = new Border { Child = grid, Padding = new Thickness(16, 12), BorderThickness = new Thickness(0, separated ? 1 : 0, 0, 0) };
         drawn.Bind(Border.BorderBrushProperty, drawn.GetResourceObservable(LookKeys.Divider));
         return drawn;
+    }
+
+    /// <summary>A shortcut row's controls: its Reset, before the field so the field keeps its place as Reset comes and goes, then the field (G32).</summary>
+    private StackPanel ShortcutControls(ShortcutRecording recording)
+    {
+        var field = shortcutFields[recording.Title] = new ShortcutField(recording);
+        var reset = new ShortcutResetButton(recording, field) { VerticalAlignment = VerticalAlignment.Center };
+        shortcutResets.Add(reset);
+        return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { reset, field } };
     }
 
     /// <summary>Open folder, and Move… beside it (G32).</summary>

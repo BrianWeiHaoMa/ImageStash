@@ -1,3 +1,5 @@
+using ImageStash.Seams;
+
 namespace ImageStash.Window;
 
 /// <summary>
@@ -33,6 +35,7 @@ public static class ShortcutWords
             ShortcutReasonKind.NotAKey => $"{combination} uses a key this PC can't register. Press a different combination.",
             ShortcutReasonKind.NotAShortcut when IsBlank(combination) => "No shortcut is set here. Press a new one.",
             ShortcutReasonKind.NotAShortcut => $"\"{combination}\" isn't a shortcut ImageStash understands. Press a new one.",
+            ShortcutReasonKind.PlainKey => $"Add Ctrl, Alt or Win: {combination}{(Alone(combination) ? " alone" : "")} is needed by every app.",
             _ => $"{combination} couldn't be registered{Stated(reason, ": {0}")}. Press a different combination.",
         };
     }
@@ -57,6 +60,7 @@ public static class ShortcutWords
             ShortcutReasonKind.NotAKey => $"{combination} uses a key this PC can't register",
             ShortcutReasonKind.NotAShortcut when IsBlank(combination) => null,
             ShortcutReasonKind.NotAShortcut => $"\"{combination}\" isn't a shortcut ImageStash understands",
+            ShortcutReasonKind.PlainKey => $"{combination} is needed by every app",
             _ => $"{combination} couldn't be registered{Stated(reason, " ({0})")}",
         };
         return cause is null ? $"{act} has no shortcut set." : $"{cause}, so {act} has no shortcut.";
@@ -85,4 +89,7 @@ public static class ShortcutWords
         reason.Words?.Trim().TrimEnd('.') is { Length: > 0 } words ? string.Format(format, words) : "";
 
     private static bool IsBlank(string combination) => string.IsNullOrWhiteSpace(combination);
+
+    /// <summary>A combination of one key and no modifier, which the plain key's words call "alone".</summary>
+    private static bool Alone(string combination) => Shortcut.Parse(combination).Value is { Gesture.KeyModifiers: Avalonia.Input.KeyModifiers.None };
 }

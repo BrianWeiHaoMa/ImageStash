@@ -7,7 +7,8 @@ namespace ImageStash.Window;
 /// The Settings page's model, F4's one separate page (G32): its rows in G32's order, each value read from the settings
 /// in effect whenever it is asked, so a page opened again later shows what holds then; the four shortcuts as
 /// press-to-record fields (<see cref="ShortcutRecording"/>), one recording at a time, each remap registered and written
-/// by the shortcuts (G33); each other change taking effect at once and written through the one settings keeper (State:
+/// by the shortcuts (G33) and each row off F5's default offering Reset, which sets the default as a remap would; each
+/// other change taking effect at once and written through the one settings keeper (State:
 /// Settings): Also copy, the cap and the pointer, which the next capture reads; Theme and Look, applied to every window
 /// now (F10, G32); the thumbnail size, which the grid takes at once and whose steps in the grid the page shows while open
 /// (G6, G32); Start with Windows, set or cleared through its seam now (F1); Open folder, which asks the platform's file
@@ -124,7 +125,7 @@ public sealed class SettingsPage
             new(ShortcutAct.Record, RecordClipTitle, shortcuts, EndOtherRecordings, RaiseChanged),
             new(ShortcutAct.StashClipboardImage, StashClipboardImageTitle, shortcuts, EndOtherRecordings, RaiseChanged),
         ];
-        shortcuts.Changed += RaiseChanged;
+        shortcuts.Changed += ShortcutsChanged;
         moving.Changed += RaiseChanged;
         transferring.Changed += RaiseChanged;
         thumbnails.Changed += ThumbnailSizeChanged;
@@ -217,7 +218,7 @@ public sealed class SettingsPage
     public void Close()
     {
         CancelRecording();
-        shortcuts.Changed -= RaiseChanged;
+        shortcuts.Changed -= ShortcutsChanged;
         moving.Changed -= RaiseChanged;
         transferring.Changed -= RaiseChanged;
         thumbnails.Changed -= ThumbnailSizeChanged;
@@ -355,6 +356,17 @@ public sealed class SettingsPage
     }
 
     private void RaiseChanged() => Changed?.Invoke();
+
+    /// <summary>The shortcuts changed, here or elsewhere: each field forgets what a Reset said of them as they were.</summary>
+    private void ShortcutsChanged()
+    {
+        foreach (var field in ShortcutFields)
+        {
+            field.ShortcutsChanged();
+        }
+
+        Changed?.Invoke();
+    }
 
     /// <summary>The size changed, here or by a step in the grid: written with every other setting again, so an earlier refused write is no longer the last.</summary>
     private void ThumbnailSizeChanged()

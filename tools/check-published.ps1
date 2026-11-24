@@ -597,9 +597,10 @@ Write-Host ' 31. the tray menu''s Settings, and the Settings button beside the +
 Write-Host "     Recording, Library with the stash folder, Open folder and Move$([char]0x2026), then Export stash$([char]0x2026) and Import stash$([char]0x2026), General with Start with Windows, Theme and Thumbnail size; light and dark; made"
 Write-Host '     as small as it goes, its rows wrap and it scrolls with nothing cut; Esc closes it, and asked again while open, from either, it comes forward (G32, F4, F10, L2);'
 Write-Host " 32. a click on a shortcut field reads ""Press a new shortcut$([char]0x2026)"" with its $([char]0xD7), and the shortcuts do nothing until it ends; a combination another app holds,"
-Write-Host '     Shift+A and Ctrl+V each get an amber line under the row saying why, the field unchanged; with a second keyboard layout on which'
-Write-Host '     Ctrl+Alt+E types a character, that combination is refused as typing one; a free combination shows in the field, the tray menu, the'
-Write-Host '     + menu and the empty stash, and works at once (G32, G33, G34, F5, G2);'
+Write-Host '     Delete alone, Shift+A and Ctrl+V each get an amber line under the row saying why (Delete and Shift+A: add Ctrl, Alt or Win), the field'
+Write-Host '     unchanged; with a second keyboard layout on which Ctrl+Alt+E types a character, that combination is refused as typing one; a free'
+Write-Host '     combination shows in the field, the tray menu, the + menu and the empty stash, and works at once; the row then shows Reset before the'
+Write-Host '     field, reached by Tab, which puts the default back, working at once, and goes (G32, G33, G34, F5, G2);'
 Write-Host ' 33. with another program holding Win+Alt+V when ImageStash starts, the icon''s tooltip names it with why; Settings opens on that row'
 Write-Host '     with the same words, and once the other program lets it go, recording it there registers it and the tooltip''s line is gone (G33);'
 Write-Host ' 34. Theme set to Dark turns the page and the stash window dark at once, and they are dark after Quit and a new start; Also copy off: a'
