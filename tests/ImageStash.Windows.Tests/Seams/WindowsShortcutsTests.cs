@@ -174,6 +174,40 @@ public sealed class WindowsShortcutsTests
     }
 
     [TestMethod]
+    public void UnderTheLayoutInUseTheWindowsKeyWithAltTypesNothingWhileAltOrTheWindowsKeyAloneTypes()
+    {
+        var layout = WindowsShortcuts.ForegroundLayout();
+
+        foreach (var text in new[] { "Win+Alt+V", "Win+Alt+Shift+V", "Win+Alt+Enter" })
+        {
+            Assert.IsFalse(WindowsShortcuts.TypesACharacter(WindowsShortcuts.CombinationOf(Shortcut.Parse(text).Value!), layout), $"{text} is a system keystroke, typing no text (S5)");
+        }
+
+        foreach (var text in new[] { "Alt+V", "Alt+Enter", "Win+V" })
+        {
+            Assert.IsTrue(WindowsShortcuts.TypesACharacter(WindowsShortcuts.CombinationOf(Shortcut.Parse(text).Value!), layout), $"{text} types its character");
+        }
+    }
+
+    [TestMethod]
+    public void TheWindowsKeyWithAltAndCtrlIsJudgedByItsTranslation()
+    {
+        // A check loads no keyboard layout of its own, the layouts being the signed-in user's: so the translations an
+        // AltGr layout gives, where Ctrl with Alt types, are supplied, as the German layout's '@' for Ctrl+Alt+Q.
+        var withCtrl = WindowsShortcuts.CombinationOf(Shortcut.Parse("Ctrl+Win+Alt+Q").Value!).Modifiers;
+        var withoutCtrl = WindowsShortcuts.CombinationOf(Shortcut.Parse("Win+Alt+Q").Value!).Modifiers;
+
+        Assert.IsTrue(WindowsShortcuts.TypesACharacter(withCtrl, 1, "@"), "a character");
+        Assert.IsTrue(WindowsShortcuts.TypesACharacter(withCtrl, -1, "^"), "a dead key");
+        Assert.IsTrue(WindowsShortcuts.TypesACharacter(WindowsShortcuts.CombinationOf(Shortcut.Parse("Ctrl+Win+Alt+Shift+Q").Value!).Modifiers, 1, "@"), "a character, Shift held too");
+        Assert.IsFalse(WindowsShortcuts.TypesACharacter(withCtrl, 0, ""), "no translation");
+        Assert.IsFalse(WindowsShortcuts.TypesACharacter(withCtrl, 1, "\u0011"), "the code Ctrl makes of its key");
+        Assert.IsFalse(WindowsShortcuts.TypesACharacter(withoutCtrl, 1, "@"), "without Ctrl, a character");
+        Assert.IsFalse(WindowsShortcuts.TypesACharacter(withoutCtrl, -1, "^"), "without Ctrl, a dead key");
+        Assert.IsFalse(WindowsShortcuts.TypesACharacter(WindowsShortcuts.CombinationOf(Shortcut.Parse("Shift+F9").Value!).Modifiers, 0, "q"), "only the characters the translation counts");
+    }
+
+    [TestMethod]
     public void EnterOrBackspaceAloneIsRefusedAtRegistrationAndLeftFree()
     {
         using var shortcuts = new WindowsShortcuts();

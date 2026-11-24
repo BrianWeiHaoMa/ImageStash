@@ -92,10 +92,8 @@ public sealed class WindowsShortcuts : IShortcuts, IDisposable
     public void ListenForReleases(Action<Shortcut, string> released) => this.released = released;
 
     /// <summary>
-    /// Whether pressing <paramref name="combination"/> would type a character under <paramref name="layout"/>: a
-    /// translation that yields a dead key or a character, made without touching the keyboard state (S5), other than
-    /// the control code <c>Ctrl</c> makes of a key (<c>Ctrl</c> with a letter yields one, and no text receives it).
-    /// Without <c>Ctrl</c>, a control character is the key's own, Enter's, Tab's, Backspace's and Esc's, and is typed.
+    /// Whether pressing <paramref name="combination"/> would type a character under <paramref name="layout"/>, judged
+    /// from its translation made without touching the keyboard state (S5).
     /// </summary>
     internal static bool TypesACharacter(Combination combination, nint layout)
     {
@@ -131,8 +129,40 @@ public sealed class WindowsShortcuts : IShortcuts, IDisposable
         var buffer = new char[8];
         var scanCode = MapVirtualKeyExW(combination.Key, MapVkToScanCode, layout);
         var count = ToUnicodeEx(combination.Key, scanCode, state, buffer, buffer.Length, KeepKeyboardState, layout);
-        var withCtrl = (combination.Modifiers & ModControl) != 0;
-        return count < 0 || buffer.Take(count).Any(character => !char.IsControl(character) || !withCtrl);
+        return TypesACharacter(combination.Modifiers, count, buffer);
+    }
+
+    /// <summary>
+    /// Whether a combination of <paramref name="modifiers"/> types a character, given its translation: ToUnicodeEx's
+    /// <paramref name="count"/>, negative for a dead key, of the characters in <paramref name="translation"/>. A dead key
+    /// or a character types, other than the control code <c>Ctrl</c> makes of a key (<c>Ctrl</c> with a letter yields
+    /// one, and no text receives it); without <c>Ctrl</c>, a control character is the key's own, Enter's, Tab's,
+    /// Backspace's and Esc's, and is typed. The Windows key with Alt and without <c>Ctrl</c> types none, whatever the
+    /// translation (for a letter, the letter alone): Windows delivers that press as a system keystroke, a menu mnemonic
+    /// with no typed text (S5).
+    /// </summary>
+    internal static bool TypesACharacter(uint modifiers, int count, ReadOnlySpan<char> translation)
+    {
+        var withCtrl = (modifiers & ModControl) != 0;
+        if (!withCtrl && (modifiers & (ModWin | ModAlt)) == (ModWin | ModAlt))
+        {
+            return false;
+        }
+
+        if (count < 0)
+        {
+            return true;
+        }
+
+        foreach (var character in translation[..Math.Min(count, translation.Length)])
+        {
+            if (!char.IsControl(character) || !withCtrl)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>The keyboard layout of the foreground window's thread, the layout keystrokes are typed in now (S13).</summary>
