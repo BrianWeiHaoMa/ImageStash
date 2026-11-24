@@ -644,7 +644,7 @@ public sealed class TagFieldTests
     }
 
     [TestMethod]
-    public async Task ATagTypedInTheFieldGetsItsChipOnceAmongTheMostCarriedSearchesByItAndRemoveTagEndsIt()
+    public async Task ATagTypedInTheFieldGetsItsChipAtTheNextScopeChoiceSearchesByItAndRemoveTagDimsIt()
     {
         using var shown = ShownWindow.Open();
         var items = await shown.OpenStash(shown.Picture("walk a.png"), shown.Picture("walk b.png"), shown.Picture("walk c.png"));
@@ -678,16 +678,21 @@ public sealed class TagFieldTests
             ShownWindow.Press(shown.TagBox, Key.Down);
             ShownWindow.Tap(shown.TagBox, Key.Enter);
         });
-        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.ShownChips().Contains("#reaction")));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() =>
+            shown.Listing.Settled && shown.Listing.Chips.Any(count => count is { Tag: "reaction", Items: 3 })));
 
         TrayDesktop.Run(() =>
         {
-            Assert.AreEqual("#reaction", shown.ShownChips()[3], "carried by the most items, its chip comes first after All (G4)");
+            Assert.DoesNotContain("#reaction", shown.ShownChips(), "the tag's place stays at the end while its count grows");
             ShownWindow.Press(shown.TagBox, Key.Escape);
             ShownWindow.RaiseClick(shown.Chip("Favorites"));
         });
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Scope == Scope.Favorites));
-        TrayDesktop.Run(() => ShownWindow.RaiseClick(shown.Chip("#reaction")));
+        TrayDesktop.Run(() =>
+        {
+            Assert.AreEqual("#reaction", shown.ShownChips()[3], "choosing a scope brings the most-carried tag first (G4)");
+            ShownWindow.RaiseClick(shown.Chip("#reaction"));
+        });
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == "reaction"));
         TrayDesktop.Run(() =>
         {
@@ -730,10 +735,12 @@ public sealed class TagFieldTests
             shown.ClickSubmenuEntry("Remove tag", "reaction");
             shown.CloseMenu();
         });
-        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && !shown.ChipRow.Children.OfType<Button>().Any(chip => ShownWindow.ChipLabel(chip) == "#reaction")));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() =>
+            shown.Listing.Settled && shown.Listing.Chips.Any(count => count is { Tag: "reaction", Items: 0 })));
         TrayDesktop.Run(() =>
         {
             shown.Window.UpdateLayout();
+            Assert.IsFalse(shown.Chip("#reaction").IsEnabled);
             shown.Listing.Select([c.Id], c.Id);
         });
         await OpenField(shown, c.Id);
@@ -744,7 +751,7 @@ public sealed class TagFieldTests
 
         CollectionAssert.AreEqual(many.Prepend("reaction").Prepend("Type a tag…").ToList(), every, "Add tag ▸ offers Type a tag…, then every tag in the stash, reaction on three items first (G17)");
         CollectionAssert.Contains(removable, "reaction", "Remove tag ▸ offers it (G17)");
-        Assert.IsEmpty(suggested, "with no item carrying it, the tag is gone from the suggestions as from the chips (G17)");
+        Assert.IsEmpty(suggested, "with no item carrying it, the tag is gone from the suggestions (G17)");
         Assert.IsTrue(items.All(item => !shown.TagsOf(item.Id).Contains("reaction")));
         Assert.AreEqual(0, shown.Uses());
     }

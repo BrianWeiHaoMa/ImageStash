@@ -283,14 +283,34 @@ public sealed class ChipRowTests
 
         TrayDesktop.Run(() => ShownWindow.RaiseClick(shown.Chip("All")));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Query == ""));
+        var beforeAdding = TrayDesktop.Get(shown.ShownChips);
         await shown.Tag(items, "new");
-        TrayDesktop.Run(() => Assert.AreEqual("#new", shown.ShownChips()[3], "a chip enters first, the commonest"));
-        Assert.AreEqual(first, Place(), "a chip come leaves it where it was (G4)");
+        TrayDesktop.Run(() =>
+        {
+            Assert.AreEqual("new", shown.Listing.Chips[^1].Tag, "a new tag joins the end");
+            CollectionAssert.AreEqual(beforeAdding, shown.ShownChips(), "the visible chips keep their places");
+            ShownWindow.RaiseClick(shown.Chip("All"));
+        });
+        await TrayDesktop.Get(() => shown.Listing.Settle());
+        var newPlace = TrayDesktop.Get(() =>
+        {
+            Assert.AreEqual("#new", shown.ShownChips()[3], "choosing the scope takes the commonest first");
+            return shown.Chip("#new").Bounds;
+        });
+        Assert.AreEqual(first, Place(), "the new order leaves the picker at the same edge (G4)");
 
         Assert.IsTrue((await TrayDesktop.Get(() => shown.Listing.Store!.RemoveTag(items, "new"))).All(outcome => outcome.Succeeded));
         await TrayDesktop.Get(() => shown.Listing.Refresh());
+        TrayDesktop.Run(() =>
+        {
+            shown.Window.UpdateLayout();
+            Assert.AreEqual(newPlace, shown.Chip("#new").Bounds, "the dead tag's place stays");
+            Assert.IsFalse(shown.Chip("#new").IsEnabled);
+            ShownWindow.RaiseClick(shown.Chip("All"));
+        });
+        await TrayDesktop.Get(() => shown.Listing.Settle());
         TrayDesktop.Run(() => CollectionAssert.DoesNotContain(shown.ShownChips(), "#new"));
-        Assert.AreEqual(first, Place(), "and gone again (G4)");
+        Assert.AreEqual(first, Place(), "dropping the inactive place leaves the picker at the same edge (G4)");
 
         TrayDesktop.Run(() => shown.Window.Width += 200);
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.ChipRow.Bounds.Width) > first.Right + 150);
