@@ -7,6 +7,7 @@ internal sealed class TagChipOrder
 {
     private static readonly StringComparer SameTag = StringComparer.OrdinalIgnoreCase;
     private IReadOnlyList<TagCount> unfiltered = [];
+    private readonly List<string> arrivals = [];
     private IReadOnlyList<TagCount>? held;
     private IReadOnlyList<TagCount>? typed;
     private bool takeUnfilteredOrder = true;
@@ -67,8 +68,20 @@ internal sealed class TagChipOrder
     {
         Live = counts;
         live = counts.ToDictionary(count => count.Tag, SameTag);
-        unfiltered = takeUnfilteredOrder ? counts : KeepPlaces(unfiltered, appendNew: true);
-        takeUnfilteredOrder = false;
+        if (takeUnfilteredOrder)
+        {
+            unfiltered = counts;
+            arrivals.Clear();
+            takeUnfilteredOrder = false;
+        }
+        else
+        {
+            // A recreated tag already has an unfiltered place but can be new to the held row.
+            var previouslyLive = unfiltered.Where(place => place.Items > 0).Select(place => place.Tag).ToHashSet(SameTag);
+            arrivals.RemoveAll(tag => !live.ContainsKey(tag));
+            arrivals.AddRange(counts.Select(count => count.Tag).Where(tag => !previouslyLive.Contains(tag)));
+            unfiltered = KeepPlaces(unfiltered, counts);
+        }
     }
 
     public void Matched(string query, IReadOnlyList<StashItem> matches)
@@ -86,7 +99,13 @@ internal sealed class TagChipOrder
     {
         if (held is not null)
         {
-            return KeepPlaces(held, appendNew: false);
+            if (searching)
+            {
+                return KeepPlaces(held);
+            }
+
+            held = KeepPlaces(held, arrivals.Select(LiveTag).OfType<TagCount>());
+            return held;
         }
 
         if (!searching)
@@ -96,7 +115,7 @@ internal sealed class TagChipOrder
 
         if (typed is not null)
         {
-            return KeepPlaces(typed, appendNew: false);
+            return KeepPlaces(typed);
         }
 
         var ranked = Ranked(query);
@@ -114,14 +133,14 @@ internal sealed class TagChipOrder
         PendingChoice = Task.CompletedTask;
     }
 
-    private IReadOnlyList<TagCount> KeepPlaces(IReadOnlyList<TagCount> places, bool appendNew)
+    private IReadOnlyList<TagCount> KeepPlaces(IReadOnlyList<TagCount> places, IEnumerable<TagCount>? arrivals = null)
     {
         // Keep the old spelling as well as the position, so a revival cannot change the slot's width.
         var kept = places.Select(place => place with { Items = LiveTag(place.Tag)?.Items ?? 0 }).ToList();
-        if (appendNew)
+        if (arrivals is not null)
         {
             var names = places.Select(place => place.Tag).ToHashSet(SameTag);
-            kept.AddRange(Live.Where(count => !names.Contains(count.Tag)));
+            kept.AddRange(arrivals.Where(count => !names.Contains(count.Tag)));
         }
 
         return kept;

@@ -79,6 +79,11 @@ public sealed partial class Listing
 
             Query = lit ? ItemSearch.WithoutWord(Query, live.Tag) : ItemSearch.WithWord(Query, live.Tag, fragment);
             chips.Chosen(Chips);
+            if (!IsSearch)
+            {
+                // Publish the arrivals before a later click can supersede this scope read.
+                Chips = chips.Shown(Query, searching: false);
+            }
         }
 
         CountChange(true, pending?.Input);

@@ -347,7 +347,7 @@ public sealed class ChipRowTests
             Assert.HasCount(2, listed.Listing.Items);
             Assert.AreEqual(changes + 2, listed.Listing.PersonsChanges);
 
-            ActAndSettle(listed.Listing, () => box.Text = "ca");
+            Type(box, listed.Listing, "ca");
             Assert.AreEqual("ca", listed.Listing.Query);
             Assert.AreEqual(cat.Id, listed.Listing.Items.Single().Id);
             CollectionAssert.AreEqual(new[] { "cat" }, listed.Listing.Chips.Select(chip => chip.Tag).ToArray());
@@ -355,17 +355,116 @@ public sealed class ChipRowTests
         });
     }
 
-    private static void Click(Button chip, Listing listing) =>
-        ActAndSettle(listing, () => chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)));
+    [TestMethod]
+    [DataRow("")]
+    [DataRow("ca")]
+    public async Task NewTagsJoinTheEndOfAHeldRowOnceTheLastFilterIsClickedOff(string typed)
+    {
+        using var listed = await ListedStash.Open();
+        var item = await listed.Stash.Import("picture");
+        var other = await listed.Stash.Import("other");
+        await listed.Organising.AddTag([item], "cat");
+        await listed.Organising.AddTag([other], "owl");
+        await listed.Listing.ShowScope(Scope.All);
 
-    private static void ActAndSettle(Listing listing, Action act)
+        ControlThread.Run(() =>
+        {
+            var row = Row(listed.Listing, listed.Organising);
+            var box = WindowLayout.SearchBox();
+            SearchBoxQuery.Wire(box, listed.Listing);
+            Type(box, listed.Listing, typed);
+            row.Measure(new Size(700, 40));
+            Dispatcher.UIThread.RunJobs();
+            var original = typed.Length == 0 ? new[] { "#cat", "#owl" } : new[] { "#cat" };
+            CollectionAssert.AreEqual(original, TagFaces());
+            var cat = row.Children.OfType<Button>().Single(chip => chip.Content as string == "#cat");
+
+            Click(cat, listed.Listing);
+            Assert.AreEqual("cat", box.Text);
+            FinishOnDispatcher(async () => Assert.IsTrue((await listed.Organising.AddTag([item], "dog")).Succeeded));
+            CollectionAssert.AreEqual(original, TagFaces(), "a new tag waits while the held search has words");
+
+            Click(cat, listed.Listing);
+            Assert.AreEqual("", box.Text ?? "");
+            CollectionAssert.AreEqual(original.Append("#dog").ToArray(), TagFaces(), "the newly made tag joins as soon as the last word is removed");
+            FinishOnDispatcher(async () => Assert.IsTrue((await listed.Organising.AddTag([item], "ant")).Succeeded));
+            var expanded = original.Concat(["#dog", "#ant"]).ToArray();
+            CollectionAssert.AreEqual(expanded, TagFaces(), "new tags join in the order discovered");
+            Assert.AreSame(cat, row.Children.OfType<Button>().First(chip => chip.Content is string));
+
+            FinishOnDispatcher(async () => Assert.IsTrue((await listed.Organising.RemoveTag([item], "dog")).Succeeded));
+            CollectionAssert.AreEqual(expanded, TagFaces(), "a tag that joined keeps its place when it dies");
+            Assert.IsFalse(row.Children.OfType<Button>().Single(chip => chip.Content as string == "#dog").IsEnabled);
+
+            FinishOnDispatcher(async () => Assert.IsTrue((await listed.Organising.RemoveTag([other], "owl")).Succeeded));
+            FinishOnDispatcher(async () => Assert.IsTrue((await listed.Organising.AddTag([other], "Owl")).Succeeded));
+            string[] recreated = typed.Length == 0 ? expanded : [.. expanded, "#Owl"];
+            CollectionAssert.AreEqual(recreated, TagFaces(), "a recreated tag joins at the end if this row had no place for it");
+
+            string[] TagFaces() => row.Children.OfType<Button>().Select(chip => chip.Content).OfType<string>().ToArray();
+        });
+    }
+
+    [TestMethod]
+    public async Task ANewTagStaysInPlaceWhenTheLastFilterIsClickedOffAndOnBeforeItsRead()
+    {
+        using var listed = await ListedStash.Open();
+        var item = await listed.Stash.Import("picture");
+        await listed.Organising.AddTag([item], "cat");
+        await listed.Listing.ShowScope(Scope.All);
+
+        ControlThread.Run(() =>
+        {
+            var box = WindowLayout.SearchBox();
+            SearchBoxQuery.Wire(box, listed.Listing);
+            Type(box, listed.Listing, "ca");
+            var row = Row(listed.Listing, listed.Organising);
+            row.Measure(new Size(700, 40));
+            Dispatcher.UIThread.RunJobs();
+            var cat = row.Children.OfType<Button>().Single(chip => chip.Content as string == "#cat");
+            Click(cat, listed.Listing);
+            FinishOnDispatcher(async () => Assert.IsTrue((await listed.Organising.AddTag([item], "dog")).Succeeded));
+
+            FinishOnDispatcher(() =>
+            {
+                using (listed.Stash.HoldStore())
+                {
+                    cat.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    Assert.AreEqual("", box.Text ?? "");
+                    Assert.IsFalse(listed.Listing.Settled);
+                    Assert.IsTrue(row.Children.OfType<Button>().Any(chip => chip.Content as string == "#dog"), "the new tag is visible while the scope read is pending");
+                    cat.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    Assert.AreEqual("cat", box.Text);
+                }
+
+                return listed.Listing.Settle();
+            });
+            CollectionAssert.AreEqual(new[] { "#cat", "#dog" },
+                row.Children.OfType<Button>().Select(chip => chip.Content).OfType<string>().ToArray());
+        });
+    }
+
+    private static void Click(Button chip, Listing listing) =>
+        FinishOnDispatcher(() =>
+        {
+            chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            return listing.Settle();
+        });
+
+    private static void Type(TextBox box, Listing listing, string text) =>
+        FinishOnDispatcher(() =>
+        {
+            box.Text = text;
+            return listing.Settle();
+        });
+
+    private static void FinishOnDispatcher(Func<Task> act)
     {
         var previous = SynchronizationContext.Current;
         AvaloniaSynchronizationContext.InstallIfNeeded();
         try
         {
-            act();
-            var settled = listing.Settle().WaitAsync(TimeSpan.FromSeconds(5));
+            var settled = act().WaitAsync(TimeSpan.FromSeconds(5));
             var frame = new DispatcherFrame();
             _ = settled.ContinueWith(_ => frame.Continue = false, TaskScheduler.FromCurrentSynchronizationContext());
             Dispatcher.UIThread.PushFrame(frame);
