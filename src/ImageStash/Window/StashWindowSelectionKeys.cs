@@ -18,7 +18,7 @@ public sealed partial class StashWindow
 
     private bool CanUseBrowsingKeys() => CanUseBrowsingKeys(allowChipPicker: false);
 
-    // A scope hint never owns keys. The Every tag picker leaves the search box focused for range selection.
+    // A scope hint never owns keys. The chip row's Every tag picker leaves focus in the box or grid.
     private bool CanUseBrowsingKeys(bool allowChipPicker) => !BrowsingOverlayOpen &&
         !OpenedPopups.Any(popup => popup.Child is not ToolTip && !(allowChipPicker && popup == scopes.Picker));
 
@@ -177,7 +177,7 @@ public sealed partial class StashWindow
         var gridOnly = StashKeys.RequiresGridFocus(direction);
         if ((gridOnly || extendSelection) &&
             (!(grid.IsFocused || (extendSelection && search.IsFocused)) ||
-                !CanUseBrowsingKeys(allowChipPicker: extendSelection && search.IsFocused)))
+                !CanUseBrowsingKeys(allowChipPicker: extendSelection)))
         {
             return false;
         }

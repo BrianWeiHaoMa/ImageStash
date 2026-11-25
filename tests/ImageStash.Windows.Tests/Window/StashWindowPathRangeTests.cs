@@ -50,7 +50,9 @@ public sealed class StashWindowPathRangeTests
     }
 
     [TestMethod]
-    public async Task ShiftDownWithEveryTagOpenExtendsTheRangeWithoutSelectingTextInTheFocusedBox()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task ShiftDownWithEveryTagOpenExtendsTheRangeWithEitherBrowsingControlFocused(bool gridFocused)
     {
         using var shown = Open();
         var pictures = Enumerable.Range(1, 12).Select(i => shown.Picture($"cat {i:00}.png")).ToArray();
@@ -64,19 +66,23 @@ public sealed class StashWindowPathRangeTests
 
         TrayDesktop.Run(() =>
         {
-            Assert.IsTrue(shown.Search.Focus());
-            shown.Search.CaretIndex = 1;
-            shown.Search.SelectionStart = shown.Search.SelectionEnd = 1;
+            var origin = gridFocused ? (Control)shown.Grid : shown.Search;
+            Assert.IsTrue(origin.Focus());
+            if (!gridFocused)
+            {
+                shown.Search.CaretIndex = 1;
+                shown.Search.SelectionStart = shown.Search.SelectionEnd = 1;
+            }
             shown.Window.UpdateLayout();
             var rows = shown.Grid.Rows;
             var end = InColumn(rows[1], rows[0].Tiles[0]);
             var state = TextState(shown.Search);
             RaiseClick(shown.Chip("Every tag"));
-            Assert.IsTrue(shown.ChipRow.Picker.IsOpen && shown.Search.IsFocused);
-            Tap(shown.Search, Key.Down, KeyModifiers.Shift);
+            Assert.IsTrue(shown.ChipRow.Picker.IsOpen && origin.IsFocused);
+            Tap(origin, Key.Down, KeyModifiers.Shift);
 
             Assert.AreEqual(state, TextState(shown.Search));
-            AssertSelection(shown, shown.Search, end.Id,
+            AssertSelection(shown, origin, end.Id,
                 shown.Listing.Items.Take(end.Index + 1).Select(item => item.Id).ToArray(), "with Every tag open");
         });
     }
