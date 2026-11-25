@@ -1,3 +1,4 @@
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.VisualTree;
@@ -136,6 +137,124 @@ public sealed class TagFieldTests
         Assert.AreEqual("re", EnterCommitsAfter("re", null, "reaction"), "nothing lit: the words as typed");
     });
 
+    [TestMethod]
+    public void EmptyBackspaceHighlightsTheLastTagAndOnlyAnotherPressRemovesIt() => ControlThread.Run(() =>
+    {
+        var (field, box) = Field();
+        field.Show(["cat", "dog"], ["cat", "dog"], ["cat", "dog"]);
+        var removed = new List<string>();
+        object? reveal = null;
+        field.Removed += removed.Add;
+        field.AddHandler(Control.RequestBringIntoViewEvent, (_, e) => reveal = e.Source);
+
+        Press(box, Key.Back);
+        Assert.IsTrue(Highlighted(field, "dog"));
+        Assert.IsFalse(Highlighted(field, "cat"));
+        Assert.AreSame(RemoveButton(field, "dog").FindAncestorOfType<Border>(), reveal, "bring the highlighted chip into view");
+        Press(box, Key.Back);
+        Assert.IsEmpty(removed, "the first press and its repeat must leave both tags attached");
+
+        Release(box, Key.Back);
+        Press(box, Key.Back);
+        CollectionAssert.AreEqual(new[] { "dog" }, removed);
+        Assert.IsFalse(Highlighted(field, "dog"));
+    });
+
+    [TestMethod]
+    public void RefreshAndSwitchingFieldsCannotRemoveANewLastTag() => ControlThread.Run(() =>
+    {
+        var (field, box) = Field();
+        var removed = new List<string>();
+        field.Removed += removed.Add;
+        field.Show(["cat", "dog"], [], []);
+        Tap(box, Key.Back);
+
+        field.Show(["cat", "emu"], [], []);
+        Tap(box, Key.Back);
+        Assert.IsEmpty(removed, "refresh made emu last, so it needs its own confirmation");
+        Assert.IsTrue(Highlighted(field, "emu"));
+
+        field.Clear();
+        field.Show(["cat", "emu"], [], []);
+        Tap(box, Key.Back);
+        Assert.IsEmpty(removed, "the same last tag on a different item needs its own confirmation");
+        Tap(box, Key.Back);
+        CollectionAssert.AreEqual(new[] { "emu" }, removed);
+    });
+
+    [TestMethod]
+    public void TypingAndEscapeCancelTheHighlightAndTextBackspaceStaysWithTheBox() => ControlThread.Run(() =>
+    {
+        var (field, box) = Field();
+        var removed = new List<string>();
+        var cancelled = 0;
+        field.Removed += removed.Add;
+        field.Cancelled += () => cancelled++;
+        Tap(box, Key.Back);
+        Assert.IsEmpty(removed, "the empty row has nothing to arm");
+
+        field.Show(["dog"], [], []);
+        Tap(box, Key.Back);
+        box.Text = "d";
+        Assert.IsFalse(Highlighted(field, "dog"));
+        Assert.IsFalse(Press(box, Key.Back), "with text, the field leaves Backspace for text editing");
+        box.Text = "";
+        Press(box, Key.Back);
+        Release(box, Key.Back);
+        Assert.IsFalse(Highlighted(field, "dog"), "holding Backspace while editing text cannot start a removal");
+
+        Tap(box, Key.Back);
+        Tap(box, Key.Escape);
+        Assert.AreEqual(1, cancelled);
+        Assert.IsFalse(Highlighted(field, "dog"));
+        Tap(box, Key.Back);
+        Assert.IsEmpty(removed);
+    });
+
+    [TestMethod]
+    public void TheRemoveButtonTakesFocusAndItsEnterLeavesTheDraftForTheBox() => ControlThread.Run(() =>
+    {
+        var (field, box) = Field();
+        field.Show(["dog"], [], []);
+        var removed = new List<string>();
+        var committed = new List<string>();
+        field.Removed += removed.Add;
+        field.Committed += committed.Add;
+        box.Text = "draft";
+        var remove = RemoveButton(field, "dog");
+
+        Assert.IsTrue(remove.Focusable && remove.IsTabStop);
+        Tap(remove, Key.Enter);
+
+        CollectionAssert.AreEqual(new[] { "dog" }, removed);
+        Assert.IsEmpty(committed);
+        Assert.AreEqual("draft", box.Text);
+    });
+
+    [TestMethod]
+    public void ModifiedEnterDoesNotRemoveAChipsTag() => ControlThread.Run(() =>
+    {
+        var (field, _) = Field();
+        field.Show(["dog"], [], []);
+        var removed = new List<string>();
+        field.Removed += removed.Add;
+        var remove = RemoveButton(field, "dog");
+
+        remove.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter, KeyModifiers = KeyModifiers.Control });
+
+        Assert.IsEmpty(removed);
+    });
+
+    [TestMethod]
+    public void DownBelongsToTheEmptyTagFieldWhileItsCatalogueIsBeingRead() => ControlThread.Run(() =>
+    {
+        var (field, box) = Field();
+        field.Show([], null, []);
+
+        Assert.IsTrue(Press(box, Key.Down), "Down is accepted while the catalogue is read");
+        Assert.IsFalse(field.Picker.IsOpen, "wait for the current catalogue before opening the picker");
+    });
+
     /// <summary>
     /// What a field with <paramref name="existing"/> to suggest would commit on Enter once <paramref name="typed"/> is in
     /// its box and <paramref name="key"/> pressed, checked against what its Enter then commits; on the control thread.
@@ -165,7 +284,27 @@ public sealed class TagFieldTests
         return (field, field.GetVisualDescendants().OfType<TextBox>().Single());
     }
 
-    private static void Press(TextBox box, Key key) => box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key });
+    private static bool Press(Control control, Key key)
+    {
+        var press = new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key };
+        control.RaiseEvent(press);
+        return press.Handled;
+    }
+
+    private static void Release(Control control, Key key) =>
+        control.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = key });
+
+    private static void Tap(Control control, Key key)
+    {
+        Press(control, key);
+        Release(control, key);
+    }
+
+    private static Button RemoveButton(TagField field, string tag) => field.GetVisualDescendants().OfType<Button>()
+        .Single(button => AutomationProperties.GetName(button) == $"Remove tag {tag}");
+
+    private static bool Highlighted(TagField field, string tag) =>
+        RemoveButton(field, tag).FindAncestorOfType<Border>()!.Classes.Contains("accent");
 
     private static bool Lit(TagField field, string suggestion) =>
         field.GetVisualDescendants().OfType<Button>().Single(button => button.Content as string == suggestion).Classes.Contains("accent");

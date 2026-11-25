@@ -159,6 +159,22 @@ public sealed class StashKeysTests
     }
 
     [TestMethod]
+    public void EnterInTheTagFieldReachesTheFocusedControlOncePerPress()
+    {
+        var keys = new PressOnce();
+        var enter = StashKeys.Route(Key.Enter, KeyModifiers.None, KeyPlace.Field);
+
+        Assert.AreEqual(KeyAction.None, keys.Acting(Key.Enter, enter, tagFieldFocused: true));
+        Assert.AreEqual(KeyAction.Held, keys.Acting(Key.Enter, enter, tagFieldFocused: true),
+            "the same Enter cannot toggle the picker entry again after a refresh");
+        Assert.AreEqual(KeyAction.Held, keys.Acting(Key.Enter, KeyAction.Handoff),
+            "if the field lost focus, the same press cannot hand off either");
+
+        keys.Released(Key.Enter);
+        Assert.AreEqual(KeyAction.None, keys.Acting(Key.Enter, enter, tagFieldFocused: true));
+    }
+
+    [TestMethod]
     public void EnterAndCtrlVAreEachHeldOnTheirOwn()
     {
         var keys = new PressOnce();

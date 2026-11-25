@@ -284,7 +284,7 @@ public sealed class Preview : Border
         name.Show(item);
         ShowFacts([]);
         tags.Clear();
-        tags.Show(Organising.CarriedTags([item]), []);
+        tags.Show(Organising.CarriedTags([item]), null);
         picture.Show(item);
         listing.FocusForPreview(item.Id, byPerson, input);
         Changed?.Invoke();
@@ -311,6 +311,8 @@ public sealed class Preview : Border
 
     /// <summary>Whether focus is in its name in edit, where <c>Ctrl+T</c> still moves focus on to its tag box (G17).</summary>
     public bool NameFocused => name.IsEditing && name.BoxFocused;
+
+    internal TagField TagField => tags.Field;
 
     /// <summary>
     /// <c>Ctrl+T</c> in the preview: focus in its tag box (G17); from the name in edit that is focus leaving the name,
@@ -457,6 +459,7 @@ public sealed class Preview : Border
 
         if (!found.Succeeded || uses is { Succeeded: false } || counts is { Succeeded: false } || layers is { Succeeded: false })
         {
+            tags.Field.CatalogueReadFailed();
             notices.Raise(found.Failure ?? uses?.Failure ?? counts?.Failure ?? layers!.Failure!);
             return;
         }

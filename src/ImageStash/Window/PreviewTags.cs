@@ -2,7 +2,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
-using Avalonia.VisualTree;
 
 namespace ImageStash.Window;
 
@@ -19,8 +18,6 @@ namespace ImageStash.Window;
 /// </summary>
 public sealed class PreviewTags : Grid
 {
-    private readonly TagFieldScroller scroller;
-
     public PreviewTags()
     {
         ColumnDefinitions = new ColumnDefinitions("Auto,*");
@@ -28,7 +25,7 @@ public sealed class PreviewTags : Grid
         // The preview's empty box names the key that reaches it from anywhere in the preview (G17).
         Field = new TagField { Placeholder = Placeholder };
         // The box and its suggestions end the row: while focus is in it, they stay in view as the row grows.
-        scroller = new TagFieldScroller(Field, () => HadFocus);
+        var scroller = new TagFieldScroller(Field);
         SetColumn(scroller, 1);
         Children.Add(label);
         Children.Add(scroller);
@@ -69,7 +66,7 @@ public sealed class PreviewTags : Grid
     public TagField Field { get; }
 
     /// <summary>
-    /// Whether focus was last inside the box, as a summon gives it back (G1); hiding the window moves no focus inside it,
+    /// Whether focus was last in the tag field, as a summon gives it back (G1); hiding the window moves no focus inside it,
     /// so this outlasts the hide.
     /// </summary>
     public bool HadFocus { get; private set; }
@@ -78,7 +75,7 @@ public sealed class PreviewTags : Grid
     /// Shows <paramref name="tags"/>, the item's, each with its ×, and takes the existing tags the suggestions and the list
     /// come from; the list marks the item's tags, since its one item carries every one of them (G17).
     /// </summary>
-    public void Show(IReadOnlyList<string> tags, IReadOnlyList<string> existingTags) => Field.Show(tags, existingTags, tags);
+    public void Show(IReadOnlyList<string> tags, IReadOnlyList<string>? existingTags) => Field.Show(tags, existingTags, tags);
 
     /// <summary>Empties the box and closes the list, as the preview opening on another item or closing does.</summary>
     public void Clear()
@@ -91,7 +88,7 @@ public sealed class PreviewTags : Grid
 
     private void FocusMoved(object? sender, FocusChangedEventArgs e)
     {
-        var inField = e.Source is Visual focused && Field.IsVisualAncestorOf(focused);
+        var inField = Field.OwnsFocus(e.Source);
         if (FieldLeaving.Commits(HadFocus, inField))
         {
             // As Enter commits, the box emptied first, focus left where it went (G17, G19, G7).
@@ -101,6 +98,5 @@ public sealed class PreviewTags : Grid
         }
 
         HadFocus = inField;
-        scroller.KeepBoxInView();
     }
 }

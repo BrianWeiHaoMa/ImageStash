@@ -1,3 +1,4 @@
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.VisualTree;
@@ -87,6 +88,71 @@ public sealed class FieldLeavingTests
             CollectionAssert.AreEqual(new[] { "reaction" }, await Tags(listed, cat));
             Assert.IsEmpty(await Tags(listed, dog));
             box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+        }));
+    }
+
+    [TestMethod]
+    public async Task BackspaceRemovesFromTheOpenedItemsAndUndoRestoresOnlyTheirEarlierMembership()
+    {
+        using var listed = await ListedStash.Open();
+        var cat = await listed.Stash.Import("cat");
+        var dog = await listed.Stash.Import("dog");
+        var emu = await listed.Stash.Import("emu");
+        await listed.Stash.Store!.AddTag([cat, emu], "reaction");
+        var taggedCat = (await listed.Stash.Store!.Item(cat.Id)).Value!;
+        await listed.Listing.ShowScope(Scope.All);
+
+        ControlThread.Run(() => ControlThread.FinishOnDispatcher(async () =>
+        {
+            var overlay = new TagFieldOverlay(listed.Listing, listed.Organising, listed.Notices);
+            overlay.Open([taggedCat, dog], new Button());
+            var box = overlay.Field.GetVisualDescendants().OfType<TextBox>().Single();
+            listed.Listing.Select([emu.Id], emu.Id);
+            void Backspace()
+            {
+                box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Back });
+                box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = Key.Back });
+            }
+
+            Backspace();
+            CollectionAssert.AreEqual(new[] { "reaction" }, await Tags(listed, cat));
+            Assert.IsEmpty(listed.Notices.Shown);
+            await listed.WaitForOrganising(Backspace);
+
+            Assert.IsEmpty(await Tags(listed, cat));
+            Assert.IsEmpty(await Tags(listed, dog));
+            CollectionAssert.AreEqual(new[] { "reaction" }, await Tags(listed, emu));
+            var notice = listed.Notices.Shown.Single();
+            Assert.AreEqual("Removed #reaction from 1 item", notice.Text);
+            Assert.IsTrue(listed.Notices.OffersUndo(notice));
+            await listed.Notices.Undo(notice);
+            CollectionAssert.AreEqual(new[] { "reaction" }, await Tags(listed, cat));
+            Assert.IsEmpty(await Tags(listed, dog));
+        }));
+    }
+
+    [TestMethod]
+    public async Task TheOpenedFieldDoesNotOfferATagFromTheStaleListing()
+    {
+        using var listed = await ListedStash.Open();
+        var cat = await listed.Stash.Import("cat");
+        var dog = await listed.Stash.Import("dog");
+        await listed.Stash.Store!.AddTag([dog], "reaction");
+        await listed.Listing.ShowScope(Scope.All);
+        await listed.Stash.Store.RemoveTag([dog], "reaction");
+        Assert.AreEqual("reaction", listed.Listing.Tags.Single().Tag, "the published listing still has the old tag");
+
+        ControlThread.Run(() => ControlThread.FinishOnDispatcher(async () =>
+        {
+            var overlay = new TagFieldOverlay(listed.Listing, listed.Organising, listed.Notices);
+            overlay.Open([cat], new Button());
+            var button = overlay.Field.GetVisualDescendants().OfType<Button>()
+                .Single(candidate => AutomationProperties.GetName(candidate) == "Every tag");
+
+            Assert.IsFalse(button.IsEffectivelyVisible, "the field does not offer a tag from the stale listing");
+            var box = overlay.Field.GetVisualDescendants().OfType<TextBox>().Single();
+            box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+            await listed.Stash.Store.All();
         }));
     }
 

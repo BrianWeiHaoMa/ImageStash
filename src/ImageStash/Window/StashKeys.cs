@@ -321,13 +321,15 @@ public sealed class PressOnce
     /// <c>Ctrl+V</c> or a <c>Ctrl+Z</c> still held is <see cref="KeyAction.Held"/>. Enter and Z are remembered wherever
     /// they land, a text field's own included, so the repeats of an Enter the name or tag field took do not hand off once
     /// focus has gone back to the preview (G19), and those of a <c>Ctrl+Z</c> the search box took do not undo a notice
-    /// once focus has gone to the grid (G7).
+    /// once focus has gone to the grid (G7). In a tag field or its picker a repeat cannot commit or pick again.
     /// </summary>
-    public KeyAction Acting(Key key, KeyAction action)
+    public KeyAction Acting(Key key, KeyAction action, bool tagFieldFocused = false)
     {
         // Only these are remembered: any other key acts on each press, a held arrow moving on as it repeats.
         var remembered = key is Key.Enter or Key.Z || action == KeyAction.Paste;
-        return remembered && !Pressed(key) && action is (KeyAction.Handoff or KeyAction.Paste or KeyAction.UndoNotice) ? KeyAction.Held : action;
+        return remembered && !Pressed(key) &&
+            (action is KeyAction.Handoff or KeyAction.Paste or KeyAction.UndoNotice || tagFieldFocused && key == Key.Enter)
+            ? KeyAction.Held : action;
     }
 
     /// <summary>

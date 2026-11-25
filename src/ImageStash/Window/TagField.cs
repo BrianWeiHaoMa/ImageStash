@@ -19,8 +19,8 @@ namespace ImageStash.Window;
 /// every existing tag, marking the tags it is told every item carries, whose pick is raised for its owner to toggle as
 /// Add tag ▸ does; and under it the existing tags it does not show that
 /// contain the word being typed, those starting with it first. Enter commits what the box shows, a chosen suggestion in
-/// place of the word being typed, and Esc closes the open list, else cancels; Down and Up choose a suggestion, and a
-/// click on one commits it.
+/// place of the word being typed, and Esc closes the open list, else cancels. The arrows choose a suggestion, or Down
+/// opens the list from an empty box. Empty Backspace first highlights the last tag, then acts like its ×.
 /// One control for every place that edits tags: it raises its commit, its cancel and its × and never reaches the store
 /// itself, so whoever places it decides what they act on. Inside it the keys it uses are its own, and it has no paste
 /// of its own and no menu offering one, as the search box has none: ImageStash reads the clipboard only for its three
@@ -34,10 +34,14 @@ public sealed class TagField : StackPanel
     private readonly WrapPanel tagsAndBox;
     private readonly TextBox box;
     private readonly Button everyTag;
+    private readonly Grid pickerAnchor;
     private readonly WrapPanel suggestionRow;
-    private IReadOnlyList<string> existing = [];
+    private IReadOnlyList<string>? existing = [];
     private IReadOnlyList<string> marked = [];
     private int chosen = -1;
+    private bool openPickerAfterRead;
+    private readonly PressOnce backspace = new();
+    private Border? armedRemoval;
 
     /// <summary>Counts the edits the box has ended, by Enter, Esc or emptying, so a paste asked in one never lands in the next.</summary>
     private int edits;
@@ -55,22 +59,33 @@ public sealed class TagField : StackPanel
         box.TextChanging += (_, _) =>
         {
             // Typing drops the choice, and its highlight with it: a suggestion lit is one Enter takes (G17).
+            openPickerAfterRead = false;
+            ClearRemovalHighlight();
             Choose(-1);
             ShowSuggestions();
             ShowEveryTag();
+        };
+        box.LostFocus += (_, _) =>
+        {
+            backspace.Released();
+            openPickerAfterRead = false;
+            ClearRemovalHighlight();
         };
         // Not focusable, so a click leaves focus in the box and the field open (G17).
         everyTag = new Button { Content = IconGlyph.Of("\uE70D", 12), Width = 32, Height = 32, Padding = default, Focusable = false, VerticalAlignment = VerticalAlignment.Center, IsVisible = false };
         AutomationProperties.SetName(everyTag, "Every tag");
         ToolTipRule.Set(everyTag, "Every tag");
         everyTag.Click += (_, _) => ToggleList();
-        tagsAndBox = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 6, LineSpacing = 6, Children = { box, everyTag } };
+        // A native popup routes keys to its Popup control. Keeping that control in the visual tree gives those keys
+        // the same window and field handlers as keys from the box.
+        pickerAnchor = new Grid { IsVisible = false, Children = { everyTag, Picker } };
+        tagsAndBox = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 6, LineSpacing = 6, Children = { box, pickerAnchor } };
         suggestionRow = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 4, LineSpacing = 4, IsVisible = false };
         Children.Add(tagsAndBox);
         Children.Add(suggestionRow);
-        LogicalChildren.Add(Picker);
         // Tunnelling, so Enter, Esc and the arrows reach the field before the text box treats them as its own.
         AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
+        AddHandler(KeyUpEvent, OnKeyUp, RoutingStrategies.Tunnel, handledEventsToo: true);
     }
 
     /// <summary>Enter, or a click on a suggestion: the words to commit, as typed, one tag per word.</summary>
@@ -110,6 +125,12 @@ public sealed class TagField : StackPanel
     /// <summary>The list of every existing tag, offered on one click while nothing is typed (G17).</summary>
     public TagPicker Picker { get; } = new();
 
+    internal Control? FocusedPart => TopLevel.GetTopLevel(this)?.FocusManager.GetFocusedElement() as Control;
+    internal bool BoxFocused => box.IsFocused;
+
+    internal bool OwnsFocus(object? source) =>
+        source is Visual focused && (this.IsVisualAncestorOf(focused) || Picker.Contains(focused));
+
     /// <summary>
     /// Every existing tag in <paramref name="existingTags"/>' order, the commonest first as the store answers them, those
     /// in <paramref name="markedTags"/>, the tags every item carries, marked, in any spelling (G17).
@@ -148,17 +169,31 @@ public sealed class TagField : StackPanel
 
     /// <summary>
     /// Shows <paramref name="tags"/>, each with its ×, takes the existing tags the suggestions and the list come from, and
-    /// marks in the list <paramref name="carriedByAll"/>, the tags every item carries; an open list follows at once.
+    /// marks in the list <paramref name="carriedByAll"/>, the tags every item carries. A null catalogue is still being read.
+    /// An open list follows at once.
     /// </summary>
-    public void Show(IReadOnlyList<string> tags, IReadOnlyList<string> existingTags, IReadOnlyList<string> carriedByAll)
+    public void Show(IReadOnlyList<string> tags, IReadOnlyList<string>? existingTags, IReadOnlyList<string> carriedByAll)
     {
         existing = existingTags;
         marked = carriedByAll;
         if (!tags.SequenceEqual(Tags))
         {
+            ClearRemovalHighlight();
+            // The refresh replaces the chip controls. Park focus inside the edit while they are rebuilt.
+            var focusedTag = FocusedPart is Button { Tag: string tag } button && this.IsVisualAncestorOf(button) ? tag : null;
+            if (focusedTag is not null)
+            {
+                FocusBox();
+            }
+
             Tags = tags;
             tagsAndBox.Children.RemoveRange(0, tagsAndBox.Children.Count - 2);
             tagsAndBox.Children.InsertRange(0, tags.Select(TagWithRemove));
+            if (focusedTag is not null)
+            {
+                UpdateLayout();
+                this.GetVisualDescendants().OfType<Button>().FirstOrDefault(button => Equals(button.Tag, focusedTag))?.Focus(NavigationMethod.Tab);
+            }
         }
 
         ShowSuggestions();
@@ -169,9 +204,20 @@ public sealed class TagField : StackPanel
     public void Clear()
     {
         edits++;
+        openPickerAfterRead = false;
+        ClearRemovalHighlight();
         box.Text = "";
         Choose(-1);
         ShowSuggestions();
+    }
+
+    internal void CatalogueReadFailed()
+    {
+        if (existing is null)
+        {
+            existing = [];
+            openPickerAfterRead = false;
+        }
     }
 
     /// <summary>
@@ -188,6 +234,12 @@ public sealed class TagField : StackPanel
         {
             if (edit == edits)
             {
+                if (!box.IsFocused && OwnsFocus(FocusedPart))
+                {
+                    // Pasting text into the field returns to its box, where Enter adds the pasted words.
+                    FocusBox();
+                }
+
                 box.SelectedText = Regex.Replace(words, @"\s+", " ");
             }
         };
@@ -207,6 +259,7 @@ public sealed class TagField : StackPanel
 
     internal void CancelAsEscape()
     {
+        ClearRemovalHighlight();
         if (Picker.IsOpen)
         {
             Picker.Close();
@@ -219,18 +272,47 @@ public sealed class TagField : StackPanel
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
-        switch (e.Key, e.KeyModifiers)
+        if (e.KeyModifiers != KeyModifiers.None)
         {
-            case (Key.Enter, KeyModifiers.None):
+            if (e.Source is Button && e.Key is Key.Enter or Key.Space)
+            {
+                e.Handled = true;
+            }
+
+            return;
+        }
+
+        if (e.Key == Key.Escape)
+        {
+            CancelAsEscape();
+            e.Handled = true;
+            return;
+        }
+
+        // A focused × is a button: Enter and Space activate that button, leaving any words in the box alone.
+        if (!ReferenceEquals(e.Source, box))
+        {
+            return;
+        }
+
+        if (e.Key == Key.Back)
+        {
+            BackspaceInBox(e);
+            return;
+        }
+
+        switch (e.Key)
+        {
+            case Key.Enter:
                 CommitAsEnter();
                 break;
-            case (Key.Escape, KeyModifiers.None):
-                CancelAsEscape();
-                break;
-            case (Key.Down, KeyModifiers.None) when Suggestions.Count > 0:
+            case Key.Down when Suggestions.Count > 0:
                 Choose(Math.Min(chosen + 1, Suggestions.Count - 1));
                 break;
-            case (Key.Up, KeyModifiers.None) when Suggestions.Count > 0:
+            case Key.Down when Text.Length == 0 && existing is not { Count: 0 }:
+                OpenListFromBox();
+                break;
+            case Key.Up when Suggestions.Count > 0:
                 Choose(Math.Max(chosen - 1, -1));
                 break;
             default:
@@ -238,6 +320,62 @@ public sealed class TagField : StackPanel
         }
 
         e.Handled = true;
+    }
+
+    private void OnKeyUp(object? sender, KeyEventArgs e)
+    {
+        backspace.Released(e.Key);
+        // Avalonia's button handles Space on release even if the key went down on another control.
+        if (e.Key == Key.Space && e.Source is Button { Tag: string, IsPressed: false } button && this.IsVisualAncestorOf(button))
+        {
+            e.Handled = true;
+        }
+    }
+
+    private void BackspaceInBox(KeyEventArgs e)
+    {
+        var pressed = backspace.Pressed(Key.Back);
+        if (Text.Length == 0)
+        {
+            if (pressed)
+            {
+                BackspaceOnEmptyBox();
+            }
+
+            e.Handled = true;
+        }
+    }
+
+    private void BackspaceOnEmptyBox()
+    {
+        if (Tags.Count == 0)
+        {
+            return;
+        }
+
+        var last = (Border)tagsAndBox.Children[Tags.Count - 1];
+        if (ReferenceEquals(armedRemoval, last))
+        {
+            RemoveTag(Tags[^1]);
+        }
+        else
+        {
+            armedRemoval = last;
+            last.Classes.Add(LookStyles.Lit);
+            last.BringIntoView();
+        }
+    }
+
+    private void RemoveTag(string tag)
+    {
+        ClearRemovalHighlight();
+        Removed?.Invoke(tag);
+    }
+
+    private void ClearRemovalHighlight()
+    {
+        armedRemoval?.Classes.Remove(LookStyles.Lit);
+        armedRemoval = null;
     }
 
     private void ToggleList()
@@ -248,21 +386,51 @@ public sealed class TagField : StackPanel
         }
         else
         {
-            Picker.Open(everyTag, Listed(existing, marked), tag => Picked?.Invoke(tag));
+            OpenList();
         }
+    }
+
+    private void OpenList() => Picker.Open(everyTag, Listed(existing ?? [], marked), tag => Picked?.Invoke(tag));
+
+    private void OpenListFromBox()
+    {
+        ClearRemovalHighlight();
+        if (existing is null)
+        {
+            openPickerAfterRead = true;
+            return;
+        }
+
+        if (!Picker.IsOpen)
+        {
+            OpenList();
+        }
+
+        Picker.FocusFirstEntry(box);
     }
 
     /// <summary>The button while nothing is typed and there is a tag to pick (G17); typing hides it and closes its list, and an open list shows what the field now shows.</summary>
     private void ShowEveryTag()
     {
-        everyTag.IsVisible = Text.Length == 0 && existing.Count > 0;
-        if (!everyTag.IsVisible)
+        var available = Text.Length == 0 && existing is { Count: > 0 };
+        if (!available)
         {
             Picker.Close();
         }
         else if (Picker.IsOpen)
         {
-            Picker.Show(Listed(existing, marked));
+            Picker.Show(Listed(existing ?? [], marked));
+        }
+
+        pickerAnchor.IsVisible = available;
+        everyTag.IsVisible = available;
+        if (openPickerAfterRead && existing is not null)
+        {
+            openPickerAfterRead = false;
+            if (available && box.IsFocused)
+            {
+                OpenListFromBox();
+            }
         }
     }
 
@@ -277,7 +445,7 @@ public sealed class TagField : StackPanel
 
     private void ShowSuggestions()
     {
-        var now = SuggestionsFor(Text, existing, Tags);
+        var now = SuggestionsFor(Text, existing ?? [], Tags);
         if (now.SequenceEqual(Suggestions))
         {
             return;
@@ -302,15 +470,15 @@ public sealed class TagField : StackPanel
     {
         var remove = new Button
         {
+            Tag = tag,
             Content = new TextBlock { Text = "", FontFamily = new FontFamily("Segoe Fluent Icons"), FontSize = 9, VerticalAlignment = VerticalAlignment.Center },
             Padding = new Thickness(5),
             VerticalAlignment = VerticalAlignment.Center,
-            Focusable = false,
         };
         remove.Classes.Add(LookStyles.IconButton);
         AutomationProperties.SetName(remove, $"Remove tag {tag}");
         ToolTipRule.Set(remove, "Remove tag");
-        remove.Click += (_, _) => Removed?.Invoke(tag);
+        remove.Click += (_, _) => RemoveTag(tag);
         var text = new TextBlock { Text = tag, MaxWidth = 220, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
         ToolTipRule.ShowWhole(text, tag);
         var chip = new Border
@@ -320,8 +488,7 @@ public sealed class TagField : StackPanel
             Height = 30,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        chip.Bind(Border.BackgroundProperty, chip.GetResourceObservable(LookKeys.TagChipGround));
-        chip.Bind(TextElement.ForegroundProperty, chip.GetResourceObservable(LookKeys.TagChipWords));
+        chip.Classes.Add(LookStyles.TagFieldChip);
         chip.Bind(Border.CornerRadiusProperty, chip.GetResourceObservable(LookKeys.ControlRadius));
         return chip;
     }
@@ -329,32 +496,37 @@ public sealed class TagField : StackPanel
 
 /// <summary>
 /// A tag field scrolling within a bounded height, however many tags it shows, so what is placed below it stays in the
-/// window (G17, G19, E4). The box and its suggestions end the field: while focus is in it, they are kept in view as it
-/// grows.
+/// window (G17, G19, E4). The focused tag control stays in view as the row grows.
 /// </summary>
 public sealed class TagFieldScroller : ScrollViewer
 {
-    private readonly Func<bool> focusInField;
+    private readonly TagField field;
 
-    public TagFieldScroller(TagField field, Func<bool> focusInField)
+    public TagFieldScroller(TagField field)
     {
-        this.focusInField = focusInField;
+        this.field = field;
         Content = field;
         MaxHeight = 148;
         HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
-        field.SizeChanged += (_, _) => KeepBoxInView();
+        field.SizeChanged += (_, _) => KeepFocusInView();
+        field.GotFocus += (_, _) => KeepFocusInView();
     }
 
     /// <summary>Drawn as the theme draws any scroller.</summary>
     protected override Type StyleKeyOverride => typeof(ScrollViewer);
 
-    /// <summary>Scrolls to the box and its suggestions while focus is in the field.</summary>
-    public void KeepBoxInView()
+    /// <summary>Reveals the focused ×, or the box and its suggestions while the box holds focus.</summary>
+    public void KeepFocusInView()
     {
-        if (focusInField())
+        var focused = field.FocusedPart;
+        if (field.BoxFocused || focused is not null && field.Picker.Contains(focused))
         {
             ScrollToEnd();
+        }
+        else if (focused is not null && field.IsVisualAncestorOf(focused))
+        {
+            focused.BringIntoView();
         }
     }
 }
@@ -394,7 +566,7 @@ public sealed class TagFieldOverlay : Border
         this.notices = notices;
         heading = new TextBlock { FontSize = 12, Opacity = 0.75, TextTrimming = TextTrimming.CharacterEllipsis };
         Field = new TagField();
-        scroller = new TagFieldScroller(Field, () => IsVisible);
+        scroller = new TagFieldScroller(Field);
         Child = new StackPanel { Spacing = 8, Children = { heading, scroller } };
         Padding = new Thickness(14, 10, 14, 12);
         Margin = new Thickness(12, 4, 12, 0);
@@ -441,13 +613,13 @@ public sealed class TagFieldOverlay : Border
         returnTo = returnFocusTo;
         heading.Text = "Tags of " + Notices.Describe(opened);
         Field.Clear();
-        Field.Show(Organising.CarriedTags(opened), [], CarriedByAll(opened));
+        Field.Show(Organising.CarriedTags(opened), null, CarriedByAll(opened));
         IsVisible = true;
         // Laid out first: the scroller places the field in the tree only once its template applies, and only a box in
         // the tree takes focus.
         UpdateLayout();
         Field.FocusBox();
-        scroller.KeepBoxInView();
+        scroller.KeepFocusInView();
         _ = Read();
     }
 
@@ -537,6 +709,7 @@ public sealed class TagFieldOverlay : Border
 
         if (!all.Succeeded || !counts.Succeeded)
         {
+            Field.CatalogueReadFailed();
             notices.Raise(all.Failure ?? counts.Failure!);
             return;
         }
@@ -547,7 +720,7 @@ public sealed class TagFieldOverlay : Border
 
     private void FocusMoved(object? sender, FocusChangedEventArgs e)
     {
-        var intoField = e.Source is Visual focused && this.IsVisualAncestorOf(focused);
+        var intoField = Field.OwnsFocus(e.Source) || e.Source is Visual focused && this.IsVisualAncestorOf(focused);
         if (FieldLeaving.Commits(IsVisible, intoField))
         {
             // Started on the items it was opened on before closing lets them go; the act's own reading is then skipped.

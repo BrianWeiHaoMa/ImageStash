@@ -1,6 +1,9 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.VisualTree;
 using ImageStash.Store;
 using ImageStash.Window;
 using ImageStash.Windows.Tests.Support;
@@ -68,6 +71,56 @@ public sealed class FieldLeavingTests
 
         await ShownWindow.Eventually(() => shown.TagsOf(item.Id).Count == 1);
         CollectionAssert.AreEqual(new[] { "dog" }, shown.TagsOf(item.Id), "what was typed, added first");
+    }
+
+    [TestMethod]
+    public async Task ReverseTabToRemoveKeepsTheDraftUntilFocusLeavesTheField()
+    {
+        using var shown = ShownWindow.Open();
+        var items = await shown.OpenStash(shown.Picture("leave remove.png"), shown.Picture("leave other.png"));
+        var item = items.Single(item => item.Name == "leave remove");
+        await shown.Tag([item], "old");
+        TrayDesktop.Run(() =>
+        {
+            shown.Grid.Focus();
+            shown.Listing.Select(items.Select(target => target.Id).ToArray(), item.Id);
+            ShownWindow.Tap(shown.Grid, Key.T, KeyModifiers.Control);
+        });
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.TagBox.IsFocused && shown.TagField.Field.Tags.Contains("old")));
+
+        TrayDesktop.Run(() =>
+        {
+            var remove = shown.TagField.GetVisualDescendants().OfType<Button>()
+                .Single(button => AutomationProperties.GetName(button) == "Remove tag old");
+            ShownWindow.Type(shown.TagBox, "draft");
+            ShownWindow.Tap(shown.TagBox, Key.Tab, KeyModifiers.Shift);
+            Assert.AreSame(remove, shown.Focused);
+            var focusLayer = AdornerLayer.GetAdornerLayer(remove);
+            Assert.IsTrue(focusLayer?.Children.Any(child => AdornerLayer.GetAdornedElement(child) == remove),
+                "keyboard focus shows on the ×");
+            Assert.IsTrue(shown.TagField.IsVisible);
+            Assert.AreEqual("draft", shown.TagBox.Text);
+            CollectionAssert.AreEqual(new[] { "old" }, shown.TagsOf(item.Id), "focus within the field commits nothing");
+
+            ShownWindow.Tap(remove, Key.Enter);
+        });
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.TagField.Field.Tags.Count == 0));
+
+        TrayDesktop.Run(() =>
+        {
+            Assert.IsTrue(shown.TagField.IsVisible && shown.TagBox.IsFocused, "when the × disappears, the edit stays at the box");
+            Assert.AreEqual("draft", shown.TagBox.Text);
+            shown.Search.Focus();
+            Assert.IsFalse(shown.TagField.IsVisible);
+            Assert.IsTrue(shown.Search.IsFocused);
+        });
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Notices.Shown.Any(notice => notice.Text == "Tagged 2 items #draft")));
+        foreach (var target in items)
+        {
+            CollectionAssert.AreEqual(new[] { "draft" }, shown.TagsOf(target.Id));
+        }
+
+        TrayDesktop.Run(() => Assert.HasCount(1, shown.Notices.Shown.Where(notice => notice.Text == "Tagged 2 items #draft")));
     }
 
     [TestMethod]

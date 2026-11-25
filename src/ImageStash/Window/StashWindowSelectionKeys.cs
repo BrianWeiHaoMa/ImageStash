@@ -1,8 +1,6 @@
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Threading;
-using Avalonia.VisualTree;
 
 namespace ImageStash.Window;
 
@@ -14,7 +12,12 @@ public sealed partial class StashWindow
 
     private TagField? TagFieldTakingKeys => tagField.IsVisible
         ? tagField.Field
-        : (FocusManager?.GetFocusedElement() as Visual)?.FindAncestorOfType<TagField>();
+        : TagFieldAt(FocusManager?.GetFocusedElement());
+
+    private TagField? TagFieldAt(IInputElement? focused) =>
+        tagField.Field.OwnsFocus(focused) ? tagField.Field
+        : preview.TagField.OwnsFocus(focused) ? preview.TagField
+        : null;
 
     private bool CanUseBrowsingKeys() => CanUseBrowsingKeys(allowChipPicker: false);
 
@@ -201,7 +204,7 @@ public sealed partial class StashWindow
         }
 
         var way = direction is Direction.Left or Direction.Up ? StepWay.Back : StepWay.On;
-        if (!preview.NameFocused && FocusManager?.GetFocusedElement() is not Avalonia.Controls.TextBox &&
+        if (!preview.NameFocused && TagFieldTakingKeys is null && FocusManager?.GetFocusedElement() is not TextBox &&
             OpenTagLists().Count == 0 && previewSteps.Next(way) is { } item)
         {
             preview.Open(item, input: input);

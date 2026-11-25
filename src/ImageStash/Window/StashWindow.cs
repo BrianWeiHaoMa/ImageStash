@@ -488,10 +488,12 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
     {
         // Another text field's keys are its own (the tag field's); only those it leaves unused reach the window (G7).
         var focused = FocusManager?.GetFocusedElement();
-        var place = StashKeys.PlaceOf(search.IsFocused, focused is TextBox && !ReferenceEquals(focused, search), preview.IsOpen, preview.ButtonFocused, editing.IsOpen, preview.NameFocused);
-        // The list a tag field's chevron opens leaves focus where it was, on the preview's picture as often as in the box.
+        var focusedTagField = TagFieldAt(focused);
+        var place = StashKeys.PlaceOf(search.IsFocused, focusedTagField is not null || focused is TextBox && !ReferenceEquals(focused, search),
+            preview.IsOpen, preview.ButtonFocused, editing.IsOpen, preview.NameFocused);
+        // A picker clicked open can leave focus on the preview's picture.
         var routed = heldKeys.Acting(e.Key, StashKeys.Route(e.Key, e.KeyModifiers, place,
-            summonSelection.PersonSelected(search.SelectedText), boxHasText: !string.IsNullOrEmpty(search.Text)));
+            summonSelection.PersonSelected(search.SelectedText), boxHasText: !string.IsNullOrEmpty(search.Text)), tagFieldFocused: focusedTagField is not null);
         var action = OpenTagLists().Count > 0 ? StashKeys.WithTagListOpen(e.Key, e.KeyModifiers, routed) : routed;
         var handled = StashKeys.Direction(action) is { } direction
             ? RunMovementKey(direction, StashKeys.ExtendsRange(action)) : RunKeyAction(action, place);
@@ -524,7 +526,7 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
                 // notice says so (G13).
                 var focused = FocusManager?.GetFocusedElement();
                 AfterScopeChoice(place, () => _ = pasteKey.Press(editor.OpenTextAt(focused), place == KeyPlace.SearchBox ? words => search.SelectedText = words
-                    : (focused as Visual)?.FindAncestorOfType<TagField>() is { } field ? field.PasteNow()
+                    : TagFieldAt(focused) is { } field ? field.PasteNow()
                     : null));
                 break;
             case KeyAction.Held:

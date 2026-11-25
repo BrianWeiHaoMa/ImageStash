@@ -192,6 +192,9 @@ public sealed class PreviewTagsTests
         TrayDesktop.Run(() => ShownWindow.Press(shown.PreviewPicture, Key.Tab));
         TrayDesktop.Run(() =>
         {
+            var remove = RemoveButton(shown, "lion");
+            Assert.AreSame(remove, shown.Focused, "the tag's × joins the tab order before the box");
+            ShownWindow.Press(remove, Key.Tab);
             Assert.AreSame(shown.PreviewTagBox, shown.Focused, "Tab reaches the field from the picture (G7)");
             ShownWindow.Type(shown.PreviewTagBox, "re");
         });
@@ -525,7 +528,7 @@ public sealed class PreviewTagsTests
             Assert.IsLessThanOrEqualTo(client.Width, right.X, "a long tag is trimmed, its × inside the window (G17)");
         });
 
-        TrayDesktop.Run(() => ShownWindow.Press(shown.PreviewPicture, Key.Tab));
+        TrayDesktop.Run(() => ShownWindow.Press(shown.PreviewPicture, Key.T, KeyModifiers.Control));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.PreviewTagBox.IsFocused && InView(shown, shown.PreviewTagBox)));
         TrayDesktop.Run(() => ShownWindow.Type(shown.PreviewTagBox, "tag"));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() =>

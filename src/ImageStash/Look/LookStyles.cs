@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
@@ -24,6 +25,9 @@ public sealed class LookStyles : Styles
 
     /// <summary>A tag's chip in the chip row, and a suggestion in the tag field.</summary>
     public const string TagChip = "tagChip";
+
+    /// <summary>A carried tag with a remove button, lit while it awaits a second Backspace.</summary>
+    public const string TagFieldChip = "tagFieldChip";
 
     /// <summary>A tag place whose filter action is unavailable.</summary>
     public const string FilterUnavailable = "filterUnavailable";
@@ -52,6 +56,12 @@ public sealed class LookStyles : Styles
     {
         Chip(ScopeChip, LookKeys.ScopeChipGround, LookKeys.ScopeChipBorder, LookKeys.ScopeChipWords);
         Chip(TagChip, LookKeys.TagChipGround, LookKeys.TagChipBorder, LookKeys.TagChipWords);
+        Add(Rule(x => x.OfType<Border>().Class(TagFieldChip),
+            (Border.BackgroundProperty, LookKeys.TagChipGround),
+            (TextElement.ForegroundProperty, LookKeys.TagChipWords)));
+        Add(Rule(x => x.OfType<Border>().Class(TagFieldChip).Class(Lit),
+            (Border.BackgroundProperty, LookKeys.LitChipGround),
+            (TextElement.ForegroundProperty, LookKeys.LitChipWords)));
         Hovered(ScopeChip, LookKeys.ScopeChipHoverGround, LookKeys.ScopeChipHoverBorder, LookKeys.ScopeChipHoverWords);
         Hovered(TagChip, LookKeys.TagChipHoverGround, LookKeys.TagChipBorder, LookKeys.TagChipWords);
         foreach (var state in new[] { ":pointerover", ":pressed" })
