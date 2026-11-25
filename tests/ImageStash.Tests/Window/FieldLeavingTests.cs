@@ -1,4 +1,6 @@
+using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.VisualTree;
 using ImageStash.Store;
 using ImageStash.Tests.Support;
 using ImageStash.Window;
@@ -47,7 +49,45 @@ public sealed class FieldLeavingTests
         CollectionAssert.AreEqual(new[] { "cat", "funny", "reaction" }, await Tags(listed, cat), "the lit suggestion, not the letter typed, and the words split as Enter splits them");
         CollectionAssert.AreEqual(new[] { "reaction" }, await Tags(listed, dog), "every item the field was opened on");
         CollectionAssert.AreEqual(new[] { "reaction" }, await Tags(listed, emu), "and no other");
-        Assert.IsEmpty(listed.Notices.Shown, "a tag change that succeeded says nothing more, as Enter's");
+        var notice = listed.Notices.Shown.Single();
+        Assert.AreEqual("Tagged 2 items #reaction", notice.Text, "the single-picture edit answers in place");
+        Assert.IsTrue(listed.Notices.OffersUndo(notice));
+    }
+
+    [TestMethod]
+    public async Task EnterWithMixedTagGainsReportsEachTagAndUndoKeepsTheEarlierMembership()
+    {
+        using var listed = await ListedStash.Open();
+        var cat = await listed.Stash.Import("cat");
+        var dog = await listed.Stash.Import("dog");
+        await listed.Stash.Store!.AddTag([cat], "reaction");
+        await listed.Listing.ShowScope(Scope.All);
+
+        ControlThread.Run(() => ControlThread.FinishOnDispatcher(async () =>
+        {
+            var overlay = new TagFieldOverlay(listed.Listing, listed.Organising, listed.Notices);
+            overlay.Open([cat, dog], new Button());
+            var box = overlay.Field.GetVisualDescendants().OfType<TextBox>().Single();
+            await listed.WaitForOrganising(() =>
+            {
+                box.Text = "reaction #funny";
+                box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
+            });
+
+            var notice = listed.Notices.Shown.Single();
+            Assert.IsTrue(listed.Notices.OffersUndo(notice));
+            StringAssert.StartsWith(notice.Text, "Updated tags on 2 items");
+            StringAssert.Contains(notice.Text, "#reaction added to 1 item");
+            StringAssert.Contains(notice.Text, "#funny added to 2 items");
+            CollectionAssert.AreEqual(new[] { "funny", "reaction" }, await Tags(listed, cat));
+            CollectionAssert.AreEqual(new[] { "funny", "reaction" }, await Tags(listed, dog));
+            Assert.IsTrue(overlay.IsVisible);
+
+            await listed.Notices.Undo(notice);
+            CollectionAssert.AreEqual(new[] { "reaction" }, await Tags(listed, cat));
+            Assert.IsEmpty(await Tags(listed, dog));
+            box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+        }));
     }
 
     [TestMethod]

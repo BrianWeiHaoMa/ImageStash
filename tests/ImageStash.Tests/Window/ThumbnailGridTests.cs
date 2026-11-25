@@ -354,8 +354,7 @@ public sealed class ThumbnailGridTests
         Assert.IsEmpty(Starred(listed), "again: none");
         await AssertTilesAsStored(listed);
 
-        // As the Favorites chip's drop sets it.
-        Assert.IsTrue((await listed.Organising.SetFavorite([first, third], true)).Succeeded);
+        Assert.IsTrue((await listed.Organising.DropOnChip([first, third], tag: null)).Succeeded);
         Assert.IsTrue(Starred(listed).SetEquals([first.Id, third.Id]), "a drop on Favorites stars the dropped tiles");
         await AssertTilesAsStored(listed);
 
@@ -366,7 +365,9 @@ public sealed class ThumbnailGridTests
         Assert.IsTrue(added.Succeeded);
         Assert.IsTrue(Starred(listed).SetEquals([second.Id, third.Id]), "and its Add to Favorites puts it on");
         await AssertTilesAsStored(listed);
-        Assert.IsEmpty(listed.Notices.Shown, "nothing said: the star is what shows");
+        CollectionAssert.AreEqual(new[] { "Added 2 items to Favorites", "Removed 3 items from Favorites", "Added 2 items to Favorites" },
+            listed.Notices.Shown.Select(notice => notice.Text).ToArray());
+        Assert.IsTrue(listed.Notices.Shown.All(listed.Notices.OffersUndo));
     }
 
     [TestMethod]

@@ -271,6 +271,30 @@ public sealed class ListedStash : IDisposable
     public Task<Outcome> ToggleFavoriteOfSelection() =>
         SelectionKeys.ActOnSelection(selection => Organising.ToggleFavorite(selection.Items));
 
+    /// <summary>Waits for an organising gesture raised on a control to finish, including its listing refresh.</summary>
+    public async Task WaitForOrganising(Action gesture)
+    {
+        var answered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void Changed()
+        {
+            if (!Organising.Changing)
+            {
+                answered.TrySetResult();
+            }
+        }
+
+        Organising.Changed += Changed;
+        try
+        {
+            gesture();
+            await answered.Task;
+        }
+        finally
+        {
+            Organising.Changed -= Changed;
+        }
+    }
+
     public Task<Outcome> OpenSelectionForEdit() =>
         SelectionKeys.ActOnSelection(selection => Editing.OpenOnSelection(selection.Items));
 

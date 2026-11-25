@@ -449,7 +449,7 @@ public sealed class ChipRowTests
         var (a, b, tagged) = (items[0], items[1], items[2]);
         await shown.Tag([tagged], "reaction");
         var data = await shown.Files(a.FilePath, b.FilePath);
-        var noticesBefore = TrayDesktop.Get(() => shown.Notices.Shown.Count);
+        var beforeDrop = TrayDesktop.Get(() => shown.Notices.Shown.ToArray());
         var (recent, all, reaction, favorites) = (await shown.DropTargetAt("Recent"), await shown.DropTargetAt("All"), await shown.DropTargetAt("#reaction"), await shown.DropTargetAt("Favorites"));
         var effects = new List<DragDropEffects>();
         drags.During = () =>
@@ -466,7 +466,9 @@ public sealed class ChipRowTests
         drags.Ends = Outcome<bool>.Of(true);
 
         Drag(shown, a, b);
-        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && Carrying(shown, "reaction").Count == 3));
+        const string tagWords = "Tagged 2 items #reaction";
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && Carrying(shown, "reaction").Count == 3
+            && shown.Notices.Shown.Any(notice => notice.Text == tagWords && shown.Notices.OffersUndo(notice))));
         await Task.Delay(300);
 
         CollectionAssert.AreEqual(new[] { DragDropEffects.None, DragDropEffects.None, DragDropEffects.Copy, DragDropEffects.Copy, DragDropEffects.Copy }, effects,
@@ -476,12 +478,11 @@ public sealed class ChipRowTests
         {
             CollectionAssert.AreEquivalent(new[] { a.Id, b.Id, tagged.Id }, Carrying(shown, "reaction"), "the dragged items got the tag (G17)");
             Assert.HasCount(3, shown.Listing.Items, "nothing imported (G11)");
-            Assert.HasCount(noticesBefore, shown.Notices.Shown, "nothing said");
+            Assert.AreEqual(tagWords, shown.Notices.Shown.Except(beforeDrop).Single().Text);
             Assert.IsFalse(shown.Window.DragInProgress, "the drag ended");
             Assert.IsTrue(shown.Window.IsVisible, "the flyout stays (G2)");
         });
         Assert.AreEqual(0, shown.Uses(), "a tile dropped on the window's own chip is no use (G10)");
-
         await shown.Listing.Store!.SetFavorite([b], true);
         effects.Clear();
         drags.During = () =>
@@ -490,16 +491,39 @@ public sealed class ChipRowTests
             effects.Add(ShownWindow.RaiseDrag(favorites, DragDrop.DropEvent, data));
         };
         Drag(shown, a, b);
-        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Items.Count(item => item.Favorite) == 2));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Items.Count(item => item.Favorite) == 2
+            && shown.Notices.Shown.Any(notice => notice.Text == "Added 1 item to Favorites" && shown.Notices.OffersUndo(notice))));
 
         CollectionAssert.AreEqual(new[] { DragDropEffects.Copy, DragDropEffects.Copy }, effects);
         TrayDesktop.Run(() => CollectionAssert.AreEquivalent(new[] { a.Id, b.Id }, shown.Listing.Items.Where(item => item.Favorite).Select(item => item.Id).ToList(),
             "both favorites, the one already a favorite staying one (G17)"));
+
+        using var pointer = TestMouse.PutBackAfterwards();
+        var undo = TrayDesktop.Get(() => shown.Window.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Text == tagWords)
+            .GetVisualAncestors().OfType<StackPanel>().First(row => row.Children.OfType<Button>().Any(button => Equals(button.Content, "Undo")))
+            .Children.OfType<Button>().Single(button => Equals(button.Content, "Undo")));
+        TestMouse.Click(await ClickPoint(undo));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => Carrying(shown, "reaction").SequenceEqual([tagged.Id])));
+        TrayDesktop.Run(() => Assert.HasCount(2, shown.Listing.Items.Where(item => item.Favorite), "the older card only undid its tag change"));
+
         Drag(shown, a, b);
-        await Task.Delay(500);
-        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled
+            && shown.Notices.Shown.Any(notice => notice.Text == "2 items already in Favorites" && shown.Notices.OffersUndo(notice))));
         TrayDesktop.Run(() => CollectionAssert.AreEquivalent(new[] { a.Id, b.Id }, shown.Listing.Items.Where(item => item.Favorite).Select(item => item.Id).ToList(),
             "dropped again, still both: a drop sets the flag, never toggles it (G17)"));
+        TrayDesktop.Run(() =>
+        {
+            shown.Grid.Focus();
+            ShownWindow.Tap(shown.Grid, Key.Z, KeyModifiers.Control);
+        });
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Notices.Shown.All(notice => notice.Text != "2 items already in Favorites")));
+        TrayDesktop.Run(() =>
+        {
+            Assert.HasCount(2, shown.Listing.Items.Where(item => item.Favorite), "Undo of the unchanged drop leaves the flags alone");
+            Assert.IsTrue(shown.Notices.Shown.Any(notice => notice.Text == "Added 1 item to Favorites" && shown.Notices.OffersUndo(notice)));
+        });
+        TrayDesktop.Run(() => ShownWindow.Tap(shown.Grid, Key.Z, KeyModifiers.Control));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Items.Where(item => item.Favorite).Select(item => item.Id).SequenceEqual([b.Id])));
         Assert.AreEqual(0, shown.Uses());
 
         drags.During = null;
@@ -520,6 +544,7 @@ public sealed class ChipRowTests
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.LitTags.Contains("reaction")));
         var data = await shown.Files(shown.Picture("external newcomer.png"));
         var reaction = await shown.DropTargetAt("#reaction");
+        var beforeDrop = TrayDesktop.Get(() => shown.Notices.Shown.ToArray());
 
         var entered = TrayDesktop.Get(() => ShownWindow.RaiseDrag(reaction, DragDrop.DragEnterEvent, data));
 
@@ -527,7 +552,9 @@ public sealed class ChipRowTests
         TrayDesktop.Run(() => Assert.IsTrue(shown.Window.GetVisualDescendants().OfType<TextBlock>().Any(text => text.IsEffectivelyVisible && text.Text == "Each picture gets the tag #reaction, those already in your stash too."),
             "the drop card says so (G11)"));
         TrayDesktop.Run(() => ShownWindow.RaiseDrag(reaction, DragDrop.DropEvent, data));
-        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Items.Count == 2));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Items.Count == 2
+            && shown.Notices.Shown.Except(beforeDrop).Any(notice => notice.Heading == "Added 1 to your stash, tagged #reaction"
+                && shown.Notices.OffersUndo(notice))));
 
         TrayDesktop.Run(() =>
         {

@@ -86,7 +86,9 @@ public sealed class TagListsTests
         Assert.IsEmpty((await listed.Stash.Store!.TagCounts()).Value!, "carried by none, the tag ceased to exist (G17)");
         Assert.AreEqual(new TagCount("half", 0), listed.Listing.Chips.Single(), "the chip row holds its inactive place");
         CollectionAssert.AreEqual(new[] { "Type a tag…" }, TagLists.AddTagEntries((await listed.Stash.Store!.TagCounts()).Value!, afterTaking).Select(entry => entry.Label).ToList(), "so the next opening does not list it");
-        Assert.IsEmpty(listed.Notices.Shown, "a change that succeeded says nothing more");
+        CollectionAssert.AreEqual(new[] { "Tagged 1 item #half", "Removed #half from 3 items" },
+            listed.Notices.Shown.Select(notice => notice.Text).ToArray());
+        Assert.IsTrue(listed.Notices.Shown.All(listed.Notices.OffersUndo));
         listed.Stash.Close();
         Assert.IsEmpty(listed.Stash.SqlQuery("SELECT item_id FROM uses", row => row.GetInt64(0)), "tagging is not a use (G10)");
     }
@@ -107,7 +109,10 @@ public sealed class TagListsTests
         var present = await listed.Organising.Present(opened);
 
         Assert.AreEqual("Add a tag failed: gone, it is no longer in the stash", clicked.Failure?.Sentence);
-        CollectionAssert.AreEqual(new[] { clicked.Failure!.Sentence }, listed.Notices.Shown.Select(notice => notice.Text).ToList(), "named once, by item (G35)");
+        CollectionAssert.AreEqual(new[] { clicked.Failure!.Sentence },
+            listed.Notices.Shown.Where(notice => notice.NamesAProblem).Select(notice => notice.Text).ToArray(), "named once, by item (G35)");
+        Assert.AreEqual("Tagged 2 items #late", listed.Notices.Shown.Single(listed.Notices.OffersUndo).Text);
+        Assert.HasCount(2, listed.Notices.Shown, "the change and the refusal");
         CollectionAssert.AreEquivalent(new[] { items[0].Id, items[1].Id }, present.Select(item => item.Id).ToList(), "the deleted item is not among those the lists read");
         Assert.IsTrue(present.All(item => item.Tags.SequenceEqual(["late"])), "the others carry it");
         Assert.IsTrue(TagLists.AddTagEntries((await listed.Stash.Store!.TagCounts()).Value!, present).Single(entry => entry.Tag == "late").Marked, "the mark is the store's truth for the items that remain");
@@ -128,6 +133,28 @@ public sealed class TagListsTests
 
         Assert.AreEqual("Add a tag failed: target, no item carries #picked any more", picked.Failure?.Sentence);
         Assert.IsEmpty((await store.TagCounts()).Value!);
+    }
+
+    [TestMethod]
+    public async Task AddTagClickReadsTheMembershipJustGivenByADuplicateImport()
+    {
+        using var listed = await ListedStash.Open();
+        var bytes = TestStash.Bytes(7);
+        var first = await listed.Stash.Import("first", bytes);
+        var second = await listed.Stash.Import("second", TestStash.Bytes(8));
+        var store = listed.Stash.Store!;
+        await store.AddTag([second], "picked");
+        await listed.Listing.ShowScope(Scope.All);
+        var opened = listed.Listing.Items.ToArray();
+        var staged = await listed.Stash.Stage("duplicate.png", bytes);
+        var imported = await store.CommitImport(TestStash.Candidate(staged, "duplicate", bytes) with { Tags = ["picked"] });
+        Assert.IsTrue(imported.Succeeded && imported.Value!.AlreadyInStash);
+        Assert.IsFalse(opened.Single(item => item.Id == first.Id).Tags.Contains("picked"));
+
+        Assert.IsTrue((await TagLists.Click(listed.Organising, ItemMenuAction.AddTag, opened, "picked")).Succeeded);
+
+        Assert.IsTrue((await listed.Stash.All()).All(item => item.Tags.Count == 0));
+        Assert.AreEqual("Removed #picked from 2 items", listed.Notices.Shown.Single(listed.Notices.OffersUndo).Text);
     }
 
     [TestMethod]

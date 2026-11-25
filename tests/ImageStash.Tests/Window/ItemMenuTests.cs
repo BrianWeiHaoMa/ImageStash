@@ -172,7 +172,9 @@ public sealed class ItemMenuTests
         CollectionAssert.AreEquivalent(opened.Select(item => item.Id).ToList(), favorites, "the items the menu was opened on, not the selection now");
         CollectionAssert.AreEqual(new[] { opened[1].Id }, after);
         CollectionAssert.AreEqual(new[] { menu.Items[2].Id }, menu.Listing.Selection.ToList(), "the listing refreshed, keeping the selection");
-        Assert.IsEmpty(menu.Notices.Shown, "a change that succeeded says nothing more");
+        var notice = menu.Notices.Shown.Single();
+        Assert.AreEqual("Added 2 items to Favorites", notice.Text);
+        Assert.IsTrue(menu.Notices.OffersUndo(notice));
         Assert.IsEmpty(menu.Uses(), "favoriting is not a use (G10)");
     }
 

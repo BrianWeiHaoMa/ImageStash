@@ -15,7 +15,7 @@ namespace ImageStash.Tests.Window;
 /// finishing, now or at the next start (G28, G35).
 /// </summary>
 [TestClass]
-public sealed class TransferringTests
+public sealed partial class TransferringTests
 {
     private static readonly Shortcuts Imported = new() { Open = "Ctrl+Alt+F2", Screenshot = "Ctrl+Shift+F6", Record = "Ctrl+Shift+F7", StashClipboardImage = "Ctrl+Alt+F3" };
 

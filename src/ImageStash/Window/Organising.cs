@@ -6,10 +6,9 @@ namespace ImageStash.Window;
 /// Tags and the favorite flag in the window (G17): the one path <c>Ctrl+D</c>, the item menu, a tile dropped on a chip
 /// and the preview take. Each change is one store transaction over the items as the caller took them; the listing then
 /// reloads, keeping the selection where its items still exist, so the grid, the chips and the Favorites scope show the
-/// store's answer. A change that succeeded says nothing more; every refusal is named in a notice, by item, as the
-/// store words it, and the other items are still changed (G35). Nothing here records a use (G10) or touches a file
-/// (G29). The store works on its own thread, so the window keeps answering meanwhile; changes run one at a time, each
-/// after the refresh of the one before, so a toggle decides from what the change before it left.
+/// store's answer. Changes on several items and drops on chips offer Undo of the facts that committed. Every refusal
+/// is named as the store words it (G35). Changes and their Undo affect tags and favorite flags alone (G10, G29).
+/// They run one at a time, each after the refresh of the one before.
 /// </summary>
 public sealed class Organising(Listing listing, Notices notices)
 {
@@ -33,42 +32,59 @@ public sealed class Organising(Listing listing, Notices notices)
 
     /// <summary>
     /// G17's toggle: while any item is not a favorite, every one becomes one; else none stays one. Each item's flag is
-    /// read as the listing now shows it, or as the store holds it once the listing no longer lists it, never as the
-    /// caller's copy was.
+    /// read from the current stash. A missing item is handed on for the store to refuse.
     /// </summary>
-    public Task<Outcome> ToggleFavorite(IReadOnlyList<StashItem> items) => OneAtATime(FavoriteAct, () => Toggle(items));
+    public Task<Outcome> ToggleFavorite(IReadOnlyList<StashItem> items) =>
+        Change(items, FavoriteAct, FavoriteAction(!AllFavorites(items)), async (store, targets) =>
+        {
+            // A second press may come after the first took the item out of Favorites.
+            var current = (await Now(store, targets)).Select((item, index) => item ?? targets[index]).ToArray();
+            return await store.SetFavoriteWithChanges(targets, !AllFavorites(current));
+        });
 
-    /// <summary>Sets the flag on every item as given, never toggling it: a drop on Favorites, the menu's entry.</summary>
-    public Task<Outcome> SetFavorite(IReadOnlyList<StashItem> items, bool favorite) => OneAtATime(favorite ? ItemFavorite.AddAction : ItemFavorite.RemoveAction, () => Favorite(items, favorite));
+    /// <summary>Sets the flag on every item as given by the menu's entry.</summary>
+    public Task<Outcome> SetFavorite(IReadOnlyList<StashItem> items, bool favorite) =>
+        SetFavorite(items, favorite, alreadyOnChip: null);
+
+    private Task<Outcome> SetFavorite(IReadOnlyList<StashItem> items, bool favorite, string? alreadyOnChip)
+    {
+        var action = FavoriteAction(favorite);
+        return Change(items, action, action, (store, targets) => store.SetFavoriteWithChanges(targets, favorite), alreadyOnChip);
+    }
+
+    private static string FavoriteAction(bool favorite) => favorite ? ItemFavorite.AddAction : ItemFavorite.RemoveAction;
 
     /// <summary>Gives every item the tags <paramref name="text"/> commits, as typed; the store splits it into one tag per word.</summary>
     public Task<Outcome> AddTag(IReadOnlyList<StashItem> items, string text) =>
-        OneAtATime(ItemTags.AddAction, () => Change(items, ItemTags.AddAction, store => store.AddTagWithChanges(items, text)));
+        Change(items, ItemTags.AddAction, ItemTags.AddAction, (store, targets) => store.AddTagWithChanges(targets, text));
 
-    /// <summary>Applies the tag of a chip drop, which can only give an existing tag (G17).</summary>
-    internal Task<Outcome> AddExistingTag(IReadOnlyList<StashItem> items, string tag) =>
-        OneAtATime(ItemTags.AddAction, () => Change(items, ItemTags.AddAction, store => store.AddExistingTag(items, tag)));
+    /// <summary>An internal drop applies Favorites or an existing tag and always answers if accepted (G17).</summary>
+    internal Task<Outcome> DropOnChip(IReadOnlyList<StashItem> items, string? tag) =>
+        tag is null
+            ? SetFavorite(items, true, alreadyOnChip: "already in Favorites")
+            : Change(items, ItemTags.AddAction, ItemTags.AddAction, (store, targets) => store.AddExistingTag(targets, tag),
+                alreadyOnChip: $"already tagged #{tag}");
 
     /// <summary>Takes <paramref name="tag"/>, in any spelling, off every item.</summary>
     public Task<Outcome> RemoveTag(IReadOnlyList<StashItem> items, string tag) =>
-        OneAtATime(ItemTags.RemoveAction, () => Change(items, ItemTags.RemoveAction, store => store.RemoveTagWithChanges(items, tag)));
+        Change(items, ItemTags.RemoveAction, ItemTags.RemoveAction, (store, targets) => store.RemoveTagWithChanges(targets, tag));
 
     /// <summary>
     /// A click on a tag Add tag ▸ lists (G17): while every item still in the stash carries <paramref name="tag"/>, it is
-    /// taken off them all; else every item is given it. Decided from the items as <see cref="Present"/> reads them,
-    /// never from the caller's copies, so two clicks give and take; an item gone meanwhile is handed on, and refused by name.
+    /// taken off them all; else every item is given it. Each click reads the current memberships.
+    /// An item gone meanwhile is handed on and refused by name.
     /// </summary>
-    public Task<Outcome> ToggleTag(IReadOnlyList<StashItem> items, string tag) => OneAtATime(TagAct, async () =>
-        AllCarry(await Present(items), tag)
-            ? await Change(items, ItemTags.RemoveAction, store => store.RemoveTagWithChanges(items, tag))
-            : await Change(items, ItemTags.AddAction, store => store.AddExistingTag(items, tag)));
+    public Task<Outcome> ToggleTag(IReadOnlyList<StashItem> items, string tag) =>
+        Change(items, TagAct, AllCarry(items, tag) ? ItemTags.RemoveAction : ItemTags.AddAction, async (store, targets) =>
+            AllCarry((await Now(store, targets)).OfType<StashItem>().ToArray(), tag)
+                ? await store.RemoveTagWithChanges(targets, tag)
+                : await store.AddExistingTag(targets, tag));
 
     /// <summary>
-    /// The items as the listing shows them now, or as the store holds them once the listing no longer lists them; an
-    /// item the store no longer holds is left out.
+    /// The requested items still in the stash, as of the latest read.
     /// </summary>
     public async Task<IReadOnlyList<StashItem>> Present(IReadOnlyList<StashItem> items) =>
-        (await Now(items)).OfType<StashItem>().ToList();
+        listing.Store is { } store ? (await Now(store, items)).OfType<StashItem>().ToList() : [];
 
     /// <summary>Whether every item is a favorite, so the menu offers Remove from Favorites and <c>Ctrl+D</c> unsets the flag.</summary>
     public static bool AllFavorites(IReadOnlyList<StashItem> items) => items.Count > 0 && items.All(item => item.Favorite);
@@ -120,64 +136,97 @@ public sealed class Organising(Listing listing, Notices notices)
         }
     }
 
-    private async Task<Outcome> Toggle(IReadOnlyList<StashItem> items)
+    /// <summary>The latest facts for each target, with a null entry for a missing item.</summary>
+    private async Task<IReadOnlyList<StashItem?>> Now(StashStore store, IReadOnlyList<StashItem> items)
     {
-        // A press again after the last one took the item out of the listing (out of Favorites) decides from that
-        // press's answer, which the store holds, so two presses bring the flag back (G17). An item the store lists no
-        // more goes as handed in, which the change then refuses by name.
-        var current = (await Now(items)).Select((now, i) => now ?? items[i]).ToList();
-        return await Favorite(current, !AllFavorites(current));
-    }
-
-    /// <summary>Each item as the listing shows it now, else as the store lists it now; null once the store lists it no more.</summary>
-    private async Task<IReadOnlyList<StashItem?>> Now(IReadOnlyList<StashItem> items)
-    {
+        // A scope or search can supersede a change's refresh before the newer listing has arrived.
+        var (commits, fileSteps) = store.ListingVersion;
         var shown = listing.Items.ToDictionary(item => item.Id);
-        var now = new List<StashItem?>();
-        foreach (var item in items)
+        var current = items.Select(item => shown.GetValueOrDefault(item.Id)).ToArray();
+        if (current.All(item => item is not null && item.CommitsWhenRead == commits
+            && (!item.StepsPendingWhenRead || item.FileStepsWhenRead == fileSteps)))
         {
-            now.Add(shown.GetValueOrDefault(item.Id) ?? (listing.Store is { } store && await store.Item(item.Id) is { Value: { } stored } ? stored : null));
+            return current;
         }
 
-        return now;
+        if (items.Count == 1)
+        {
+            var read = await store.Item(items[0].Id);
+            return read.Succeeded ? [read.Value] : current;
+        }
+
+        var all = await store.All();
+        if (all.Value is not { } found)
+        {
+            return current;
+        }
+
+        var stored = found.ToDictionary(item => item.Id);
+        return items.Select(item => stored.GetValueOrDefault(item.Id)).ToArray();
     }
 
-    private Task<Outcome> Favorite(IReadOnlyList<StashItem> items, bool favorite) =>
-        Change(items, favorite ? ItemFavorite.AddAction : ItemFavorite.RemoveAction, store => store.SetFavoriteWithChanges(items, favorite));
-
     /// <summary>
-    /// One change over <paramref name="items"/>: nothing to change is done with nothing shown; while the stash is not
-    /// open the items are refused by name and nothing is asked of the store; otherwise the store's outcomes, the
-    /// listing refreshed, and each distinct failure named once, the first returned.
+    /// Binds the gesture's targets and stash before waiting. A transfer lets already accepted changes finish.
     /// </summary>
-    private async Task<Outcome> Change(IReadOnlyList<StashItem> items, string action, Func<StashStore, Task<ItemFactResult>> change)
+    private Task<Outcome> Change(IReadOnlyList<StashItem> items, string act, string refusalAction,
+        Func<StashStore, IReadOnlyList<StashItem>, Task<ItemFactResult>> write, string? alreadyOnChip = null)
     {
-        if (items.Count == 0)
+        var targets = items.DistinctBy(item => item.Id).ToArray();
+        if (targets.Length == 0)
         {
-            return Outcome.Done;
+            return Task.FromResult(Outcome.Done);
         }
 
         if (listing.CannotStartReason is { } refused)
         {
-            return Named(new Failure(action, Notices.Describe(items), refused));
+            using var acting = UserAct.Begin(act);
+            var failure = new Failure(refusalAction, Notices.Describe(targets), refused);
+            notices.Raise(failure);
+            return Task.FromResult<Outcome>(failure);
         }
 
         var store = listing.Store!;
+        return OneAtATime(act, async () =>
+        {
+            var result = await write(store, targets);
+            await listing.Refresh();
+            var failures = Failures(result);
+            foreach (var failure in failures)
+            {
+                notices.Raise(failure);
+            }
 
-        var result = await change(store);
+            var words = OrganisingNotice.For(result, targets.Length, alreadyOnChip);
+            if (words is not null)
+            {
+                notices.Raise(words, "Undo", () => Undo(result));
+            }
+
+            return FirstFailure(failures);
+        });
+    }
+
+    private Task<Outcome> Undo(ItemFactResult result) => OneAtATime(Notices.Undoing, async () =>
+    {
+        // A transfer can wait for an offered Undo. The Store checks that this result belongs to its own open stash.
+        var reversed = listing.Store is { } store
+            ? await store.UndoItemFacts(result)
+            : result.RefuseUndo(listing.NotOpenReason ?? "the stash is closed");
         await listing.Refresh();
-        var failures = result.Outcomes.Where(outcome => !outcome.Succeeded).Select(outcome => outcome.Failure!).DistinctBy(failure => failure.Sentence).ToList();
-        foreach (var failure in failures)
+        var failures = Failures(reversed);
+        foreach (var failure in failures.Skip(1))
         {
             notices.Raise(failure);
         }
 
-        return failures.Count == 0 ? Outcome.Done : failures[0];
-    }
+        // The notice stack raises the returned refusal.
+        return FirstFailure(failures);
+    });
 
-    private Outcome Named(Failure failure)
-    {
-        notices.Raise(failure);
-        return failure;
-    }
+    // Store shares a transaction-wide refusal across its outcomes. Two items can have the same displayed name.
+    private static List<Failure> Failures(ItemFactResult result) =>
+        result.Outcomes.Select(outcome => outcome.Failure).OfType<Failure>()
+            .Distinct<Failure>(ReferenceEqualityComparer.Instance).ToList();
+
+    private static Outcome FirstFailure(List<Failure> failures) => failures.Count == 0 ? Outcome.Done : failures[0];
 }

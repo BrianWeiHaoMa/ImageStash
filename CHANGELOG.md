@@ -6,6 +6,7 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 
 ### Added
 
+- Apply a tag or favorite change to a selection of two or more pictures, or drop tiles onto a tag chip or Favorites. A notice shows how many pictures changed. Its Undo takes back the tag changes or restores the favorite flags from that batch. In the grid or in the preview outside its fields, `Ctrl+Z` runs the newest available Undo.
 - Search matches names, tags and words saved in Meme, Label and Caption bar layers, including captions from earlier versions. Press Enter on a caption match to hand off the finished picture.
 - Hold Shift with an arrow to extend a range of pictures in the grid. Reverse direction to shrink the range, or keep going past its starting picture. Shift+Up and Shift+Down also work from the search box, keeping its text selection.
 - Tab to the grid, then use Home or End to select the first or last picture, or Page Up and Page Down to move by one visible page of rows. The picture you reach scrolls into view and is ready to copy, paste or preview.

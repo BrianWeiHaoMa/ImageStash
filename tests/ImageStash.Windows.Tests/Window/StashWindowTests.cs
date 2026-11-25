@@ -689,7 +689,6 @@ public sealed class StashWindowTests
         var items = await shown.OpenStash(shown.Picture("fav one.png"), shown.Picture("fav two.png"));
         await shown.Listing.Store!.SetFavorite([items[0]], true);
         await Dispatcher.UIThread.InvokeAsync(() => shown.Listing.Refresh());
-        var noticesBefore = TrayDesktop.Get(() => shown.Notices.Shown.Count);
         var menuLabel = TrayDesktop.Get(() =>
         {
             shown.Listing.Select(items.Select(item => item.Id), items[0].Id);
@@ -711,13 +710,16 @@ public sealed class StashWindowTests
             shown.Grid.Focus();
             ShownWindow.Press(shown.Grid, Key.D, KeyModifiers.Control);
         });
-        await Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Items.All(item => !item.Favorite)));
+        await Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Items.All(item => !item.Favorite)
+            && shown.Notices.Shown.Any(notice => notice.Text == "Removed 2 items from Favorites" && shown.Notices.OffersUndo(notice))));
 
-        TrayDesktop.Run(() =>
+        var beforeSearchKey = TrayDesktop.Get(() =>
         {
+            var before = shown.Notices.Shown.ToArray();
             shown.Search.Focus();
             shown.Search.Text = "fav";
             ShownWindow.Press(shown.Search, Key.D, KeyModifiers.Control);
+            return before;
         });
         await Task.Delay(300);
         await Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled));
@@ -727,7 +729,7 @@ public sealed class StashWindowTests
         {
             Assert.IsTrue(shown.Listing.Items.All(item => !item.Favorite), "Ctrl+D in the box acts on nothing (G7)");
             Assert.AreEqual("fav", shown.Search.Text, "and leaves the box's text as it was");
-            Assert.HasCount(noticesBefore, shown.Notices.Shown, "nothing said");
+            CollectionAssert.AreEqual(beforeSearchKey, shown.Notices.Shown.ToArray(), "the search-box key raised no notice");
         });
         Assert.AreEqual(0, shown.Uses(), "favoriting is not a use (G10)");
     }

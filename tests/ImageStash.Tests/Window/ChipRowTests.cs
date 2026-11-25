@@ -311,6 +311,61 @@ public sealed class ChipRowTests
         Assert.IsTrue(drag.TakenByChip);
         Assert.AreEqual("cat", shown.Query);
         CollectionAssert.AreEqual(new[] { "cat", "dog" }, (await store.Item(cat.Id)).Value!.Tags.ToArray());
+        var undo = listed.Notices.Shown.Single(listed.Notices.OffersUndo);
+        Assert.AreEqual("Tagged 1 item #dog", undo.Text);
+        await listed.Notices.Undo(undo);
+        CollectionAssert.AreEqual(new[] { "cat" }, (await store.Item(cat.Id)).Value!.Tags.ToArray());
+    }
+
+    [TestMethod]
+    [DataRow("#reaction", 1, false, "Tagged 1 item #reaction")]
+    [DataRow("#reaction", 1, true, "1 item already tagged #reaction")]
+    [DataRow("#reaction", 2, true, "Tagged 1 item #reaction")]
+    [DataRow("Favorites", 1, false, "Added 1 item to Favorites")]
+    [DataRow("Favorites", 1, true, "1 item already in Favorites")]
+    [DataRow("Favorites", 2, true, "Added 1 item to Favorites")]
+    public async Task AnInternalChipDropReportsTheActualChangeAndUndoRestoresOnlyTheDraggedFacts(
+        string target, int count, bool alreadySet, string words)
+    {
+        using var listed = await ListedStash.Open();
+        var store = listed.Stash.Store!;
+        var first = await listed.Stash.Import("first");
+        var second = await listed.Stash.Import("second");
+        var carrier = await listed.Stash.Import("carrier");
+        await store.AddTag(alreadySet ? [carrier, first] : [carrier], "reaction");
+        await store.SetFavorite(alreadySet ? [carrier, first] : [carrier], true);
+        await listed.Listing.ShowScope(Scope.All);
+        listed.Listing.Focus(carrier.Id);
+        var drag = new OwnDrag(count == 1 ? [first] : [first, second]);
+
+        ControlThread.Run(() =>
+        {
+            var row = new ChipRow(listed.Listing, listed.Organising, () => drag);
+            FinishOnDispatcher(() => listed.WaitForOrganising(() => Assert.AreEqual(DragDropEffects.Copy, DropOn(row, target))));
+        });
+
+        Assert.IsTrue(drag.TakenByChip);
+        bool HasFact(StashItem item) => target == "Favorites" ? item.Favorite : item.Tags.Contains("reaction");
+        Assert.IsTrue((await listed.Stash.All()).Where(item => count == 2 || item.Id != second.Id).All(HasFact));
+        ControlThread.Run(() => FinishOnDispatcher(async () =>
+        {
+            var notice = listed.Notices.Shown.Single();
+            Assert.IsTrue(listed.Notices.OffersUndo(notice));
+            Assert.AreEqual(words, notice.Text);
+            if (count == 1 && alreadySet)
+            {
+                var later = target == "Favorites"
+                    ? await listed.Organising.SetFavorite([first], false)
+                    : await listed.Organising.RemoveTag([first], "reaction");
+                Assert.IsTrue(later.Succeeded);
+            }
+
+            await listed.Notices.Undo(notice);
+            await listed.Reopen();
+        }));
+        CollectionAssert.AreEquivalent(alreadySet && count > 1 ? new[] { carrier.Id, first.Id } : new[] { carrier.Id },
+            (await listed.Stash.All()).Where(HasFact).Select(item => item.Id).ToArray());
+        Assert.AreEqual(0L, listed.Uses());
     }
 
     [TestMethod]
@@ -461,7 +516,8 @@ public sealed class ChipRowTests
 
     private static DragDropEffects DropOn(ChipRow row, string tag)
     {
-        var chip = row.Children.OfType<Button>().Single(button => button.Content as string == tag);
+        var chip = row.Children.OfType<Button>().Single(button =>
+            button.Content as string == tag || AutomationProperties.GetName(button) == tag);
         using var data = new DataTransfer();
         var drop = new DragEventArgs(DragDrop.DropEvent, data, chip, new Point(1, 1), KeyModifiers.None) { DragEffects = DragDropEffects.Copy };
         chip.RaiseEvent(drop);

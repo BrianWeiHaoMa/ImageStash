@@ -65,8 +65,11 @@ A new screenshot, recording or stashed clipboard image appears in Recent before 
 while you work. Opening ImageStash again or choosing a scope applies the latest order. Click a tag chip to filter the
 grid, then click it in the same place to remove it from the search. Typing updates the suggestions. A chip can complete
 the unfinished last word, as in `cat jo` becoming `cat joy`. Every tag lets you pick existing tags that are dimmed or
-missing from the row. Drop tiles onto a tag chip to give them that tag, or drop files or a folder onto the window to
-add them. `Ctrl+D` makes the selected pictures favorites, or takes them off: a favorite's tile carries a small star,
+missing from the row. Drop tiles onto a tag chip to give them that tag, or onto Favorites to star them. Drop files
+or a folder onto the window to add them. Apply a tag or favorite change to a selection of two or more pictures,
+or drop tiles onto a tag chip or Favorites, and a notice tells you how many pictures changed. Click Undo on that
+notice to reverse its change. `Ctrl+Z` runs the newest available Undo in the grid or in the preview outside its fields.
+`Ctrl+D` makes the selected pictures favorites, or takes them off: a favorite's tile carries a small star,
 and so does its preview, where a click on the star does the same. Rest the pointer on a tile to see its name, up to
 three tags and a star for a favorite. The tray icon's right-click menu holds the captures, Pause shortcuts, Settings
 (where each shortcut can be changed) and Quit. While shortcuts are paused, Settings offers Resume. The stash footer

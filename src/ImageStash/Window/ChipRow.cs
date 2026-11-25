@@ -413,7 +413,7 @@ public sealed class ChipRow : Panel
             e.DragEffects = chip.IsEnabled ? DragDropEffects.Copy : DragDropEffects.None;
             if (chip.IsEnabled)
             {
-                _ = tag is null ? organising.SetFavorite(drag.Items, true) : organising.AddExistingTag(drag.Items, tag);
+                _ = organising.DropOnChip(drag.Items, tag);
             }
         });
     }

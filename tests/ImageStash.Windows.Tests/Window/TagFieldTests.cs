@@ -36,7 +36,7 @@ public sealed class TagFieldTests
         using var shown = ShownWindow.Open();
         var items = await shown.OpenStash(shown.Picture("field tagged.png"), shown.Picture("field one.png"), shown.Picture("field two.png"), shown.Picture("red.png"));
         await shown.Tag([items[0]], "reaction Scream dog");
-        var noticesBefore = TrayDesktop.Get(() => shown.Notices.Shown.Count);
+        var beforeCommit = TrayDesktop.Get(() => shown.Notices.Shown.ToArray());
         TrayDesktop.Run(() =>
         {
             shown.Grid.Focus();
@@ -85,7 +85,13 @@ public sealed class TagFieldTests
             Assert.IsTrue(shown.Grid.IsFocused, "and gives focus back to the grid, where it was (G19)");
         });
         Assert.AreEqual(0, shown.Uses(), "tagging is not a use (G10)");
-        TrayDesktop.Run(() => Assert.HasCount(noticesBefore, shown.Notices.Shown, "a change that succeeded says nothing more"));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Notices.Shown.Count > beforeCommit.Length));
+        TrayDesktop.Run(() =>
+        {
+            var notice = shown.Notices.Shown.Except(beforeCommit).Single();
+            Assert.AreEqual("Tagged 2 items #dog #cat", notice.Text);
+            Assert.IsTrue(shown.Notices.OffersUndo(notice));
+        });
     }
 
     [TestMethod]
@@ -395,6 +401,8 @@ public sealed class TagFieldTests
         TrayDesktop.Run(() => ShownWindow.RaiseClick(ShownWindow.Entry(shown.TagField.Field.Picker, "joy")));
         await ShownWindow.Eventually(() => shown.TagsOf(b.Id).Contains("joy"));
         await ShownWindow.Eventually(() => Marked().Count == 2);
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Notices.Shown.Any(notice =>
+            notice.Text == "Tagged 1 item #joy" && shown.Notices.OffersUndo(notice))));
         CollectionAssert.AreEquivalent(new[] { "alpha", "joy" }, Marked(), "both now carry joy");
         CollectionAssert.AreEqual(new[] { "alpha", "joy" }, shown.TagsOf(a.Id));
 
@@ -541,6 +549,8 @@ public sealed class TagFieldTests
         TrayDesktop.Run(() => CollectionAssert.AreEqual(new[] { "x", "y" }, shown.TagField.Field.Tags.ToList(), "the selection's tags, each with its ×"));
         TrayDesktop.Run(() => shown.TagField.GetVisualDescendants().OfType<Button>().Single(button => Avalonia.Automation.AutomationProperties.GetName(button) == "Remove tag y").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.TagField.Field.Tags.SequenceEqual(["x"])));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Notices.Shown.Any(notice =>
+            notice.Text == "Removed #y from 2 items" && shown.Notices.OffersUndo(notice))));
 
         Assert.IsEmpty(shown.TagsOf(items[1].Id), "the × took y off every selected item (G17)");
         CollectionAssert.AreEqual(new[] { "x" }, shown.TagsOf(items[0].Id));
@@ -601,7 +611,7 @@ public sealed class TagFieldTests
             shown.Listing.Select(items.Select(item => item.Id), items[0].Id);
         });
         await OpenField(shown, items[0].Id);
-        var noticesBefore = TrayDesktop.Get(() => shown.Notices.Shown.Count);
+        var beforeCommit = TrayDesktop.Get(() => shown.Notices.Shown.ToArray());
 
         var deleted = await shown.Listing.Store!.Delete([items[1].Id]);
         TrayDesktop.Run(() =>
@@ -609,8 +619,14 @@ public sealed class TagFieldTests
             ShownWindow.Type(shown.TagBox, "late");
             ShownWindow.Tap(shown.TagBox, Key.Enter);
         });
-        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Notices.Shown.Count == noticesBefore + 1));
-        var named = TrayDesktop.Get(() => shown.Notices.Shown[^1].Text);
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Notices.Shown.Any(notice =>
+            notice.Text == "Tagged 1 item #late" && shown.Notices.OffersUndo(notice))));
+        var named = TrayDesktop.Get(() =>
+        {
+            var raised = shown.Notices.Shown.Except(beforeCommit).ToArray();
+            Assert.HasCount(2, raised);
+            return raised.Single(notice => notice.NamesAProblem).Text;
+        });
         TrayDesktop.Run(() => Assert.IsTrue(shown.TagField.IsVisible && shown.TagBox.IsFocused, "the refusal named, the field still open for the next"));
         await shown.Listing.Store!.UndoDelete([deleted.Single().Value!]);
 

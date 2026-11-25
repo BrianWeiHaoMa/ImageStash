@@ -15,6 +15,32 @@ namespace ImageStash.Tests.Window;
 public sealed class UndoKeyNoticeTests
 {
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task AnOrganisingNoticeThatExpiredOrWasClosedCannotBeUndone(bool closed)
+    {
+        using var listed = await ListedStash.Open();
+        var cat = await listed.Stash.Import("cat");
+        var dog = await listed.Stash.Import("dog");
+        await listed.Organising.AddTag([cat, dog], "work");
+        var notice = listed.Notices.Shown.Single(listed.Notices.OffersUndo);
+        if (closed)
+        {
+            listed.Notices.Close(notice);
+        }
+        else
+        {
+            listed.Stash.Clock.Now += Notices.LastingFor(notice.Words);
+        }
+
+        await Undo(listed, KeyPlace.Grid);
+        await listed.Notices.Undo(notice);
+
+        Assert.IsFalse(listed.Notices.OffersUndo(notice));
+        Assert.IsTrue((await listed.Stash.All()).All(item => item.Tags.SequenceEqual(["work"])));
+    }
+
+    [TestMethod]
     public async Task AfterAnImportAndADeleteAndAFailureCtrlZUndoesTheDeleteThenTheImportThenNothing()
     {
         using var listed = await ListedStash.Open();
