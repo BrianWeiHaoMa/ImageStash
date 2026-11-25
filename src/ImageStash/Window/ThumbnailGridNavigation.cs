@@ -7,6 +7,23 @@ namespace ImageStash.Window;
 public sealed partial class ThumbnailGrid
 {
     private bool focusRevealPending;
+    private (double Width, double RowHeight)? arrangedGeometry;
+
+    private void RevealRangeAfterReflow()
+    {
+        var geometry = (laidOutWidth, laidOutRowHeight);
+        if (geometry == arrangedGeometry)
+        {
+            return;
+        }
+
+        arrangedGeometry = geometry;
+        if (listing.HasKeyboardRange)
+        {
+            // Measure may have laid out new rows already. Reveal against the new scroll extent after arrange.
+            Dispatcher.UIThread.Post(BringFocusedIntoView, DispatcherPriority.Background);
+        }
+    }
 
     internal (IReadOnlyList<GridRow> Rows, double ViewportHeight) ReadNavigationLayout()
     {

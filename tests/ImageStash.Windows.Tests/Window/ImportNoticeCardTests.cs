@@ -247,6 +247,43 @@ public sealed class ImportNoticeCardTests
         });
     }
 
+    [TestMethod]
+    public async Task AnImportClosingThePreviewCommitsAnotherNameTypedWhileTheFirstRenameIsHeld()
+    {
+        using var shown = ShownWindow.Open();
+        var older = (await shown.OpenStash(shown.Picture("older.png"))).Single();
+        TransferredStash.CloseNotices(shown);
+        await OpenPreview(shown, older);
+        Draft("first draft");
+
+        var picture = shown.Picture("newcomer.png");
+        Task<IReadOnlyList<ImportedFile>> running;
+        using (new FileStream(older.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            running = TrayDesktop.Get(() => shown.Import.Drop(new DropContents(
+                [new DroppedItem("newcomer.png", picture, null, IsFolder: false)], false, false, [])));
+            await Eventually(() => TrayDesktop.Get(() => shown.Preview.ClosingAfterCommit));
+            Draft("second draft");
+        }
+
+        var added = (await running).Single().Item!;
+        var stored = await shown.Listing.Store!.Item(older.Id);
+        Assert.AreEqual("second draft", stored.Value!.Name);
+        TrayDesktop.Run(() =>
+        {
+            Assert.IsFalse(shown.Preview.IsOpen);
+            CollectionAssert.AreEqual(new[] { added.Id }, shown.Listing.Selection.ToArray());
+        });
+
+        void Draft(string text) => TrayDesktop.Run(() =>
+        {
+            Tap(shown.PreviewPicture, Key.F2);
+            shown.Window.UpdateLayout();
+            Assert.IsTrue(shown.NameBox.IsFocused);
+            Type(shown.NameBox, text);
+        });
+    }
+
     private static async Task OpenPreview(ShownWindow shown, StashItem item)
     {
         TrayDesktop.Run(() => shown.OpenPreview(item));

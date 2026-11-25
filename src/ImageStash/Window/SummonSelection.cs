@@ -9,8 +9,8 @@ namespace ImageStash.Window;
 /// selection: over it <c>Ctrl+C</c> copies the selected items, and only text the person selected in the box goes as text
 /// (G7). It becomes the person's once they change it in the box: a click or a drag there, Shift with an arrow,
 /// Home or End, <c>Ctrl+A</c>, which may make the very range the summon made, or a change of the text, as typing over it
-/// makes; and it lapses when the box loses focus, which clears its selection. Up and Down, which move the grid's
-/// selection and leave the box's alone, change nothing here.
+/// makes; and it lapses when the box loses focus, which clears its selection. Up and Down, alone or with Shift,
+/// leave the box selection alone while moving or extending the grid selection.
 /// </summary>
 public sealed class SummonSelection
 {
@@ -69,13 +69,13 @@ public sealed class SummonSelection
 
     /// <summary>
     /// Whether a key pressed in the box sets its selection (G7): <c>Ctrl+A</c>; Left, Right, Home and End, with or without
-    /// Shift or <c>Ctrl</c>; Up and Down only with Shift, since alone they move the grid's selection.
+    /// Shift or <c>Ctrl</c>; Up and Down with <c>Ctrl+Shift</c> stay in the box as well.
     /// </summary>
     public static bool SelectsInBox(Key key, KeyModifiers modifiers) => (key, modifiers & ~KeyModifiers.Control) switch
     {
         (Key.A, KeyModifiers.None) => modifiers == KeyModifiers.Control,
         (Key.Left or Key.Right or Key.Home or Key.End, KeyModifiers.None or KeyModifiers.Shift) => true,
-        (Key.Up or Key.Down, KeyModifiers.Shift) => true,
+        (Key.Up or Key.Down, KeyModifiers.Shift) => modifiers.HasFlag(KeyModifiers.Control),
         _ => false,
     };
 }

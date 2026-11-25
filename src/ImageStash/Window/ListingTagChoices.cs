@@ -11,6 +11,18 @@ public sealed partial class Listing
     internal bool CanFilterTag(string tag, bool searching, bool lit) =>
         order.Tags.FilterAvailability(tag, Query, searching, lit) ?? !Settled;
 
+    private void ApplyListingTags(Outcome<IReadOnlyList<TagCount>> counted, (long Commits, long FileSteps) version,
+        string query, bool searching, bool itemsLoaded)
+    {
+        if (counted.Value is { } currentTags)
+        {
+            tagsVersion = version;
+            order.Tags.Counted(currentTags);
+        }
+
+        Chips = order.Tags.Shown(query, searching, rank: itemsLoaded && counted.Succeeded);
+    }
+
     /// <summary>Chooses a visible chip or a live tag from Every tag. A lit chip can be removed while its read is pending.</summary>
     internal Task ChooseTag(string tag, bool fromPicker = false)
     {

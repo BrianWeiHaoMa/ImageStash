@@ -16,6 +16,10 @@ public enum KeyAction
     MoveLast,
     MovePageUp,
     MovePageDown,
+    ExtendUp,
+    ExtendDown,
+    ExtendLeft,
+    ExtendRight,
     FocusGrid,
     SelectAll,
     Escape,
@@ -99,7 +103,8 @@ public enum KeyPlace
 /// G7's keys, in one place for both states (G2): the search box is an ordinary text box, so Left, Right, Home, End,
 /// Shift with them, <c>Ctrl+A</c>, <c>Ctrl+X</c> and <c>Ctrl+Z</c> are its own; Up and Down move the grid's selection
 /// from the box or the grid without moving focus, and plain Left and Right move it from the grid or the empty box; Tab in the box moves focus
-/// to the grid, where Home and End select the endpoints, Page Up and Page Down move by a viewport, and <c>Ctrl+A</c>
+/// to the grid. Shift extends a range with those same arrows in the grid, and with Up and Down in the box.
+/// In the grid Home and End select the endpoints, Page Up and Page Down move by a viewport, and <c>Ctrl+A</c>
 /// selects every item; Enter, Esc, <c>Ctrl+O</c> and G6's <c>Ctrl</c> with
 /// <c>+</c> or <c>-</c>, on the main keys or the numeric keypad's, work from both; <c>Ctrl+T</c>, from both, opens the
 /// tag field on the selection (<see cref="TagKey"/>); <c>Ctrl+C</c> copies the text the
@@ -215,6 +220,10 @@ public static class StashKeys
         (Key.Down, KeyModifiers.None) => KeyAction.MoveDown,
         (Key.Left, KeyModifiers.None) when !inSearchBox || !boxHasText => KeyAction.MoveLeft,
         (Key.Right, KeyModifiers.None) when !inSearchBox || !boxHasText => KeyAction.MoveRight,
+        (Key.Up, KeyModifiers.Shift) => KeyAction.ExtendUp,
+        (Key.Down, KeyModifiers.Shift) => KeyAction.ExtendDown,
+        (Key.Left, KeyModifiers.Shift) when !inSearchBox => KeyAction.ExtendLeft,
+        (Key.Right, KeyModifiers.Shift) when !inSearchBox => KeyAction.ExtendRight,
         (Key.Home, KeyModifiers.None) when !inSearchBox => KeyAction.MoveFirst,
         (Key.End, KeyModifiers.None) when !inSearchBox => KeyAction.MoveLast,
         (Key.PageUp, KeyModifiers.None) when !inSearchBox => KeyAction.MovePageUp,
@@ -260,16 +269,19 @@ public static class StashKeys
 
     public static Direction? Direction(KeyAction action) => action switch
     {
-        KeyAction.MoveUp => Window.Direction.Up,
-        KeyAction.MoveDown => Window.Direction.Down,
-        KeyAction.MoveLeft => Window.Direction.Left,
-        KeyAction.MoveRight => Window.Direction.Right,
+        KeyAction.MoveUp or KeyAction.ExtendUp => Window.Direction.Up,
+        KeyAction.MoveDown or KeyAction.ExtendDown => Window.Direction.Down,
+        KeyAction.MoveLeft or KeyAction.ExtendLeft => Window.Direction.Left,
+        KeyAction.MoveRight or KeyAction.ExtendRight => Window.Direction.Right,
         KeyAction.MoveFirst => Window.Direction.First,
         KeyAction.MoveLast => Window.Direction.Last,
         KeyAction.MovePageUp => Window.Direction.PageUp,
         KeyAction.MovePageDown => Window.Direction.PageDown,
         _ => null,
     };
+
+    internal static bool ExtendsRange(KeyAction action) =>
+        action is KeyAction.ExtendUp or KeyAction.ExtendDown or KeyAction.ExtendLeft or KeyAction.ExtendRight;
 
     internal static bool RequiresGridFocus(Direction direction) =>
         direction is Window.Direction.First or Window.Direction.Last or Window.Direction.PageUp or Window.Direction.PageDown;

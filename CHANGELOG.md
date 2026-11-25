@@ -6,6 +6,7 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 
 ### Added
 
+- Hold Shift with an arrow to extend a range of pictures in the grid. Reverse direction to shrink the range, or keep going past its starting picture. Shift+Up and Shift+Down also work from the search box, keeping its text selection.
 - Tab to the grid, then use Home or End to select the first or last picture, or Page Up and Page Down to move by one visible page of rows. The picture you reach scrolls into view and is ready to copy, paste or preview.
 - From the search box or grid, `Ctrl+1` opens Recent, `Ctrl+2` opens Favorites and `Ctrl+3` opens All. Each clears the search and selects the first picture in that scope. `Ctrl+,` opens Settings. Hover a scope chip or the gear to see its key.
 - Left and Right move through the pictures while the search box is empty. With the first picture selected, Right, Right, Enter hands over the third without leaving the box. Actions pressed after an arrow use the selection it reaches, even when the list is still loading.
@@ -67,6 +68,7 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 ### Fixed
 
 - Opening the tag field with Ctrl+T during a search keeps a quick Page Down and Delete from deleting a picture beneath it.
+- A picture or range selected while an import is finishing stays selected, with the current search and scope. Use Show on the import notice to select the imported pictures.
 - Holding Enter down no longer pastes the picture twice or reaches the chat as Send: one press hands over once, however long it is held, and the chat is brought forward only once Enter is let go. Still held a second after the picture is ready, nothing is pasted: the picture is on the clipboard and the "Copied · press Ctrl+V" notification says so. An Enter that committed a name or a tag in the preview does not also paste.
 
 ## [0.2.2] - 2026-11-16

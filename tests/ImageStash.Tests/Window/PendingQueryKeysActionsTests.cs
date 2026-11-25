@@ -8,9 +8,10 @@ namespace ImageStash.Tests.Window;
 public sealed partial class PendingQueryKeysTests
 {
     [TestMethod]
-    [DataRow(Key.Down)]
-    [DataRow(Key.PageDown)]
-    public async Task ANewQuerySupersedesPendingMovementAndDelete(Key move)
+    [DataRow(Key.Down, KeyModifiers.None)]
+    [DataRow(Key.PageDown, KeyModifiers.None)]
+    [DataRow(Key.Down, KeyModifiers.Shift)]
+    public async Task ANewQuerySupersedesPendingMovementAndDelete(Key move, KeyModifiers modifiers)
     {
         using var listed = await Listed();
         await DogAndTwoCats(listed);
@@ -23,7 +24,7 @@ public sealed partial class PendingQueryKeysTests
         using (listed.Stash.HoldStore())
         {
             _ = listing.SetQuery("cat");
-            drained = listed.Press(move, KeyModifiers.None, KeyPlace.Grid);
+            drained = listed.Press(move, modifiers, KeyPlace.Grid);
             deleted = listed.DeleteSelection();
             dog = listing.SetQuery("dog");
         }
@@ -122,6 +123,7 @@ public sealed partial class PendingQueryKeysTests
 
     [TestMethod]
     [DataRow(Key.Down, KeyModifiers.None)]
+    [DataRow(Key.Down, KeyModifiers.Shift)]
     [DataRow(Key.D3, KeyModifiers.Control)]
     public async Task ADiscardedTagFieldMoveCannotRetargetTheWaitingDeleteAfterEscape(Key blocked, KeyModifiers modifiers)
     {
@@ -207,9 +209,10 @@ public sealed partial class PendingQueryKeysTests
     }
 
     [TestMethod]
-    [DataRow(Key.Down)]
-    [DataRow(Key.PageDown)]
-    public async Task AStashReopenedWithReusedIdsDoesNotInheritAnUnresolvedDelete(Key move)
+    [DataRow(Key.Down, KeyModifiers.None)]
+    [DataRow(Key.PageDown, KeyModifiers.None)]
+    [DataRow(Key.Down, KeyModifiers.Shift)]
+    public async Task AStashReopenedWithReusedIdsDoesNotInheritAnUnresolvedDelete(Key move, KeyModifiers modifiers)
     {
         using var listed = await Listed();
         var (old, _) = await DogAndTwoCats(listed);
@@ -223,13 +226,20 @@ public sealed partial class PendingQueryKeysTests
 
         Assert.AreEqual(old.Id, newItems[0].Id, "the replacement reused an ID with different content");
         var listing = listed.Listing;
+        if (modifiers == KeyModifiers.Shift)
+        {
+            listing.Focus(listing.Items[1].Id);
+            await listed.Press(Key.Up, KeyModifiers.Shift, KeyPlace.Grid);
+            Assert.HasCount(2, listing.SelectedItems);
+        }
+
         Task<KeyAction> drained;
         Task reading;
         Task<Outcome> deleted;
         using (listed.Stash.HoldStore())
         {
             reading = listing.SetQuery("cat");
-            drained = listed.Press(move, KeyModifiers.None, KeyPlace.Grid);
+            drained = listed.Press(move, modifiers, KeyPlace.Grid);
             deleted = listed.DeleteSelection();
             await listing.Withdraw();
             listing.StashReplaced();
@@ -250,6 +260,12 @@ public sealed partial class PendingQueryKeysTests
 
         Assert.IsEmpty(replacement.RecycleBin.Asked);
         Assert.IsEmpty(listed.Stash.RecycleBin.Asked);
+        if (modifiers == KeyModifiers.Shift)
+        {
+            await listed.Press(Key.Down, KeyModifiers.Shift, KeyPlace.Grid);
+            CollectionAssert.AreEqual(newItems.Take(2).Select(item => item.Id).ToArray(),
+                listing.SelectedItems.Select(item => item.Id).ToArray(), "the fresh key starts at the replacement's first tile");
+        }
     }
 
     [TestMethod]

@@ -129,6 +129,14 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
     /// </summary>
     public event Action? Finishing;
 
+    internal Func<Task>? FinishPreview { get; set; }
+
+    private Task FinishView()
+    {
+        Finishing?.Invoke();
+        return FinishPreview?.Invoke() ?? Task.CompletedTask;
+    }
+
     /// <summary>
     /// A drop onto the window: its files and its folders' own files are imported after any batch already running; a
     /// drop that is only a link, or carries no file, is refused by name and nothing is fetched (N2).
@@ -358,7 +366,7 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
 
     /// <summary>
     /// One batch, after any already running: its busy state while <paramref name="steps"/> run, then its result shown
-    /// (<see cref="ShowResult"/>), or, when the person moved on since <paramref name="began"/>, their search, scope,
+    /// (<see cref="Listing.ShowImportResult"/>), or, when the person moved on since <paramref name="began"/>, their search, scope,
     /// selection and preview kept over what the stash now holds; and the notice for every file, followed by
     /// <paramref name="also"/> when given, with an Undo, offered when the batch put an item in the stash or gave a tag to
     /// one already there, that takes back both, and Show when the window was kept (G12, R9).
@@ -378,18 +386,14 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
             var undoes = batch.Count > 0 || given.Count > 0;
             await SettleScopeAndTagChoices();
 
-            var kept = began.MovedOn(listing);
+            var replacements = listing.Replacements;
+            var kept = !await listing.ShowImportResult(shown, began, replacements, SettleScopeAndTagChoices, FinishView);
             if (kept)
             {
                 // What the person left stays, its list reading what the stash now holds (G5); Show brings the result up.
                 await listing.Refresh();
             }
-            else
-            {
-                kept = !await ShowResult(shown, byPerson: false);
-            }
 
-            var replacements = listing.Replacements;
             var show = kept ? new NoticeButton(ImportEnd.Show, () => ShowAgain(shown, replacements)) : null;
 
             var (heading, details) = NoticeWords(results);
@@ -403,35 +407,6 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
             SetBusy(null);
             oneBatchAtATime.Release();
         }
-    }
-
-    /// <summary>
-    /// A batch's result shown, at its end or by its notice's Show (G12): whatever covers the grid closes, an open edit
-    /// staying (G26), the search is cleared, and All shows <paramref name="items"/> selected, the ones it still lists; an
-    /// end with none to select leaves All as its load leaves it. <paramref name="byPerson"/> says whether the person asked
-    /// for it. False when the person changed the search, the scope or the selection while All loaded: that stays theirs.
-    /// </summary>
-    private async Task<bool> ShowResult(IReadOnlyList<long> items, bool byPerson)
-    {
-        Finishing?.Invoke();
-        var loading = listing.ShowScope(Scope.All, byPerson);
-        var loadAsked = ImportBegan.In(listing);
-        await loading;
-        // A change's refresh asked meanwhile, as a name's commit the preview's close made (G19), replaces All's load
-        // before it applies: the items are selected in the list the latest load applies.
-        await listing.Settle();
-        await SettleScopeAndTagChoices();
-        if (loadAsked.MovedOn(listing))
-        {
-            return false;
-        }
-
-        if (byPerson || items.Count > 0)
-        {
-            listing.SelectAdded(items);
-        }
-
-        return true;
     }
 
     private async Task SettleScopeAndTagChoices()
@@ -464,7 +439,7 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
             return;
         }
 
-        await ShowResult(listing.Replacements == replacements ? items : [], byPerson: true);
+        await listing.ShowImportResult(items, ImportBegan.In(listing), replacements, SettleScopeAndTagChoices, FinishView, byPerson: true);
     }
 
     /// <summary>

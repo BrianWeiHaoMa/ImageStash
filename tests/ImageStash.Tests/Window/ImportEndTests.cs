@@ -343,29 +343,146 @@ public sealed class ImportEndTests
     }
 
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task AClickDuringTheFinalAllReadKeepsTheOlderTileAndItsView(bool search)
+    {
+        using var listed = await ListedStash.Open(storeRetry: TimeSpan.FromSeconds(5));
+        var older = await listed.Stash.ImportFixture("cat older", "still.png");
+        await listed.Stash.ImportFixture("cat newer", "animated.gif");
+        await listed.Listing.ShowScope(Scope.All);
+        if (search)
+        {
+            await listed.Listing.SetQuery("cat");
+        }
+
+        ControlThread.Run(() => ControlThread.FinishOnDispatcher(async () =>
+        {
+            var added = await DuringFinalAllRead(listed, () => listed.Listing.Focus(older.Id));
+            Assert.AreEqual(search ? "cat" : "", listed.Listing.Query);
+            CollectionAssert.AreEqual(new[] { older.Id }, listed.Listing.Selection.ToArray());
+            Assert.AreEqual(older.Id, listed.Listing.Focused);
+            var notice = listed.Notices.Shown.Single();
+            Assert.AreEqual(ImportEnd.Show, notice.Button?.Label);
+            await NoticeButton.Press(listed.Notices, notice);
+            AssertShown(listed, [added.Id], "Show selects the batch");
+        }));
+        Assert.IsEmpty(listed.Failures);
+    }
+
+    [TestMethod]
+    [DataRow(false, false, true)]
+    [DataRow(false, true, true)]
+    [DataRow(false, true, false)]
+    [DataRow(true, false, true)]
+    public async Task AnArrowDuringTheFinalAllReadKeepsAChangedSelectionAndAnEdgeLeavesTheImportFreeToSelect(bool edge, bool summon, bool shift)
+    {
+        using var listed = await ListedStash.Open(storeRetry: TimeSpan.FromSeconds(5));
+        var older = await listed.Stash.ImportFixture("cat older", "still.png");
+        var newer = await listed.Stash.ImportFixture("cat newer", "animated.gif");
+        await listed.Listing.SetQuery("cat");
+
+        ControlThread.Run(() => ControlThread.FinishOnDispatcher(async () =>
+        {
+            Task<KeyAction>? moved = null;
+            var refreshed = Task.CompletedTask;
+            var immediate = false;
+            var added = await DuringFinalAllRead(listed, () =>
+            {
+                if (summon)
+                {
+                    refreshed = listed.Summon(pinned: true);
+                    Assert.IsFalse(refreshed.IsCompleted, "the summon has a same-view read behind the held All read");
+                }
+
+                moved = listed.Press(edge ? Key.Up : Key.Down, shift ? KeyModifiers.Shift : KeyModifiers.None, KeyPlace.SearchBox);
+                immediate = moved.IsCompletedSuccessfully && listed.Listing.Focused == (edge ? newer.Id : older.Id);
+            });
+            await refreshed;
+            await moved!;
+            Assert.IsTrue(immediate, "the key uses the view still on screen while the batch reads All");
+            var notice = listed.Notices.Shown.Single();
+            if (edge)
+            {
+                Assert.IsNull(notice.Button, "a boundary key changed no selection");
+                AssertShown(listed, [added.Id], "the import selects its result");
+            }
+            else
+            {
+                Assert.AreEqual("cat", listed.Listing.Query);
+                CollectionAssert.AreEqual(shift ? new[] { newer.Id, older.Id } : new[] { older.Id },
+                    listed.Listing.SelectedItems.Select(item => item.Id).ToArray());
+                Assert.AreEqual(older.Id, listed.Listing.Focused);
+                Assert.AreEqual(ImportEnd.Show, notice.Button?.Label);
+                await NoticeButton.Press(listed.Notices, notice);
+                AssertShown(listed, [added.Id], "Show selects the batch");
+            }
+        }));
+        Assert.IsEmpty(listed.Failures);
+    }
+
+    private static async Task<StashItem> DuringFinalAllRead(ListedStash listed, Action choose)
+    {
+        var held = new TaskCompletionSource<IDisposable>(TaskCreationOptions.RunContinuationsAsynchronously);
+        // The first file has committed. The skipped second file needs no store operation before the final All read.
+        listed.Import.Changed += HoldAfterTheAddition;
+        var clip = listed.Stash.Source("clip.mp4", TestStash.Bytes(1));
+        var importing = listed.Import.Drop(ListedStash.Contents([MediaFixtures.Path("transparent.png"), clip]));
+        using (await held.Task.WaitAsync(TimeSpan.FromSeconds(3)))
+        {
+            Assert.IsFalse(importing.IsCompleted);
+            choose();
+        }
+
+        return (await importing).Single(file => file.PutInStash).Item!;
+
+        void HoldAfterTheAddition()
+        {
+            if (listed.Import.Busy == "Adding 2 of 2 to your stash…")
+            {
+                listed.Import.Changed -= HoldAfterTheAddition;
+                held.SetResult(listed.Stash.HoldStore());
+            }
+        }
+    }
+
+    [TestMethod]
     public async Task ANameCommittedAsTheEndClosesThePreviewIsKeptAndTheEndStillSelectsTheNewItems()
     {
-        using var listed = await ListedStash.Open();
+        using var listed = await ListedStash.Open(storeRetry: TimeSpan.FromSeconds(5));
         var older = await listed.Stash.ImportFixture("older", "still.png");
         await listed.Listing.SetQuery("older");
         await listed.Press(Key.Space, KeyModifiers.None, KeyPlace.Grid);
         Assert.IsTrue(listed.PreviewOpen, "opened before the drop: no change since the import began");
-        // The preview's close commits the name typed in it while the import ran, as focus leaving for the grid commits
-        // it (G19): the rename and its refresh run while the end's All loads.
-        Task<Outcome>? commit = null;
-        listed.Import.Finishing += () => commit ??= listed.Renaming.Rename(older, "typed name");
-        var (one, two) = (new HeldBackFile(MediaFixtures.Path("transparent.png")), new HeldBackFile(MediaFixtures.Path("photo.jpg")));
-        var running = listed.Import.Drop(new([one.Item, two.Item], false, false, []));
-        one.Release();
-        two.Release();
-        var added = (await running).Select(file => file.Item!.Id).ToList();
+        ControlThread.Run(() => ControlThread.FinishOnDispatcher(async () =>
+        {
+            // The draft's rename and its listing refresh must both finish before the import shows its result.
+            var closing = new TaskCompletionSource<Task<Outcome>>(TaskCreationOptions.RunContinuationsAsynchronously);
+            listed.Import.FinishPreview = () =>
+            {
+                var renamed = listed.Renaming.Rename(older, "typed name");
+                closing.SetResult(renamed);
+                return renamed;
+            };
+            Task<IReadOnlyList<ImportedFile>> running;
+            Task<Outcome> commit;
+            using (new FileStream(older.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                running = listed.Import.Drop(ListedStash.Contents([MediaFixtures.Path("transparent.png"), MediaFixtures.Path("photo.jpg")]));
+                commit = await closing.Task.WaitAsync(TimeSpan.FromSeconds(3));
+                Assert.IsFalse(running.IsCompleted, "the held draft keeps the import from taking over the view");
+                Assert.AreEqual("older", listed.Listing.Query);
+            }
 
-        Assert.IsTrue((await commit!).Succeeded);
-        Assert.AreEqual("typed name", (await listed.Stash.Store!.Item(older.Id)).Value!.Name, "the name typed is kept (G19)");
-        Assert.IsFalse(listed.PreviewOpen);
-        AssertShown(listed, added, "the commit's refresh leaves the end's result as the end shows it (G12)");
-        Assert.IsNull(listed.Notices.Shown.Single().Button);
-        Assert.IsEmpty(listed.Failures);
+            var added = (await running).Select(file => file.Item!.Id).ToList();
+            Assert.IsTrue(commit.IsCompletedSuccessfully);
+            Assert.IsTrue((await commit).Succeeded);
+            Assert.AreEqual("typed name", (await listed.Stash.Store!.Item(older.Id)).Value!.Name, "the name typed is kept (G19)");
+            Assert.IsFalse(listed.PreviewOpen);
+            AssertShown(listed, added, "the refreshed result follows the draft's commit (G12)");
+            Assert.IsNull(listed.Notices.Shown.Single().Button);
+            Assert.IsEmpty(listed.Failures);
+        }));
     }
 
     /// <summary>The import's result as shown: no search, All lit, exactly <paramref name="items"/> selected, the first of them in order focused.</summary>

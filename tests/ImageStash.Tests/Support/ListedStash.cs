@@ -41,10 +41,10 @@ public sealed class ListedStash : IDisposable
         WindowShowing = new WindowShowing(Notices);
         WindowShowing.Seen(visible: true, minimised: false);
         Listing = new Listing(Failures.Add);
+        Import = new Import(Listing, Notices, TestStash.ShortRetry);
         SelectionKeys = new PendingQueryKeys(Listing,
             () => (JustifiedRows.Layout(Listing.Items, GridViewport.Width, 96), GridViewport.Height),
-            tagFieldOwnsKeys: () => TagFieldItems.Count > 0);
-        Import = new Import(Listing, Notices, TestStash.ShortRetry);
+            fieldOwnsSelection: () => TagFieldItems.Count > 0, importRunning: () => Import.Busy is not null);
         Import.FollowScopeChoices(SelectionKeys);
         Clipboard = new RecordingClipboard(stash.Clock);
         Paste = new ClipboardPaste(Listing, Notices, Import, Clipboard, stash.Clock, TestStash.ShortRetry);
@@ -336,7 +336,7 @@ public sealed class ListedStash : IDisposable
 
         if (StashKeys.Direction(action) is { } direction)
         {
-            await SelectionKeys.Move(direction);
+            await SelectionKeys.Move(direction, extendSelection: StashKeys.ExtendsRange(action));
             return action;
         }
 

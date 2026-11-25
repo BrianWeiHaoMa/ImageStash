@@ -58,17 +58,63 @@ public sealed class ImportShowTests
         two.Release();
         var added = (await running).Select(file => file.Item!.Id).ToList();
         Assert.IsTrue(listed.PreviewOpen, "kept at the end");
-        // The preview's close commits the name typed in it, as focus leaving for the grid commits it (G19): the rename
-        // and its refresh run while Show's All loads.
+        // The preview commits the name as it closes (G19), including the refresh after the rename.
         Task<Outcome>? commit = null;
-        listed.Import.Finishing += () => commit ??= listed.Renaming.Rename(older, "typed name");
+        listed.Import.FinishPreview = () => commit = listed.Renaming.Rename(older, "typed name");
 
         await Show(listed);
 
-        Assert.IsTrue((await commit!).Succeeded);
+        Assert.IsTrue(commit!.IsCompletedSuccessfully, "Show waited for the preview's close");
+        Assert.IsTrue((await commit).Succeeded);
         Assert.AreEqual("typed name", (await listed.Stash.Store!.Item(older.Id)).Value!.Name, "the name typed is kept (G19)");
         ImportEndTests.AssertShown(listed, added, "the commit's refresh leaves Show's result as Show shows it (G12)");
         Assert.IsEmpty(listed.Failures);
+    }
+
+    [TestMethod]
+    public async Task AFailedShowReadKeepsTheUsableSearchAndCanBeRetried()
+    {
+        using var listed = await ListedStash.Open(storeRetry: TimeSpan.Zero);
+        var older = await listed.Stash.ImportFixture("older", "still.png");
+        var arrival = new HeldBackFile(MediaFixtures.Path("transparent.png"));
+        var running = listed.Import.Drop(arrival.Drop);
+        await listed.Listing.SetQuery("older");
+        arrival.Release();
+        var added = (await running).Single().Item!;
+
+        using (listed.Stash.HoldStore())
+        {
+            await Show(listed);
+        }
+
+        Assert.AreEqual("older", listed.Listing.Query);
+        Assert.AreEqual(older.Id, listed.Listing.SelectedItems.Single().Id);
+        Assert.IsNotEmpty(listed.Failures, "the failed read is named");
+        await Show(listed);
+        ImportEndTests.AssertShown(listed, [added.Id], "a later Show uses the released store");
+    }
+
+    [TestMethod]
+    public async Task AFailedShowDoesNotCountAsMovingOnDuringALaterBatch()
+    {
+        using var listed = await ListedStash.Open(storeRetry: TimeSpan.Zero);
+        await listed.Stash.ImportFixture("older", "still.png");
+        var first = new HeldBackFile(MediaFixtures.Path("transparent.png"));
+        var firstRunning = listed.Import.Drop(first.Drop);
+        await listed.Listing.SetQuery("older");
+        first.Release();
+        await firstRunning;
+
+        var later = new HeldBackFile(MediaFixtures.Path("photo.jpg"));
+        var laterRunning = listed.Import.Drop(later.Drop);
+        using (listed.Stash.HoldStore())
+        {
+            await Show(listed);
+        }
+
+        later.Release();
+        var added = (await laterRunning).Single().Item!;
+        ImportEndTests.AssertShown(listed, [added.Id], "the failed Show left the view alone, so the later batch shows its result");
     }
 
     [TestMethod]

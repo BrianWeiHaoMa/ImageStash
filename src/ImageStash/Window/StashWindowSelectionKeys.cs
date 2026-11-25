@@ -16,9 +16,11 @@ public sealed partial class StashWindow
         ? tagField.Field
         : (FocusManager?.GetFocusedElement() as Visual)?.FindAncestorOfType<TagField>();
 
-    // A scope hint is a popup too. The shortcut is available while the hint is visible.
-    private bool CanUseBrowsingKeys() => !BrowsingOverlayOpen &&
-        !OpenedPopups.Any(popup => popup.Child is not ToolTip);
+    private bool CanUseBrowsingKeys() => CanUseBrowsingKeys(allowChipPicker: false);
+
+    // A scope hint never owns keys. The Every tag picker leaves the search box focused for range selection.
+    private bool CanUseBrowsingKeys(bool allowChipPicker) => !BrowsingOverlayOpen &&
+        !OpenedPopups.Any(popup => popup.Child is not ToolTip && !(allowChipPicker && popup == scopes.Picker));
 
     private bool RunBrowsingKey(KeyAction action)
     {
@@ -170,21 +172,23 @@ public sealed partial class StashWindow
         }
     }
 
-    private bool RunMovementKey(Direction direction)
+    private bool RunMovementKey(Direction direction, bool extendSelection)
     {
         var gridOnly = StashKeys.RequiresGridFocus(direction);
-        if (gridOnly && (!grid.IsFocused || !CanUseBrowsingKeys()))
+        if ((gridOnly || extendSelection) &&
+            (!(grid.IsFocused || (extendSelection && search.IsFocused)) ||
+                !CanUseBrowsingKeys(allowChipPicker: extendSelection && search.IsFocused)))
         {
             return false;
         }
 
-        _ = keys.Move(direction, gridOnly ? grid.BringFocusedIntoView : null);
+        _ = keys.Move(direction, gridOnly || extendSelection ? grid.BringFocusedIntoView : null, extendSelection);
         return true;
     }
 
-    private bool HandleMovementOutsideGrid(Direction direction, long input)
+    private bool HandleMovementOutsideGrid(Direction direction, long input, bool extendSelection)
     {
-        if (StashKeys.RequiresGridFocus(direction))
+        if (extendSelection || StashKeys.RequiresGridFocus(direction))
         {
             // A popup opened after the press leaves the accepted move in order with its following action.
             return BrowsingOverlayOpen;

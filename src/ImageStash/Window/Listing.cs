@@ -152,6 +152,7 @@ public sealed partial class Listing
             Replacements++;
             withdrawnStore = null;
             order = new ListingOrder();
+            keyboardRangeAnchor = null;
         }
     }
 
@@ -198,7 +199,7 @@ public sealed partial class Listing
     /// <summary>The selected items in the order the grid shows them, as the handoff takes them (G8).</summary>
     public IReadOnlyList<StashItem> SelectedItems => Items.Where(item => selection.Contains(item.Id)).ToList();
 
-    /// <summary>The item the keys and <c>Shift</c>-click act from: one of the selection, or none.</summary>
+    /// <summary>The item the keys move from, also the moving end of a keyboard range: one of the selection, or none.</summary>
     public long? Focused { get; private set; }
 
     public bool IsSearch => ItemSearch.IsSearch(Query);
@@ -252,6 +253,7 @@ public sealed partial class Listing
                 indexOf = [];
                 selection = [];
                 selectionByImport = false;
+                keyboardRangeAnchor = null;
                 Focused = null;
                 ClearTagCounts();
                 if (!keepOrder)
@@ -323,6 +325,7 @@ public sealed partial class Listing
             indexOf = [];
             selection = [];
             selectionByImport = false;
+            keyboardRangeAnchor = null;
             Focused = null;
             ClearTagCounts();
             applied = ++started;
@@ -349,28 +352,33 @@ public sealed partial class Listing
         CountChange(byPerson, input);
         lock (gate)
         {
-            var changesView = Query.Length > 0 || Scope != scope;
-            Query = "";
-            Scope = scope;
-            resetPending = false;
-            if (scope == Scope.Recent)
-            {
-                // A paste that hid the flyout chooses Recent with its first item selected.
-                order.RequestRecentOrder();
-            }
-
-            if (byPerson)
-            {
-                order.Tags.RequestOrder();
-            }
-            else if (changesView)
-            {
-                order.Tags.Edited();
-            }
+            SetScope(scope, byPerson);
         }
 
         QueryChangedByWindow?.Invoke();
         return Load(keepSelection: false, selectionAt: input);
+    }
+
+    private void SetScope(Scope scope, bool byPerson)
+    {
+        var changesView = Query.Length > 0 || Scope != scope;
+        Query = "";
+        Scope = scope;
+        resetPending = false;
+        if (scope == Scope.Recent)
+        {
+            // A paste that hid the flyout chooses Recent with its first item selected.
+            order.RequestRecentOrder();
+        }
+
+        if (byPerson)
+        {
+            order.Tags.RequestOrder();
+        }
+        else if (changesView)
+        {
+            order.Tags.Edited();
+        }
     }
 
     /// <summary>The search box changed: its matches, or once it has no words, the scope the user was in (G5).</summary>
@@ -452,6 +460,7 @@ public sealed partial class Listing
                 Focused = FirstSelected();
                 selection = [Focused!.Value];
                 selectionByImport = false;
+                keyboardRangeAnchor = null;
             }
         }
 
@@ -513,7 +522,7 @@ public sealed partial class Listing
             SupersedeSelectionKeys();
         }
 
-        Select([id], id, byImport: false, byPerson);
+        Select([id], id, byPerson);
     }
 
     /// <summary>
@@ -523,31 +532,36 @@ public sealed partial class Listing
     public void FocusForPreview(long id, bool byPerson = true, long? input = null)
     {
         CountChange(byPerson, input);
-        Select([id], id, byImport: false, byPerson: false);
+        Select([id], id, byPerson: false);
     }
 
     /// <summary>Replaces the selection; the focus goes to <paramref name="focus"/>, or to the first selected item in order.</summary>
-    public void Select(IEnumerable<long> ids, long? focus) => Select(ids, focus, byImport: false, byPerson: true);
+    public void Select(IEnumerable<long> ids, long? focus) => Select(ids, focus, byPerson: true);
 
-    /// <summary>
-    /// An import's end, or its notice's Show: the items it shows selected (G12), the first of them focused, as an
-    /// import's selection (<see cref="Summoned"/>), never counted as the person's change.
-    /// </summary>
-    public void SelectAdded(IEnumerable<long> ids) => Select(ids, null, byImport: true, byPerson: false);
-
-    private void Select(IEnumerable<long> ids, long? focus, bool byImport, bool byPerson, long? input = null)
+    private void Select(IEnumerable<long> ids, long? focus, bool byPerson)
     {
         lock (gate)
         {
-            var chosen = ids.Where(indexOf.ContainsKey).ToHashSet();
-            var focused = focus is { } f && chosen.Contains(f) ? f : Items.FirstOrDefault(item => chosen.Contains(item.Id))?.Id;
-            CountChange(byPerson && (!chosen.SetEquals(selection) || focused != Focused), input);
-            selection = chosen;
-            selectionByImport = byImport;
-            Focused = focused;
+            ReplaceSelection(ids, focus, byImport: false, byPerson);
         }
 
         Raise();
+    }
+
+    private void ReplaceSelection(IEnumerable<long> ids, long? focus, bool byImport, bool byPerson)
+    {
+        var chosen = ids.Where(indexOf.ContainsKey).ToHashSet();
+        var focused = focus is { } f && chosen.Contains(f) ? f : Items.FirstOrDefault(item => chosen.Contains(item.Id))?.Id;
+        ApplySelection(chosen, focused, byImport, byPerson, input: null);
+        keyboardRangeAnchor = null;
+    }
+
+    private void ApplySelection(HashSet<long> chosen, long? focused, bool byImport, bool byPerson, long? input)
+    {
+        CountChange(byPerson && (!chosen.SetEquals(selection) || focused != Focused), input);
+        selection = chosen;
+        selectionByImport = byImport;
+        Focused = focused;
     }
 
     /// <summary><c>Ctrl</c>-click (G17): adds or removes one item and leaves the rest of the selection as it was.</summary>
@@ -563,6 +577,7 @@ public sealed partial class Listing
             CountChange(true);
             SupersedeSelectionKeys();
             selectionByImport = false;
+            keyboardRangeAnchor = null;
             if (selection.Add(id))
             {
                 Focused = id;
@@ -585,21 +600,16 @@ public sealed partial class Listing
     {
         lock (gate)
         {
-            if (!indexOf.TryGetValue(id, out var to))
+            if (!indexOf.ContainsKey(id))
             {
                 return;
             }
 
-            if (Focused is not { } focused || !indexOf.TryGetValue(focused, out var from))
-            {
-                (from, Focused) = (to, id);
-            }
-
-            var run = Items.Skip(Math.Min(from, to)).Take(Math.Abs(to - from) + 1).Select(item => item.Id).ToHashSet();
-            CountChange(!run.SetEquals(selection));
+            // Pointer range selection keeps the start focused, including when it follows a keyboard range.
+            var anchor = RangeAnchorOr(id);
+            ApplyRange(anchor, id, focus: anchor);
             SupersedeSelectionKeys();
-            selection = run;
-            selectionByImport = false;
+            keyboardRangeAnchor = null;
         }
 
         Raise();
@@ -616,6 +626,7 @@ public sealed partial class Listing
             CountChange(!all.SetEquals(selection), input);
             selection = all;
             selectionByImport = false;
+            keyboardRangeAnchor = null;
             Focused = Focused is { } f && selection.Contains(f) ? f : FirstSelected();
         }
 
@@ -680,6 +691,7 @@ public sealed partial class Listing
             if (!keepSelection)
             {
                 LastSelectionReset = Math.Max(LastSelectionReset, selectionAt ?? NextInput());
+                keyboardRangeAnchor = null;
             }
             (query, scope, reset) = (Query, Scope, resetPending);
             searching = ItemSearch.IsSearch(query);
@@ -757,13 +769,7 @@ public sealed partial class Listing
                     order.Recent(recent);
                 }
 
-                if (counted.Value is { } currentTags)
-                {
-                    tagsVersion = version;
-                    order.Tags.Counted(currentTags);
-                }
-
-                Chips = order.Tags.Shown(query, searching, rank: loaded.Items.Succeeded && counted.Succeeded);
+                ApplyListingTags(counted, version, query, searching, loaded.Items.Succeeded);
             }
         }
 
@@ -846,6 +852,7 @@ public sealed partial class Listing
 
     private void Apply(IReadOnlyList<StashItem> items, bool keepSelection)
     {
+        var previousFocus = Focused;
         var choseNothing = keepSelection && Items.Count > 0 && selection.Count == 0;
         Items = items;
         indexOf = new Dictionary<long, int>(items.Count);
@@ -866,6 +873,8 @@ public sealed partial class Listing
             selectionByImport = false;
             Focused = items.Count > 0 ? items[0].Id : null;
         }
+
+        KeepRangeAfterRefresh(keepSelection, previousFocus);
     }
 
     /// <summary>The items a load shows, the scope it resolved, and whether it learned that the stash holds nothing.</summary>

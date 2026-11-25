@@ -14,19 +14,32 @@ public enum Direction
 
 public sealed partial class Listing
 {
-    /// <summary>The item reached by grid navigation becomes the whole selection (G7).</summary>
-    public void MoveFocus(Direction direction, IReadOnlyList<GridRow> rows, long? input = null, double viewportHeight = 0)
+    /// <summary>Selects the destination, or extends to it while holding the range start (G7, G17).</summary>
+    public void MoveFocus(Direction direction, IReadOnlyList<GridRow> rows, long? input = null, double viewportHeight = 0,
+        bool extendSelection = false)
     {
-        long? destination;
         lock (gate)
         {
-            destination = MovementDestination(direction, rows, viewportHeight);
+            if (MovementDestination(direction, rows, viewportHeight) is not { } target ||
+                (extendSelection && target == Focused))
+            {
+                return;
+            }
+
+            if (extendSelection)
+            {
+                var anchor = RangeAnchorOr(target);
+                ApplyRange(anchor, target, focus: target, input);
+                keyboardRangeAnchor = anchor;
+            }
+            else
+            {
+                ApplySelection([target], target, byImport: false, byPerson: true, input);
+                keyboardRangeAnchor = null;
+            }
         }
 
-        if (destination is { } target)
-        {
-            Select([target], target, byImport: false, byPerson: true, input);
-        }
+        Raise();
     }
 
     private long? MovementDestination(Direction direction, IReadOnlyList<GridRow> rows, double viewportHeight)

@@ -8,31 +8,37 @@ namespace ImageStash.Window;
 /// while the person moves on. Listing remains the owner of the displayed selection.
 /// </summary>
 public sealed class PendingQueryKeys(Listing listing, Func<(IReadOnlyList<GridRow> Rows, double ViewportHeight)> gridLayout,
-    Func<Direction, long, bool>? handleOutsideGrid = null, Func<bool>? tagFieldOwnsKeys = null)
+    Func<Direction, long, bool, bool>? handleOutsideGrid = null, Func<bool>? fieldOwnsSelection = null,
+    Func<bool>? importRunning = null)
 {
     private readonly Queue<Pressed> pressed = new();
     private bool draining;
     private Task drained = Task.CompletedTask;
     private long lastSelectionKey;
-    private (long Key, long BeforeInput) discardedTagSelection;
+    private (long Key, long BeforeInput) discardedSelection;
 
     internal Task PendingScopeChoice { get; private set; } = Task.CompletedTask;
 
-    public Task Move(Direction direction, Action? revealUnmovedFocus = null) => Dispatch(input =>
+    public Task Move(Direction direction, Action? revealUnmovedFocus = null, bool extendSelection = false) => Dispatch(input =>
     {
-        if (handleOutsideGrid?.Invoke(direction, input) == true)
+        if (handleOutsideGrid?.Invoke(direction, input, extendSelection) == true)
         {
+            if (extendSelection)
+            {
+                DiscardDependents(input);
+            }
+
             return;
         }
 
         var (rows, height) = gridLayout();
         var previous = listing.Focused;
-        listing.MoveFocus(direction, rows, input, height);
+        listing.MoveFocus(direction, rows, input, height, extendSelection);
         if (previous is not null && previous == listing.Focused)
         {
             revealUnmovedFocus?.Invoke();
         }
-    }, WaitFor.Layout);
+    }, direction is Direction.Up or Direction.Down or Direction.Left or Direction.Right ? WaitFor.ArrowLayout : WaitFor.Layout);
 
     internal async Task ChooseScope(Scope scope, Func<bool> browsing)
     {
@@ -93,7 +99,7 @@ public sealed class PendingQueryKeys(Listing listing, Func<(IReadOnlyList<GridRo
     private Task Dispatch(Action<long> act, WaitFor waitFor, TaskCompletionSource? decided = null, Action? viewUnavailable = null)
     {
         var input = listing.NextInput();
-        if (waitFor is WaitFor.Layout or WaitFor.CurrentView or WaitFor.ScopeChoice)
+        if (waitFor is WaitFor.Layout or WaitFor.ArrowLayout or WaitFor.CurrentView or WaitFor.ScopeChoice)
         {
             lastSelectionKey = input;
         }
@@ -140,6 +146,9 @@ public sealed class PendingQueryKeys(Listing listing, Func<(IReadOnlyList<GridRo
     private bool Ready(Pressed next) => next.WaitFor == WaitFor.ScopeChoice || !listing.TagChoicePending && (next.WaitFor switch
     {
         WaitFor.Layout => listing.Settled,
+        // Use the displayed view during an import so the person can choose before the batch takes over.
+        WaitFor.ArrowLayout => listing.Settled ||
+            (importRunning?.Invoke() == true && listing.ShowsRequestedView && !listing.SelectionReadPending),
         // During a selection-preserving refresh, an act takes the selection the person can still see.
         WaitFor.CurrentView or WaitFor.Selection or WaitFor.ExplicitTileOrSelection => !listing.SelectionReadPending,
         _ => true,
@@ -154,7 +163,7 @@ public sealed class PendingQueryKeys(Listing listing, Func<(IReadOnlyList<GridRo
     {
         try
         {
-            if (!Current(next) || TagFieldBlocksSelection(next))
+            if (!Current(next) || SelectionBlocked(next))
             {
                 return;
             }
@@ -174,31 +183,33 @@ public sealed class PendingQueryKeys(Listing listing, Func<(IReadOnlyList<GridRo
         }
     }
 
-    private bool TagFieldBlocksSelection(Pressed next)
+    private bool SelectionBlocked(Pressed next)
     {
         if (next.WaitFor is WaitFor.EarlierKeys or WaitFor.AfterScopeChoice)
         {
             return false;
         }
 
-        if (next.SelectionKey == discardedTagSelection.Key && next.Input < discardedTagSelection.BeforeInput)
+        if (next.SelectionKey == discardedSelection.Key && next.Input < discardedSelection.BeforeInput)
         {
             return true;
         }
 
-        if (tagFieldOwnsKeys?.Invoke() != true)
+        if (fieldOwnsSelection?.Invoke() != true)
         {
             return false;
         }
 
         if (next.Input == next.SelectionKey)
         {
-            // Keys already waiting for this selection change cannot use a different item if Escape closes the field.
-            discardedTagSelection = (next.Input, listing.NextInput());
+            DiscardDependents(next.Input);
         }
 
         return true;
     }
+
+    // Keys already waiting for a blocked selection change cannot use another item if Escape closes its overlay.
+    private void DiscardDependents(long input) => discardedSelection = (input, listing.NextInput());
 
     private bool HasSelectionFor(Pressed next) =>
         next.WaitFor is WaitFor.EarlierKeys or WaitFor.ShownSelection or WaitFor.ScopeChoice or WaitFor.AfterScopeChoice || listing.ShowsRequestedView ||
@@ -207,7 +218,7 @@ public sealed class PendingQueryKeys(Listing listing, Func<(IReadOnlyList<GridRo
     private sealed record Pressed(Action<long> Act, WaitFor WaitFor, long Input, long SelectionKey, StashStore? Store, int Replacements,
         TaskCompletionSource? Decided, Action? ViewUnavailable);
 
-    private enum WaitFor { EarlierKeys, ShownSelection, Selection, ExplicitTileOrSelection, CurrentView, Layout, ScopeChoice, AfterScopeChoice }
+    private enum WaitFor { EarlierKeys, ShownSelection, Selection, ExplicitTileOrSelection, CurrentView, Layout, ArrowLayout, ScopeChoice, AfterScopeChoice }
 }
 
 internal sealed record KeySelection(IReadOnlyList<StashItem> Items, StashItem? Focused, long Input);

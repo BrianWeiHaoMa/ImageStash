@@ -216,6 +216,7 @@ public sealed partial class ThumbnailGrid : Control
     protected override Size ArrangeOverride(Size finalSize)
     {
         LayOut(finalSize.Width);
+        RevealRangeAfterReflow();
         Dispatcher.UIThread.Post(AskForThumbnails, DispatcherPriority.Background);
         QueuePlay();
         return finalSize;
@@ -453,10 +454,11 @@ public sealed partial class ThumbnailGrid : Control
         // A fresh Recent order can move the selected item to the top. Bring it into view even when its identity is unchanged (G1, G7).
         var place = listing.Focused is { } focused ? listing.PlaceOf(focused) : null;
         var movedToTheTop = place == 0 && shownFocusPlace is > 0;
+        var rangeEndMoved = listing.HasKeyboardRange && place != shownFocusPlace;
         var reordered = shownRecentReorders != listing.RecentReorders;
         shownFocusPlace = place;
         shownRecentReorders = listing.RecentReorders;
-        if (listing.Focused != shownFocus || movedToTheTop || reordered)
+        if (listing.Focused != shownFocus || movedToTheTop || rangeEndMoved || reordered)
         {
             shownFocus = listing.Focused;
             Dispatcher.UIThread.Post(BringFocusedIntoView, DispatcherPriority.Background);

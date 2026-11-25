@@ -122,13 +122,13 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
             grid.InvalidateMeasure();
             grid.InvalidateVisual();
         };
-        keys = new PendingQueryKeys(listing, grid.ReadNavigationLayout, HandleMovementOutsideGrid,
-            () => TagFieldTakingKeys is not null);
-        import.FollowScopeChoices(keys);
         scroller = WindowLayout.GridScroller(grid);
         var dropTarget = new DropTarget(this, drops, import, () => DragInProgress, () => listing.LitTags);
         tagField = new TagFieldOverlay(listing, organising, notices);
         preview = new Preview(listing, handoff, organising, deletion, renaming, itemMenu, notices, notices.Clock, pasteTarget, DialogShown, grid);
+        keys = new PendingQueryKeys(listing, grid.ReadNavigationLayout, HandleMovementOutsideGrid,
+            () => TagFieldTakingKeys is not null || preview.EditingName, () => import.Busy is not null);
+        import.FollowScopeChoices(keys);
         // Esc in the field gives focus back to where Ctrl+T was pressed, the box or the grid (G7).
         tagKey = new TagKey(listing, () => preview.IsOpen, preview.FocusTags, () => tagField.IsVisible, items => tagField.Open(items, FocusManager?.GetFocusedElement() ?? grid));
         previewSteps = new PreviewStepping(listing, () => preview.Item, item => preview.Open(item));
@@ -376,14 +376,7 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
         // in it committed first, as focus leaving for the grid commits them (G19), and the preview closed once that commit
         // has been answered, as Esc closes it, so nothing on the grid acts before it (G20, G8); one an edit covers stays,
         // for the edit to return to (G26).
-        import.Finishing += () =>
-        {
-            if (!editing.IsOpen)
-            {
-                _ = preview.CommitDraft();
-                preview.Dismiss();
-            }
-        };
+        import.FinishPreview = () => editing.IsOpen ? Task.CompletedTask : preview.DismissWhenCommitted(commitDraft: true);
         // The preview's buttons are Enter's and Ctrl+C's own path on its item (G19, G8, G9).
         preview.HandOverRequested += () => _ = preview.HandOver(this, activation.TargetNow(), activation.ForPaste);
         preview.CopyRequested += () => _ = preview.Copy(this);
@@ -501,7 +494,8 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
         var routed = heldKeys.Acting(e.Key, StashKeys.Route(e.Key, e.KeyModifiers, place,
             summonSelection.PersonSelected(search.SelectedText), boxHasText: !string.IsNullOrEmpty(search.Text)));
         var action = OpenTagLists().Count > 0 ? StashKeys.WithTagListOpen(e.Key, e.KeyModifiers, routed) : routed;
-        var handled = StashKeys.Direction(action) is { } direction ? RunMovementKey(direction) : RunKeyAction(action, place);
+        var handled = StashKeys.Direction(action) is { } direction
+            ? RunMovementKey(direction, StashKeys.ExtendsRange(action)) : RunKeyAction(action, place);
         if (handled)
         {
             e.Handled = true;

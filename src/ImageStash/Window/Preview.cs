@@ -381,16 +381,23 @@ public sealed class Preview : Border
     /// answered and read, so the grid it uncovers lists the item where the store put its file, and a handoff from there
     /// hands that file over (G8, P1).
     /// </summary>
-    public void Dismiss()
+    public void Dismiss() => _ = DismissWhenCommitted();
+
+    internal Task DismissWhenCommitted(bool commitDraft = false)
     {
+        if (commitDraft)
+        {
+            _ = CommitDraft();
+        }
+
         if (committing.IsCompleted)
         {
             Close();
-            return;
+            return Task.CompletedTask;
         }
 
         closingIn = openings;
-        _ = CloseAfterCommit(openings);
+        return CloseAfterCommit(openings, commitDraft);
     }
 
     /// <summary>Closes it, its play stopped and every read in flight dropped, and gives focus back to the grid (G6).</summary>
@@ -542,9 +549,18 @@ public sealed class Preview : Border
         return Task.FromResult(Outcome.Done);
     }
 
-    private async Task CloseAfterCommit(int opening)
+    private async Task CloseAfterCommit(int opening, bool commitDraft)
     {
-        await committing;
+        var pending = committing;
+        await pending;
+        // An import closing the preview commits any draft typed while an earlier write was held.
+        while (commitDraft && IsOpen && opening == openings &&
+            (pending != committing || CommitDraft() is not null))
+        {
+            pending = committing;
+            await pending;
+        }
+
         if (opening == openings)
         {
             Close();

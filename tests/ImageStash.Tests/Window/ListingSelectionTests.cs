@@ -60,6 +60,89 @@ public sealed class ListingSelectionTests
     }
 
     [TestMethod]
+    public async Task ShiftArrowsGrowThenShrinkPastAStationaryAnchor()
+    {
+        using var stash = new TestStash();
+        var (listing, rows, ids) = await Twelve(stash);
+        listing.Focus(ids[1]);
+
+        Extend(Direction.Right, end: 2, first: 1, last: 2);
+        Extend(Direction.Right, end: 3, first: 1, last: 3);
+        Extend(Direction.Left, end: 2, first: 1, last: 2);
+        Extend(Direction.Left, end: 1, first: 1, last: 1);
+        Extend(Direction.Left, end: 0, first: 0, last: 1);
+        var changes = listing.PersonsChanges;
+        Extend(Direction.Left, end: 0, first: 0, last: 1);
+        Assert.AreEqual(changes, listing.PersonsChanges);
+
+        listing.MoveFocus(Direction.Right, rows);
+        CollectionAssert.AreEqual(new[] { ids[1] }, listing.SelectedItems.Select(item => item.Id).ToArray());
+        Extend(Direction.Right, end: 2, first: 1, last: 2);
+
+        void Extend(Direction direction, int end, int first, int last)
+        {
+            listing.MoveFocus(direction, rows, extendSelection: true);
+            Assert.AreEqual(ids[end], listing.Focused);
+            CollectionAssert.AreEqual(ids[first..(last + 1)], listing.SelectedItems.Select(item => item.Id).ToArray());
+        }
+    }
+
+    [TestMethod]
+    public async Task ShiftClicksAndArrowsInteroperateWithShortRowsAndOtherSelectionGestures()
+    {
+        using var stash = new TestStash();
+        var (listing, rows, ids) = await Twelve(stash, extra: 1);
+        listing.Focus(ids[11]);
+        listing.MoveFocus(Direction.Down, rows, extendSelection: true);
+        Assert.AreEqual(ids[12], listing.Focused, "the nearest tile in the short row");
+        CollectionAssert.AreEqual(ids[11..13], listing.SelectedItems.Select(item => item.Id).ToArray());
+
+        listing.ExtendTo(ids[9]);
+        Assert.AreEqual(ids[11], listing.Focused, "Shift-click keeps the range's anchor focused");
+        CollectionAssert.AreEqual(ids[9..12], listing.SelectedItems.Select(item => item.Id).ToArray());
+        listing.MoveFocus(Direction.Left, rows, extendSelection: true);
+        Assert.AreEqual(ids[10], listing.Focused);
+        CollectionAssert.AreEqual(ids[10..12], listing.SelectedItems.Select(item => item.Id).ToArray());
+
+        listing.Toggle(ids[8]);
+        CollectionAssert.AreEqual(ids[8..12].Where(id => id != ids[9]).ToArray(), listing.SelectedItems.Select(item => item.Id).ToArray());
+        listing.MoveFocus(Direction.Left, rows, extendSelection: true);
+        CollectionAssert.AreEqual(ids[7..9], listing.SelectedItems.Select(item => item.Id).ToArray(), "Ctrl-click supplies the new start");
+        listing.SelectAll();
+        CollectionAssert.AreEqual(ids, listing.SelectedItems.Select(item => item.Id).ToArray());
+        listing.MoveFocus(Direction.Right, rows, extendSelection: true);
+        CollectionAssert.AreEqual(ids[7..9], listing.SelectedItems.Select(item => item.Id).ToArray());
+    }
+
+    [TestMethod]
+    public async Task AReorderedSearchKeepsRangeIdentitiesAndANewSearchOrScopeStartsAFreshRange()
+    {
+        using var stash = new TestStash();
+        var (listing, rows, ids) = await Twelve(stash);
+        await listing.SetQuery("item");
+        listing.Focus(ids[1]);
+        listing.MoveFocus(Direction.Right, rows, extendSelection: true);
+        var end = listing.SelectedItems[^1];
+        Assert.IsTrue((await stash.Store!.RecordUses([end], stash.Clock.Now)).Succeeded);
+
+        await listing.Refresh();
+        Assert.AreEqual(end.Id, listing.Items[0].Id, "use moved the keyboard endpoint to the head of search");
+        CollectionAssert.AreEqual(new[] { ids[2], ids[1] }, listing.SelectedItems.Select(item => item.Id).ToArray());
+        Assert.AreEqual(end.Id, listing.Focused);
+        listing.MoveFocus(Direction.Right, [], extendSelection: true);
+        CollectionAssert.AreEqual(ids[0..2], listing.SelectedItems.Select(item => item.Id).ToArray(), "the next arrow uses the current order");
+
+        await listing.SetQuery("item ");
+        Assert.AreEqual(end.Id, listing.Focused);
+        listing.MoveFocus(Direction.Right, [], extendSelection: true);
+        CollectionAssert.AreEqual(new[] { ids[2], ids[0] }, listing.SelectedItems.Select(item => item.Id).ToArray());
+
+        await listing.ShowScope(Scope.All);
+        listing.MoveFocus(Direction.Right, [], extendSelection: true);
+        CollectionAssert.AreEqual(ids[0..2], listing.SelectedItems.Select(item => item.Id).ToArray(), "a scope starts at its own first tile");
+    }
+
+    [TestMethod]
     public async Task ShiftClickExtendsFromTheFocusedItemAndCtrlClickTogglesOneLeavingTheRest()
     {
         using var stash = new TestStash();

@@ -39,6 +39,24 @@ public sealed class StashKeysTests
     }
 
     [TestMethod]
+    [DataRow(Key.Up, Direction.Up, true)]
+    [DataRow(Key.Down, Direction.Down, true)]
+    [DataRow(Key.Left, Direction.Left, false)]
+    [DataRow(Key.Right, Direction.Right, false)]
+    public void ShiftArrowsExtendOnlyFromTheGridOrVerticallyFromTheBox(Key key, Direction direction, bool fromBox)
+    {
+        var inGrid = StashKeys.Route(key, KeyModifiers.Shift, KeyPlace.Grid);
+        Assert.AreEqual(direction, StashKeys.Direction(inGrid));
+        Assert.IsTrue(StashKeys.ExtendsRange(inGrid));
+        Assert.AreEqual(fromBox ? inGrid : KeyAction.None, StashKeys.Route(key, KeyModifiers.Shift, KeyPlace.SearchBox));
+        Assert.AreEqual(KeyAction.None, StashKeys.Route(key, KeyModifiers.Control | KeyModifiers.Shift, KeyPlace.Grid));
+        foreach (var place in Enum.GetValues<KeyPlace>().Where(place => place is not (KeyPlace.Grid or KeyPlace.SearchBox)))
+        {
+            Assert.AreEqual(KeyAction.None, StashKeys.Route(key, KeyModifiers.Shift, place));
+        }
+    }
+
+    [TestMethod]
     [DataRow(Key.Home)]
     [DataRow(Key.End)]
     [DataRow(Key.PageUp)]
@@ -252,6 +270,8 @@ public sealed class StashKeysTests
         Assert.AreEqual(KeyAction.Copy, StashKeys.Route(Key.C, KeyModifiers.Control, KeyPlace.SearchBox, mark.PersonSelected("my")), "the summon's selection is not the person's (G7, G1)");
         mark.KeyDown(Key.Down, KeyModifiers.None);
         mark.KeyDown(Key.Up, KeyModifiers.None);
+        mark.KeyDown(Key.Down, KeyModifiers.Shift);
+        mark.KeyDown(Key.Up, KeyModifiers.Shift);
         mark.KeyDown(Key.LeftCtrl, KeyModifiers.Control);
         mark.KeyDown(Key.LeftShift, KeyModifiers.Shift);
         Assert.AreEqual(KeyAction.Copy, StashKeys.Route(Key.C, KeyModifiers.Control, KeyPlace.SearchBox, mark.PersonSelected("my")), "Up and Down move the grid's selection and leave the box's alone, and Ctrl or Shift alone selects nothing");
@@ -265,7 +285,7 @@ public sealed class StashKeysTests
     [DataRow(Key.Home, KeyModifiers.Shift)]
     [DataRow(Key.End, KeyModifiers.Shift)]
     [DataRow(Key.Left, KeyModifiers.Control | KeyModifiers.Shift)]
-    [DataRow(Key.Up, KeyModifiers.Shift)]
+    [DataRow(Key.Up, KeyModifiers.Control | KeyModifiers.Shift)]
     [DataRow(Key.Home, KeyModifiers.None)]
     [DataRow(Key.End, KeyModifiers.None)]
     public void TextThePersonSelectsInTheBoxAfterASummonIsTheBoxsOwnCopy(Key key, KeyModifiers modifiers)

@@ -49,6 +49,91 @@ public sealed class ThumbnailGridTests
     }
 
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task ReflowRevealsTheSameKeyboardRangeEndAtItsNewBounds(bool stepSize)
+    {
+        using var listed = await ListedStash.Open();
+        for (var index = 0; index < 16; index++)
+        {
+            await listed.Stash.Import($"picture {index}", MediaFixtures.DistinctPng(index));
+        }
+
+        await listed.Listing.ShowScope(Scope.All);
+        var listing = listed.Listing;
+        ControlThread.Run(() =>
+        {
+            // Layout and the reveal event run without bitmap decoding on the portable control thread.
+            var thumbnails = new Thumbnails<Bitmap>(1, 0, TimeSpan.Zero, FrameBitmap.Of,
+                action => Dispatcher.UIThread.Post(action), image => image.Dispose(), failure => Assert.Fail(failure.Sentence));
+            var size = stepSize ? ThumbnailSize.Small : ThumbnailSize.Medium;
+            var width = stepSize ? 280 : 600;
+            var grid = new ThumbnailGrid(listing, thumbnails, () => size);
+            Place(width);
+            listing.Focus(listing.Items[^2].Id);
+            listing.MoveFocus(Direction.Right, grid.Rows, extendSelection: true);
+            Dispatcher.UIThread.RunJobs();
+
+            var end = listing.Focused!.Value;
+            var wide = grid.Rows.SelectMany(row => row.Tiles).Single(tile => tile.Id == end);
+            var chosen = listing.SelectedItems.Select(item => item.Id).ToArray();
+            Rect? requested = null;
+            grid.AddHandler(Control.RequestBringIntoViewEvent, (_, args) => requested = args.TargetRect);
+
+            size = ThumbnailSize.Medium;
+            grid.InvalidateMeasure();
+            Place(280);
+            Dispatcher.UIThread.RunJobs();
+
+            var narrow = grid.Rows.SelectMany(row => row.Tiles).Single(tile => tile.Id == end);
+            Assert.IsGreaterThan(wide.Y, narrow.Y, "the same item is farther down after reflow");
+            Assert.AreEqual(narrow.Bounds.Inflate(JustifiedRows.Gap), requested);
+            Assert.AreEqual(end, listing.Focused);
+            CollectionAssert.AreEqual(chosen, listing.SelectedItems.Select(item => item.Id).ToArray());
+
+            void Place(double width)
+            {
+                grid.Measure(new Size(width, double.PositiveInfinity));
+                grid.Arrange(new Rect(new Size(width, grid.DesiredSize.Height)));
+            }
+        });
+    }
+
+    [TestMethod]
+    public async Task ASearchReorderedByCopyRevealsTheSameKeyboardEndAtItsNewPlace()
+    {
+        using var listed = await ListedStash.Open();
+        for (var index = 0; index < 16; index++)
+        {
+            await listed.Stash.Import($"picture {index}", MediaFixtures.DistinctPng(index));
+        }
+
+        await listed.Listing.SetQuery("picture");
+        var listing = listed.Listing;
+        ControlThread.Run(() => ControlThread.FinishOnDispatcher(async () =>
+        {
+            var grid = LayOut(listing, 280, decoders: 0);
+            listing.Changed += () => grid.Measure(new Size(280, double.PositiveInfinity));
+            listing.Focus(listing.Items[^2].Id);
+            await listed.Press(Key.Right, KeyModifiers.Shift, KeyPlace.Grid);
+            Dispatcher.UIThread.RunJobs();
+
+            var end = listing.Focused!.Value;
+            var selected = listing.SelectedItems.Select(item => item.Id).ToArray();
+            Rect? requested = null;
+            grid.AddHandler(Control.RequestBringIntoViewEvent, (_, args) => requested = args.TargetRect);
+
+            await listed.Press(Key.C, KeyModifiers.Control, KeyPlace.Grid);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.AreEqual(end, listing.Items[1].Id, "the copied items lead the search, with the end second");
+            Assert.AreEqual(end, listing.Focused);
+            CollectionAssert.AreEqual(selected, listing.SelectedItems.Select(item => item.Id).ToArray());
+            Assert.AreEqual(grid.Rows.SelectMany(row => row.Tiles).Single(tile => tile.Id == end).Bounds, requested);
+        }));
+    }
+
+    [TestMethod]
     public async Task NavigationCanReadTheArrivingRowsAfterTheGridHides()
     {
         using var listed = await ListedStash.Open();
@@ -211,9 +296,9 @@ public sealed class ThumbnailGridTests
         Assert.AreEqual("Renamed\n#new #extra\n★", hover.Words, "the same tile supplies its latest listed facts");
     }
 
-    private static ThumbnailGrid LayOut(Listing listing, double width, Func<ThumbnailSize>? size = null)
+    private static ThumbnailGrid LayOut(Listing listing, double width, Func<ThumbnailSize>? size = null, int decoders = 1)
     {
-        var thumbnails = new Thumbnails<Bitmap>(1, 1, TimeSpan.Zero, FrameBitmap.Of,
+        var thumbnails = new Thumbnails<Bitmap>(1, decoders, TimeSpan.Zero, FrameBitmap.Of,
             action => Dispatcher.UIThread.Post(action), image => image.Dispose(), failure => Assert.Fail(failure.Sentence));
         var grid = new ThumbnailGrid(listing, thumbnails, size ?? (() => ThumbnailSize.Medium));
         // Measuring lays out the real grid. Arranging would request pixels from a platform the portable checks lack.
