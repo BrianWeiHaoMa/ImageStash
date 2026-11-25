@@ -55,6 +55,9 @@ internal sealed class EditorPane : Canvas
     /// <summary>What it shows, while open.</summary>
     public Control? Shown => IsOpen ? frame.Child as Control : null;
 
+    /// <summary>Identifies this opening even when the same control is shown again.</summary>
+    public object? Opening { get; private set; }
+
     /// <summary>Whether the card stands beside the picture rather than over the editor.</summary>
     public bool IsDocked => IsOpen && ReferenceEquals(frame.Parent, docked);
 
@@ -77,6 +80,7 @@ internal sealed class EditorPane : Canvas
     /// <summary>Shows <paramref name="content"/> for <paramref name="anchor"/>: beside the picture where the editor has room, else over the editor by the anchor.</summary>
     public void Show(Control content, Control anchor)
     {
+        Opening = new object();
         this.anchor = anchor;
         frame.Child = content;
         frame.IsVisible = true;
@@ -85,6 +89,7 @@ internal sealed class EditorPane : Canvas
 
     public void Hide()
     {
+        Opening = null;
         frame.IsVisible = false;
         frame.Child = null;
         docked.IsVisible = false;

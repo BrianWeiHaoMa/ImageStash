@@ -11,7 +11,7 @@ namespace ImageStash.Window;
 /// says it holds no picture or file, or that a link is not taken and nothing is downloaded (N2). The tags lit at the
 /// paste go on every item it adds (G11). While the stash cannot take an import nothing is read, unless the paste is the
 /// search box's or a tag field's, whose words need no stash (G35, G13); a clipboard another program holds is retried, then named (E3).
-/// Inside a layer's text in the editor (<see cref="PasteText"/>) it never imports: words alone go in, a web address among
+/// Inside a layer's text or the color picker's hex box (<see cref="PasteText"/>) it never imports: words alone go in, a web address among
 /// them, and anything else gets a notice that it holds no text to paste (G13).
 /// </summary>
 public sealed class ClipboardPaste(Listing listing, Notices notices, Import import, IClipboardAndDrops clipboard, TimeProvider clock, TimeSpan heldClipboardRetry)
@@ -76,7 +76,7 @@ public sealed class ClipboardPaste(Listing listing, Notices notices, Import impo
     }
 
     /// <summary>
-    /// <c>Ctrl+V</c> inside a text or caption-bar layer's text in the editor (G13): one read whatever the stash is doing,
+    /// <c>Ctrl+V</c> inside an editor text field (G13): one read whatever the stash is doing,
     /// since nothing is added; its words go to <paramref name="intoText"/> when it holds words and neither files nor a
     /// picture, a web address alone among them (nothing is fetched, N2), and otherwise the notice says it holds no text to
     /// paste; a read that fails is named (G35).

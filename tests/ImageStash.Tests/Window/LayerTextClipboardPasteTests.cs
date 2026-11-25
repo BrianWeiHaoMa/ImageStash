@@ -15,7 +15,7 @@ namespace ImageStash.Tests.Window;
 /// uppercased, G21), each line of the clipboard a line of the layer, and become part of the edit's typing; files, a
 /// picture or nothing add no item and get the notice that the clipboard holds no text to paste; one read per press
 /// (N9, R5, <see cref="PressOnce"/>); a late answer lands only in the opening the key was pressed in; a whole-stash act
-/// waiting for the edit does not stop it; the caret anywhere else, the picker's hex box included, pastes as before.
+/// waiting for the edit does not stop it; outside the editor's text and hex fields the ordinary window paste applies.
 /// </summary>
 [TestClass]
 public sealed class LayerTextClipboardPasteTests
@@ -269,19 +269,19 @@ public sealed class LayerTextClipboardPasteTests
     }
 
     [TestMethod]
-    public async Task WithTheCaretInTheHexBoxWhileALayersTextStaysOpenCtrlVPastesAsEverywhereElseAndPutsNothingInTheLayer()
+    public async Task WithFocusOutsideTheEditorFieldsCtrlVPastesAnImageWhileALayersTextStaysOpen()
     {
         using var listed = await ListedStash.Open();
         var (session, field) = await TextInEdit(listed, TextKind.Label, "so");
         listed.LayerTextCaret = null;
         listed.Clipboard.Reading = Words("ff0000");
 
-        await PressCtrlV(listed);
+        await listed.Press(Key.V, KeyModifiers.Control, KeyPlace.Editor);
 
-        Assert.AreEqual("Paste failed: the clipboard, it holds no picture or file", listed.Notices.Shown.Single().Text, "the hex box's paste as today (G13)");
+        Assert.AreEqual("Paste failed: the clipboard, it holds no picture or file", listed.Notices.Shown.Single().Text, "the ordinary window paste (G13)");
         listed.Clipboard.Reading = Outcome<ClipboardReading>.Of(new ClipboardReading([], MediaFixtures.Bytes("transparent.png"), null, false));
         listed.Keys.Released(Key.V);
-        await PressCtrlV(listed);
+        await listed.Press(Key.V, KeyModifiers.Control, KeyPlace.Editor);
 
         Assert.HasCount(2, await listed.Stash.All(), "a picture imported from there, as from the editor with no field focused (G13)");
         Assert.AreEqual("so", LayerText(session), "nothing in the layer");

@@ -10,7 +10,6 @@ using Avalonia.VisualTree;
 using ImageStash.Editor;
 using ImageStash.Layers;
 using ImageStash.Media;
-using ImageStash.Store;
 using ImageStash.Windows.Tests.Support;
 using SkiaSharp;
 
@@ -19,74 +18,15 @@ namespace ImageStash.Windows.Tests.Editor;
 /// <summary>
 /// The colour picker the More swatch opens (G21, F4, N9, R5): over the editor inside the stash window, never a window of
 /// its own, with the square, the hue strip, the hex, Pick from the picture and Recent; a hex typed and entered colouring
-/// the selected mark and showing inside the More swatch and in Recent; the hex with no paste of its own, Ctrl+V in it
-/// being the window's paste; Esc closing it; the eyedropper sampling the picture as composed, not the screen; a hue chosen
+/// the selected mark and showing inside the More swatch and in Recent; Ctrl+V using the window's text paste in the hex;
+/// Esc closing it; the eyedropper sampling the picture as composed, not the screen; a hue chosen
 /// on the strip from a white kept for the square, a hex then naming its own hue; at the window's minimum, every recent
 /// colour kept, Auto, None, the hex and Pick from the picture whole and under the pointer inside the card, and the card
 /// inside the window as Recent fills while it shows.
 /// </summary>
 [TestClass]
-public sealed class ColorPickerTests
+public sealed partial class ColorPickerTests
 {
-    [TestMethod]
-    public async Task AHexTypedAndEnteredColoursTheSelectedMarkShowsInsideTheMoreSwatchAndInRecentAndThePasteIsTheWindowsNotTheHexs()
-    {
-        using var shown = ShownWindow.Open();
-        using var editor = new ShownEditor(shown);
-        var items = await shown.OpenStash(shown.Picture("checker.png", 64, 48, EditorCanvasTests.Checker));
-        await EditorOverlayTests.Open(shown, items[0]);
-        var windowsBefore = ProcessWindows.Visible();
-        TrayDesktop.Run(() =>
-        {
-            editor.Choose("Draw");
-            editor.Choose("Box");
-            editor.Drag((0.25, 0.25), (0.75, 0.75));
-        });
-        await OpenThePicker(shown, editor);
-        await ShownWindow.Eventually(() => TrayDesktop.Get(() => Picker(editor) is not null));
-
-        TrayDesktop.Run(() =>
-        {
-            var content = Picker(editor)!;
-            Assert.AreSame(shown.Window, TopLevel.GetTopLevel(content), "inside the stash window (F4)");
-            Assert.AreEqual(windowsBefore, ProcessWindows.Visible(), "never a window of its own (F4)");
-            Assert.IsTrue(Named(content, "Pick from the picture") is Button, "the eyedropper");
-            Assert.Contains("Recent", content.GetVisualDescendants().OfType<TextBlock>().Select(text => text.Text).ToList());
-            var hex = (TextBox)Named(content, "Hex")!;
-            hex.Focus();
-            hex.SelectAll();
-            ShownWindow.Type(hex, "#FF7A1A");
-            ShownWindow.Tap(hex, Key.Enter);
-
-            var orange = new Rgba(255, 122, 26, 255);
-            Assert.AreEqual(orange, ((DrawMarkLayer)editor.Session!.Layers.Layers.Single()).Color, "the selected box takes the colour (G21)");
-            Assert.AreEqual(Color.FromRgb(255, 122, 26), MoreSwatchFill(editor), "the More swatch shows it");
-            Assert.Contains("#FF7A1A", content.GetVisualDescendants().OfType<Button>().Select(AutomationProperties.GetName).ToList(), "Recent holds it");
-        });
-
-        // N9, R5: the hex has no paste of its own; Ctrl+V in it is the window's paste, which reads the clipboard's text as nothing to add.
-        TestClipboard.PutText("#123456");
-        TrayDesktop.Run(() =>
-        {
-            var hex = (TextBox)Named(Picker(editor)!, "Hex")!;
-            hex.Focus();
-            ShownWindow.Press(hex, Key.V, KeyModifiers.Control);
-            Assert.AreEqual("#FF7A1A", hex.Text, "nothing pasted into the hex");
-        });
-        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Said().Contains("it holds no picture or file")));
-
-        // Esc leaves the hex and the picker, and Del then removes the selected mark.
-        TrayDesktop.Run(() =>
-        {
-            var hex = (TextBox)Named(Picker(editor)!, "Hex")!;
-            ShownWindow.Press(hex, Key.Escape);
-            Assert.IsNull(Picker(editor), "the picker closed");
-            Assert.IsTrue(editor.Session!.IsOpen, "and the edit stays open");
-            ShownWindow.Press(editor.Canvas, Key.Delete);
-            Assert.IsTrue(editor.Session.Layers.IsEmpty, "the selected mark removed");
-        });
-    }
-
     [TestMethod]
     public async Task PickFromThePictureSamplesThePictureAsComposedUnderTheClick()
     {

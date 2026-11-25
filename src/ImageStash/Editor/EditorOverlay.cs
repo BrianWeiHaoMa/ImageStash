@@ -118,8 +118,26 @@ public sealed class EditorOverlay : Border
     /// <summary>The session shown, or null while the editor is closed.</summary>
     public EditorSession? Session => session;
 
-    /// <summary>The layer's open text when <paramref name="focused"/>, where focus is, lies in it; null elsewhere, the picker's hex box included.</summary>
+    /// <summary>The layer's open text when <paramref name="focused"/>, where focus is, lies in it.</summary>
     public IOpenLayerText? OpenTextAt(object? focused) => field.Holds(focused) ? field : null;
+
+    /// <summary>The text input for the focused hex box, valid until its picker opening ends.</summary>
+    internal Action<string>? HexPasteAt(object? focused)
+    {
+        if (pane.Shown is not ColorPicker picker || picker.HexPasteAt(focused) is not { } intoHex)
+        {
+            return null;
+        }
+
+        var opening = pane.Opening;
+        return words =>
+        {
+            if (ReferenceEquals(pane.Opening, opening))
+            {
+                intoHex(words);
+            }
+        };
+    }
 
     public EditorCanvas Canvas => canvas;
 

@@ -31,7 +31,7 @@ public enum KeyAction
     /// <summary><c>Ctrl+O</c>: Import files… (G7, G12).</summary>
     ImportFiles,
 
-    /// <summary><c>Ctrl+V</c>: Paste image, from every place, inside a field too, which has no paste of its own; inside a layer's text in the editor, its words alone (G7, G13; <see cref="PasteKey"/>).</summary>
+    /// <summary><c>Ctrl+V</c>: the window's paste, which takes words alone in an editor text field (G7, G13; <see cref="PasteKey"/>).</summary>
     Paste,
 
     /// <summary>Enter: the handoff on the selection (G7, G8).</summary>
@@ -117,8 +117,8 @@ public enum KeyPlace
 /// notice that still offers one, once per press however long it is held, while in the box it stays the box's own; and a
 /// character typed in the grid goes into the box with focus. <c>Ctrl+V</c> is the window's paste from every place, the
 /// one read of the clipboard, and <c>Shift+Insert</c> is nothing, since no text box has a paste of its own (G13, N9);
-/// with the caret in a text or caption-bar layer's text in the editor it pastes the clipboard's words there and never
-/// adds an item (<see cref="PasteKey"/>).
+/// with the caret in a layer's text or the color picker's hex box it pastes the clipboard's words there and never adds
+/// an item (<see cref="PasteKey"/>).
 /// Inside any other text field the keys it uses are its own (typed characters, Space, Backspace, Del, the arrows,
 /// Enter, Esc, F2, its text's <c>Ctrl+A</c> and <c>Ctrl+C</c>), so none of them deletes, hands off, closes or moves the
 /// selection; only <c>Ctrl+O</c>, <c>Ctrl+V</c> and the thumbnail size, which a field leaves unused, still reach the

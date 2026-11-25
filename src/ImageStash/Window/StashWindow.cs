@@ -526,13 +526,10 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
                 AfterScopeChoice(place, ImportFiles);
                 break;
             case KeyAction.Paste:
-                // The words replace the box's selection, or go in at its caret, as a text box's paste does: the search
-                // box's, a tag field's or a layer's open text in the editor as typed text; in any other field the
-                // notice says so (G13).
                 var focused = FocusManager?.GetFocusedElement();
-                AfterScopeChoice(place, () => _ = pasteKey.Press(editor.OpenTextAt(focused), place == KeyPlace.SearchBox ? words => search.SelectedText = words
-                    : TagFieldAt(focused) is { } field ? field.PasteNow()
-                    : null));
+                AfterScopeChoice(place, () => _ = pasteKey.Press(editor.OpenTextAt(focused),
+                    place == KeyPlace.SearchBox ? words => search.SelectedText = words : TagFieldAt(focused)?.PasteNow(),
+                    editor.HexPasteAt(focused)));
                 break;
             case KeyAction.Held:
                 break;

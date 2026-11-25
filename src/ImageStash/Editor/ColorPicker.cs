@@ -20,8 +20,7 @@ namespace ImageStash.Editor;
 /// the pointer passes, as no step, so the choice is made by looking at the picture; letting go applies the last one, as
 /// one step and one recent colour (G21, G25), and a drag that ends any other way (its pointer lost, the picker closed)
 /// puts back what was there. A colour is applied at once when Enter is pressed in the hex, when a recent colour is
-/// clicked, or when the eyedropper's click samples the picture. The hex is a field with no paste of its own: ImageStash
-/// reads the clipboard only for its three actions (N9, R5).
+/// clicked, or when the eyedropper's click samples the picture. Ctrl+V in the hex uses the window's text paste (G13, N9, R5).
 /// </summary>
 internal sealed class ColorPicker : StackPanel
 {
@@ -125,6 +124,11 @@ internal sealed class ColorPicker : StackPanel
 
     /// <summary>The recent colours as their swatches show them, newest first.</summary>
     public IEnumerable<Button> RecentSwatches => recent.Children.OfType<Button>();
+
+    /// <summary>The text input for this picker when its hex has focus.</summary>
+    public Action<string>? HexPasteAt(object? focused) => ReferenceEquals(focused, hex) ? TypeHex : null;
+
+    private void TypeHex(string words) => hex.RaiseEvent(new TextInputEventArgs { RoutedEvent = TextInputEvent, Text = words });
 
     /// <summary>Shows the colour it was opened for as it is now, Auto or None checked when either is, and the colours used recently, as it opens.</summary>
     public void Reset()

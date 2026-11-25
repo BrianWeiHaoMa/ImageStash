@@ -79,7 +79,7 @@ public sealed class PresetDialogs : IDialogsAndExplorer
 }
 
 /// <summary>
-/// The real clipboard seam with the native drag replaced by a preset ending, which the seam's own check exercises:
+/// The real clipboard seam with an optional preset read, and the native drag replaced by a preset ending:
 /// keeps the files of each drag and runs a check of its own while the drag is in progress.
 /// </summary>
 public sealed class PresetDrags : IClipboardAndDrops
@@ -110,10 +110,13 @@ public sealed class PresetDrags : IClipboardAndDrops
     /// <summary>How many reads of the clipboard's data have been asked for, image-only reads included (N9).</summary>
     public int Reads { get; private set; }
 
+    /// <summary>While set, answers the window's usual clipboard read with the check's data.</summary>
+    public Func<Task<Outcome<ClipboardReading>>>? ReadClipboard { get; set; }
+
     public Task<Outcome<ClipboardReading>> Read(TimeSpan heldClipboardRetry)
     {
         Reads++;
-        return real.Read(heldClipboardRetry);
+        return ReadClipboard?.Invoke() ?? real.Read(heldClipboardRetry);
     }
 
     public Task<Outcome<ClipboardImage?>> ReadImage(TimeSpan heldClipboardRetry)

@@ -3,19 +3,21 @@ using ImageStash.Editor;
 namespace ImageStash.Window;
 
 /// <summary>
-/// <c>Ctrl+V</c>'s act (G7, G13). With the caret in a text or caption-bar layer's open text in the editor it never
-/// imports: the clipboard's words go in at the caret as typed (<see cref="LayerTextPaste"/>), and anything else gets the
-/// notice. Being in the editor, or a layer's text being open, is not enough: the picker's hex box, while a layer's text
-/// stays open, and the editor with no field focused paste as everywhere else, through <see cref="ClipboardPaste.Paste"/>.
-/// The answer lands only in the opening of the text the key was pressed in, at its caret as it is when the read
-/// returns; a text closed since, closed and opened again, another layer's text opened or the editor gone takes nothing.
+/// <c>Ctrl+V</c>'s act (G7, G13). In a layer's open text or the color picker's hex box, words go into the opening the key
+/// was pressed in, at its current caret. Other clipboard contents get a notice. Everywhere else uses the ordinary window paste.
 /// </summary>
 public sealed class PasteKey(ClipboardPaste paste, Editing editing)
 {
     /// <param name="caretIn">The layer's open text the caret is in, or null: the caret is anywhere else.</param>
     /// <param name="intoField">The search box's or a tag field's taker of the words, else null (<see cref="ClipboardPaste.Paste"/>).</param>
-    public Task Press(IOpenLayerText? caretIn, Action<string>? intoField)
+    /// <param name="intoHex">The focused picker opening's text input, else null.</param>
+    public Task Press(IOpenLayerText? caretIn, Action<string>? intoField, Action<string>? intoHex = null)
     {
+        if (intoHex is not null)
+        {
+            return paste.PasteText(intoHex);
+        }
+
         if (caretIn is null)
         {
             return paste.Paste(intoField);
