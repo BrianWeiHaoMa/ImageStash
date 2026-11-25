@@ -25,7 +25,7 @@ namespace ImageStash.Windows.Tests.Window;
 /// These checks click the stash window at the primary display's left edge with real mouse input.
 /// </summary>
 [TestClass]
-public sealed class ThumbnailGridTests
+public sealed partial class ThumbnailGridTests
 {
     private static readonly SKColor First = new(0xC8, 0x28, 0x0A);
 

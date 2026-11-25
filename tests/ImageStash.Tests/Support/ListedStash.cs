@@ -41,7 +41,8 @@ public sealed class ListedStash : IDisposable
         WindowShowing = new WindowShowing(Notices);
         WindowShowing.Seen(visible: true, minimised: false);
         Listing = new Listing(Failures.Add);
-        SelectionKeys = new PendingQueryKeys(Listing, () => JustifiedRows.Layout(Listing.Items, 100, 96));
+        SelectionKeys = new PendingQueryKeys(Listing,
+            () => (JustifiedRows.Layout(Listing.Items, GridViewport.Width, 96), GridViewport.Height));
         Import = new Import(Listing, Notices, TestStash.ShortRetry);
         Import.FollowScopeChoices(SelectionKeys);
         Clipboard = new RecordingClipboard(stash.Clock);
@@ -262,6 +263,7 @@ public sealed class ListedStash : IDisposable
     /// <summary>The keys the window holds down, as its key-downs and key-ups tell them; the paste waits for a held Enter.</summary>
     public PressOnce Keys { get; } = new();
     public PendingQueryKeys SelectionKeys { get; }
+    internal (double Width, double Height) GridViewport { get; set; } = (100, 96);
 
     public Task<Outcome> DeleteSelection() => SelectionKeys.ActOnSelection(selection => Deletion.Delete(selection.Items));
 

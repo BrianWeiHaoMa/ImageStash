@@ -77,6 +77,7 @@ public sealed class ImportEndTests
 
     [TestMethod]
     [DataRow("an arrow")]
+    [DataRow("a page key")]
     [DataRow("a click")]
     [DataRow("a scope chip")]
     [DataRow("a scope key")]
@@ -99,6 +100,10 @@ public sealed class ImportEndTests
             case "an arrow":
                 // Right, as the grid's keys move the selection (PendingQueryKeys).
                 listed.Listing.MoveFocus(Direction.Right, []);
+                break;
+            case "a page key":
+                await listed.Press(Key.PageDown, KeyModifiers.None, KeyPlace.Grid);
+                Assert.AreEqual(older.Id, listed.Listing.Focused);
                 break;
             case "a click":
                 listed.Listing.Focus(older.Id);

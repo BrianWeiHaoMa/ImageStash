@@ -483,6 +483,7 @@ public sealed partial class ThumbnailGrid : Control
                 ForgetPointer();
             }
 
+            RetryFocusReveal();
             QueuePlay();
         }
     }
@@ -569,23 +570,6 @@ public sealed partial class ThumbnailGrid : Control
     private ThumbnailRequest Request(StashItem item, ThumbnailSize step) =>
         new(ThumbnailKey.Of(item, step), item.FilePath, item.Name,
             Thumbnails<Bitmap>.Bound(item.Facts, JustifiedRows.RowHeight(step), TopLevel.GetTopLevel(this)?.RenderScaling ?? 1));
-
-    private void BringFocusedIntoView()
-    {
-        if (listing.Focused is not { } focused)
-        {
-            return;
-        }
-
-        foreach (var row in rows)
-        {
-            if (row.Tiles.FirstOrDefault(tile => tile.Id == focused) is { } tile)
-            {
-                this.BringIntoView(tile.Bounds.Inflate(JustifiedRows.Gap));
-                return;
-            }
-        }
-    }
 
     private GridTile? TileAt(Point point)
     {

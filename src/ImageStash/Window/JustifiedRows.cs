@@ -90,6 +90,22 @@ public static class JustifiedRows
         return last < first ? (0, -1) : (first, last);
     }
 
+    /// <summary>Project the source row's centre by one viewport. In a gap, take the row in the direction of travel.</summary>
+    internal static int PageRow(IReadOnlyList<GridRow> rows, int from, int step, double viewportHeight)
+    {
+        var source = rows[from];
+        var y = source.Y + source.Height / 2 + step * viewportHeight;
+        var to = FirstEndingAfter(rows, y);
+        if (step < 0 && to < rows.Count && y < rows[to].Y)
+        {
+            to--;
+        }
+
+        // A short viewport still advances a row when there is one.
+        var adjacent = Math.Clamp(from + step, 0, rows.Count - 1);
+        return step < 0 ? Math.Clamp(to, 0, adjacent) : Math.Clamp(to, adjacent, rows.Count - 1);
+    }
+
     /// <summary>
     /// The rectangle of a picture <paramref name="sourceWidth"/> × <paramref name="sourceHeight"/> that a tile of
     /// <paramref name="width"/> × <paramref name="height"/> shows: the largest one of the tile's shape, centred.

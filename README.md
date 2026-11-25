@@ -49,6 +49,8 @@ Start Menu or its `ImageStash.Windows.exe`, opens the stash window, as a click o
 | `Ctrl+T` | Tag the selected pictures: type a word and press Enter. In a picture's preview, it goes to the preview's tag box. |
 | `Space`, then the arrows | Preview the selected picture, then step to the previous or next one in the grid; the preview's ‹ and › do the same. |
 | `Left` / `Right` | Move to the previous or next picture from the grid or from an empty search box. |
+| `Home` / `End` | With the grid focused, select the first or last picture in the current list. |
+| `Page Up` / `Page Down` | With the grid focused, move the selection by one screenful of rows and keep its column. |
 | `Ctrl+1`, `Ctrl+2`, `Ctrl+3` | Clear the search and show Recent, Favorites or All from the search box or grid. |
 | `Ctrl+,` | Open Settings from the search box or grid. |
 

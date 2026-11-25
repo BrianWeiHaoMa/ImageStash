@@ -122,12 +122,7 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
             grid.InvalidateMeasure();
             grid.InvalidateVisual();
         };
-        // The grid lays out its rows in a layout pass after the listing changes: an arrow moves among the rows of what is listed now.
-        keys = new PendingQueryKeys(listing, () =>
-        {
-            grid.UpdateLayout();
-            return grid.Rows;
-        }, MoveInKeyboardPreview);
+        keys = new PendingQueryKeys(listing, grid.ReadNavigationLayout, HandleMovementOutsideGrid);
         import.FollowScopeChoices(keys);
         scroller = WindowLayout.GridScroller(grid);
         var dropTarget = new DropTarget(this, drops, import, () => DragInProgress, () => listing.LitTags);
@@ -505,16 +500,11 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
         var routed = heldKeys.Acting(e.Key, StashKeys.Route(e.Key, e.KeyModifiers, place,
             summonSelection.PersonSelected(search.SelectedText), boxHasText: !string.IsNullOrEmpty(search.Text)));
         var action = OpenTagLists().Count > 0 ? StashKeys.WithTagListOpen(e.Key, e.KeyModifiers, routed) : routed;
-        if (StashKeys.Direction(action) is { } direction)
+        var handled = StashKeys.Direction(action) is { } direction ? RunMovementKey(direction) : RunKeyAction(action, place);
+        if (handled)
         {
-            _ = keys.Move(direction);
+            e.Handled = true;
         }
-        else if (!RunKeyAction(action, place))
-        {
-            return;
-        }
-
-        e.Handled = true;
     }
 
     /// <summary>

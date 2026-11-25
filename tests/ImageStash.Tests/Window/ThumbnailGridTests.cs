@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
@@ -18,6 +19,55 @@ namespace ImageStash.Tests.Window;
 [TestClass]
 public sealed class ThumbnailGridTests
 {
+    [TestMethod]
+    public void TheGridRevealsTheTileWithItsRingWhenTheViewportCanHoldBoth()
+    {
+        var tile = new GridTile(1, 0, 0, 104, 96, 96);
+
+        Assert.AreEqual(tile.Bounds.Inflate(JustifiedRows.Gap), ThumbnailGrid.FocusRevealBounds(tile, 120));
+        Assert.AreEqual(tile.Bounds, ThumbnailGrid.FocusRevealBounds(tile, 3),
+            "a viewport shorter than the ring's padding needs to reveal the tile itself");
+    }
+
+    [TestMethod]
+    public async Task ARevealRequestsTheFocusedTilesBoundsFromTheScroller()
+    {
+        using var listed = await ListedStash.Open();
+        var picture = await listed.Stash.Import("picture", [1]);
+        await listed.Listing.ShowScope(Scope.All);
+        ControlThread.Run(() =>
+        {
+            var grid = LayOut(listed.Listing, 240);
+            var tile = grid.Rows.SelectMany(row => row.Tiles).Single(tile => tile.Id == picture.Id);
+            Rect? requested = null;
+            grid.AddHandler(Control.RequestBringIntoViewEvent, (_, args) => requested = args.TargetRect);
+
+            grid.BringFocusedIntoView();
+
+            Assert.AreEqual(tile.Bounds, requested, "with zero arranged height, request the tile without padding");
+        });
+    }
+
+    [TestMethod]
+    public async Task NavigationCanReadTheArrivingRowsAfterTheGridHides()
+    {
+        using var listed = await ListedStash.Open();
+        var cat = await listed.Stash.Import("cat", [1]);
+        await listed.Stash.Import("dog", [2]);
+        await listed.Listing.ShowScope(Scope.All);
+
+        ControlThread.Run(() => ControlThread.FinishOnDispatcher(async () =>
+        {
+            var grid = LayOut(listed.Listing, 240);
+            Assert.HasCount(2, grid.Rows.SelectMany(row => row.Tiles).ToArray());
+            grid.IsVisible = false;
+            await listed.Listing.SetQuery("cat");
+
+            var current = grid.ReadNavigationLayout();
+            CollectionAssert.AreEqual(new[] { cat.Id }, current.Rows.SelectMany(row => row.Tiles).Select(tile => tile.Id).ToArray());
+        }));
+    }
+
     [TestMethod]
     public async Task AHoverTipUsesTheTileUnderThePointerAndWaitsAgainAcrossTheGutter()
     {

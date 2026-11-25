@@ -43,7 +43,7 @@ public sealed class TagKeyTests
         await listed.Stash.Import("cat newer", MediaFixtures.DistinctPng(2));
         await listed.Listing.ShowScope(Scope.All);
         // The window's queue, as the window's case hands it Ctrl+T's act, its rows one tile each.
-        var keys = new PendingQueryKeys(listed.Listing, () => JustifiedRows.Layout(listed.Listing.Items, 100, 96));
+        var keys = listed.SelectionKeys;
 
         Task search, drained;
         using (listed.Stash.HoldStore())

@@ -89,6 +89,18 @@ public sealed class JustifiedRowsTests
     }
 
     [TestMethod]
+    public void APageLandingBetweenRowsTakesTheRowInItsDirectionOfTravel()
+    {
+        var rows = JustifiedRows.Layout(TestItems.Many(40), 240, 96);
+        var gap = rows[3].Y - JustifiedRows.Gap / 2;
+        var firstCentre = rows[0].Y + rows[0].Height / 2;
+        var laterCentre = rows[5].Y + rows[5].Height / 2;
+
+        Assert.AreEqual(3, JustifiedRows.PageRow(rows, 0, 1, gap - firstCentre));
+        Assert.AreEqual(2, JustifiedRows.PageRow(rows, 5, -1, laterCentre - gap));
+    }
+
+    [TestMethod]
     public void FiveThousandItemsAreLaidOutWellWithinTheSecond()
     {
         var items = TestItems.Many(5000);

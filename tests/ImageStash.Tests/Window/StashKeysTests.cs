@@ -39,6 +39,23 @@ public sealed class StashKeysTests
     }
 
     [TestMethod]
+    [DataRow(Key.Home)]
+    [DataRow(Key.End)]
+    [DataRow(Key.PageUp)]
+    [DataRow(Key.PageDown)]
+    public void PlainPageAndEndpointKeysMoveOnlyInTheGrid(Key key)
+    {
+        Assert.IsNotNull(StashKeys.Direction(StashKeys.Route(key, KeyModifiers.None, KeyPlace.Grid)));
+        foreach (var place in Enum.GetValues<KeyPlace>().Where(place => place != KeyPlace.Grid))
+        {
+            Assert.AreEqual(KeyAction.None, StashKeys.Route(key, KeyModifiers.None, place));
+        }
+
+        Assert.AreEqual(KeyAction.None, StashKeys.Route(key, KeyModifiers.Shift, KeyPlace.Grid));
+        Assert.AreEqual(KeyAction.None, StashKeys.Route(key, KeyModifiers.Control, KeyPlace.Grid));
+    }
+
+    [TestMethod]
     [DataRow(Key.Left, KeyAction.MoveLeft)]
     [DataRow(Key.Right, KeyAction.MoveRight)]
     public void OnlyPlainHorizontalArrowsInTheLiterallyEmptyBoxMoveTheSelection(Key key, KeyAction movement)

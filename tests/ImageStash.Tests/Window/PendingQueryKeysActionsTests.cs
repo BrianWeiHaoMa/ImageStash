@@ -8,25 +8,28 @@ namespace ImageStash.Tests.Window;
 public sealed partial class PendingQueryKeysTests
 {
     [TestMethod]
-    public async Task ANewQuerySupersedesPendingDownAndDelete()
+    [DataRow(Key.Down)]
+    [DataRow(Key.PageDown)]
+    public async Task ANewQuerySupersedesPendingMovementAndDelete(Key move)
     {
         using var listed = await Listed();
         await DogAndTwoCats(listed);
         var listing = listed.Listing;
-        var keys = Keys(listed);
         var before = listing.Items.ToArray();
 
-        Task drained, dog;
+        Task<KeyAction> drained;
+        Task dog;
         Task<Outcome> deleted;
         using (listed.Stash.HoldStore())
         {
             _ = listing.SetQuery("cat");
-            drained = keys.Move(Direction.Down);
+            drained = listed.Press(move, KeyModifiers.None, KeyPlace.Grid);
             deleted = listed.DeleteSelection();
             dog = listing.SetQuery("dog");
         }
 
         await Task.WhenAll(drained, dog);
+        Assert.AreNotEqual(KeyAction.None, await drained);
         Assert.IsTrue((await deleted).Succeeded);
 
         var after = (await listed.Stash.Store!.All()).Value!;
@@ -69,7 +72,10 @@ public sealed partial class PendingQueryKeysTests
     }
 
     [TestMethod]
-    public async Task DownThenDeleteRecyclesTheSecondArrivingMatch()
+    [DataRow(Key.Down)]
+    [DataRow(Key.PageDown)]
+    [DataRow(Key.End)]
+    public async Task MovementThenDeleteRecyclesTheSecondArrivingMatch(Key move)
     {
         using var listed = await Listed();
         var (newer, older) = await DogAndTwoCats(listed);
@@ -77,7 +83,7 @@ public sealed partial class PendingQueryKeysTests
         using (listed.Stash.HoldStore())
         {
             _ = listed.Listing.SetQuery("cat");
-            moved = listed.Press(Key.Down, KeyModifiers.None, KeyPlace.Grid);
+            moved = listed.Press(move, KeyModifiers.None, KeyPlace.Grid);
             deleted = listed.Press(Key.Delete, KeyModifiers.None, KeyPlace.Grid);
         }
 
@@ -139,7 +145,9 @@ public sealed partial class PendingQueryKeysTests
     }
 
     [TestMethod]
-    public async Task AStashReopenedWithReusedIdsDoesNotInheritAnUnresolvedDelete()
+    [DataRow(Key.Down)]
+    [DataRow(Key.PageDown)]
+    public async Task AStashReopenedWithReusedIdsDoesNotInheritAnUnresolvedDelete(Key move)
     {
         using var listed = await Listed();
         var (old, _) = await DogAndTwoCats(listed);
@@ -153,13 +161,13 @@ public sealed partial class PendingQueryKeysTests
 
         Assert.AreEqual(old.Id, newItems[0].Id, "the replacement reused an ID with different content");
         var listing = listed.Listing;
-        var keys = Keys(listed);
-        Task drained, reading;
+        Task<KeyAction> drained;
+        Task reading;
         Task<Outcome> deleted;
         using (listed.Stash.HoldStore())
         {
             reading = listing.SetQuery("cat");
-            drained = keys.Move(Direction.Down);
+            drained = listed.Press(move, KeyModifiers.None, KeyPlace.Grid);
             deleted = listed.DeleteSelection();
             await listing.Withdraw();
             listing.StashReplaced();
@@ -167,6 +175,7 @@ public sealed partial class PendingQueryKeysTests
         }
 
         await Task.WhenAll(drained, reading);
+        Assert.AreNotEqual(KeyAction.None, await drained);
         Assert.IsTrue((await deleted).Succeeded);
 
         var after = (await newStore.All()).Value!;

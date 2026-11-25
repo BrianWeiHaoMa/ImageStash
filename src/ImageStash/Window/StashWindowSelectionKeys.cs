@@ -8,8 +8,10 @@ public sealed partial class StashWindow
 {
     private Task keyboardHandoff = Task.CompletedTask;
 
+    private bool BrowsingOverlayOpen => preview.IsOpen || editing.IsOpen || tagField.IsVisible;
+
     // A scope hint is a popup too. The shortcut is available while the hint is visible.
-    private bool CanUseBrowsingKeys() => !preview.IsOpen && !editing.IsOpen && !tagField.IsVisible &&
+    private bool CanUseBrowsingKeys() => !BrowsingOverlayOpen &&
         !OpenedPopups.Any(popup => popup.Child is not ToolTip);
 
     private bool RunBrowsingKey(KeyAction action)
@@ -162,8 +164,26 @@ public sealed partial class StashWindow
         }
     }
 
-    private bool MoveInKeyboardPreview(Direction direction, long input)
+    private bool RunMovementKey(Direction direction)
     {
+        var gridOnly = StashKeys.RequiresGridFocus(direction);
+        if (gridOnly && (!grid.IsFocused || !CanUseBrowsingKeys()))
+        {
+            return false;
+        }
+
+        _ = keys.Move(direction, gridOnly ? grid.BringFocusedIntoView : null);
+        return true;
+    }
+
+    private bool HandleMovementOutsideGrid(Direction direction, long input)
+    {
+        if (StashKeys.RequiresGridFocus(direction))
+        {
+            // A popup opened after the press leaves the accepted move in order with its following action.
+            return BrowsingOverlayOpen;
+        }
+
         // A Space earlier in the same queue can have opened the preview since this arrow was pressed.
         if (!preview.IsOpen)
         {

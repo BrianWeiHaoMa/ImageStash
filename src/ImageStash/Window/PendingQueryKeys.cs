@@ -7,8 +7,8 @@ namespace ImageStash.Window;
 /// filter cancels unresolved input. Operations that have acquired their items start immediately and can finish
 /// while the person moves on. Listing remains the owner of the displayed selection.
 /// </summary>
-public sealed class PendingQueryKeys(Listing listing, Func<IReadOnlyList<GridRow>> laidOutRows,
-    Func<Direction, long, bool>? moveInPreview = null)
+public sealed class PendingQueryKeys(Listing listing, Func<(IReadOnlyList<GridRow> Rows, double ViewportHeight)> gridLayout,
+    Func<Direction, long, bool>? handleOutsideGrid = null)
 {
     private readonly Queue<Pressed> pressed = new();
     private bool draining;
@@ -17,11 +17,19 @@ public sealed class PendingQueryKeys(Listing listing, Func<IReadOnlyList<GridRow
 
     internal Task PendingScopeChoice { get; private set; } = Task.CompletedTask;
 
-    public Task Move(Direction direction) => Dispatch(input =>
+    public Task Move(Direction direction, Action? revealUnmovedFocus = null) => Dispatch(input =>
     {
-        if (moveInPreview?.Invoke(direction, input) != true)
+        if (handleOutsideGrid?.Invoke(direction, input) == true)
         {
-            listing.MoveFocus(direction, laidOutRows(), input);
+            return;
+        }
+
+        var (rows, height) = gridLayout();
+        var previous = listing.Focused;
+        listing.MoveFocus(direction, rows, input, height);
+        if (previous is not null && previous == listing.Focused)
+        {
+            revealUnmovedFocus?.Invoke();
         }
     }, WaitFor.Layout);
 

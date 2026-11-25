@@ -21,14 +21,6 @@ public enum StashState
     Replacing,
 }
 
-public enum Direction
-{
-    Up,
-    Down,
-    Left,
-    Right,
-}
-
 /// <summary>
 /// What the stash window shows, held once: the stash's state, the scope, the query, the ordered items,
 /// the tag chips, the selection and the focused item (Composition: Window owns the selection). The window's controls read it and
@@ -631,68 +623,11 @@ public sealed partial class Listing
     }
 
     /// <summary>
-    /// An arrow key (G7): Left and Right go to the previous and next item in order; Up and Down to the tile of the
-    /// adjacent row under the focused tile's centre, or the nearest tile of that row. The item reached becomes the whole
-    /// selection. With nothing focused, the first item is.
-    /// </summary>
-    public void MoveFocus(Direction direction, IReadOnlyList<GridRow> rows, long? input = null)
-    {
-        long target;
-        lock (gate)
-        {
-            if (Items.Count == 0)
-            {
-                return;
-            }
-
-            if (Focused is not { } focused || !indexOf.TryGetValue(focused, out var index))
-            {
-                target = Items[0].Id;
-            }
-            else
-            {
-                target = direction switch
-                {
-                    Direction.Left => Items[Math.Max(0, index - 1)].Id,
-                    Direction.Right => Items[Math.Min(Items.Count - 1, index + 1)].Id,
-                    // Rows laid out for items no longer listed move nothing.
-                    _ => Vertical(focused, direction == Direction.Up ? -1 : 1, rows) is { } reached && indexOf.ContainsKey(reached) ? reached : focused,
-                };
-            }
-        }
-
-        Select([target], target, byImport: false, byPerson: true, input);
-    }
-
-    /// <summary>
     /// The one item whose animation plays in the grid (G6): the hovered one when it is animated, else the focused one
     /// when it is; hover is the more recent act, and leaving the tile hands play back to the selection.
     /// </summary>
     public static long? PlayingItem(StashItem? hovered, StashItem? focused) =>
         hovered is { Facts.Animated: true } ? hovered.Id : focused is { Facts.Animated: true } ? focused.Id : null;
-
-    private static long? Vertical(long focused, int step, IReadOnlyList<GridRow> rows)
-    {
-        for (var r = 0; r < rows.Count; r++)
-        {
-            if (rows[r].Tiles.FirstOrDefault(tile => tile.Id == focused) is not { } from)
-            {
-                continue;
-            }
-
-            if (r + step < 0 || r + step >= rows.Count)
-            {
-                return null;
-            }
-
-            var next = rows[r + step].Tiles;
-            var centre = from.CentreX;
-            return (next.FirstOrDefault(tile => tile.X <= centre && centre < tile.X + tile.Width)
-                ?? next.MinBy(tile => Math.Abs(tile.CentreX - centre)))?.Id;
-        }
-
-        return null;
-    }
 
     private long? FirstSelected() => Items.FirstOrDefault(item => selection.Contains(item.Id))?.Id;
 
