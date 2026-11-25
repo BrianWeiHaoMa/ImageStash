@@ -17,7 +17,9 @@ public sealed class HideTool : EditorTool
 
     public override string Name => "Hide";
 
-    public override string Hint => "Drag over what to hide";
+    public override string Hint => Session.SelectedLayer is HideLayer
+        ? "Drag the box to move, a corner to resize, or elsewhere to hide."
+        : "Drag over what to hide";
 
     /// <summary>The style a new hide gets while no hide is selected.</summary>
     public HideKind Kind { get; private set; } = HideKind.Blur;

@@ -17,6 +17,8 @@ namespace ImageStash.Editor;
 /// </summary>
 internal static class EditorButtons
 {
+    public const int ChoiceHeight = 32;
+
     private static readonly FontFamily Icons = new("Segoe Fluent Icons");
 
     /// <summary>The More swatch's fill while it holds no picked colour.</summary>
@@ -83,7 +85,7 @@ internal static class EditorButtons
     /// </summary>
     public static ToggleButton Choice(object content, string words, Action chosen)
     {
-        var choice = new ChoiceButton { Content = content, Height = 32, MinWidth = 32, Padding = new Thickness(10, 0), VerticalContentAlignment = VerticalAlignment.Center };
+        var choice = new ChoiceButton { Content = content, Height = ChoiceHeight, MinWidth = 32, Padding = new Thickness(10, 0), VerticalContentAlignment = VerticalAlignment.Center };
         AutomationProperties.SetName(choice, words);
         ToolTipRule.Set(choice, words);
         choice.Click += (_, _) => chosen();
@@ -109,7 +111,7 @@ internal static class EditorButtons
     public static (ToggleButton Button, Border Fill) More(string words, Action<Control> clicked)
     {
         var fill = Square(Rainbow);
-        var more = new ChoiceButton { Content = fill, Height = 32, MinWidth = 32, Padding = new Thickness(6, 0) };
+        var more = new ChoiceButton { Content = fill, Height = ChoiceHeight, MinWidth = 32, Padding = new Thickness(6, 0) };
         AutomationProperties.SetName(more, words);
         ToolTipRule.Set(more, words);
         more.Click += (_, _) => clicked(more);

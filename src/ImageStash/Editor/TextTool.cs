@@ -37,7 +37,7 @@ public sealed class TextTool : EditorTool
 
     public override string Hint => Session.SelectedLayer switch
     {
-        TextLayer => "Drag to move it, a corner to resize it, the round handle to turn it; double-click to edit its text",
+        TextLayer => "Drag to move, corners resize, round handle turns. Double-click to edit.",
         CaptionBarLayer => "Drag a corner to resize it; double-click to edit its text",
         _ => "Click the picture to add text",
     };

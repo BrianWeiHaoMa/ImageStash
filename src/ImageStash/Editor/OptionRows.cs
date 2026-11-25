@@ -3,7 +3,7 @@ using ImageStash.Seams;
 
 namespace ImageStash.Editor;
 
-/// <summary>A tool's option row: the choices for its tool's next layer and selected layer, and what the mouse does (G20).</summary>
+/// <summary>A tool's option row: the choices for its next layer and selected layer (G20).</summary>
 internal interface IOptionRow
 {
     /// <summary>The tool whose options it shows.</summary>

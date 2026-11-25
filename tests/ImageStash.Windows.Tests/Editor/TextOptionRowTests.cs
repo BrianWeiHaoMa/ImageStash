@@ -17,7 +17,7 @@ namespace ImageStash.Windows.Tests.Editor;
 
 /// <summary>
 /// Text's option row on the real window (G20, G21, F8, F4, F13, G25): with nothing selected the presets and "Click the
-/// picture to add text"; with a text selected also the font button, the five fill swatches, More and the outline swatch,
+/// picture to add text"; the font button, the five fill swatches, More and the outline swatch disabled until selected,
 /// and what the mouse does; with a hide selected, Hide's row instead; the font menu's ten in F8's order, each in its
 /// face, then All fonts… listing the Fonts seam's families in a list that scrolls inside the window, stays open as fonts
 /// are chosen from it and checks the chosen one, which the menu then shows checked after the ten; the editor's keys
@@ -31,7 +31,7 @@ public sealed class TextOptionRowTests
     private static readonly string[] F8 = ["Impact", "Arial Black", "Segoe UI", "Comic Sans MS", "Georgia", "Consolas", "Bahnschrift", "Segoe Script", "Ink Free", "Verdana"];
 
     [TestMethod]
-    public async Task NothingSelectedShowsThePresetsAndTheHintATextSelectedAlsoItsFontSwatchesAndOutlineAndAHideSelectedHidesRow()
+    public async Task TextOptionsKeepTheirPlacesAndEnableForASelectedLayerAndHideWithAnotherTool()
     {
         using var shown = ShownWindow.Open();
         using var editor = new ShownEditor(shown);
@@ -43,13 +43,13 @@ public sealed class TextOptionRowTests
             Assert.IsTrue(Checked(editor.Button("Text")), "and current at open");
             CollectionAssert.IsSubsetOf(new[] { "Meme", "Caption bar", "Label", "Click the picture to add text" }, editor.Texts(), "the presets and the hint (G21)");
             Assert.IsTrue(Checked(editor.Button("Meme")), "Meme for the next layer");
-            Assert.IsFalse(OfTheSelected().Any(editor.Shows), "no font, swatch or outline with nothing selected (G21)");
+            AssertSelectionControls(editor, enabled: false);
 
             editor.Click(0.5, 0.25);
             Assert.IsTrue(editor.Session!.SelectedLayer is TextLayer { Preset: TextPreset.Meme }, "a click adds a Meme");
             Assert.IsTrue(Checked(editor.Button("Meme")));
             Assert.AreEqual("Impact", FontWords(editor), "the font button reads the layer's font (F8)");
-            Assert.IsTrue(OfTheSelected().All(editor.Shows), "the font, five swatches, More and the outline swatch (G21)");
+            AssertSelectionControls(editor, enabled: true);
             Assert.Contains(editor.Session.Tool.Hint, editor.Texts(), "and what the mouse does (G20)");
             Assert.AreNotEqual("Click the picture to add text", editor.Session.Tool.Hint);
 
@@ -62,9 +62,9 @@ public sealed class TextOptionRowTests
 
             editor.Click(0.5, 0.1);
             Assert.IsTrue(editor.Session.SelectedLayer is TextLayer && Checked(editor.Button("Text")), "a click on the Meme selects it with Text current");
-            Assert.IsTrue(OfTheSelected().All(editor.Shows), "and its row back");
+            AssertSelectionControls(editor, enabled: true);
             ShownWindow.Press(editor.Canvas, Key.Escape);
-            Assert.IsFalse(OfTheSelected().Any(editor.Shows), "deselected, the presets and the hint again");
+            AssertSelectionControls(editor, enabled: false);
             Assert.Contains("Click the picture to add text", editor.Texts());
         });
     }
@@ -291,16 +291,16 @@ public sealed class TextOptionRowTests
     private static void AssertRowInside(ShownWindow shown, ShownEditor editor) => TrayDesktop.Run(() =>
     {
         shown.Window.UpdateLayout();
-        // The row itself is the option row's content, the groups inside it its children.
-        var row = editor.Button("Meme").GetVisualAncestors().OfType<WrapPanel>().First(panel => panel.Parent is ContentControl);
-        var controls = row.GetVisualDescendants().OfType<Button>().Cast<Control>().Concat(row.Children.OfType<TextBlock>()).ToList();
+        var row = editor.Button("Meme").GetVisualAncestors().OfType<TextOptionRow>().Single();
+        var controls = row.GetVisualDescendants().OfType<Button>().ToList();
         Assert.IsGreaterThan(10, controls.Count);
         foreach (var control in controls)
         {
-            AssertInside(shown, control, $"{AutomationProperties.GetName(control) ?? (control as TextBlock)?.Text} (G21)");
+            AssertInside(shown, control, $"{AutomationProperties.GetName(control)} (G21)");
         }
 
-        Assert.IsGreaterThan(40, row.Bounds.Height, "the row wraps onto more than one line");
+        Assert.IsGreaterThan(0, editor.Button("Outline color").TranslatePoint(default, editor.Button("Font"))!.Value.Y,
+            "the swatches wrap below the font");
     });
 
     private static bool Checked(Button button) => ((ToggleButton)button).IsChecked == true;
@@ -309,9 +309,17 @@ public sealed class TextOptionRowTests
     private static Color Ground(ToggleButton entry) =>
         entry.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>().First().Background is ISolidColorBrush { } ground ? ground.Color : Colors.Transparent;
 
-    /// <summary>The words of the controls the row shows only with a text or caption-bar layer selected.</summary>
+    /// <summary>The controls that need a selected text or caption-bar layer.</summary>
     private static IEnumerable<string> OfTheSelected() =>
         ColorChoices.Swatches.Select(ColorChoices.Hex).Append("Font").Append("More colors").Append("Outline color");
+
+    private static void AssertSelectionControls(ShownEditor editor, bool enabled)
+    {
+        foreach (var words in OfTheSelected())
+        {
+            Assert.AreEqual(enabled, editor.Button(words).IsEffectivelyEnabled, words);
+        }
+    }
 
     /// <summary>The font button's words.</summary>
     internal static string FontWords(ShownEditor editor) =>

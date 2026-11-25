@@ -33,7 +33,7 @@ internal sealed class OutlineSwatch : Button
         auto = new TextBlock { Text = "A", FontSize = 10, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         strike = Strike(22);
         Content = new Panel { Width = 22, Height = 22, Children = { ring, auto, strike } };
-        Height = 32;
+        Height = EditorButtons.ChoiceHeight;
         MinWidth = 32;
         Padding = new Thickness(5, 0);
         AutomationProperties.SetName(this, Called);

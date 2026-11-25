@@ -1,15 +1,11 @@
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
-using Avalonia.Layout;
 using ImageStash.Layers;
-using Thickness = Avalonia.Thickness;
 
 namespace ImageStash.Editor;
 
 /// <summary>
-/// Hide's option row (G20, G23): Blur and Black box, the selected hide's style or the next one's, and what the mouse
-/// does; it wraps onto a second line when the window is narrower than it.
+/// Hide's option row (G20, G23): Blur and Black box, the selected hide's style or the next one's.
 /// </summary>
 internal sealed class HideOptionRow : WrapPanel, IOptionRow
 {
@@ -19,16 +15,13 @@ internal sealed class HideOptionRow : WrapPanel, IOptionRow
     public HideOptionRow(HideTool tool)
     {
         this.tool = tool;
-        Orientation = Orientation.Horizontal;
-        ItemSpacing = 12;
-        LineSpacing = 6;
+        EditorOptions.SetSpacing(this);
         kinds =
         [
             (HideKind.Blur, EditorButtons.Choice("Blur", "Blur", () => tool.Choose(HideKind.Blur))),
             (HideKind.Black, EditorButtons.Choice("Black box", "Black box", () => tool.Choose(HideKind.Black))),
         ];
-        Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Children = { kinds[0].Button, kinds[1].Button } });
-        Children.Add(new TextBlock { Text = tool.Hint, Opacity = 0.7, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0) });
+        Children.AddRange(kinds.Select(kind => kind.Button));
         Refresh();
     }
 

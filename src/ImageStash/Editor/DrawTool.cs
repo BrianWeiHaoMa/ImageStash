@@ -18,7 +18,9 @@ public sealed class DrawTool : EditorTool
 
     public override string Name => "Draw";
 
-    public override string Hint => "Drag to draw a mark; click a mark to select it";
+    public override string Hint => Selected is null
+        ? "Drag to draw a mark; click a mark to select it"
+        : "Drag the selected mark to move it, or drag elsewhere to draw.";
 
     /// <summary>The kind of mark a drag draws next while no mark is selected.</summary>
     public MarkKind Mark { get; private set; } = MarkKind.Pen;

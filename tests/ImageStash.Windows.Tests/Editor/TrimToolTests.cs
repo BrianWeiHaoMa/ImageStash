@@ -60,7 +60,7 @@ public sealed class TrimToolTests
                 TextOptionRowTests.AssertInside(shown, control, $"{(control as TextBlock)?.Text ?? Avalonia.Automation.AutomationProperties.GetName(control)} at the minimum (G20, G21)");
             }
 
-            Assert.IsGreaterThan(0.0, hint.TranslatePoint(default, kept)!.Value.Y, "the row wrapped: what the mouse does on a line below the kept range");
+            Assert.IsGreaterThan(0.0, hint.TranslatePoint(default, kept)!.Value.Y, "the gesture hint is on its own line below the kept range");
         });
         var before = await RenderedWindow.Of(shown);
 
@@ -83,10 +83,9 @@ public sealed class TrimToolTests
 
         TrayDesktop.Run(() => editor.Choose("Text"));
         var underText = await RenderedWindow.Of(shown);
-        // Text's row is not Trim's height, so the strip may stand elsewhere.
-        var moved = TrayDesktop.Get(editor.FilmstripInRendering).Y - strip.Y;
-        Assert.DoesNotContain(handle, underText.Colors(strip.X + second * s - 4, middle + moved - 4, 8, 8), "the handles are Trim's");
-        Assert.AreEqual(after.At(inFirst, middle), underText.At(inFirst, (int)(middle + moved)), "the frame cut away stays dimmed under every tool");
+        Assert.AreEqual(strip, TrayDesktop.Get(editor.FilmstripInRendering), "the strip stays in place when the tool changes");
+        Assert.DoesNotContain(handle, underText.Colors(strip.X + second * s - 4, middle - 4, 8, 8), "the handles are Trim's");
+        Assert.AreEqual(after.At(inFirst, middle), underText.At(inFirst, middle), "the frame cut away stays dimmed under every tool");
     }
 
     [TestMethod]
@@ -95,7 +94,7 @@ public sealed class TrimToolTests
         using var shown = ShownWindow.Open();
         using var editor = new ShownEditor(shown);
         var item = (await shown.OpenStash(Clip(shown, "steady", (_, _, frame) => ((byte)(frame * 100), 0, 0)))).Single();
-        // Wide enough for the whole row on one line, so Reset and the hint stand after the readings.
+        // Wide enough for Reset and the readings to be on one line.
         TrayDesktop.Run(() => shown.Window.Width = 1000);
         await EditorOverlayTests.Open(shown, item);
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => editor.Session!.TimelineComplete && editor.Filmstrip.Cells.Count == 3));

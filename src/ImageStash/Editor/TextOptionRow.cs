@@ -3,19 +3,19 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
+using Avalonia.Media;
 using ImageStash.Layers;
 using ImageStash.Look;
 using ImageStash.Media;
 using ImageStash.Seams;
-using Thickness = Avalonia.Thickness;
 
 namespace ImageStash.Editor;
 
 /// <summary>
 /// Text's option row (G20, G21, F8): the presets Meme, Caption bar and Label, the selected
-/// layer's checked, else the next one's; with a text or caption-bar layer selected, also the font button, which opens
-/// the font menu, the five fill swatches with the More swatch, which opens the colour picker, and the outline swatch,
-/// which opens it with Auto and None; and what the mouse does, with nothing selected "Click the picture to add text".
+/// layer's checked, else the next one's; also the font button, which opens the font menu, the five fill swatches with
+/// the More swatch, which opens the colour picker, and the outline swatch, which opens it with Auto and None.
+/// The font and swatches keep their places while disabled without a selected text or caption-bar layer.
 /// It wraps onto further lines when the window is narrower, so nothing is clipped or hidden.
 /// </summary>
 internal sealed class TextOptionRow : WrapPanel, IOptionRow
@@ -34,7 +34,6 @@ internal sealed class TextOptionRow : WrapPanel, IOptionRow
     private readonly ColorPicker fillPicker;
     private readonly ColorPicker outlinePicker;
     private readonly Control[] ofTheSelected;
-    private readonly TextBlock hint;
     private Control? allFonts;
 
     /// <param name="menu">Makes one of the editor's menus, which hands the editor its keys.</param>
@@ -42,21 +41,21 @@ internal sealed class TextOptionRow : WrapPanel, IOptionRow
     {
         this.tool = tool;
         this.pane = pane;
-        Orientation = Orientation.Horizontal;
-        ItemSpacing = 12;
-        LineSpacing = 6;
+        EditorOptions.SetSpacing(this);
         presets = [.. new[] { (TextKind.Meme, "Meme"), (TextKind.CaptionBar, "Caption bar"), (TextKind.Label, "Label") }
             .Select(preset => (preset.Item1, EditorButtons.Choice(preset.Item2, preset.Item2, () => tool.Choose(preset.Item1))))];
 
-        fontName = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis, MaxWidth = 160 };
+        fontName = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        var arrow = EditorButtons.Glyph("\ue70d", 10);
+        Grid.SetColumn(arrow, 1);
         font = new Button
         {
-            Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { fontName, EditorButtons.Glyph("", 10) } },
-            Height = 32,
-            MinWidth = 120,
+            Content = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8, Children = { fontName, arrow } },
+            Height = EditorButtons.ChoiceHeight,
+            Width = 140,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
         };
         AutomationProperties.SetName(font, FontButton);
-        ToolTipRule.Set(font, FontButton);
         font.Click += (_, _) => FontMenu.Open(menu(PlacementMode.TopEdgeAlignedLeft), font, tool.FontShown, tool.Choose, () =>
         {
             // It stays open as a font is chosen, as the colour picker does: a press elsewhere or Esc closes it.
@@ -74,12 +73,10 @@ internal sealed class TextOptionRow : WrapPanel, IOptionRow
         outlinePicker.Done += pane.Hide;
         outline = new OutlineSwatch(anchor => Open(outlinePicker, anchor));
 
-        // Text's sentence is long: it wraps within the row rather than run past the window (G21).
-        hint = new TextBlock { Opacity = 0.7, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0), TextWrapping = Avalonia.Media.TextWrapping.Wrap };
-        var colorRow = Group([.. swatches.Select(swatch => swatch.Button), more]);
-        ofTheSelected = [font, colorRow, outline];
-        var presetRow = Group(presets.Select(preset => preset.Button));
-        Children.AddRange([presetRow, font, colorRow, outline, hint]);
+        var colorsRow = EditorOptions.Group([.. swatches.Select(swatch => swatch.Button), more, outline]);
+        ofTheSelected = [font, colorsRow];
+        var presetRow = EditorOptions.Group(presets.Select(preset => preset.Button));
+        Children.AddRange([EditorOptions.Group([presetRow, font], EditorOptions.GroupSpacing), colorsRow]);
         Refresh();
     }
 
@@ -88,15 +85,24 @@ internal sealed class TextOptionRow : WrapPanel, IOptionRow
     public void Refresh()
     {
         EditorButtons.Check(presets, tool.KindShown);
-        hint.Text = tool.Hint;
         var (family, fill, shownOutline) = (tool.FontShown, tool.FillShown, tool.OutlineShown);
+        fontName.Text = family ?? FontButton;
+        AutomationProperties.SetHelpText(font, family);
+        ToolTipRule.ShowWhole(font, family);
         foreach (var control in ofTheSelected)
         {
-            control.IsVisible = family is not null;
+            control.IsEnabled = family is not null;
         }
 
         if (family is null || fill is not { } color || shownOutline is null)
         {
+            foreach (var swatch in swatches)
+            {
+                swatch.Button.IsChecked = false;
+            }
+
+            EditorButtons.ShowPicked(more, moreFill, ColorChoices.Swatches[0]);
+            outline.Show(Outline.None, ColorChoices.Swatches[0]);
             // What the pane shows was for the layer no longer selected.
             if (pane.Shown is { } shown && (ReferenceEquals(shown, fillPicker) || ReferenceEquals(shown, outlinePicker) || ReferenceEquals(shown, allFonts)))
             {
@@ -106,7 +112,6 @@ internal sealed class TextOptionRow : WrapPanel, IOptionRow
             return;
         }
 
-        fontName.Text = family;
         if (allFonts is not null && ReferenceEquals(pane.Shown, allFonts))
         {
             FontMenu.Mark(allFonts, family);
@@ -115,14 +120,6 @@ internal sealed class TextOptionRow : WrapPanel, IOptionRow
         EditorButtons.Check(swatches, color);
         EditorButtons.ShowPicked(more, moreFill, color);
         outline.Show(shownOutline, color);
-    }
-
-    /// <summary>Choices kept close together, which still wrap among themselves when the row is narrower than they are (G21).</summary>
-    private static WrapPanel Group(IEnumerable<Control> choices)
-    {
-        var group = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 2, LineSpacing = 2 };
-        group.Children.AddRange(choices);
-        return group;
     }
 
     private void Open(ColorPicker picker, Control anchor)

@@ -5,18 +5,13 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ImageStash.Look;
-using Thickness = Avalonia.Thickness;
 
 namespace ImageStash.Editor;
 
 /// <summary>
 /// Trim's option row (G20, G22, G25): play and pause, where the play is over the clip's length, what the
-/// handles keep and for how long, Reset, and what the mouse does; it wraps onto a second line when the window is narrower
-/// than it. The position and what is kept hold room for their widest readings, so Reset and the hint never move as they
-/// change. While the frames are still being read the times are not yet known, and the row says so in their place, in
-/// words short enough to keep the row's two lines at the window's minimum width; the filmstrip names the item (G35). Once
-/// a frame could not be read the clip's length is not known either, and the row says that instead. It follows the play
-/// itself, as the session tells it apart from the rest of the editor.
+/// handles keep and for how long, and Reset. The position and what is kept hold room for their widest readings.
+/// The load and failure state stands in for the readings until every frame has been timed (G35).
 /// </summary>
 internal sealed class TrimOptionRow : WrapPanel, IOptionRow
 {
@@ -37,21 +32,26 @@ internal sealed class TrimOptionRow : WrapPanel, IOptionRow
     {
         this.tool = tool;
         this.session = session;
-        Orientation = Orientation.Horizontal;
-        ItemSpacing = 12;
-        LineSpacing = 6;
+        EditorOptions.SetSpacing(this);
         play = EditorButtons.Icon("", Pause, "Pause (Space)");
-        play.Height = 32;
+        play.Height = EditorButtons.ChoiceHeight;
         play.Click += (_, _) => session.TogglePlaying();
         position = new SteadyReadout { VerticalAlignment = VerticalAlignment.Center, FontWeight = FontWeight.SemiBold };
         busy = new TextBlock { Text = Reading, VerticalAlignment = VerticalAlignment.Center, Opacity = 0.7 };
-        kept = new SteadyReadout { VerticalAlignment = VerticalAlignment.Center, Opacity = 0.7, TextWrapping = TextWrapping.Wrap };
+        // Keep Reset beside the range when the whole group wraps. Even a long imported clip can use two text lines here.
+        kept = new SteadyReadout
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Opacity = 0.7,
+            FontSize = 13,
+            LineHeight = 15,
+            MaxWidth = 320,
+            TextWrapping = TextWrapping.Wrap,
+        };
         var reset = EditorButtons.Labelled(null, Reset);
+        reset.Height = EditorButtons.ChoiceHeight;
         reset.Click += (_, _) => tool.Reset();
-        Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { play, position, busy } });
-        Children.Add(kept);
-        Children.Add(reset);
-        Children.Add(new TextBlock { Text = tool.Hint, Opacity = 0.7, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0) });
+        Children.AddRange([EditorOptions.Group([play, position, busy], spacing: 4), EditorOptions.Group([kept, reset], EditorOptions.GroupSpacing)]);
         Refresh();
     }
 

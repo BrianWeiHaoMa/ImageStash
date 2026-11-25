@@ -48,7 +48,7 @@ public sealed class EditorOverlay : Border
     private readonly Button compare;
     private readonly Button more;
     private readonly StackPanel tools;
-    private readonly ContentControl options;
+    private readonly EditorOptions options = new();
     private readonly Button cancel;
     private readonly Button size;
     private readonly TextBlock sizeText;
@@ -74,7 +74,6 @@ public sealed class EditorOverlay : Border
         compare = EditorButtons.Labelled("\ue8ab", "Compare");
         more = EditorButtons.Icon("\ue712", "More options");
         tools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(10, 8, 10, 0) };
-        options = new ContentControl { Margin = new Thickness(12, 8, 12, 0) };
         cancel = EditorButtons.Labelled(null, "Cancel", "Esc");
         busyText = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxLines = 2, TextTrimming = TextTrimming.CharacterEllipsis };
         var progress = new ProgressBar { IsIndeterminate = true, Width = 48, MinWidth = 48, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
@@ -143,7 +142,7 @@ public sealed class EditorOverlay : Border
         IsVisible = next is not null;
         if (next is null)
         {
-            options.Content = null;
+            options.Row = null;
             tools.Children.Clear();
             focusLeft = null;
             return;
@@ -438,15 +437,17 @@ public sealed class EditorOverlay : Border
             choice.IsChecked = ReferenceEquals(choice.Tag, shown.Tool);
         }
 
-        if (options.Content is IOptionRow row && ReferenceEquals(row.Tool, shown.Tool))
+        if (options.Row is IOptionRow row && ReferenceEquals(row.Tool, shown.Tool))
         {
             row.Refresh();
         }
         else
         {
             pane.Hide();
-            options.Content = OptionRows.For(shown.Tool, shown, canvas, pane, Menu, fonts);
+            options.Row = OptionRows.For(shown.Tool, shown, canvas, pane, Menu, fonts);
         }
+
+        options.Hint = shown.Tool.Hint;
 
         // Focus the pointer left among the options, choosing one while the field stays open, goes back to the field (G21).
         TypingGoesOn();
