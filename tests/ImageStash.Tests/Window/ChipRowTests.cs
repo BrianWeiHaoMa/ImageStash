@@ -454,8 +454,8 @@ public sealed class ChipRowTests
 
             FinishOnDispatcher(async () => Assert.IsTrue((await listed.Organising.RemoveTag([other], "owl")).Succeeded));
             FinishOnDispatcher(async () => Assert.IsTrue((await listed.Organising.AddTag([other], "Owl")).Succeeded));
-            string[] recreated = typed.Length == 0 ? expanded : [.. expanded, "#Owl"];
-            CollectionAssert.AreEqual(recreated, TagFaces(), "a recreated tag joins at the end if this row had no place for it");
+            string[] recreated = typed.Length == 0 ? ["#cat", "#Owl", "#dog", "#ant"] : [.. expanded, "#Owl"];
+            CollectionAssert.AreEqual(recreated, TagFaces(), "the recreated tag shows its live spelling in its held place, or joins at the end");
 
             string[] TagFaces() => row.Children.OfType<Button>().Select(chip => chip.Content).OfType<string>().ToArray();
         });

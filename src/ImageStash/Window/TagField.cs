@@ -271,6 +271,11 @@ public sealed class TagField : StackPanel
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
+        if (e.Source is TagRenameBox)
+        {
+            return;
+        }
+
         if (e.KeyModifiers != KeyModifiers.None)
         {
             if (e.Source is Button && e.Key is Key.Enter or Key.Space)
@@ -569,14 +574,14 @@ public sealed class TagFieldOverlay : Border
     private IInputElement? returnTo;
     private int reads;
 
-    public TagFieldOverlay(Listing listing, Organising organising, Notices notices, PressOnce? heldKeys = null)
+    public TagFieldOverlay(Listing listing, Organising organising, Notices notices, PressOnce? heldKeys = null, ClipboardPaste? paste = null)
     {
         this.listing = listing;
         this.organising = organising;
         this.notices = notices;
         heading = new TextBlock { FontSize = 12, Opacity = 0.75, TextTrimming = TextTrimming.CharacterEllipsis };
         Field = new TagField();
-        Field.Picker.ConfigureTagManagement(listing, organising, heldKeys);
+        Field.Picker.ConfigureTagManagement(listing, organising, heldKeys, paste);
         scroller = new TagFieldScroller(Field);
         Child = new StackPanel { Spacing = 8, Children = { heading, scroller } };
         Padding = new Thickness(14, 10, 14, 12);

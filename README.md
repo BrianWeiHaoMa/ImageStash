@@ -66,10 +66,12 @@ while you work. Opening ImageStash again or choosing a scope applies the latest 
 grid, then click it in the same place to remove it from the search. Typing updates the suggestions. A chip can complete
 the unfinished last word, as in `cat jo` becoming `cat joy`. Every tag lets you pick existing tags that are dimmed or
 missing from the row. The Every tag lists in the chip row and tag field show how many pictures in the whole stash
-carry each tag. Right-click a live tag chip or an entry in Every tag to remove the tag from all its pictures. The
-notice offers Undo. Drop tiles onto a tag chip to give them that tag, or onto Favorites to star them. Drop files
-or a folder onto the window to add them. Apply a tag or favorite change to a selection of two or more pictures,
-or drop tiles onto a tag chip or Favorites, and a notice tells you how many pictures changed. Click Undo on that
+carry each tag. Right-click a live tag chip or an entry in Every tag and choose Rename tag… to edit it in place.
+Enter saves one word and merges into an existing tag if you type its name. Esc cancels. The same menu can remove
+the tag from all its pictures, with Undo in the notice. Drop tiles onto a tag chip to give them that tag, or onto
+Favorites to star them. Drop files or a folder onto the window to add them. Apply a tag or favorite change to a
+selection of two or more pictures, or drop tiles onto a tag chip or Favorites, and a notice tells you how many
+pictures changed. Click Undo on that
 notice to reverse its change. `Ctrl+Z` runs the newest available Undo in the grid or in the preview outside its fields.
 `Ctrl+D` makes the selected pictures favorites, or takes them off: a favorite's tile carries a small star,
 and so does its preview, where a click on the star does the same. Rest the pointer on a tile to see its name, up to

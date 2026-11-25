@@ -1,8 +1,10 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Threading;
 using ImageStash.Look;
 using ImageStash.Store;
@@ -60,6 +62,7 @@ public sealed class ChipRow : Panel
     private readonly Listing listing;
     private readonly Organising organising;
     private readonly PressOnce? heldKeys;
+    private readonly ClipboardPaste? paste;
     private readonly Func<OwnDrag?> ownDrag;
     private readonly (Button Chip, Scope Scope)[] scopes;
     private readonly List<(Button Chip, string Tag)> tagChips = [];
@@ -79,15 +82,17 @@ public sealed class ChipRow : Panel
     private bool everyTagShown;
     private IDisposable? ring;
     private Button? ringedChip;
+    private double widthBeforeRing;
 
     /// <param name="ownDrag">The window's own drag in progress, or null.</param>
-    public ChipRow(Listing listing, Organising organising, Func<OwnDrag?> ownDrag, PressOnce? heldKeys = null)
+    public ChipRow(Listing listing, Organising organising, Func<OwnDrag?> ownDrag, PressOnce? heldKeys = null, ClipboardPaste? paste = null)
     {
         this.listing = listing;
         this.organising = organising;
         this.ownDrag = ownDrag;
         this.heldKeys = heldKeys;
-        picker.ConfigureTagManagement(listing, organising, heldKeys);
+        this.paste = paste;
+        picker.ConfigureTagManagement(listing, organising, heldKeys, paste);
         // What does not fit is laid beyond the right edge: clipped, it is neither seen nor reached.
         ClipToBounds = true;
         scopes = ScopeFaces.Select(face => (ScopeChip(face.Name, face.Glyph, face.Scope), face.Scope)).ToArray();
@@ -244,14 +249,43 @@ public sealed class ChipRow : Panel
             var available = listing.CanFilterTag(tag, searching, marked);
             // A live chip keeps receiving drags even while its filter action is unavailable.
             chip.IsEnabled = live;
-            chip.Opacity = available ? 1 : 0.45;
             chip.Classes.Set(LookStyles.FilterUnavailable, !available);
             chip.Classes.Set("accent", marked);
+            UpdateTagOpacity(chip);
             if (!live)
             {
                 EndRing(chip);
             }
+
+            if (listing.LiveTag(tag) is { } current)
+            {
+                ShowTagSpelling(chip, current.Tag);
+            }
         }
+    }
+
+    private static void UpdateTagOpacity(Button chip) =>
+        chip.Opacity = chip.Content is not TagRenameBox && chip.Classes.Contains(LookStyles.FilterUnavailable) ? 0.45 : 1;
+
+    private void ShowTagSpelling(Button chip, string tag)
+    {
+        var label = "#" + tag;
+        if (AutomationProperties.GetName(chip) == label)
+        {
+            return;
+        }
+
+        ((TagManagementMenu)chip.ContextMenu!).CancelRename();
+        EndRing(chip);
+        if (double.IsNaN(chip.Width))
+        {
+            // The original label sized this place. Trim the new label if it needs more room.
+            chip.Measure(Size.Infinity);
+            chip.Width = chip.DesiredSize.Width;
+        }
+
+        chip.Content = label;
+        AutomationProperties.SetName(chip, label);
     }
 
     /// <summary>Every tag, the commonest first, whatever the query, the lit ones marked (G4); made when the list opens, not at every load (G1).</summary>
@@ -375,8 +409,35 @@ public sealed class ChipRow : Panel
     private Button TagChip(string tag)
     {
         var chip = Chip("#" + tag, LookStyles.TagChip, TagChipPadding);
-        chip.Click += (_, _) => _ = listing.ChooseTag(tag);
-        chip.ContextMenu = new TagManagementMenu(chip, listing, organising, () => listing.LiveTag(tag), heldKeys);
+        AutomationProperties.SetName(chip, "#" + tag);
+        chip.ContentTemplate = new FuncDataTemplate<object>((content, _) =>
+        {
+            // A presenter's explicit template also handles control content, including the focused editor.
+            if (content is not string label)
+            {
+                return content as Control;
+            }
+
+            var words = new TextBlock { Text = label, TextTrimming = TextTrimming.CharacterEllipsis };
+            ToolTipRule.ShowWhenTrimmed(chip, words, label);
+            return words;
+        });
+        chip.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == ContentControl.ContentProperty)
+            {
+                UpdateTagOpacity(chip);
+            }
+        };
+        chip.Click += (_, _) =>
+        {
+            if (chip.Content is not TagRenameBox)
+            {
+                _ = listing.ChooseTag(tag);
+            }
+        };
+        chip.ContextMenu = new TagManagementMenu(chip, listing, organising, () => listing.LiveTag(tag), heldKeys, paste,
+            () => chip.IsEffectivelyVisible && chip.IsHitTestVisible);
         TakesOwnDrag(chip, tag);
         return chip;
     }
@@ -413,6 +474,7 @@ public sealed class ChipRow : Panel
                 }
 
                 // The drag ring must not grow a tag past the space reserved for its target.
+                widthBeforeRing = chip.Width;
                 if (tag is not null && chip.DesiredSize.Width > 0)
                 {
                     chip.Width = chip.DesiredSize.Width;
@@ -455,9 +517,9 @@ public sealed class ChipRow : Panel
         ring?.Dispose();
         ring = null;
         ringedChip = null;
-        if (chip.Content is string)
+        if (chip.Classes.Contains(LookStyles.TagChip))
         {
-            chip.ClearValue(Button.WidthProperty);
+            chip.Width = widthBeforeRing;
         }
 
         chip.ClearValue(Button.BorderBrushProperty);

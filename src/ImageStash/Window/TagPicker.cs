@@ -64,6 +64,7 @@ public sealed class TagPicker : Popup
     private readonly Border card;
     private Action<string> picked = _ => { };
     private Action<Button, Row>? attachTagMenu;
+    private PressOnce? heldKeys;
     private Control? keyboardReturn;
     private Button? keyboardEntry;
     private double widestName;
@@ -97,7 +98,12 @@ public sealed class TagPicker : Popup
         });
         Child = card;
         card.AddHandler(KeyDownEvent, OnListKeyDown, RoutingStrategies.Tunnel);
-        card.AddHandler(KeyUpEvent, (_, e) => e.Handled |= e.Key == Key.Space, RoutingStrategies.Tunnel);
+        card.AddHandler(KeyUpEvent, (_, e) =>
+        {
+            // The chip row's popup can receive releases that do not route through the window.
+            heldKeys?.Released(e.Key);
+            e.Handled |= e.Key == Key.Space && e.Source is not TagRenameBox;
+        }, RoutingStrategies.Tunnel, handledEventsToo: true);
         Closed += (_, _) =>
         {
             RestoreBoxFocus();
@@ -111,11 +117,15 @@ public sealed class TagPicker : Popup
     internal bool Contains(Visual target) => ReferenceEquals(target, card) || card.IsVisualAncestorOf(target) ||
         OpenedPopups.Any(popup => popup.IsInsidePopup(target));
 
-    internal void ConfigureTagManagement(Listing listing, Organising organising, PressOnce? heldKeys)
+    internal void ConfigureTagManagement(Listing listing, Organising organising, PressOnce? heldKeys, ClipboardPaste? paste)
     {
+        this.heldKeys = heldKeys;
         attachTagMenu = (button, row) => button.ContextMenu = new TagManagementMenu(button, listing, organising, () =>
-            IsOpen && rows.Contains(row) ? new TagCount(row.Entry.Tag, row.Entry.Count) : null, heldKeys);
+            IsOpen && rows.Contains(row) ? new TagCount(row.Entry.Tag, row.Entry.Count) : null, heldKeys, paste, () => RowInView(button));
     }
+
+    private bool RowInView(Button button) => button.IsEffectivelyVisible && button.TranslatePoint(default, list) is { } at
+        && at.Y < list.Viewport.Height && at.Y + button.Bounds.Height > 0;
 
     private Button MakeEntry(Row row)
     {
@@ -199,8 +209,7 @@ public sealed class TagPicker : Popup
 
         var focusedTag = FocusedEntry?.Tag as string;
         var index = focusedTag is not null ? IndexOf(focusedTag) : -1;
-        var sameTags = entries.Select(entry => entry.Tag).SequenceEqual(Entries.Select(entry => entry.Tag));
-        var replacingFocus = index >= 0 && !sameTags;
+        var replacingFocus = index >= 0 && (index >= entries.Count || entries[index].Tag != Entries[index].Tag);
         Entries = entries;
         if (replacingFocus)
         {
@@ -209,21 +218,7 @@ public sealed class TagPicker : Popup
             card.Focus();
         }
 
-        if (sameTags)
-        {
-            for (var i = 0; i < entries.Count; i++)
-            {
-                rows[i].Entry = entries[i];
-            }
-        }
-        else
-        {
-            rows.Clear();
-            foreach (var entry in entries)
-            {
-                rows.Add(new Row(entry));
-            }
-        }
+        SetRows(entries);
 
         if (replacingFocus)
         {
@@ -235,6 +230,34 @@ public sealed class TagPicker : Popup
         }
 
         card.Focusable = false;
+    }
+
+    private void SetRows(IReadOnlyList<TagPickerEntry> entries)
+    {
+        var commonLength = Math.Min(rows.Count, entries.Count);
+        for (var i = 0; i < commonLength; i++)
+        {
+            var entry = entries[i];
+            if (rows[i].Entry.Tag == entry.Tag)
+            {
+                rows[i].Entry = entry;
+            }
+            else
+            {
+                // Recycle only the row that changed. Another row can still hold the person's draft.
+                rows[i] = new Row(entry);
+            }
+        }
+
+        while (rows.Count > entries.Count)
+        {
+            rows.RemoveAt(rows.Count - 1);
+        }
+
+        for (var i = commonLength; i < entries.Count; i++)
+        {
+            rows.Add(new Row(entries[i]));
+        }
     }
 
     private Button? FocusedEntry
@@ -309,7 +332,7 @@ public sealed class TagPicker : Popup
 
     private void OnListKeyDown(object? sender, KeyEventArgs e)
     {
-        if (TagManagementMenu.InTagMenu(e.Source))
+        if (e.Source is TagRenameBox || TagManagementMenu.InTagMenu(e.Source))
         {
             return;
         }
@@ -406,7 +429,13 @@ public sealed class TagPicker : Popup
 
             AutomationProperties.SetName(this, tag);
             ToolTipRule.ShowWhenTrimmed(words, words, tag);
-            Click += (_, _) => pick(tag);
+            Click += (_, _) =>
+            {
+                if (Content is not TagRenameBox)
+                {
+                    pick(tag);
+                }
+            };
             Show(row.Entry);
             // A row model outlives the controls virtualization discards as it scrolls.
             WeakEvents.AvaloniaPropertyChanged.Subscribe(row, this);

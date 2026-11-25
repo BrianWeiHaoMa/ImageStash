@@ -1,13 +1,10 @@
-using Avalonia;
-using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Interactivity;
-using Avalonia.VisualTree;
 using ImageStash.Layers;
 using ImageStash.Store;
 using ImageStash.Tests.Support;
 using ImageStash.Window;
+using static ImageStash.Tests.Support.TagMenuControls;
 
 namespace ImageStash.Tests.Window;
 
@@ -365,98 +362,11 @@ public sealed class TagManagementTests
         }));
     }
 
-    private static async Task<Button> OpenOrigin(ListedStash listed, string origin, StashItem item)
-    {
-        if (origin is "chip" or "chip picker")
-        {
-            var row = Chips(listed);
-            if (origin == "chip")
-            {
-                return Chip(row, "shared");
-            }
-
-            Click(EveryTag(row));
-            return PickerRow(row.Picker, "shared");
-        }
-
-        TagField field;
-        if (origin == "selection picker")
-        {
-            var host = new TagFieldOverlay(listed.Listing, listed.Organising, listed.Notices);
-            host.Open(listed.Listing.SelectedItems, new Button());
-            field = host.Field;
-        }
-        else
-        {
-            var preview = new Preview(listed.Listing, listed.Handoff, listed.Organising, listed.Deletion,
-                listed.Renaming, listed.Editing, listed.ItemMenu, listed.Notices, listed.Stash.Clock, listed.PasteTarget, _ => { }, new Button());
-            preview.Open(item);
-            field = preview.GetVisualDescendants().OfType<PreviewTags>().Single().Field;
-        }
-
-        var opener = EveryTag(field);
-        if (!opener.IsVisible)
-        {
-            var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            void Changed(object? sender, AvaloniaPropertyChangedEventArgs args)
-            {
-                if (args.Property == Visual.IsVisibleProperty && opener.IsVisible)
-                {
-                    ready.TrySetResult();
-                }
-            }
-
-            opener.PropertyChanged += Changed;
-            try
-            {
-                await ready.Task;
-            }
-            finally
-            {
-                opener.PropertyChanged -= Changed;
-            }
-        }
-
-        Click(opener);
-        return PickerRow(field.Picker, "shared");
-    }
-
-    private static ChipRow Chips(ListedStash listed)
-    {
-        var row = new ChipRow(listed.Listing, listed.Organising, () => null);
-        row.Measure(new Size(600, 40));
-        return row;
-    }
-
-    private static Button Chip(ChipRow row, string tag) => row.Children.OfType<Button>().Single(button => Equals(button.Content, "#" + tag));
-
-    private static Button EveryTag(Control host) => host.GetVisualDescendants().OfType<Button>()
-        .Single(button => AutomationProperties.GetName(button) == "Every tag");
-
-    private static Button PickerRow(TagPicker picker, string tag)
-    {
-        Assert.IsTrue(picker.IsOpen);
-        var items = (ItemsControl)((ScrollViewer)((Border)picker.Child!).Child!).Content!;
-        var index = picker.Entries.ToList().FindIndex(entry => entry.Tag == tag);
-        return (Button)items.ItemTemplate!.Build(items.Items[index])!;
-    }
-
-    private static ContextRequestedEventArgs RequestMenu(Control source)
-    {
-        var request = new ContextRequestedEventArgs { RoutedEvent = InputElement.ContextRequestedEvent };
-        source.RaiseEvent(request);
-        return request;
-    }
-
     private static MenuItem RemoveCommand(Button source, string label)
     {
         Assert.IsTrue(RequestMenu(source).Handled, "the requested tag has a context menu");
         return source.ContextMenu!.Items.OfType<MenuItem>().Single(item => Equals(item.Header, label));
     }
-
-    private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-
-    private static void Click(MenuItem item) => item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
 
     private static async Task<string[]> Tags(ListedStash listed, StashItem item) =>
         (await listed.Stash.All()).Single(row => row.Id == item.Id).Tags.ToArray();

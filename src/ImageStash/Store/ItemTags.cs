@@ -27,7 +27,7 @@ internal static class ItemTags
 
     private const string CountAction = "Count the tags";
     public const string RemoveFromAllAction = "Remove tag from all items";
-    private const string RenameAction = "Rename tag";
+    public const string RenameAction = "Rename tag";
     private static readonly UTF8Encoding StoredText = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
     /// <summary>

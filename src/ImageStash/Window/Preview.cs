@@ -81,7 +81,7 @@ public sealed class Preview : Border
     /// <param name="dialogUp">Told while Save a copy…'s picker or Open with…'s dialog is up, so the flyout stays (G2).</param>
     /// <param name="returnFocusTo">Where focus goes when the preview closes: the grid.</param>
     public Preview(Listing listing, Handoff handoff, Organising organising, Deletion deletion, Renaming renaming, Editing editing, ItemMenu itemMenu, Notices notices, TimeProvider clock,
-        PasteTargetHolder pasteTarget, Action<bool> dialogUp, IInputElement returnFocusTo, PressOnce? heldKeys = null)
+        PasteTargetHolder pasteTarget, Action<bool> dialogUp, IInputElement returnFocusTo, PressOnce? heldKeys = null, ClipboardPaste? paste = null)
     {
         this.listing = listing;
         this.handoff = handoff;
@@ -159,7 +159,7 @@ public sealed class Preview : Border
         editFacts = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, Opacity = 0.6 };
         var facts = new StackPanel { Spacing = 2, Margin = new Thickness(12, 10, 12, 14), Children = { pictureFacts, useFacts, editFacts } };
         tags = new PreviewTags { Margin = new Thickness(12, 0, 12, 12) };
-        tags.Field.Picker.ConfigureTagManagement(listing, organising, heldKeys);
+        tags.Field.Picker.ConfigureTagManagement(listing, organising, heldKeys, paste);
         // Enter in the tag field leaves focus in its box, so several tags are added in a row (G17); Esc, as the name's
         // Esc does, gives focus back to the preview, whose Enter then hands off again (G19, G7).
         tags.Committed += text => _ = AddTags(text);

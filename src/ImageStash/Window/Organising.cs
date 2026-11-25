@@ -69,16 +69,38 @@ public sealed class Organising(Listing listing, Notices notices)
     public Task<Outcome> RemoveTag(IReadOnlyList<StashItem> items, string tag) =>
         Change(items, ItemTags.RemoveAction, ItemTags.RemoveAction, (store, targets) => store.RemoveTagWithChanges(targets, tag));
 
+    /// <summary>Renames a tag on its carriers in the issuing stash, with no change to the query or selected items.</summary>
+    internal Task<Outcome> RenameTag(StashStore issuer, string tag, string text)
+    {
+        const string action = ItemTags.RenameAction;
+        if (RefuseTagChange(action, issuer, tag) is { } refusal)
+        {
+            return Task.FromResult<Outcome>(refusal);
+        }
+
+        return OneAtATime(action, async () =>
+        {
+            var renamed = await issuer.RenameTag(tag, text);
+            await listing.Refresh();
+            if (renamed.Failure is { } failure)
+            {
+                notices.Raise(failure with { Subject = $"#{tag}" });
+            }
+            else if (renamed.Value is { Items: > 0 } result)
+            {
+                notices.Raise(result.Merged ? $"Merged #{tag} into #{result.Tag}" : $"Renamed #{tag} to #{result.Tag}");
+            }
+
+            return renamed;
+        });
+    }
+
     /// <summary>Takes the offered tag off its listed carriers, while the whole-stash count in the offer still holds.</summary>
     internal Task<Outcome> RemoveTagFromAll(StashStore issuer, TagCount offer)
     {
         const string action = ItemTags.RemoveFromAllAction;
-        var reason = listing.CannotStartReason ?? (listing.Store != issuer ? Listing.ReplacedSinceReason : null);
-        if (reason is not null)
+        if (RefuseTagChange(action, issuer, offer.Tag) is { } refusal)
         {
-            using var acting = UserAct.Begin(action);
-            var refusal = new Failure(action, $"#{offer.Tag}", reason);
-            notices.Raise(refusal);
             return Task.FromResult<Outcome>(refusal);
         }
 
@@ -101,6 +123,20 @@ public sealed class Organising(Listing listing, Notices notices)
             notices.Raise(failure);
             return failure;
         });
+    }
+
+    private Failure? RefuseTagChange(string action, StashStore issuer, string tag)
+    {
+        var reason = listing.CannotStartReason ?? (listing.Store != issuer ? Listing.ReplacedSinceReason : null);
+        if (reason is null)
+        {
+            return null;
+        }
+
+        using var acting = UserAct.Begin(action);
+        var refusal = new Failure(action, $"#{tag}", reason);
+        notices.Raise(refusal);
+        return refusal;
     }
 
     /// <summary>

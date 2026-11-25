@@ -103,7 +103,7 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
         seams.BorderDrag.StopAtMinimum(this);
         head = WindowLayout.Head(search, WindowLayout.SettingsButton(() => SettingsRequested?.Invoke()), AddMenu.Button(settings, act => unavailable(act), paste, ImportFiles, () => ScreenshotRequested?.Invoke(), () => RecordRequested?.Invoke()), pin);
 
-        scopes = new ChipRow(listing, organising, () => ownDrag, heldKeys)
+        scopes = new ChipRow(listing, organising, () => ownDrag, heldKeys, paste)
         { Margin = new Thickness(10, 4, 10, 8) };
 
         thumbnails = new Thumbnails<Bitmap>(
@@ -124,8 +124,8 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
         };
         scroller = WindowLayout.GridScroller(grid);
         var dropTarget = new DropTarget(this, drops, import, () => DragInProgress, () => listing.LitTags);
-        tagField = new TagFieldOverlay(listing, organising, notices, heldKeys);
-        preview = new Preview(listing, handoff, organising, deletion, renaming, editing, itemMenu, notices, notices.Clock, pasteTarget, DialogShown, grid, heldKeys);
+        tagField = new TagFieldOverlay(listing, organising, notices, heldKeys, paste);
+        preview = new Preview(listing, handoff, organising, deletion, renaming, editing, itemMenu, notices, notices.Clock, pasteTarget, DialogShown, grid, heldKeys, paste);
         keys = new PendingQueryKeys(listing, grid.ReadNavigationLayout, editing, HandleMovementOutsideGrid,
             () => TagFieldTakingKeys is not null || preview.EditingName, () => import.Busy is not null);
         import.FollowScopeChoices(keys);
@@ -486,7 +486,7 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
-        if (TagManagementMenu.InTagMenu(e.Source))
+        if (e.Source is TagRenameBox || TagManagementMenu.InTagMenu(e.Source))
         {
             return;
         }
