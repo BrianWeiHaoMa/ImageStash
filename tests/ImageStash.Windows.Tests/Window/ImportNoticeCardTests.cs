@@ -83,7 +83,7 @@ public sealed class ImportNoticeCardTests
             var texts = card.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible && text.Text is { Length: > 0 }
                 && !text.GetVisualAncestors().OfType<Button>().Any()).ToList();
             var heading = texts.Single(text => text.Text == "Added 1, tagged #cat · 1 already in your stash");
-            var details = texts.Single(text => text.Text == "held.png was already in your stash as “held”, now tagged #cat. Added “newcomer”.");
+            var details = texts.Single(text => text.Text == "held.png was already in your stash as “held”. This import gave it #cat. Added “newcomer”.");
             var window = new Rect(shown.Window.ClientSize);
             foreach (var shownText in new[] { heading, details })
             {

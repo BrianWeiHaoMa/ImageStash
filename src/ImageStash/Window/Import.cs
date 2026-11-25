@@ -278,7 +278,7 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
     /// unreadable and failed ("Added 38 · 1 already in your stash · 1 skipped", or "Added 3 to your stash" when nothing
     /// else happened), the added count naming the tags the lit chips gave the items added ("Added 3 to your stash, tagged
     /// #cat"); its details name every file that was not added with its reason, a duplicate by its item's name with the
-    /// tags its item gained ("…as “cat”, now tagged #funny"), a failure beside a duplicate included, and then the added
+    /// tags its item gained ("…as “cat”. This import gave it #funny."), a failure beside a duplicate included, and then the added
     /// items by name when they are three or fewer. A file the batch put in the stash whose last step failed is counted
     /// and named as failed, never as added, and a tag is named only as the store committed it (R9).
     /// </summary>
@@ -291,8 +291,9 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
 
         var addedFiles = files.Where(file => file.Result == ImportResultKind.Added).ToList();
         var added = addedFiles.Select(file => file.Item!).ToList();
-        // Every item a batch adds gets the same lit tags; only those every one of them gained are said of them all.
-        var addedTags = addedFiles.Count == 0 ? [] : addedFiles[0].GainedTags.Where(tag => addedFiles.All(file => file.GainedTags.Contains(tag))).ToList();
+        // Compare the lit words as Store does since a spelling correction can land between file commits.
+        var addedTags = addedFiles.Count == 0 ? [] : addedFiles[0].GainedTags
+            .Where(tag => addedFiles.All(file => file.GainedTags.Contains(tag, StringComparer.OrdinalIgnoreCase))).ToList();
         var tagged = addedTags.Count > 0 ? $", tagged {Tagged(addedTags)}" : "";
         var counted = new List<string> { added.Count > 0 ? $"Added {added.Count}{tagged}" : "Nothing was added" };
         foreach (var (kind, words) in Counted)
@@ -307,7 +308,8 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
         var heading = added.Count > 0 && counted.Count == 1 ? $"Added {added.Count} to your stash{tagged}" : string.Join(" · ", counted);
         var parts = new List<string>();
         parts.AddRange(files.Where(file => file.Result == ImportResultKind.AlreadyInStash)
-            .Select(file => $"{file.Name} was already in your stash as {Notices.Describe([file.Item!])}{(file.GainedTags.Count > 0 ? $", now tagged {Tagged(file.GainedTags)}" : "")}."));
+            .Select(file => $"{file.Name} was already in your stash as {Notices.Describe([file.Item!])}."
+                + (file.GainedTags.Count > 0 ? $" This import gave it {Tagged(file.GainedTags)}." : "")));
         var skipped = files.Where(file => file.Result == ImportResultKind.Skipped).ToList();
         if (skipped.Count > 0)
         {

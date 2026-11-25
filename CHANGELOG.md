@@ -72,6 +72,7 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 
 ### Fixed
 
+- Import notices name the tags a batch gave pictures, even if a tag's capitalization changes or the tag is removed while the batch is being added.
 - Del pressed while the editor is opening after `Ctrl+E` or the preview’s Edit leaves the saved picture in the stash, even when a search delays `Ctrl+E`.
 - Opening the tag field with Ctrl+T during a search keeps a quick Page Down and Delete from deleting a picture beneath it.
 - A picture or range selected while an import is finishing stays selected, with the current search and scope. Use Show on the import notice to select the imported pictures.

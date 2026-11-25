@@ -477,7 +477,7 @@ Write-Host '     way, while the start Windows makes at the next sign-in waits in
 Write-Host '  5. one drop from File Explorer of a JPG, a transparent PNG, an animated GIF, an animated WebP, an MP4 and a link: the card counts four'
 Write-Host '     and two before release; four are added once, selected, first in All, and the MP4 and the link are refused by name; the same GIF'
 Write-Host '     again is already in the stash; with a tag chip lit, the card says each picture gets its tag, those already in the stash too, the'
-Write-Host '     GIF dropped once more gets it, the notice saying "now tagged" with that tag, and its Undo takes the tag off the GIF again;'
+Write-Host '     GIF dropped once more gets it, the notice saying the import gave it that tag, and its Undo takes the tag off the GIF again;'
 Write-Host '     Undo of a two-file drop leaves the four; a drop of files all already in the stash selects those pictures in All; a drop of a'
 Write-Host '     large folder during which you type in the search box (or move the selection, click a chip, or press Space) ends with your search,'
 Write-Host '     selection and preview as you left them and the notice offering Show beside Undo, which clears the search and selects the new'

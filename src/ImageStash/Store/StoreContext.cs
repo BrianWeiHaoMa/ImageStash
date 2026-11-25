@@ -75,8 +75,8 @@ internal sealed record StoreContext(
     public Dictionary<long, List<string>> EntriesForDeleteUndo { get; } = [];
 
     /// <summary>
-    /// How many changes this open store has committed: raised once by each <see cref="Change{T}"/> that commits, never
-    /// by a read, and stamped on every item a read answers (<see cref="StashItem.CommitsWhenRead"/>). Every file step
+    /// How many changes this open store has committed, excluding reads and changes that report no write, and stamped on
+    /// every item a read answers (<see cref="StashItem.CommitsWhenRead"/>). Every file step
     /// follows the commit of its row (State: Every change), so an item whose stamp still equals it has its file where it
     /// was read, or none; never another row's. In memory and afresh at each open (R8).
     /// </summary>
@@ -105,8 +105,11 @@ internal sealed record StoreContext(
     /// </summary>
     public List<AdoptedAtStart> AdoptedAtStart { get; } = [];
 
-    /// <summary>Runs <paramref name="change"/> as one transaction; a failure names <paramref name="action"/> and the store.</summary>
-    public Outcome<T> Change<T>(string action, Func<T> change)
+    /// <summary>
+    /// Runs <paramref name="change"/> as one transaction. A failure names <paramref name="action"/> and the store.
+    /// Supply <paramref name="wrote"/> when a request can finish without changing the stash.
+    /// </summary>
+    public Outcome<T> Change<T>(string action, Func<T> change, Func<T, bool>? wrote = null)
     {
         if (MoveRefusal(action, StashFolder.StoreFileName) is { } moving)
         {
@@ -121,7 +124,7 @@ internal sealed record StoreContext(
             return result;
         }));
         // Once, after the commit: the transaction may have run, and been rolled back, several times while the store was held.
-        if (changed.Succeeded)
+        if (changed.Succeeded && (wrote is null || wrote(changed.Value!)))
         {
             Commits++;
         }

@@ -277,7 +277,7 @@ public sealed class StashWindowPathTests
         CollectionAssert.AreEqual(new[] { "cat" }, stash.Single(item => item.Id == held.Id).Tags.ToList(), "and so does the one the stash already held (G11)");
         var notice = listed.Notices.Shown.Single();
         Assert.AreEqual(
-            ("Added 1, tagged #cat · 1 already in your stash", "still.png was already in your stash as “held”, now tagged #cat. Added “transparent”."),
+            ("Added 1, tagged #cat · 1 already in your stash", "still.png was already in your stash as “held”. This import gave it #cat. Added “transparent”."),
             (notice.Heading, notice.Text),
             "it counts one added and one already in the stash, names that one, and says each got the tag (G12)");
 

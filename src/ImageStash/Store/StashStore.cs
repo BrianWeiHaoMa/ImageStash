@@ -252,6 +252,14 @@ public sealed class StashStore : IDisposable
     internal Task<ItemFactResult> RemoveTagWithChanges(IReadOnlyList<StashItem> items, string tag) =>
         thread.Run(() => ItemTags.Remove(store, items, tag));
 
+    /// <summary>Removes the tag from its listed carriers if their count still matches the offer at the write.</summary>
+    internal Task<Outcome<TagRemoval>> RemoveTagFromAll(string tag, int expectedItems) =>
+        thread.Run(() => ItemTags.RemoveFromAll(store, tag, expectedItems));
+
+    /// <summary>Corrects a tag's spelling or gives its listed carriers the new word in its place.</summary>
+    internal Task<Outcome<TagRename>> RenameTag(string tag, string text) =>
+        thread.Run(() => ItemTags.Rename(store, tag, text));
+
     /// <summary>Sets the favorite flag on each item as given, never toggling it; one outcome per item, in order.</summary>
     public async Task<IReadOnlyList<Outcome>> SetFavorite(IReadOnlyList<StashItem> items, bool favorite) =>
         (await SetFavoriteWithChanges(items, favorite).ConfigureAwait(false)).Outcomes;

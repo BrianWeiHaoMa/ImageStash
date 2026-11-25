@@ -31,7 +31,7 @@ public sealed class ImportTagsTests
         CollectionAssert.AreEqual(new[] { "cat" }, (await TagsOf(importing, old)).ToList(), "and so does the item the stash already held (G11)");
         var notice = importing.Notices.Shown.Single();
         Assert.AreEqual(
-            ("Added 1, tagged #cat · 1 already in your stash", "still.png was already in your stash as “old”, now tagged #cat. Added “photo”."),
+            ("Added 1, tagged #cat · 1 already in your stash", "still.png was already in your stash as “old”. This import gave it #cat. Added “photo”."),
             (notice.Heading, notice.Text));
         Assert.AreEqual("Undo", notice.UndoLabel);
         Assert.IsFalse(notice.NamesAProblem, "tags given name no problem, so the notice keeps its time (G16)");
@@ -60,7 +60,7 @@ public sealed class ImportTagsTests
         CollectionAssert.AreEqual(new[] { "cat" }, again.GainedTags.ToList(), "the tag it lacked, as committed");
         CollectionAssert.AreEquivalent(new[] { "dog", "cat" }, (await TagsOf(importing, old)).ToList());
         var notice = importing.Notices.Shown.Single();
-        Assert.AreEqual(("Nothing was added · 1 already in your stash", "still.png was already in your stash as “old”, now tagged #cat."), (notice.Heading, notice.Text),
+        Assert.AreEqual(("Nothing was added · 1 already in your stash", "still.png was already in your stash as “old”. This import gave it #cat."), (notice.Heading, notice.Text),
             "the tag it already carried is not said to be given");
 
         await importing.Notices.Undo(notice);
@@ -81,7 +81,7 @@ public sealed class ImportTagsTests
         await importing.Import.Drop(ListedStash.Contents([MediaFixtures.Path("still.png"), MediaFixtures.Path("photo.jpg")]));
 
         var tagged = importing.Notices.Shown.Single();
-        Assert.AreEqual(("Nothing was added · 2 already in your stash", "still.png was already in your stash as “old”, now tagged #cat. photo.jpg was already in your stash as “carrying”."),
+        Assert.AreEqual(("Nothing was added · 2 already in your stash", "still.png was already in your stash as “old”. This import gave it #cat. photo.jpg was already in your stash as “carrying”."),
             (tagged.Heading, tagged.Text));
         Assert.AreEqual("Undo", tagged.UndoLabel, "the batch gave a tag, so its Undo is offered (G12)");
         await importing.Notices.Undo(tagged);
@@ -113,14 +113,14 @@ public sealed class ImportTagsTests
 
         CollectionAssert.AreEqual(new[] { "Import files (tagged #cat)" }, titles, "the picker's title names the tag the files will get");
         CollectionAssert.AreEqual(new[] { "cat" }, (await TagsOf(importing, still)).ToList(), "Ctrl+O tags the item already in the stash (G11)");
-        Assert.AreEqual("still.png was already in your stash as “still”, now tagged #cat.", importing.Notices.Shown[^1].Text);
+        Assert.AreEqual("still.png was already in your stash as “still”. This import gave it #cat.", importing.Notices.Shown[^1].Text);
 
         await importing.Listing.SetQuery("cat");
         importing.Clipboard.Reading = Outcome<ClipboardReading>.Of(new ClipboardReading([ListedStash.File(MediaFixtures.Path("photo.jpg"))], null, null, false));
         await importing.Paste.Paste();
 
         CollectionAssert.AreEqual(new[] { "cat" }, (await TagsOf(importing, photo)).ToList(), "a pasted file too (G13)");
-        Assert.AreEqual(("Nothing was added · 1 already in your stash", "photo.jpg was already in your stash as “photo”, now tagged #cat."),
+        Assert.AreEqual(("Nothing was added · 1 already in your stash", "photo.jpg was already in your stash as “photo”. This import gave it #cat."),
             (importing.Notices.Shown[^1].Heading, importing.Notices.Shown[^1].Text));
 
         await importing.Import.Pick(title =>
@@ -168,7 +168,7 @@ public sealed class ImportTagsTests
         var notice = importing.Notices.Shown.Single();
         Assert.AreEqual("Nothing was added · 1 already in your stash", notice.Heading);
         StringAssert.StartsWith(notice.Text, "still.png was already in your stash as “old”. still.png: Add a tag failed: stash.db, ");
-        Assert.DoesNotContain("now tagged", notice.Text, "no tag the store refused is claimed (R9)");
+        Assert.DoesNotContain("This import gave it", notice.Text, "no tag the store refused is claimed (R9)");
         Assert.IsTrue(notice.NamesAProblem, "the failure is named (G35)");
         Assert.IsNull(notice.UndoLabel, "the batch changed nothing to take back");
     }
@@ -232,6 +232,61 @@ public sealed class ImportTagsTests
         var secondItem = (await second).Single().Item!;
         CollectionAssert.AreEqual(new[] { "cat" }, (await TagsOf(importing, firstItem)).ToArray(), "the earlier drop keeps its live snapshot");
         Assert.IsEmpty(await TagsOf(importing, secondItem), "the second drop took its snapshot while the place was dead");
+    }
+
+    [TestMethod]
+    public async Task ASpellingCorrectionBetweenImportCommitsKeepsTheTagInTheBatchNotice()
+    {
+        using var importing = await ListedStash.Open();
+        await TaggedItem(importing, "carrier", "Ärger");
+        var store = importing.Stash.Store!;
+        await importing.Listing.SetQuery("ärger");
+        var second = new HeldBackFile(MediaFixtures.Path("transparent.png"));
+        var batch = importing.Import.Drop(new DropContents([ListedStash.File(MediaFixtures.Path("photo.jpg")), second.Item], false, false, []));
+        try
+        {
+            Assert.AreSame(second.Requested, await Task.WhenAny(batch, second.Requested));
+            var renamed = await store.RenameTag("Ärger", "ärger");
+            Assert.IsTrue(renamed.Succeeded, renamed.Failure?.ToString());
+        }
+        finally
+        {
+            second.Release();
+        }
+
+        var results = await batch;
+
+        CollectionAssert.AreEqual(new[] { "Ärger", "ärger" }, results.Select(file => file.GainedTags.Single()).ToArray());
+        Assert.AreEqual("Added 2 to your stash, tagged #Ärger", importing.Notices.Shown.Single().Heading);
+    }
+
+    [TestMethod]
+    public async Task ANoticeNamesWhatTheImportGaveADuplicateWhenALaterChangeTookItOff()
+    {
+        using var importing = await ListedStash.Open();
+        await TaggedItem(importing, "carrier", "Cat");
+        var duplicate = await importing.Stash.ImportFixture("duplicate", "still.png");
+        var store = importing.Stash.Store!;
+        await importing.Listing.SetQuery("Cat");
+        var second = new HeldBackFile(MediaFixtures.Path("transparent.png"));
+        var batch = importing.Import.Drop(new DropContents([ListedStash.File(MediaFixtures.Path("still.png")), second.Item], false, false, []));
+        try
+        {
+            Assert.AreSame(second.Requested, await Task.WhenAny(batch, second.Requested));
+            var removed = await store.RemoveTagFromAll("Cat", 2);
+            Assert.IsNotNull(removed.Value?.Receipt, removed.Failure?.ToString());
+        }
+        finally
+        {
+            second.Release();
+        }
+
+        await batch;
+
+        Assert.IsEmpty(await TagsOf(importing, duplicate));
+        var notice = importing.Notices.Shown.Single();
+        Assert.AreEqual("still.png was already in your stash as “duplicate”. This import gave it #Cat. Added “transparent”.", notice.Text);
+        Assert.IsTrue(importing.Notices.OffersUndo(notice));
     }
 
     [TestMethod]

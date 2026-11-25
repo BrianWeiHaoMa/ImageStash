@@ -1,14 +1,22 @@
 using System.Collections.Immutable;
+using System.Text;
 
 namespace ImageStash.Store;
 
 /// <summary>A tag and how many items the stash lists carrying it.</summary>
 public sealed record TagCount(string Tag, int Items);
 
+/// <summary>The count at the write. Only an applied removal carries an Undo receipt.</summary>
+internal sealed record TagRemoval(TagCount Count, ItemFactResult? Receipt);
+
+/// <summary>The resulting spelling, the number of listed carriers changed, and whether the destination was live.</summary>
+internal sealed record TagRename(string Tag, int Items, bool Merged);
+
 /// <summary>
 /// The tag rule, in one place (G17, In use: "Tags are search words"): a tag is one word of the typed text, every leading
 /// <c>#</c> removed, stored as typed and compared ignoring case for every script, so one tag has one spelling across the
-/// stash, the one first stored. The <c>tags</c> table is the record: a tag exists only while a listed item carries it.
+/// stash, the one first stored or set by a spelling correction. The <c>tags</c> table is the record: a tag exists only
+/// while a listed item carries it.
 /// </summary>
 internal static class ItemTags
 {
@@ -18,6 +26,9 @@ internal static class ItemTags
     private const string UndoRemoveAction = "Undo removing a tag";
 
     private const string CountAction = "Count the tags";
+    private const string RemoveFromAllAction = "Remove tag from all items";
+    private const string RenameAction = "Rename tag";
+    private static readonly UTF8Encoding StoredText = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
     /// <summary>
     /// The tags <paramref name="text"/> commits, one per word, in order: split on spaces, every leading <c>#</c>
@@ -39,10 +50,8 @@ internal static class ItemTags
 
     /// <summary>Assigns a picked or dropped tag only while it still has a carrier at the tagging write (G17).</summary>
     public static ItemFactResult AddExisting(StoreContext store, IReadOnlyList<StashItem> items, string tag) =>
-        Add(store, items, [tag], () => TagRows(store).Any(row => string.Equals(row.Tag, tag, StringComparison.OrdinalIgnoreCase)
-            && StashItem.IsListed(store.Folder, row.PendingSteps))
-            ? null
-            : $"no item carries #{tag} any more");
+        Add(store, items, [tag], () => ListedRows(store, TagRows(store)).Any(row => SameWord(row.Tag, tag))
+            ? null : NoCarrier(tag));
 
     private static ItemFactResult Add(StoreContext store, IReadOnlyList<StashItem> items, IReadOnlyList<string> words, Func<string?>? refusedBecause = null)
     {
@@ -62,6 +71,114 @@ internal static class ItemTags
     public static ItemFactResult Remove(StoreContext store, IReadOnlyList<StashItem> items, string tag) =>
         ItemFactChange.Apply(store, RemoveAction, UndoRemoveAction, items, listed =>
             [.. listed.Select(item => ChangeMemberships(store, item, [], [tag])).OfType<ItemFactDelta>()]);
+
+    public static Outcome<TagRemoval> RemoveFromAll(StoreContext store, string tag, int expectedItems) =>
+        Write<TagRemoval>(store, RemoveFromAllAction, () =>
+        {
+            var carriers = Carriers(ListedRows(store, TagRows(store)), tag);
+            var count = new TagCount(carriers.FirstOrDefault()?.Tag ?? tag, carriers.Count);
+            if (count.Items != expectedItems)
+            {
+                return (Outcome<TagRemoval>.Of(new TagRemoval(count, null)), false);
+            }
+
+            if (count.Items == 0)
+            {
+                return (new Failure(RemoveFromAllAction, $"#{tag}", NoCarrier(tag)), false);
+            }
+
+            var changes = carriers.Select(row => ChangeMemberships(store, row.Item, [], [tag]))
+                .OfType<ItemFactDelta>().ToImmutableArray();
+            var receipt = new ItemFactResult(store, UndoRemoveAction, [.. changes.Select(_ => Outcome.Done)], changes);
+            return (Outcome<TagRemoval>.Of(new TagRemoval(count, receipt)), !changes.IsEmpty);
+        });
+
+    public static Outcome<TagRename> Rename(StoreContext store, string tag, string text)
+    {
+        var words = Words(text);
+        if (words.Count != 1)
+        {
+            return new Failure(RenameAction, $"#{tag}", "enter one tag word");
+        }
+
+        var requested = words[0];
+        if (requested.Contains('\0'))
+        {
+            return new Failure(RenameAction, $"#{tag}", "the new tag contains a null character");
+        }
+
+        try
+        {
+            // SQLite's text binding can replace a lone surrogate and write a different word from the one requested.
+            StoredText.GetByteCount(requested);
+        }
+        catch (EncoderFallbackException)
+        {
+            return new Failure(RenameAction, $"#{tag}", "the new tag contains invalid Unicode");
+        }
+
+        return Write<TagRename>(store, RenameAction, () =>
+        {
+            var correctingSpelling = SameWord(tag, requested);
+            var rows = TagRows(store, includeDeleted: correctingSpelling);
+            var listed = ListedRows(store, rows).ToList();
+            var carriers = Carriers(listed, tag);
+            if (carriers.Count == 0)
+            {
+                return (new Failure(RenameAction, $"#{tag}", NoCarrier(tag)), false);
+            }
+
+            if (correctingSpelling)
+            {
+                var wrote = CorrectSpelling(store, tag, requested, rows);
+                var changedItems = Carriers(listed.Where(row => row.Tag != requested), tag).Count;
+                var recased = new TagRename(requested, changedItems, false);
+                return (Outcome<TagRename>.Of(recased), wrote);
+            }
+
+            var destination = Spellings(store, [requested])[requested];
+            foreach (var carrier in carriers)
+            {
+                ChangeMemberships(store, carrier.Item, [destination], [tag]);
+            }
+
+            var renamed = new TagRename(destination, carriers.Count, listed.Any(row => SameWord(row.Tag, requested)));
+            return (Outcome<TagRename>.Of(renamed), true);
+        });
+    }
+
+    private static bool CorrectSpelling(StoreContext store, string tag, string requested, List<TagMembership> rows)
+    {
+        // Delete Undo reveals its held row, so the same word must have the corrected spelling there too.
+        var spellings = rows.Select(row => row.Tag).Where(word => SameWord(word, tag) && word != requested).Distinct();
+        var wrote = false;
+        foreach (var spelling in spellings)
+        {
+            // An older row can already carry the destination spelling, so keep that membership.
+            wrote |= store.Execute(
+                """
+                DELETE FROM tags
+                WHERE tag = $old AND item_id IN (SELECT item_id FROM tags WHERE tag = $new)
+                """,
+                ("$new", requested), ("$old", spelling)) > 0;
+            wrote |= store.Execute("UPDATE tags SET tag = $new WHERE tag = $old", ("$new", requested), ("$old", spelling)) > 0;
+        }
+
+        return wrote;
+    }
+
+    private static Outcome<T> Write<T>(StoreContext store, string action, Func<(Outcome<T> Result, bool Wrote)> change)
+    {
+        var committed = store.Change(action, change, result => result.Wrote);
+        return committed.Succeeded ? committed.Value.Result : committed.Failure;
+    }
+
+    private static List<TagMembership> Carriers(IEnumerable<TagMembership> listed, string tag) =>
+        listed.Where(row => SameWord(row.Tag, tag)).DistinctBy(row => row.Id).ToList();
+
+    private static bool SameWord(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
+    private static string NoCarrier(string tag) => $"no item carries #{tag} any more";
 
     /// <summary>Changes the requested memberships and reports just the gains and losses in this transaction.</summary>
     public static ItemFactDelta? ChangeMemberships(
@@ -116,24 +233,15 @@ internal static class ItemTags
             return rows.Failure;
         }
 
-        var listed = new Dictionary<long, bool>();
         var carriers = new Dictionary<string, (string Spelling, HashSet<long> Items)>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (id, tag, pendingSteps) in rows.Value!)
+        foreach (var row in ListedRows(store, rows.Value!))
         {
-            if (!listed.TryGetValue(id, out var isListed))
+            if (!carriers.TryGetValue(row.Tag, out var carrier))
             {
-                listed[id] = isListed = StashItem.IsListed(store.Folder, pendingSteps);
+                carriers[row.Tag] = carrier = (row.Tag, []);
             }
 
-            if (isListed)
-            {
-                if (!carriers.TryGetValue(tag, out var carrier))
-                {
-                    carriers[tag] = carrier = (tag, []);
-                }
-
-                carrier.Items.Add(id);
-            }
+            carrier.Items.Add(row.Id);
         }
 
         return Outcome<IReadOnlyList<TagCount>>.Of(carriers.Values
@@ -143,9 +251,37 @@ internal static class ItemTags
             .ToList());
     }
 
-    private static List<(long Id, string Tag, string? PendingSteps)> TagRows(StoreContext store) => store.Query(
-        $"SELECT t.item_id, t.tag, i.pending_steps FROM tags t JOIN items i ON i.id = t.item_id WHERE {StashItem.NotDeleted} ORDER BY t.rowid",
-        r => (r.GetInt64(0), r.GetString(1), r.IsDBNull(2) ? null : r.GetString(2)));
+    private sealed record TagMembership(long Id, string Tag, string? PendingSteps, bool Deleted, string Name, string FileName)
+    {
+        public ItemFactTarget Item => new(Id, ItemQueries.Named(Name, FileName));
+    }
+
+    private static List<TagMembership> TagRows(StoreContext store, bool includeDeleted = false) => store.Query(
+        $"""
+        SELECT t.item_id, t.tag, i.pending_steps, i.deleted, i.name, i.finished_file
+        FROM tags t JOIN items i ON i.id = t.item_id
+        {(includeDeleted ? "" : $"WHERE {StashItem.NotDeleted}")}
+        ORDER BY t.rowid
+        """,
+        r => new TagMembership(r.GetInt64(0), r.GetString(1), r.IsDBNull(2) ? null : r.GetString(2),
+            r.GetBoolean(3), r.GetString(4), r.GetString(5)));
+
+    private static IEnumerable<TagMembership> ListedRows(StoreContext store, IEnumerable<TagMembership> rows)
+    {
+        var listed = new Dictionary<long, bool>();
+        foreach (var row in rows)
+        {
+            if (!listed.TryGetValue(row.Id, out var isListed))
+            {
+                listed[row.Id] = isListed = !row.Deleted && StashItem.IsListed(store.Folder, row.PendingSteps);
+            }
+
+            if (isListed)
+            {
+                yield return row;
+            }
+        }
+    }
 
     /// <summary>
     /// Maps tag words to the first spelling stored across every row's tags, including rows marked deleted, or the first
