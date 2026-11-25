@@ -9,7 +9,7 @@ public sealed record TagCount(string Tag, int Items);
 /// <summary>The count at the write. Only an applied removal carries an Undo receipt.</summary>
 internal sealed record TagRemoval(TagCount Count, ItemFactResult? Receipt);
 
-/// <summary>The resulting spelling, the number of listed carriers changed, and whether the destination was live.</summary>
+/// <summary>The resulting spelling, how many listed source carriers changed, and whether the destination was live.</summary>
 internal sealed record TagRename(string Tag, int Items, bool Merged);
 
 /// <summary>
@@ -120,7 +120,7 @@ internal static class ItemTags
         return Write<TagRename>(store, RenameAction, () =>
         {
             var correctingSpelling = SameWord(tag, requested);
-            var rows = TagRows(store, includeDeleted: correctingSpelling);
+            var rows = TagRows(store, includeDeleted: true);
             var listed = ListedRows(store, rows).ToList();
             var carriers = Carriers(listed, tag);
             if (carriers.Count == 0)
@@ -136,13 +136,16 @@ internal static class ItemTags
                 return (Outcome<TagRename>.Of(recased), wrote);
             }
 
-            var destination = Spellings(store, [requested])[requested];
+            // If older rows disagree, keep the spelling the tag list shows.
+            var liveDestination = listed.FirstOrDefault(row => SameWord(row.Tag, requested));
+            var destination = liveDestination?.Tag ?? Spellings(store, [requested])[requested];
+            CorrectSpelling(store, requested, destination, rows);
             foreach (var carrier in carriers)
             {
                 ChangeMemberships(store, carrier.Item, [destination], [tag]);
             }
 
-            var renamed = new TagRename(destination, carriers.Count, listed.Any(row => SameWord(row.Tag, requested)));
+            var renamed = new TagRename(destination, carriers.Count, liveDestination is not null);
             return (Outcome<TagRename>.Of(renamed), true);
         });
     }

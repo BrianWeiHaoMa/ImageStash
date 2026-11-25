@@ -278,9 +278,11 @@ public sealed class WholeStashTagTests
     }
 
     [TestMethod]
-    [DataRow("Friend", "Ärger")]
-    [DataRow("ärger", "ärger")]
-    public async Task RenameAndDeleteUndoPreserveTheHeldMembershipWithItsCurrentSpelling(string text, string restoredTag)
+    [DataRow("Friend", "Ärger", null)]
+    [DataRow("friend", "Ärger", "Friend")]
+    [DataRow("ärger", "ärger", null)]
+    public async Task RenameAndDeleteUndoPreserveTheHeldMembershipWithItsCurrentSpelling(
+        string text, string restoredTag, string? existingDestination)
     {
         using var stash = new TestStash();
         var store = await stash.OpenCleanly();
@@ -288,16 +290,22 @@ public sealed class WholeStashTagTests
         var held = await stash.Import("held", TestStash.Bytes(2));
         await store.AddTag([live, held], "Ärger");
         await store.AddTag([held], "Other");
+        if (existingDestination is not null)
+        {
+            await store.AddTag([live], existingDestination);
+        }
+
         var deleted = (await store.Delete([held.Id])).Single();
         Assert.IsTrue(deleted.Succeeded, deleted.Failure?.ToString());
 
-        Assert.AreEqual(new TagRename(text, 1, false), Value(await store.RenameTag("ÄRGER", text)));
-        await AssertCounts(store, new TagCount(text, 1));
+        var listedTag = existingDestination ?? text;
+        Assert.AreEqual(new TagRename(listedTag, 1, existingDestination is not null), Value(await store.RenameTag("ÄRGER", text)));
+        await AssertCounts(store, new TagCount(listedTag, 1));
         var restored = (await store.UndoDelete([deleted.Value!])).Single();
 
         Assert.IsTrue(restored.Succeeded, restored.Failure?.ToString());
         var reopened = await Reopen(stash);
-        CollectionAssert.AreEquivalent(new[] { (live.Id, text), (held.Id, restoredTag), (held.Id, "Other") }, stash.TagRows());
+        CollectionAssert.AreEquivalent(new[] { (live.Id, listedTag), (held.Id, restoredTag), (held.Id, "Other") }, stash.TagRows());
         Assert.HasCount(2, (await reopened.All()).Value!);
     }
 
@@ -322,6 +330,58 @@ public sealed class WholeStashTagTests
 
         CollectionAssert.AreEqual(new[] { (live.Id, "a\uFFFD"), (held.Id, "a\uFFFD") }, stash.TagRows());
         Assert.AreNotEqual(before, store.ListingVersion);
+    }
+
+    [TestMethod]
+    public async Task MergingIntoAnOlderTagKeepsOneSpellingOnListedAndRestoredItems()
+    {
+        using var stash = new TestStash();
+        var store = await stash.OpenCleanly();
+        var held = await stash.Import("held", TestStash.Bytes(1));
+        var destination = await stash.Import("destination", TestStash.Bytes(2));
+        var source = await stash.Import("source", TestStash.Bytes(3));
+        // Older writes compared the input before SQLite replaced its lone surrogate.
+        await store.AddTag([held], "A\uD800");
+        await store.AddTag([destination, source], "a\uD800");
+        await store.AddTag([source], "Cat Keep");
+        var deleted = Value((await store.Delete([held.Id])).Single());
+        await AssertCounts(store, new TagCount("a\uFFFD", 2), new TagCount("Cat", 1), new TagCount("Keep", 1));
+
+        Assert.AreEqual(new TagRename("a\uFFFD", 1, true), Value(await store.RenameTag("Cat", "A\uFFFD")));
+        await AssertCounts(store, new TagCount("a\uFFFD", 2), new TagCount("Keep", 1));
+        Assert.IsTrue((await store.UndoDelete([deleted])).Single().Succeeded);
+
+        var reopened = await Reopen(stash);
+        await AssertCounts(reopened, new TagCount("a\uFFFD", 3), new TagCount("Keep", 1));
+        CollectionAssert.AreEquivalent(
+            new[] { (held.Id, "a\uFFFD"), (destination.Id, "a\uFFFD"), (source.Id, "a\uFFFD"), (source.Id, "Keep") },
+            stash.TagRows());
+    }
+
+    [TestMethod]
+    public async Task DeleteUndoLeavesOffARecasedTagThatImportUndoTookBackWhileTheItemWasDeleted()
+    {
+        using var stash = new TestStash();
+        var store = await stash.OpenCleanly();
+        var bytes = TestStash.Bytes(1);
+        var imported = await stash.Import("duplicate", bytes);
+        var live = await stash.Import("live", TestStash.Bytes(2));
+        await store.AddTag([imported], "Keep");
+        await store.AddTag([live], "Ärger");
+        var staged = await stash.Stage("duplicate.png", bytes);
+        var duplicate = Value(await store.CommitImport(TestStash.Candidate(staged, "duplicate", bytes) with { Tags = ["Ärger"] }));
+        Assert.IsTrue(duplicate.AlreadyInStash);
+        CollectionAssert.AreEqual(new[] { "Ärger" }, duplicate.GainedTags.ToArray());
+        var deleted = Value((await store.Delete([imported.Id])).Single());
+
+        Assert.AreEqual(new TagRename("ärger", 1, false), Value(await store.RenameTag("Ärger", "ärger")));
+        var undone = await store.UndoImport([], [(imported.Id, duplicate.GainedTags)]);
+        Assert.IsTrue(undone.Single().Succeeded, TestStash.Failures(undone));
+        Assert.IsTrue((await store.UndoDelete([deleted])).Single().Succeeded);
+
+        var reopened = await Reopen(stash);
+        await AssertCounts(reopened, new TagCount("Keep", 1), new TagCount("ärger", 1));
+        CollectionAssert.AreEquivalent(new[] { (imported.Id, "Keep"), (live.Id, "ärger") }, stash.TagRows());
     }
 
     [TestMethod]

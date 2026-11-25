@@ -280,7 +280,7 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
     /// #cat"); its details name every file that was not added with its reason, a duplicate by its item's name with the
     /// tags its item gained ("…as “cat”. This import gave it #funny."), a failure beside a duplicate included, and then the added
     /// items by name when they are three or fewer. A file the batch put in the stash whose last step failed is counted
-    /// and named as failed, never as added, and a tag is named only as the store committed it (R9).
+    /// and named as failed, never as added. Its details still name the tags the store committed to the listed item (R9).
     /// </summary>
     public static (string Heading, string Details) NoticeWords(IReadOnlyList<ImportedFile> files)
     {
@@ -308,8 +308,7 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
         var heading = added.Count > 0 && counted.Count == 1 ? $"Added {added.Count} to your stash{tagged}" : string.Join(" · ", counted);
         var parts = new List<string>();
         parts.AddRange(files.Where(file => file.Result == ImportResultKind.AlreadyInStash)
-            .Select(file => $"{file.Name} was already in your stash as {Notices.Describe([file.Item!])}."
-                + (file.GainedTags.Count > 0 ? $" This import gave it {Tagged(file.GainedTags)}." : "")));
+            .Select(file => $"{file.Name} was already in your stash as {Notices.Describe([file.Item!])}." + GivenTagWords(file, "it")));
         var skipped = files.Where(file => file.Result == ImportResultKind.Skipped).ToList();
         if (skipped.Count > 0)
         {
@@ -339,8 +338,12 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
     private static string FailureWords(ImportedFile file)
     {
         var sentence = file.Failure!.Sentence.TrimEnd('.') + ".";
-        return file.Failure.Subject == file.Name ? sentence : $"{file.Name}: {sentence}";
+        var named = file.Failure.Subject == file.Name ? sentence : $"{file.Name}: {sentence}";
+        return named + (file.Result == ImportResultKind.Failed ? GivenTagWords(file, "the picture") : "");
     }
+
+    private static string GivenTagWords(ImportedFile file, string subject) =>
+        file.GainedTags.Count > 0 ? $" This import gave {subject} {Tagged(file.GainedTags)}." : "";
 
     /// <param name="litTags">The tags lit at the user's act, read then, which every item added or already in the stash gets.</param>
     /// <param name="began">Read at the user's act, which the batch's end is judged from.</param>

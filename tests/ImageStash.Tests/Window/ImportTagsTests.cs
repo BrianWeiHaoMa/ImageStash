@@ -235,6 +235,32 @@ public sealed class ImportTagsTests
     }
 
     [TestMethod]
+    public async Task AFailedLastStepStillNamesTheTagGivenToTheListedPicture()
+    {
+        using var importing = await ListedStash.Open();
+        var carrier = await TaggedItem(importing, "carrier", "Cat");
+        await importing.Listing.SetQuery("Cat");
+        importing.Stash.SqlWhileOpen(
+            "CREATE TRIGGER refuse_clearing BEFORE UPDATE OF pending_steps ON items WHEN NEW.pending_steps IS NULL BEGIN SELECT RAISE(ABORT, 'the write was refused'); END");
+
+        var results = await importing.Import.Drop(ListedStash.Contents([MediaFixtures.Path("still.png")]));
+
+        var file = results.Single();
+        Assert.AreEqual(ImportResultKind.Failed, file.Result);
+        CollectionAssert.AreEqual(new[] { "Cat" }, (await TagsOf(importing, file.Item!)).ToList());
+        var notice = importing.Notices.Shown.Single();
+        Assert.AreEqual("Nothing was added · 1 failed", notice.Heading);
+        StringAssert.StartsWith(notice.Text, "still.png: Add to the stash failed: ");
+        StringAssert.Contains(notice.Text, "the write was refused");
+        StringAssert.Contains(notice.Text, "This import gave the picture #Cat.");
+        Assert.AreEqual("Undo", notice.UndoLabel);
+
+        await importing.Notices.Undo(notice);
+
+        Assert.AreEqual(carrier.Id, (await importing.Stash.All()).Single().Id);
+    }
+
+    [TestMethod]
     public async Task ASpellingCorrectionBetweenImportCommitsKeepsTheTagInTheBatchNotice()
     {
         using var importing = await ListedStash.Open();
