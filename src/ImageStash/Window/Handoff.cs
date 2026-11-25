@@ -75,11 +75,12 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
             return Outcome.Done;
         }
 
+        var replacements = listing.Replacements;
         IReadOnlyList<StashItem> copied;
         await oneWriteAtATime.WaitAsync();
         try
         {
-            if (Refusal(items, Action) is { } refused)
+            if (Refusal(items, Action, replacements) is { } refused)
             {
                 return Named(refused);
             }
@@ -247,10 +248,11 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
             return Outcome.Done;
         }
 
+        var replacements = listing.Replacements;
         await oneWriteAtATime.WaitAsync();
         try
         {
-            if (Refusal(items, Action) is { } refused)
+            if (Refusal(items, Action, replacements) is { } refused)
             {
                 return Named(refused);
             }
@@ -267,11 +269,17 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
 
             await Record(items);
             SetBusy($"Bringing {target.AppName} to the front…");
-            if (!await LetGoInTime(hide.HeldKeys?.LetGo(Key.Enter) ?? Task.CompletedTask))
+            if (!await LetGoInTime(Task.WhenAll(hide.OriginatingRelease, hide.CurrentRelease)) || !hide.CurrentRelease.IsCompleted)
             {
                 // The flyout stays, so the held Enter's repeats stay with ImageStash, and nothing starts the next summon anew (G1).
                 notifications.Raise(CopiedNotification);
                 return new Failure(PasteTargetReasons.Action, target.AppName, EnterHeld);
+            }
+
+            if (hide.RefusalBeforePaste?.Invoke() is { } reason)
+            {
+                notifications.Raise(CopiedNotification);
+                return Named(new Failure(PasteTargetReasons.Action, target.AppName, reason));
             }
 
             var reachable = targets.Confirm(target);
@@ -431,8 +439,9 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
     /// listing holds no store (it is opening, did not open at start or after a Move, or an import replaces it), or once
     /// a Move's copy, an export or an import has begun (State: Move, G36); null otherwise.
     /// </summary>
-    private Failure? Refusal(IReadOnlyList<StashItem> items, string action) =>
-        listing.Store is null ? new Failure(action, Subject(items), listing.NotOpenReason!)
+    private Failure? Refusal(IReadOnlyList<StashItem> items, string action, int? replacements = null) =>
+        replacements is { } at && at != listing.Replacements ? new Failure(action, Subject(items), Listing.ReplacedSinceReason)
+        : listing.Store is null ? new Failure(action, Subject(items), listing.NotOpenReason!)
         : listing.WholeStashActBegun ? new Failure(action, Subject(items), listing.WholeStashActAsked!)
         : null;
 
@@ -502,4 +511,12 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
 /// whether it is hidden after (G1, G2); <see cref="HeldKeys"/> are the keys the window holds down, an Enter among which the
 /// paste waits to be let go before any other app is given the front (N3); with none, nothing is held.
 /// </summary>
-public sealed record PasteHide(Func<bool> Hide, PressOnce? HeldKeys = null);
+public sealed record PasteHide(Func<bool> Hide, PressOnce? HeldKeys = null)
+{
+    internal Task OriginatingRelease { get; init; } = Task.CompletedTask;
+    internal Func<string?>? RefusalBeforePaste { get; init; }
+    internal Task CurrentRelease => HeldKeys?.LetGo(Key.Enter) ?? Task.CompletedTask;
+
+    // A release from a later press cannot validate the press whose release was never seen.
+    internal PasteHide ForEnterPress() => this with { OriginatingRelease = CurrentRelease };
+}

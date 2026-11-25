@@ -392,7 +392,7 @@ public sealed class EditingCrossedByAnotherChangeTests
         listed.Listing.Focus(cat.Id);
         var opening = from switch
         {
-            EditOrigin.Grid => listed.Editing.OpenOnSelection(null),
+            EditOrigin.Grid => listed.OpenSelectionForEdit(),
             EditOrigin.Preview => listed.Editing.Open(cat, EditOrigin.Preview),
             _ => listed.Editing.OpenFromNotification(new CaptureEdit(cat, true)),
         };

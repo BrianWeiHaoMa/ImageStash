@@ -57,13 +57,13 @@ public sealed class OrganisingTests
         var item = await listed.Stash.Import("pressed");
         await listed.Listing.ShowScope(Scope.All);
 
-        var first = listed.Organising.ToggleFavoriteOfSelection();
-        var second = listed.Organising.ToggleFavoriteOfSelection();
+        var first = listed.ToggleFavoriteOfSelection();
+        var second = listed.ToggleFavoriteOfSelection();
         await Task.WhenAll(first, second);
         var afterTwo = await FavoriteIds(listed);
-        var third = listed.Organising.ToggleFavoriteOfSelection();
-        var fourth = listed.Organising.ToggleFavoriteOfSelection();
-        var fifth = listed.Organising.ToggleFavoriteOfSelection();
+        var third = listed.ToggleFavoriteOfSelection();
+        var fourth = listed.ToggleFavoriteOfSelection();
+        var fifth = listed.ToggleFavoriteOfSelection();
         await Task.WhenAll(third, fourth, fifth);
 
         Assert.IsEmpty(afterTwo, "two presses, as a held key repeats them, toggle twice (G17)");
@@ -98,7 +98,7 @@ public sealed class OrganisingTests
         await listed.Listing.ShowScope(Scope.All);
 
         var typing = listed.Listing.SetQuery("ca");
-        var toggled = await listed.Organising.ToggleFavoriteOfSelection();
+        var toggled = await listed.ToggleFavoriteOfSelection();
         await typing;
 
         Assert.IsTrue(toggled.Succeeded);
@@ -119,8 +119,8 @@ public sealed class OrganisingTests
         Task<Outcome> first, second;
         using (listed.Stash.HoldStore())
         {
-            first = listed.Organising.ToggleFavoriteOfSelection();
-            second = listed.Organising.ToggleFavoriteOfSelection();
+            first = listed.ToggleFavoriteOfSelection();
+            second = listed.ToggleFavoriteOfSelection();
         }
 
         Assert.IsTrue((await first).Succeeded && (await second).Succeeded);
@@ -215,7 +215,7 @@ public sealed class OrganisingTests
         listed.Listing.SelectAll();
 
         var clock = Stopwatch.StartNew();
-        var toggled = await listed.Organising.ToggleFavoriteOfSelection();
+        var toggled = await listed.ToggleFavoriteOfSelection();
         clock.Stop();
 
         TestContext.WriteLine($"Ctrl+D over 5,000 items, refresh included: {clock.Elapsed.TotalMilliseconds:F0} ms");

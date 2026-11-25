@@ -169,7 +169,7 @@ public sealed class LayerTextClipboardPasteTests
         var (original, finished) = (MediaFixtures.FirstFrame(unedited), MediaFixtures.FirstFrame(saved.FilePath));
         Assert.AreEqual((original.Width, original.Height), (finished.Width, finished.Height));
         CollectionAssert.AreNotEqual(original.Pixels, finished.Pixels, "the lettering drawn into the finished picture (G21)");
-        Assert.IsTrue((await listed.Editing.OpenOnSelection(saved)).Succeeded);
+        Assert.IsTrue((await listed.Editing.Open(saved, EditOrigin.Preview)).Succeeded);
         Assert.AreEqual("TRUE", ((TextLayer)listed.Editing.Session!.Layers.Layers.Single()).Text, "the pasted words saved as the layer's text, live at the next Edit (G26)");
     }
 

@@ -416,10 +416,10 @@ public sealed class DeletionTests
         using var release = new ManualResetEventSlim();
         listed.Stash.RecycleBin.BeforeEach = _ => release.Wait(TimeSpan.FromSeconds(10));
 
-        var first = listed.Deletion.DeleteSelection();
+        var first = listed.DeleteSelection();
         // A load waiting behind the Delete, as typing or any reload leaves one, so the second press waits for the listing.
         var loading = listed.Listing.Refresh();
-        var again = listed.Deletion.DeleteSelection();
+        var again = listed.DeleteSelection();
         release.Set();
         await Task.WhenAll(first, loading, again);
 
@@ -438,7 +438,7 @@ public sealed class DeletionTests
         await listed.Listing.ShowScope(Scope.All);
 
         var typing = listed.Listing.SetQuery("ca");
-        var deleted = await listed.Deletion.DeleteSelection();
+        var deleted = await listed.DeleteSelection();
         await typing;
 
         Assert.IsTrue(deleted.Succeeded, deleted.Failure?.Sentence);

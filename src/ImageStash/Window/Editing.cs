@@ -170,7 +170,12 @@ public sealed class Editing
         }
 
         // The store cannot see a menu's change while it renders, so Edit waits for it here.
+        var replacements = listing.Replacements;
         await ChangesOf(item.Id);
+        if (replacements != listing.Replacements)
+        {
+            return new Failure(Action, Name(item), Listing.ReplacedSinceReason);
+        }
 
         if (Session is { } open)
         {
@@ -262,22 +267,9 @@ public sealed class Editing
         return Outcome.Done;
     }
 
-    /// <summary>
-    /// <c>Ctrl+E</c> (G20, G7): the editor on <paramref name="previewItem"/>, the open preview's item, whatever the grid
-    /// beneath selects; else on the selection once what was typed has arrived, when it is one item; with several,
-    /// nothing, named in no notice.
-    /// </summary>
-    public async Task<Outcome> OpenOnSelection(StashItem? previewItem)
-    {
-        using var acting = UserAct.Begin(Action);
-        if (previewItem is not null)
-        {
-            return await Open(previewItem, EditOrigin.Preview);
-        }
-
-        await listing.Settle();
-        return listing.SelectedItems is [var one] ? await Open(one, EditOrigin.Grid) : Outcome.Done;
-    }
+    /// <summary>Opens the editor on the one resolved grid item, when the key had a single selection (G20).</summary>
+    internal Task<Outcome> OpenOnSelection(IReadOnlyList<StashItem> items) =>
+        items is [var one] ? Open(one, EditOrigin.Grid) : Task.FromResult(Outcome.Done);
 
     /// <summary>Save (G26): the edit closes once the store has published it, and the window returns where Edit was started.</summary>
     public Task<Outcome> Save() => Ending(asNewItem: false);

@@ -29,24 +29,6 @@ public sealed class Deletion(Listing listing, Notices notices)
     public string? Busy { get; private set; }
 
     /// <summary>
-    /// Del: the selection, once what was typed has arrived (G5, G7). A press while the selection is still the items a
-    /// running Delete is deleting asks for nothing more, so it never deletes the item that Delete's refresh selects next.
-    /// </summary>
-    public async Task<Outcome> DeleteSelection()
-    {
-        // The act begins at the press, before the wait, so a Delete asked later is the later act (G16).
-        using var acting = UserAct.Begin(Action);
-        var pressed = listing.SelectedItems;
-        if (pressed.Count > 0 && pressed.All(item => deleting.Contains(item.Id)))
-        {
-            return Outcome.Done;
-        }
-
-        await listing.Settle();
-        return await Delete(listing.SelectedItems);
-    }
-
-    /// <summary>
     /// Deletes <paramref name="items"/>, the selection as the caller took it; returns the first failure, every failure
     /// named through the notices, else done. Nothing to delete is done with nothing shown; while the stash is not open
     /// the items are refused by name and nothing is asked of Store.

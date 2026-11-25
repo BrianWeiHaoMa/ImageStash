@@ -48,6 +48,7 @@ Start Menu or its `ImageStash.Windows.exe`, opens the stash window, as a click o
 | `Ctrl+E` | Edit the selected picture with Text, Crop, Trim, Hide and Draw. While you type a caption, `Ctrl+V` pastes copied words into it. |
 | `Ctrl+T` | Tag the selected pictures: type a word and press Enter. In a picture's preview, it goes to the preview's tag box. |
 | `Space`, then the arrows | Preview the selected picture, then step to the previous or next one in the grid; the preview's ‹ and › do the same. |
+| `Left` / `Right` | Move to the previous or next picture from the grid or from an empty search box. |
 
 A new screenshot, recording or stashed clipboard image appears in Recent before you use it. Recent keeps its order
 while you work. Opening ImageStash again or choosing a scope applies the latest order. Click a tag chip to filter the

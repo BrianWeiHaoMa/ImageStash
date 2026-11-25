@@ -54,7 +54,10 @@ public sealed class WindowActivation
         this.pasteTarget = pasteTarget;
         this.targets = targets;
         this.heldKeys = heldKeys;
-        ForPaste = new PasteHide(HideForPaste, heldKeys);
+        ForPaste = new PasteHide(HideForPaste, heldKeys)
+        {
+            RefusalBeforePaste = () => editing.IsOpen ? "an edit is open" : null,
+        };
         this.dialogUp = dialogUp;
         this.dragInProgress = dragInProgress;
         focusLoss = new FocusLossHide(primaryButtonHeld, dragOver, FocusLeft, () => HideWindow(), clock, action => Dispatcher.UIThread.Post(action));

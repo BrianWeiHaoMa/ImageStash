@@ -56,7 +56,7 @@ public sealed class PreviewStepping
     public StashItem? Next(StepWay way)
     {
         Observe();
-        return shown() is { } item ? PreviewStep.Of(listing.Items, item.Id, lastPlace, way) : null;
+        return listing.ShowsRequestedView && shown() is { } item ? PreviewStep.Of(listing.Items, item.Id, lastPlace, way) : null;
     }
 
     /// <summary>

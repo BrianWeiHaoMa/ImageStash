@@ -30,6 +30,132 @@ public sealed class StashWindowPathTests
     public void UseProductTheme() => TrayDesktop.UseProductTheme();
 
     [TestMethod]
+    public async Task EmptySearchRightRightEnterHandsOverTheThirdPictureWithoutMovingFocus()
+    {
+        var relay = PresetTarget.App("Relay");
+        using var shown = ShownWindow.Open();
+        await shown.OpenStash(shown.Picture("first.png"), shown.Picture("second.png"), shown.Picture("third.png"));
+        await TrayDesktop.Get(() => shown.Listing.ShowScope(Scope.All));
+        TrayDesktop.Run(() => shown.Window.SummonFromShortcut(new ForegroundReading(false, relay), new SummonAnchor(null)));
+        await Eventually(() => TrayDesktop.Get(() => shown.Search.IsFocused && shown.Listing.Settled));
+
+        var expected = TrayDesktop.Get(() =>
+        {
+            var third = shown.Listing.Items[2];
+            Assert.AreEqual("", shown.Search.Text ?? "");
+            Tap(shown.Search, Key.Right);
+            Tap(shown.Search, Key.Right);
+            Assert.AreEqual(third.Id, shown.Listing.Focused);
+            Assert.IsTrue(shown.Search.IsFocused);
+            Press(shown.Search, Key.Enter);
+            Press(shown.Search, Key.Enter);
+            Release(shown.Search, Key.Enter);
+            return third;
+        });
+
+        await Eventually(() => shown.Target.Pasted.Count == 1 && shown.Uses() == 1);
+        CollectionAssert.AreEqual(new[] { expected.FilePath }, TestClipboard.Read().Files.ToArray());
+        Assert.AreEqual(1, (await shown.Listing.Store!.UseHistory(expected.Id)).Value!.Count);
+        CollectionAssert.AreEqual(new[] { relay }, shown.Target.Pasted);
+        TrayDesktop.Run(() => Assert.IsFalse(shown.Window.IsVisible));
+    }
+
+    [TestMethod]
+    [DataRow(" ")]
+    [DataRow("cat")]
+    public async Task HorizontalArrowsInTheSearchBoxKeepTextEditingEvenWithNoSearchWords(string text)
+    {
+        using var shown = ShownWindow.Open();
+        await shown.OpenStash(shown.Picture("cat first.png"), shown.Picture("cat second.png"));
+        await TrayDesktop.Get(() => shown.Listing.ShowScope(Scope.All));
+        TrayDesktop.Run(shown.Window.SummonPinned);
+        TrayDesktop.Run(() => shown.Search.Text = text);
+        await Eventually(() => TrayDesktop.Get(() => shown.Search.IsFocused && shown.Listing.Settled && shown.Listing.Query == text));
+
+        TrayDesktop.Run(() =>
+        {
+            var first = shown.Listing.Focused;
+            shown.Search.SelectAll();
+            Tap(shown.Search, Key.Right);
+            Assert.AreEqual(text.Length, shown.Search.CaretIndex);
+            Tap(shown.Search, Key.Right);
+            Assert.AreEqual(text.Length, shown.Search.CaretIndex);
+            Tap(shown.Search, Key.Left);
+            Assert.AreEqual(text.Length - 1, shown.Search.CaretIndex);
+            Assert.AreEqual(first, shown.Listing.Focused);
+            Assert.IsTrue(shown.Search.IsFocused);
+        });
+    }
+
+    [TestMethod]
+    [DataRow(Key.Space, false)]
+    [DataRow(Key.Space, true)]
+    [DataRow(Key.F2, false)]
+    public async Task PendingArrowsAndPreviewKeysUseTheFocusedWindowAndThePictureShown(Key opener, bool selectAllWhilePreviewed)
+    {
+        using var shown = ShownWindow.Open();
+        await shown.OpenStash(shown.Picture("cat first.png"), shown.Picture("cat second.png"), shown.Picture("cat third.png"));
+        var expectedOrder = (await shown.Listing.Store!.Search("cat")).Value!;
+        TrayDesktop.Run(shown.Window.SummonPinned);
+        await Eventually(() => TrayDesktop.Get(() => shown.Search.IsFocused && shown.Listing.Settled));
+
+        using (shown.HoldStore())
+        {
+            TrayDesktop.Run(() =>
+            {
+                shown.Search.Text = "cat";
+                Assert.IsFalse(shown.Listing.Settled);
+                Tap(shown.Search, Key.Tab);
+                Assert.IsTrue(shown.Grid.IsFocused);
+                Tap(shown.Grid, Key.Right);
+                Tap(shown.Grid, opener);
+                if (selectAllWhilePreviewed)
+                {
+                    Tap(shown.Grid, Key.A, KeyModifiers.Control);
+                    Tap(shown.Grid, Key.Space);
+                    Tap(shown.Grid, Key.C, KeyModifiers.Control);
+                }
+                else if (opener == Key.Space)
+                {
+                    Tap(shown.Grid, Key.Right);
+                    Tap(shown.Grid, Key.C, KeyModifiers.Control);
+                }
+            });
+        }
+
+        if (opener == Key.F2)
+        {
+            await Eventually(() => TrayDesktop.Get(() => shown.Preview.IsOpen && shown.NameBox.IsFocused));
+            TrayDesktop.Run(() =>
+            {
+                Assert.AreEqual(expectedOrder[1].Id, shown.Preview.Item?.Id);
+                Assert.AreEqual(expectedOrder[1].Name, shown.NameBox.SelectedText);
+            });
+        }
+        else if (selectAllWhilePreviewed)
+        {
+            await Eventually(() => shown.Uses() == 1);
+            TrayDesktop.Run(() =>
+            {
+                Assert.IsFalse(shown.Preview.IsOpen);
+                CollectionAssert.AreEqual(new[] { expectedOrder[1].Id }, shown.Listing.Selection.ToArray());
+                Assert.IsTrue(shown.Grid.IsFocused);
+            });
+            CollectionAssert.AreEqual(new[] { expectedOrder[1].FilePath }, TestClipboard.Read().Files.ToArray());
+        }
+        else
+        {
+            await Eventually(() => shown.Uses() == 1);
+            TrayDesktop.Run(() =>
+            {
+                Assert.AreEqual(expectedOrder[2].Id, shown.Preview.Item?.Id);
+                Assert.IsTrue(shown.PreviewPicture.IsFocused);
+            });
+            CollectionAssert.AreEqual(new[] { expectedOrder[2].FilePath }, TestClipboard.Read().Files.ToArray());
+        }
+    }
+
+    [TestMethod]
     public async Task ADropEndingHiddenThenDelAndCtrlZThenCtrlTTypeAndClickTheGrid()
     {
         using var shown = ShownWindow.Open();

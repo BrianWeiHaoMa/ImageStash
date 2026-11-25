@@ -24,7 +24,7 @@ namespace ImageStash.Window;
 /// so a summon only shows it (G1); Close unpins and hides it and never exits ImageStash (G2, G3). The preview and the
 /// editor are overlays inside it (F4).
 /// </summary>
-public sealed class StashWindow : Avalonia.Controls.Window
+public sealed partial class StashWindow : Avalonia.Controls.Window
 {
     private const long ThumbnailBytes = 96L * 1024 * 1024;
 
@@ -127,7 +127,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
         {
             grid.UpdateLayout();
             return grid.Rows;
-        });
+        }, MoveInKeyboardPreview);
         scroller = WindowLayout.GridScroller(grid);
         var dropTarget = new DropTarget(this, drops, import, () => DragInProgress, () => listing.LitTags);
         tagField = new TagFieldOverlay(listing, organising, notices);
@@ -372,9 +372,9 @@ public sealed class StashWindow : Avalonia.Controls.Window
         // open once the menu has closed, whose own focus would otherwise end the field's and leave the preview's on the grid beneath it.
         grid.ItemMenuRequested += anchor => itemMenu.Show(grid, anchor, this, activation.TargetNow(), activation.ForPaste, DialogShown,
             items => Dispatcher.UIThread.Post(() => tagField.Open(items, grid), DispatcherPriority.Background),
-            item => Dispatcher.UIThread.Post(() => preview.Open(item), DispatcherPriority.Background),
-            item => Dispatcher.UIThread.Post(() => preview.Open(item, editingName: true), DispatcherPriority.Background),
-            item => Dispatcher.UIThread.Post(() => _ = editing.Open(item, EditOrigin.Grid), DispatcherPriority.Background));
+            item => OpenAfterMenu(() => preview.Open(item)),
+            item => OpenAfterMenu(() => preview.Open(item, editingName: true)),
+            item => OpenAfterMenu(() => _ = editing.Open(item, EditOrigin.Grid)));
         // An import's end shows All with the new items selected, which the preview would hide (G12), a name or tags typed
         // in it committed first, as focus leaving for the grid commits them (G19), and the preview closed once that commit
         // has been answered, as Esc closes it, so nothing on the grid acts before it (G20, G8); one an edit covers stays,
@@ -415,6 +415,7 @@ public sealed class StashWindow : Avalonia.Controls.Window
             cover();
             if (opened)
             {
+                listing.SupersedeSelectionKeys();
                 editor.FocusAsLeft();
             }
             else if (!editing.IsOpen)
@@ -501,7 +502,8 @@ public sealed class StashWindow : Avalonia.Controls.Window
         var focused = FocusManager?.GetFocusedElement();
         var place = StashKeys.PlaceOf(search.IsFocused, focused is TextBox && !ReferenceEquals(focused, search), preview.IsOpen, preview.ButtonFocused, editing.IsOpen, preview.NameFocused);
         // The list a tag field's chevron opens leaves focus where it was, on the preview's picture as often as in the box.
-        var routed = heldKeys.Acting(e.Key, StashKeys.Route(e.Key, e.KeyModifiers, place, summonSelection.PersonSelected(search.SelectedText)));
+        var routed = heldKeys.Acting(e.Key, StashKeys.Route(e.Key, e.KeyModifiers, place,
+            summonSelection.PersonSelected(search.SelectedText), boxHasText: !string.IsNullOrEmpty(search.Text)));
         var action = OpenTagLists().Count > 0 ? StashKeys.WithTagListOpen(e.Key, e.KeyModifiers, routed) : routed;
         if (StashKeys.Direction(action) is { } direction)
         {
@@ -527,9 +529,6 @@ public sealed class StashWindow : Avalonia.Controls.Window
             case KeyAction.FocusGrid:
                 grid.Focus(NavigationMethod.Tab);
                 break;
-            case KeyAction.SelectAll:
-                keys.Then(listing.SelectAll);
-                break;
             case KeyAction.ImportFiles:
                 ImportFiles();
                 break;
@@ -544,44 +543,14 @@ public sealed class StashWindow : Avalonia.Controls.Window
                 break;
             case KeyAction.Held:
                 break;
-            case KeyAction.Handoff:
-                // The target as Enter found it, whatever waits before the handoff (G8).
-                var target = activation.TargetNow();
-                // With the preview open, its item, whatever the grid beneath it selects (G8, G19).
-                keys.Then(() => _ = preview.IsOpen ? preview.HandOver(this, target, activation.ForPaste) : HandOverTypedSelection(target));
-                break;
-            case KeyAction.Copy:
-                // In the editor, the item being edited as last saved: nothing of the live layers is rendered before Save (G9).
-                keys.Then(() => _ = editing.Session is { } edited ? handoff.Copy(this, [edited.Item]) : preview.IsOpen ? preview.Copy(this) : CopyTypedSelection());
-                break;
-            case KeyAction.Edit:
-                keys.Then(() => _ = editing.OpenOnSelection(preview.Item));
-                break;
-            case KeyAction.Delete:
-                keys.Then(() => _ = preview.IsOpen ? preview.Delete() : deletion.DeleteSelection());
-                break;
-            case KeyAction.ToggleFavorite:
-                keys.Then(() => _ = preview.IsOpen ? preview.ToggleFavorite() : organising.ToggleFavoriteOfSelection());
-                break;
-            case KeyAction.TogglePreview:
-                keys.Then(TogglePreview);
-                break;
-            case KeyAction.Rename:
-                keys.Then(Rename);
-                break;
             case KeyAction.UndoNotice:
-                // In the order pressed: after a Del still waiting behind an arrow, so it undoes that Delete (G7).
-                keys.Then(() => _ = notices.UndoNewest());
-                break;
-            case KeyAction.AddTags:
-                // After an arrow still waiting for what was typed, on the selection it reaches (G17).
-                keys.Then(() => tagKey.Press());
+                _ = notices.UndoNewest();
                 break;
             case KeyAction.StepBack:
-                keys.Then(() => previewSteps.Step(StepWay.Back));
+                previewSteps.Step(StepWay.Back);
                 break;
             case KeyAction.StepOn:
-                keys.Then(() => previewSteps.Step(StepWay.On));
+                previewSteps.Step(StepWay.On);
                 break;
             case KeyAction.LargerThumbnails or KeyAction.SmallerThumbnails:
                 ThumbnailSizing.Step(action == KeyAction.LargerThumbnails ? 1 : -1);
@@ -591,36 +560,10 @@ public sealed class StashWindow : Avalonia.Controls.Window
                 keys.Then(Escape);
                 break;
             default:
-                return false;
+                return RunSelectionKey(action, place);
         }
 
         return true;
-    }
-
-    /// <summary>Space: the preview closed when it is open, else opened on the focused item (G19).</summary>
-    private void TogglePreview()
-    {
-        if (preview.IsOpen)
-        {
-            preview.Dismiss();
-        }
-        else
-        {
-            OpenPreview(editingName: false);
-        }
-    }
-
-    /// <summary>F2: the preview's name in edit, the preview opened on the focused item first when it is closed (G17).</summary>
-    private void Rename()
-    {
-        if (preview.IsOpen)
-        {
-            preview.EditName();
-        }
-        else
-        {
-            OpenPreview(editingName: true);
-        }
     }
 
     /// <summary>Esc: closes an open tag list, else the preview, else clears the search, else hides the flyout; pinned, it goes no further (G2).</summary>
@@ -668,24 +611,6 @@ public sealed class StashWindow : Avalonia.Controls.Window
     /// <summary><c>Ctrl+O</c> and Import files…: the window's own picker, which leaves the flyout up while it is open (G2, F4).</summary>
     private void ImportFiles() =>
         _ = import.Pick(title => dialogs.OpenFiles(this, title, Import.PickerFilters), DialogShown);
-
-    /// <summary>
-    /// Enter: the handoff on the selection, once the matches of what was typed have arrived, so a key pressed right after
-    /// typing hands over the first match, not what showed before it (G5); into the target the footer named when Enter
-    /// was pressed, or onto the clipboard when it named none (G8).
-    /// </summary>
-    private async Task HandOverTypedSelection(PasteTarget? target)
-    {
-        await listing.Settle();
-        await handoff.HandOver(this, listing.SelectedItems, target, activation.ForPaste);
-    }
-
-    /// <summary><c>Ctrl+C</c>: the selection onto the clipboard once what was typed has arrived, and the window stays (G2, G9).</summary>
-    private async Task CopyTypedSelection()
-    {
-        await listing.Settle();
-        await handoff.Copy(this, listing.SelectedItems);
-    }
 
     /// <summary>A double-click: the handoff on the tile it landed on, which its first click selected (G8).</summary>
     private void HandOverSelection() => _ = handoff.HandOver(this, listing.SelectedItems, activation.TargetNow(), activation.ForPaste);

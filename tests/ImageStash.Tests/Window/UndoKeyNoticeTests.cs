@@ -24,7 +24,7 @@ public sealed class UndoKeyNoticeTests
         var before = (await listed.Stash.All()).Single();
         var imported = await listed.Import.Drop(ListedStash.Contents([MediaFixtures.Path("photo.jpg"), MediaFixtures.Path("still.gif")]));
         listed.Listing.Focus(kept.Id);
-        await listed.Deletion.DeleteSelection();
+        await listed.DeleteSelection();
         listed.Notices.Raise(new Failure("Copy", "“kept”", "the clipboard is held"));
 
         await Undo(listed, KeyPlace.Grid);
@@ -52,7 +52,7 @@ public sealed class UndoKeyNoticeTests
         var cat = await listed.Stash.Import("cat");
         await listed.Listing.Refresh();
         listed.Listing.Focus(cat.Id);
-        await listed.Deletion.DeleteSelection();
+        await listed.DeleteSelection();
         var deleted = listed.Notices.Shown.Single();
         listed.Notices.Hover(deleted, over: true);
         await listed.Import.Drop(ListedStash.Contents([MediaFixtures.Path("photo.jpg"), listed.Stash.Source("clip.mp4", TestStash.Bytes(1))]));
@@ -78,10 +78,10 @@ public sealed class UndoKeyNoticeTests
         var (one, two) = (await listed.Stash.Import("one"), await listed.Stash.Import("two"));
         await listed.Listing.Refresh();
         listed.Listing.Focus(one.Id);
-        await listed.Deletion.DeleteSelection();
+        await listed.DeleteSelection();
         listed.Notices.Hover(listed.Notices.Shown.Single(), over: true);
         listed.Listing.Focus(two.Id);
-        await listed.Deletion.DeleteSelection();
+        await listed.DeleteSelection();
         var newer = listed.Notices.Shown[^1];
 
         listed.Stash.Clock.Now += Notices.LastingFor(newer.Words);
@@ -98,9 +98,9 @@ public sealed class UndoKeyNoticeTests
         var (one, two) = (await listed.Stash.Import("one"), await listed.Stash.Import("two"));
         await listed.Listing.Refresh();
         listed.Listing.Focus(one.Id);
-        await listed.Deletion.DeleteSelection();
+        await listed.DeleteSelection();
         listed.Listing.Focus(two.Id);
-        await listed.Deletion.DeleteSelection();
+        await listed.DeleteSelection();
 
         var held = new[]
         {
@@ -128,7 +128,7 @@ public sealed class UndoKeyNoticeTests
         var cat = await listed.Stash.Import("cat");
         await listed.Listing.Refresh();
         listed.Listing.Focus(cat.Id);
-        await listed.Deletion.DeleteSelection();
+        await listed.DeleteSelection();
 
         Assert.AreEqual(KeyAction.None, await listed.Press(Key.Z, KeyModifiers.Control, place));
 
@@ -199,7 +199,7 @@ public sealed class UndoKeyNoticeTests
         var lost = await listed.Stash.Import("lost");
         await listed.Listing.Refresh();
         listed.Listing.Focus(lost.Id);
-        await listed.Deletion.DeleteSelection();
+        await listed.DeleteSelection();
         File.Delete(listed.Stash.HeldCopy(lost.Id));
 
         await Undo(listed, KeyPlace.Grid);

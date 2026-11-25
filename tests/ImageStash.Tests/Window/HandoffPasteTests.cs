@@ -427,6 +427,76 @@ public sealed class HandoffPasteTests
     }
 
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task DeferredKeyboardPasteRequiresItsOwnReleaseAndNoCurrentlyHeldEnter(bool releaseLostWithFocus)
+    {
+        var clock = new SteppedClock();
+        using var handing = await Handing.Open(clock);
+        var (cat, _, _) = await Searched(handing);
+        handing.Keys.Acting(Key.Enter, KeyAction.Handoff);
+        var hide = new PasteHide(() => false, handing.Keys).ForEnterPress();
+        handing.Keys.Released(releaseLostWithFocus ? null : Key.Enter);
+        handing.Keys.Acting(Key.Enter, KeyAction.Handoff);
+        if (releaseLostWithFocus)
+        {
+            handing.Keys.Released(Key.Enter);
+        }
+
+        var pasting = handing.Handoff.Paste(null!, [cat], RecordingTarget.Relay, hide);
+        await Handing.Eventually(() => clock.NextDue is not null || pasting.IsCompleted);
+        Assert.IsFalse(pasting.IsCompleted, "the release at issue is still missing");
+        Assert.IsEmpty(handing.Target.Pasted);
+        if (releaseLostWithFocus)
+        {
+            clock.Advance(Handoff.PasteBound);
+            Assert.AreEqual(Handoff.EnterHeld, (await pasting).Failure?.Reason);
+            Assert.IsEmpty(handing.Target.Pasted);
+        }
+        else
+        {
+            handing.Keys.Released(Key.Enter);
+            Assert.IsTrue((await pasting).Succeeded);
+            Assert.AreEqual(RecordingTarget.Relay, handing.Target.Pasted.Single().Target);
+        }
+
+        CollectionAssert.AreEqual(new[] { cat.FilePath }, handing.Clipboard.Written.Single().Content.FilePaths.ToArray());
+    }
+
+    [TestMethod]
+    public async Task OpeningAnEditorDuringTheClipboardWriteLeavesTheHandoffAsACopy()
+    {
+        using var listed = await ListedStash.Open();
+        var cat = await listed.Stash.ImportFixture("cat", "still.png");
+        var dog = await listed.Stash.ImportFixture("dog", "transparent.png");
+        await listed.Listing.ShowScope(Scope.All);
+        var clipboard = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        listed.Clipboard.Hold = clipboard.Task;
+        var hidden = false;
+        var hide = new PasteHide(() => hidden = true)
+        {
+            RefusalBeforePaste = () => listed.Editing.IsOpen ? "an edit is open" : null,
+        };
+
+        var paste = listed.Handoff.Paste(null!, [cat], RecordingTarget.Relay, hide);
+        try
+        {
+            Assert.IsTrue((await listed.Editing.Open(dog, EditOrigin.Grid)).Succeeded);
+        }
+        finally
+        {
+            clipboard.SetResult();
+        }
+
+        Assert.AreEqual("an edit is open", (await paste).Failure?.Reason);
+        Assert.AreEqual(dog.Id, listed.Editing.Session?.Item.Id);
+        Assert.IsFalse(hidden);
+        Assert.IsEmpty(listed.Target.Pasted);
+        Assert.AreEqual(1L, listed.Uses());
+        CollectionAssert.AreEqual(new[] { cat.FilePath }, listed.Clipboard.Written.Single().Content.FilePaths.ToArray());
+    }
+
+    [TestMethod]
     public async Task WithNoEnterDownAPasteWaitsForNothing()
     {
         var clock = new SteppedClock();

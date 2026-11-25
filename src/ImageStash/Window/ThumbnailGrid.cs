@@ -429,6 +429,10 @@ public sealed partial class ThumbnailGrid : Control
         {
             listing.Focus(tile.Id);
         }
+        else if (fromPointer)
+        {
+            listing.SupersedeSelectionKeys();
+        }
 
         Focus(NavigationMethod.Pointer);
         ForgetPointer();

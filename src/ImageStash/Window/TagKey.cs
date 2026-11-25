@@ -17,7 +17,9 @@ namespace ImageStash.Window;
 public sealed class TagKey(Listing listing, Func<bool> previewOpen, Action focusPreviewTags, Func<bool> fieldOpen, Action<IReadOnlyList<StashItem>> openField)
 {
     /// <summary>The act: the items the "Tags of …" field opened on, or none when it opened on none.</summary>
-    public IReadOnlyList<StashItem> Press()
+    public IReadOnlyList<StashItem> Press() => PressOnSelection(listing.SelectedItems);
+
+    internal IReadOnlyList<StashItem> PressOnSelection(IReadOnlyList<StashItem> items)
     {
         if (previewOpen())
         {
@@ -25,8 +27,6 @@ public sealed class TagKey(Listing listing, Func<bool> previewOpen, Action focus
             return [];
         }
 
-        // Taken now, before anything waits, so an item selected later is never given the words (G17).
-        var items = listing.SelectedItems;
         if (fieldOpen() || items.Count == 0)
         {
             return [];

@@ -39,6 +39,18 @@ public sealed class StashKeysTests
     }
 
     [TestMethod]
+    [DataRow(Key.Left, KeyAction.MoveLeft)]
+    [DataRow(Key.Right, KeyAction.MoveRight)]
+    public void OnlyPlainHorizontalArrowsInTheLiterallyEmptyBoxMoveTheSelection(Key key, KeyAction movement)
+    {
+        Assert.AreEqual(movement, StashKeys.Route(key, KeyModifiers.None, KeyPlace.SearchBox, boxHasText: false));
+        Assert.AreEqual(KeyAction.None, StashKeys.Route(key, KeyModifiers.Shift, KeyPlace.SearchBox, boxHasText: false));
+        Assert.AreEqual(KeyAction.None, StashKeys.Route(key, KeyModifiers.Control, KeyPlace.SearchBox, boxHasText: false));
+        Assert.AreEqual(KeyAction.None, StashKeys.Route(key, KeyModifiers.None, KeyPlace.SearchBox, boxHasText: true));
+        Assert.AreEqual(KeyAction.None, StashKeys.Route(key, KeyModifiers.None, KeyPlace.SearchBox, boxTextSelected: true, boxHasText: true));
+    }
+
+    [TestMethod]
     [DataRow(Key.Left, KeyModifiers.None)]
     [DataRow(Key.Right, KeyModifiers.None)]
     [DataRow(Key.Home, KeyModifiers.None)]
@@ -177,6 +189,22 @@ public sealed class StashKeysTests
         Assert.IsTrue(keys.LetGo(Key.Enter).IsCompleted, "a later wait has no press of the window's to wait for");
         keys.Released(Key.Enter);
         await unseen.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [TestMethod]
+    public void AnotherEnterPressCannotReleaseTheOneLostWithFocus()
+    {
+        var keys = new PressOnce();
+        keys.Acting(Key.Enter, KeyAction.Handoff);
+        var first = keys.LetGo(Key.Enter);
+        keys.Released();
+
+        keys.Acting(Key.Enter, KeyAction.Handoff);
+        var second = keys.LetGo(Key.Enter);
+        keys.Released(Key.Enter);
+
+        Assert.IsFalse(first.IsCompleted);
+        Assert.IsTrue(second.IsCompletedSuccessfully);
     }
 
     [TestMethod]

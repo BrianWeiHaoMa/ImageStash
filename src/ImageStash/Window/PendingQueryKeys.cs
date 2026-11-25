@@ -1,36 +1,77 @@
+using ImageStash.Store;
+
 namespace ImageStash.Window;
 
 /// <summary>
-/// The window's keys in the order they were pressed while what was typed is still being searched (G5, G7, G8): an arrow
-/// pressed while the listing's latest load is pending waits for that load, and for the grid to lay out its rows, then
-/// moves the selection among those rows, as "the selection moves to the first match, Up and Down move it" says; every
-/// key act on the selection, or on what it opens, pressed after a waiting arrow (Enter, <c>Ctrl+C</c>, <c>Ctrl+D</c>,
-/// Del, <c>Ctrl+E</c>, F2, Space, Esc, <c>Ctrl+A</c>, another arrow) waits for the arrows before it and is then
-/// dispatched at once, never after an earlier act has completed, so Down, Enter, Down hands over the row Down reached
-/// and ends on the next. An act takes the selection it acts on as it is dispatched. A query typed, or a scope chosen,
-/// after an arrow and before that arrow's load has applied supersedes it: that arrow does nothing and the new matches
-/// arrive with their first selected (G5). Keys dispatched after a queued tag choice wait for its result too.
+/// Keyboard movement and acts on its selection resolve in press order (G5, G7). A later accepted selection or
+/// filter cancels unresolved input. Operations that have acquired their items start immediately and can finish
+/// while the person moves on. Listing remains the owner of the displayed selection.
 /// </summary>
-/// <param name="laidOutRows">The grid's rows laid out for the items the listing holds now, a layout pass forced when owed.</param>
-public sealed class PendingQueryKeys(Listing listing, Func<IReadOnlyList<GridRow>> laidOutRows)
+public sealed class PendingQueryKeys(Listing listing, Func<IReadOnlyList<GridRow>> laidOutRows,
+    Func<Direction, long, bool>? moveInPreview = null)
 {
     private readonly Queue<Pressed> pressed = new();
     private bool draining;
     private Task drained = Task.CompletedTask;
+    private long lastSelectionKey;
 
-    /// <summary>
-    /// An arrow (G5, G7): moved now while the listing is settled and nothing waits; else after what waits, once its load
-    /// has applied. Completes once it, and every key waiting with it, has been dispatched.
-    /// </summary>
-    public Task Move(Direction direction)
+    public Task Move(Direction direction) => Dispatch(input =>
     {
-        if (pressed.Count == 0 && listing.Settled && !listing.TagChoicePending)
+        if (moveInPreview?.Invoke(direction, input) != true)
         {
-            listing.MoveFocus(direction, laidOutRows());
+            listing.MoveFocus(direction, laidOutRows(), input);
+        }
+    }, WaitFor.Layout);
+
+    /// <summary>Starts the act with the selected and focused items before the next queued key can move either.</summary>
+    internal async Task<Outcome> ActOnSelection(Func<KeySelection, Task<Outcome>> act, bool allowExplicitTile = false)
+    {
+        var finished = Task.FromResult(Outcome.Done);
+        await WithSelection(selection => finished = act(selection), allowExplicitTile);
+        return await finished;
+    }
+
+    internal Task WithSelection(Action<KeySelection> apply, bool allowExplicitTile = false)
+    {
+        // A tile chosen during a scope load already has an identity, even if the arriving scope will omit it.
+        (IReadOnlyList<StashItem> Items, StashItem? Focused)? chosen =
+            listing.SelectionReadPending && listing.HasExplicitSelectionAfter(lastSelectionKey) ? ReadSelection() : null;
+        var waitFor = chosen is not null ? WaitFor.EarlierKeys
+            : allowExplicitTile ? WaitFor.ExplicitTileOrSelection : WaitFor.Selection;
+        return Dispatch(input =>
+        {
+            var selection = chosen ?? ReadSelection();
+            apply(new KeySelection(selection.Items, selection.Focused, input));
+        }, waitFor);
+    }
+
+    internal Task WithCurrentView(Action<long> act) => Dispatch(act, WaitFor.CurrentView);
+
+    private (IReadOnlyList<StashItem> Items, StashItem? Focused) ReadSelection()
+    {
+        var items = listing.SelectedItems;
+        return (items, items.FirstOrDefault(item => item.Id == listing.Focused));
+    }
+
+    /// <summary>An ordered command that has no item target, such as Escape or the notice's Undo.</summary>
+    public void Then(Action act) => _ = Dispatch(_ => act(), WaitFor.EarlierKeys);
+
+    private Task Dispatch(Action<long> act, WaitFor waitFor)
+    {
+        var input = listing.NextInput();
+        if (waitFor is WaitFor.Layout or WaitFor.CurrentView)
+        {
+            lastSelectionKey = input;
+        }
+
+        var next = new Pressed(act, waitFor, input, lastSelectionKey, listing.Store, listing.Replacements);
+        if (!draining && Ready(next))
+        {
+            Run(next);
             return Task.CompletedTask;
         }
 
-        pressed.Enqueue(new Pressed(direction, null, listing.InputOrder));
+        pressed.Enqueue(next);
         if (!draining)
         {
             drained = Drain();
@@ -39,57 +80,20 @@ public sealed class PendingQueryKeys(Listing listing, Func<IReadOnlyList<GridRow
         return drained;
     }
 
-    /// <summary>A key act, dispatched after any earlier arrow or tag choice still waiting for results.</summary>
-    public void Then(Action act)
-    {
-        if (pressed.Count == 0 && !listing.TagChoicePending)
-        {
-            act();
-            return;
-        }
-
-        pressed.Enqueue(new Pressed(null, act, 0));
-        if (!draining)
-        {
-            drained = Drain();
-        }
-    }
-
     private async Task Drain()
     {
-        if (draining)
-        {
-            return;
-        }
-
         draining = true;
         try
         {
             while (pressed.TryPeek(out var next))
             {
-                if (next.Act is { } act)
-                {
-                    if (listing.TagChoicePending)
-                    {
-                        await listing.Settle();
-                    }
-
-                    pressed.Dequeue();
-                    act();
-                    continue;
-                }
-
-                // A change's refresh may start after the awaited load: the arrow waits for the listing to settle again.
-                while ((!listing.Settled || listing.TagChoicePending) && listing.LastSelectionReset <= next.Input)
+                while (Current(next) && !Ready(next))
                 {
                     await listing.Settle();
                 }
 
                 pressed.Dequeue();
-                if (listing.LastSelectionReset <= next.Input)
-                {
-                    listing.MoveFocus(next.Direction!.Value, laidOutRows());
-                }
+                Run(next);
             }
         }
         finally
@@ -98,6 +102,33 @@ public sealed class PendingQueryKeys(Listing listing, Func<IReadOnlyList<GridRow
         }
     }
 
-    /// <summary>An arrow with its place in the input order, or a key act.</summary>
-    private sealed record Pressed(Direction? Direction, Action? Act, long Input);
+    private bool Ready(Pressed next) => !listing.TagChoicePending && (next.WaitFor switch
+    {
+        WaitFor.Layout => listing.Settled,
+        // During a selection-preserving refresh, an act takes the selection the person can still see.
+        WaitFor.CurrentView or WaitFor.Selection or WaitFor.ExplicitTileOrSelection => !listing.SelectionReadPending,
+        _ => true,
+    });
+
+    private bool Current(Pressed next) =>
+        ReferenceEquals(next.Store, listing.Store) && next.Replacements == listing.Replacements &&
+        next.Input >= listing.LastSelectionReset && next.Input >= listing.LastPersonChange && next.Input >= listing.LastSelectionInput;
+
+    private void Run(Pressed next)
+    {
+        if (Current(next) && HasSelectionFor(next))
+        {
+            next.Act(next.Input);
+        }
+    }
+
+    private bool HasSelectionFor(Pressed next) =>
+        next.WaitFor == WaitFor.EarlierKeys || listing.ShowsRequestedView ||
+        (next.WaitFor == WaitFor.ExplicitTileOrSelection && listing.HasExplicitSelectionAfter(next.SelectionKey));
+
+    private sealed record Pressed(Action<long> Act, WaitFor WaitFor, long Input, long SelectionKey, StashStore? Store, int Replacements);
+
+    private enum WaitFor { EarlierKeys, Selection, ExplicitTileOrSelection, CurrentView, Layout }
 }
+
+internal sealed record KeySelection(IReadOnlyList<StashItem> Items, StashItem? Focused, long Input);

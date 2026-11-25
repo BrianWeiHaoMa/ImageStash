@@ -34,7 +34,7 @@ public sealed class EditingAStillWithEveryLayerTests
         Require(await listed.Organising.AddTag([first], "reaction funny"));
         Require(await listed.Organising.SetFavorite([first], true));
         listed.Listing.Focus(first.Id);
-        Require(await listed.Editing.OpenOnSelection(null));
+        Require(await listed.OpenSelectionForEdit());
 
         var layers = AddEveryLayer(listed.Editing.Session!);
         Require(await listed.Editing.Save());

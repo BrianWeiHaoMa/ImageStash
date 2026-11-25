@@ -6,6 +6,7 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 
 ### Added
 
+- Left and Right move through the pictures while the search box is empty. With the first picture selected, Right, Right, Enter hands over the third without leaving the box. Actions pressed after an arrow use the selection it reaches, even when the list is still loading.
 - When you pause shortcuts, the stash footer and Settings say so and offer Resume. The tray tooltip says shortcuts are paused and still lists unavailable shortcuts, shortening conflict details to fit. The tray icon shows a pause badge or a warning badge for an unavailable shortcut, with the red dot taking precedence while recording.
 
 - A copy now says it worked: after `Ctrl+C`, an Enter that copies (with no app to paste into), or the item menu's Copy, the footer reads "✓ Copied" with the picture's name, or how many pictures, for two seconds before its hints return. In the preview, the button that copies reads "Copied ✓" for a moment instead. A paste into a chat shows nothing of the kind: ImageStash cannot see whether it arrived.

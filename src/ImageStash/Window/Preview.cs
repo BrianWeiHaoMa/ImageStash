@@ -161,9 +161,9 @@ public sealed class Preview : Border
         // Esc does, gives focus back to the preview, whose Enter then hands off again (G19, G7).
         tags.Committed += text => _ = AddTags(text);
         tags.Cancelled += () => picture.Focus(NavigationMethod.Tab);
-        tags.Removed += tag => _ = Act(item => organising.RemoveTag([item], tag));
+        tags.Removed += tag => _ = Act(ItemTags.RemoveAction, item => organising.RemoveTag([item], tag));
         // A pick in the list of every tag gives the tag or takes it off, as Add tag ▸ does (G17).
-        tags.Picked += tag => _ = Act(item => organising.ToggleTag([item], tag));
+        tags.Picked += tag => _ = Act(Organising.TagAct, item => organising.ToggleTag([item], tag));
 
         handOff = new Button { Classes = { "accent" }, HorizontalAlignment = HorizontalAlignment.Left };
         AutomationProperties.SetAutomationId(handOff, "Handoff");
@@ -176,11 +176,7 @@ public sealed class Preview : Border
         AutomationProperties.SetAutomationId(edit, "Edit");
         AutomationProperties.SetName(edit, "Edit");
         // On the item as the click found it, once a commit of its name or tags has run (G20).
-        edit.Click += (_, _) => _ = OnItem(item =>
-        {
-            EditRequested?.Invoke(item);
-            return Task.FromResult(Outcome.Done);
-        });
+        edit.Click += (_, _) => _ = Edit();
         // The handoff button takes what Copy and Edit leave, its words trimmed, so a long app name never pushes them out
         // of the window (G19, G7); left-aligned, the row is no wider than its buttons, Copy and Edit right beside it.
         var actions = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(12, 0, 12, 12) };
@@ -271,7 +267,7 @@ public sealed class Preview : Border
     /// <paramref name="editingName"/>, as F2 and the item menu's Rename open it, its name in edit, selected (G17); with
     /// <paramref name="byPerson"/> false, as an edit returning to it opens it, not the person's change (G12).
     /// </summary>
-    public void Open(StashItem item, bool editingName = false, bool byPerson = true)
+    public void Open(StashItem item, bool editingName = false, bool byPerson = true, long? input = null)
     {
         using var acting = UserAct.Begin(OpenAct);
         if (item.Id != Item?.Id)
@@ -291,7 +287,7 @@ public sealed class Preview : Border
         tags.Clear();
         tags.Show(Organising.CarriedTags([item]), []);
         picture.Show(item);
-        listing.FocusForPreview(item.Id, byPerson);
+        listing.FocusForPreview(item.Id, byPerson, input);
         Changed?.Invoke();
         picture.Focus(NavigationMethod.Tab);
         if (editingName)
@@ -474,26 +470,32 @@ public sealed class Preview : Border
     /// preview with the flyout, unless it holds typed text or the window stays (G1).
     /// </summary>
     public Task<Outcome> HandOver(TopLevel owner, PasteTarget? target, PasteHide hide) =>
-        Act(item => handoff.HandOver(owner, [item], target, hide));
+        Act(target is null ? Handoff.Action : Handoff.HandOverAct, item => handoff.HandOver(owner, [item], target, hide));
 
     /// <summary><c>Ctrl+C</c>: the item onto the clipboard, the window staying (G9).</summary>
-    public Task<Outcome> Copy(TopLevel owner) => Act(item => handoff.Copy(owner, [item]));
+    public Task<Outcome> Copy(TopLevel owner) => Act(Handoff.Action, item => handoff.Copy(owner, [item]));
 
     /// <summary>Del: the item deleted through the window's one Delete, with its notice and Undo; the preview closes once it is gone (G18).</summary>
-    public Task<Outcome> Delete() => Act(item => deletion.Delete([item]));
+    public Task<Outcome> Delete() => Act(Deletion.Action, item => deletion.Delete([item]));
 
     /// <summary><c>Ctrl+D</c> and its star: the item's favorite flag toggled through the window's one organising entry (G17).</summary>
-    public Task<Outcome> ToggleFavorite() => Act(item => organising.ToggleFavorite([item]));
+    public Task<Outcome> ToggleFavorite() => Act(Organising.FavoriteAct, item => organising.ToggleFavorite([item]));
+
+    internal Task<Outcome> Edit() => OnItem(Editing.Action, item =>
+    {
+        EditRequested?.Invoke(item);
+        return Task.FromResult(Outcome.Done);
+    });
 
     /// <summary>
     /// The name field's Enter, or focus leaving it: the item renamed through the window's one rename path; the head shows
     /// the name it showed until the store's answer is read again, so a new name never shows before the store has it
     /// (G17, G28, R9).
     /// </summary>
-    private Task<Outcome> Rename(string text) => Committing(Act(item => renaming.Rename(item, text)));
+    private Task<Outcome> Rename(string text) => Committing(Act(ItemRename.Action, item => renaming.Rename(item, text)));
 
     /// <summary>The tag field's Enter, a suggestion's click, or focus leaving it: the tags typed onto the item, as every tag field commits them (G17).</summary>
-    private Task<Outcome> AddTags(string text) => Committing(Act(item => FieldLeaving.AddTags(organising, [item], text)));
+    private Task<Outcome> AddTags(string text) => Committing(Act(ItemTags.AddAction, item => FieldLeaving.AddTags(organising, [item], text)));
 
     /// <summary>A field's commit, started on the item as last read, which the acts asked after it wait for (G19, G20).</summary>
     private Task<Outcome> Committing(Task<Outcome> running)
@@ -510,13 +512,13 @@ public sealed class Preview : Border
     /// </summary>
     private Task<Outcome> FromMenu(ItemMenuAction action) => action switch
     {
-        ItemMenuAction.Edit => OnItem(EditOnceTheMenuHasClosed),
+        ItemMenuAction.Edit => OnItem(Editing.Action, EditOnceTheMenuHasClosed),
         ItemMenuAction.Rename => EditNameOnceTheMenuHasClosed(),
-        ItemMenuAction.RevertToOriginal => Act(item => itemMenu.OnEdited(action, item, EditOrigin.Preview)),
-        ItemMenuAction.SaveAsNewItem => OnItem(item => itemMenu.OnEdited(action, item, EditOrigin.Preview)),
-        ItemMenuAction.SaveACopy => OnItem(item => TopLevel.GetTopLevel(this) is { } owner ? itemMenu.SaveACopy(owner, item, dialogUp) : Task.FromResult(Outcome.Done)),
-        ItemMenuAction.OpenWith => OnItem(item => TopLevel.GetTopLevel(this) is { } owner ? itemMenu.OpenWith(owner, item, dialogUp) : Task.FromResult(Outcome.Done)),
-        ItemMenuAction.Reveal => OnItem(item => Task.FromResult(itemMenu.RevealInExplorer(item))),
+        ItemMenuAction.RevertToOriginal => Act(Editing.RevertAction, item => itemMenu.OnEdited(action, item, EditOrigin.Preview)),
+        ItemMenuAction.SaveAsNewItem => OnItem(Editing.SaveAsNewItemAction, item => itemMenu.OnEdited(action, item, EditOrigin.Preview)),
+        ItemMenuAction.SaveACopy => OnItem(ItemMenu.SaveACopyAction, item => TopLevel.GetTopLevel(this) is { } owner ? itemMenu.SaveACopy(owner, item, dialogUp) : Task.FromResult(Outcome.Done)),
+        ItemMenuAction.OpenWith => OnItem(ItemMenu.OpenWithAct, item => TopLevel.GetTopLevel(this) is { } owner ? itemMenu.OpenWith(owner, item, dialogUp) : Task.FromResult(Outcome.Done)),
+        ItemMenuAction.Reveal => OnItem(ItemMenu.RevealAct, item => Task.FromResult(itemMenu.RevealInExplorer(item))),
         ItemMenuAction.Delete => Delete(),
         _ => throw new ArgumentOutOfRangeException(nameof(action), action, "not an entry of the preview's menu"),
     };
@@ -589,9 +591,9 @@ public sealed class Preview : Border
     }
 
     /// <summary>One change on the item as last read, then the item read again, so what shows is the store's answer.</summary>
-    private async Task<Outcome> Act(Func<StashItem, Task<Outcome>> change)
+    private async Task<Outcome> Act(string action, Func<StashItem, Task<Outcome>> change)
     {
-        var outcome = await OnItem(change);
+        var outcome = await OnItem(action, change);
         await Refresh();
         return outcome;
     }
@@ -604,28 +606,47 @@ public sealed class Preview : Border
     /// closed the preview meanwhile, or it has opened on another item since: on the item as the store now has it, and on
     /// nothing once it is gone from the stash, which the preview's closing showed (G8, G2, G7).
     /// </summary>
-    private async Task<Outcome> OnItem(Func<StashItem, Task<Outcome>> act)
+    private async Task<Outcome> OnItem(string action, Func<StashItem, Task<Outcome>> act)
     {
-        var asked = Item;
-        await committing;
-        if (Item is { } item && item.Id == asked?.Id)
-        {
-            return await act(item);
-        }
-
-        if (asked is null || listing.Store is not { } store)
+        using var acting = UserAct.Begin(action);
+        if (Item is not { } asked)
         {
             return Outcome.Done;
         }
 
-        var now = await store.Item(asked.Id);
+        var replacements = listing.Replacements;
+        await committing;
+        if (Refused() is { } refused)
+        {
+            return Named(refused);
+        }
+
+        if (Item is { } item && item.Id == asked.Id)
+        {
+            return await act(item);
+        }
+
+        var now = await listing.Store!.Item(asked.Id);
+        if (Refused() is { } refusedAfterRead)
+        {
+            return Named(refusedAfterRead);
+        }
+
         if (!now.Succeeded)
         {
-            notices.Raise(now.Failure);
-            return now.Failure;
+            return Named(now.Failure);
         }
 
         return now.Value is { } stored ? await act(stored) : Outcome.Done;
+
+        Failure? Refused() => (replacements != listing.Replacements ? Listing.ReplacedSinceReason : listing.NotOpenReason)
+            is { } reason ? new Failure(action, asked.NameOrFileName, reason) : null;
+
+        Outcome Named(Failure failure)
+        {
+            notices.Raise(failure);
+            return failure;
+        }
     }
 
     /// <summary>The facts as last read, their times stated as they are now.</summary>

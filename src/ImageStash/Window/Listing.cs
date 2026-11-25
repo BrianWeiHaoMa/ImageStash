@@ -55,7 +55,7 @@ public sealed partial class Listing
     internal long InputOrder => Interlocked.Read(ref inputOrder);
     internal long LastPersonChange { get; private set; }
 
-    private long NextInput() => Interlocked.Increment(ref inputOrder);
+    internal long NextInput() => Interlocked.Increment(ref inputOrder);
 
     private (long Commits, long FileSteps)? tagsVersion;
     private ListingOrder order = new();
@@ -76,6 +76,7 @@ public sealed partial class Listing
     /// <summary>A load that moves the selection to the first item has started and none has been applied since.</summary>
     private bool selectionResetWaiting;
     private bool loadFailed;
+    private (Scope Scope, string Query)? displayedView;
     private bool stashEmpty;
     private int started;
     private int applied;
@@ -219,6 +220,18 @@ public sealed partial class Listing
     /// <summary>The input order of the latest accepted selection reset. A newer reset supersedes a waiting arrow (G5).</summary>
     internal long LastSelectionReset { get; private set; }
 
+    // A refresh failure can leave an unchanged, already-listed item usable for G8.
+    // Rows belonging to a different query or scope cannot answer a keyboard command.
+    internal bool ShowsRequestedView => displayedView == ListingView(Scope, Query);
+    internal bool SelectionReadPending => !Settled && selectionResetWaiting;
+    // Reaffirming a tile or opening an overlay can supersede keys without changing the import's selection count.
+    internal long LastSelectionInput { get; private set; }
+
+    internal bool HasExplicitSelectionAfter(long input) =>
+        displayedView is not null && LastSelectionInput > Math.Max(LastSelectionReset, input);
+
+    internal void SupersedeSelectionKeys() => LastSelectionInput = NextInput();
+
     /// <summary>The stash is open, nothing is searched, and it holds no item at all: the empty state (G2).</summary>
     public bool IsEmptyStash => State == StashState.Open && Settled && !IsSearch && Items.Count == 0 && stashEmpty;
 
@@ -242,6 +255,7 @@ public sealed partial class Listing
             {
                 // A Move has changed the file paths. Clear the old listing before any caller can use them.
                 Items = [];
+                displayedView = null;
                 indexOf = [];
                 selection = [];
                 selectionByImport = false;
@@ -310,6 +324,8 @@ public sealed partial class Listing
             }
 
             store = null;
+            displayedView = null;
+            SupersedeSelectionKeys();
             Items = [];
             indexOf = [];
             selection = [];
@@ -494,15 +510,24 @@ public sealed partial class Listing
     /// A plain click: the item becomes the whole selection and is focused; <paramref name="byPerson"/> false for the
     /// window's own, as the editor selecting the item it opened on or returns to (G12).
     /// </summary>
-    public void Focus(long id, bool byPerson = true) => Select([id], id, byImport: false, byPerson);
+    public void Focus(long id, bool byPerson = true)
+    {
+        // Clicking the focused tile can cancel a queued key without changing the import's selection count.
+        if (byPerson)
+        {
+            SupersedeSelectionKeys();
+        }
+
+        Select([id], id, byImport: false, byPerson);
+    }
 
     /// <summary>
     /// The preview opened on an item, or moved to it: the item alone selected, as <see cref="Focus"/>; by the person, a
     /// change of theirs even when the item already was the selection, since opening the preview is one (G12).
     /// </summary>
-    public void FocusForPreview(long id, bool byPerson = true)
+    public void FocusForPreview(long id, bool byPerson = true, long? input = null)
     {
-        CountChange(byPerson);
+        CountChange(byPerson, input);
         Select([id], id, byImport: false, byPerson: false);
     }
 
@@ -515,13 +540,13 @@ public sealed partial class Listing
     /// </summary>
     public void SelectAdded(IEnumerable<long> ids) => Select(ids, null, byImport: true, byPerson: false);
 
-    private void Select(IEnumerable<long> ids, long? focus, bool byImport, bool byPerson)
+    private void Select(IEnumerable<long> ids, long? focus, bool byImport, bool byPerson, long? input = null)
     {
         lock (gate)
         {
             var chosen = ids.Where(indexOf.ContainsKey).ToHashSet();
             var focused = focus is { } f && chosen.Contains(f) ? f : Items.FirstOrDefault(item => chosen.Contains(item.Id))?.Id;
-            CountChange(byPerson && (!chosen.SetEquals(selection) || focused != Focused));
+            CountChange(byPerson && (!chosen.SetEquals(selection) || focused != Focused), input);
             selection = chosen;
             selectionByImport = byImport;
             Focused = focused;
@@ -541,6 +566,7 @@ public sealed partial class Listing
             }
 
             CountChange(true);
+            SupersedeSelectionKeys();
             selectionByImport = false;
             if (selection.Add(id))
             {
@@ -576,6 +602,7 @@ public sealed partial class Listing
 
             var run = Items.Skip(Math.Min(from, to)).Take(Math.Abs(to - from) + 1).Select(item => item.Id).ToHashSet();
             CountChange(!run.SetEquals(selection));
+            SupersedeSelectionKeys();
             selection = run;
             selectionByImport = false;
         }
@@ -584,12 +611,14 @@ public sealed partial class Listing
     }
 
     /// <summary><c>Ctrl+A</c> in the grid (G17).</summary>
-    public void SelectAll()
+    public void SelectAll() => SelectAll(input: null);
+
+    internal void SelectAll(long? input)
     {
         lock (gate)
         {
             var all = Items.Select(item => item.Id).ToHashSet();
-            CountChange(!all.SetEquals(selection));
+            CountChange(!all.SetEquals(selection), input);
             selection = all;
             selectionByImport = false;
             Focused = Focused is { } f && selection.Contains(f) ? f : FirstSelected();
@@ -603,7 +632,7 @@ public sealed partial class Listing
     /// adjacent row under the focused tile's centre, or the nearest tile of that row. The item reached becomes the whole
     /// selection. With nothing focused, the first item is.
     /// </summary>
-    public void MoveFocus(Direction direction, IReadOnlyList<GridRow> rows)
+    public void MoveFocus(Direction direction, IReadOnlyList<GridRow> rows, long? input = null)
     {
         long target;
         lock (gate)
@@ -629,7 +658,7 @@ public sealed partial class Listing
             }
         }
 
-        Select([target], target);
+        Select([target], target, byImport: false, byPerson: true, input);
     }
 
     /// <summary>
@@ -850,9 +879,15 @@ public sealed partial class Listing
         }
 
         // A refresh that supersedes a search or first-show reset keeps its move to the first item.
-        Apply(items, keepSelection && !selectionResetWaiting && !reset);
+        displayedView = ListingView(Scope, Query);
+        // A newer personal selection on a displayed tile survives a pending reset if that tile is still listed.
+        var choseSinceReset = selectionResetWaiting && Math.Max(LastPersonChange, LastSelectionInput) > LastSelectionReset;
+        Apply(items, !reset && (choseSinceReset || (keepSelection && !selectionResetWaiting)));
         selectionResetWaiting = false;
     }
+
+    private static (Scope Scope, string Query) ListingView(Scope scope, string query) =>
+        ItemSearch.IsSearch(query) ? (Scope.All, query) : (scope, "");
 
     /// <summary>Lets every <see cref="Settle"/> go once the latest load has been applied and shown.</summary>
     private void EndSettling()

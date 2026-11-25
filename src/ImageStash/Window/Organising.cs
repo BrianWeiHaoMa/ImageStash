@@ -32,18 +32,6 @@ public sealed class Organising(Listing listing, Notices notices)
     public const string TagAct = "Tag";
 
     /// <summary>
-    /// <c>Ctrl+D</c> in the grid: the selection, once what was typed has arrived (G5, G7), toggled as
-    /// <see cref="ToggleFavorite"/> says. A press while the last one is still being written toggles again, as a held key
-    /// repeats it (G17): the selection is taken before waiting behind the change before it, whose refresh may move the
-    /// selection off the item pressed (out of Favorites).
-    /// </summary>
-    public Task<Outcome> ToggleFavoriteOfSelection() => Counted(FavoriteAct, async () =>
-    {
-        await listing.Settle();
-        return await ToggleFavorite(listing.SelectedItems);
-    });
-
-    /// <summary>
     /// G17's toggle: while any item is not a favorite, every one becomes one; else none stays one. Each item's flag is
     /// read as the listing now shows it, or as the store holds it once the listing no longer lists it, never as the
     /// caller's copy was.

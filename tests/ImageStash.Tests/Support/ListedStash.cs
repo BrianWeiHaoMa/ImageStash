@@ -41,6 +41,7 @@ public sealed class ListedStash : IDisposable
         WindowShowing = new WindowShowing(Notices);
         WindowShowing.Seen(visible: true, minimised: false);
         Listing = new Listing(Failures.Add);
+        SelectionKeys = new PendingQueryKeys(Listing, () => JustifiedRows.Layout(Listing.Items, 100, 96));
         Import = new Import(Listing, Notices, TestStash.ShortRetry);
         Clipboard = new RecordingClipboard(stash.Clock);
         Paste = new ClipboardPaste(Listing, Notices, Import, Clipboard, stash.Clock, TestStash.ShortRetry);
@@ -259,6 +260,15 @@ public sealed class ListedStash : IDisposable
 
     /// <summary>The keys the window holds down, as its key-downs and key-ups tell them; the paste waits for a held Enter.</summary>
     public PressOnce Keys { get; } = new();
+    public PendingQueryKeys SelectionKeys { get; }
+
+    public Task<Outcome> DeleteSelection() => SelectionKeys.ActOnSelection(selection => Deletion.Delete(selection.Items));
+
+    public Task<Outcome> ToggleFavoriteOfSelection() =>
+        SelectionKeys.ActOnSelection(selection => Organising.ToggleFavorite(selection.Items));
+
+    public Task<Outcome> OpenSelectionForEdit() =>
+        SelectionKeys.ActOnSelection(selection => Editing.OpenOnSelection(selection.Items));
 
     /// <summary><c>Ctrl+T</c>'s act, over <see cref="PreviewOpen"/> and <see cref="TagFieldItems"/> in place of the window's controls.</summary>
     public TagKey TagKey { get; }
@@ -313,22 +323,39 @@ public sealed class ListedStash : IDisposable
     /// </summary>
     public async Task<KeyAction> Press(Key key, KeyModifiers modifiers, KeyPlace place)
     {
-        var action = Keys.Acting(key, StashKeys.Route(key, modifiers, place));
+        var action = Keys.Acting(key, StashKeys.Route(key, modifiers, place, boxHasText: Listing.Query.Length > 0));
+        if (StashKeys.Direction(action) is { } direction)
+        {
+            await SelectionKeys.Move(direction);
+            return action;
+        }
+
         switch (action)
         {
             case KeyAction.Handoff:
                 var target = PasteTarget.Current;
+                var hide = new PasteHide(() => PasteHidesFlyout, Keys).ForEnterPress();
                 if (PreviewOpen && PreviewItem is { } shown)
                 {
-                    await Handoff.HandOver(null!, [shown], target, new PasteHide(() => PasteHidesFlyout, Keys));
+                    await Handoff.HandOver(null!, [shown], target, hide);
                     break;
                 }
 
-                await Listing.Settle();
-                await Handoff.HandOver(null!, Listing.SelectedItems, target, new PasteHide(() => PasteHidesFlyout, Keys));
+                await SelectionKeys.ActOnSelection(selection => Handoff.HandOver(null!, selection.Items, target, hide), allowExplicitTile: true);
+                break;
+            case KeyAction.Copy:
+                await SelectionKeys.ActOnSelection(selection => Handoff.Copy(null!, selection.Items), allowExplicitTile: true);
                 break;
             case KeyAction.Edit:
-                await Editing.OpenOnSelection(PreviewOpen ? PreviewItem : null);
+                if (PreviewOpen && PreviewItem is { } previewItem)
+                {
+                    await Editing.Open(previewItem, EditOrigin.Preview);
+                }
+                else
+                {
+                    await OpenSelectionForEdit();
+                }
+
                 break;
             case KeyAction.Paste:
                 await PasteKey.Press(LayerTextCaret, intoField: null);
@@ -337,13 +364,21 @@ public sealed class ListedStash : IDisposable
                 await Notices.UndoNewest();
                 break;
             case KeyAction.Delete when !PreviewOpen:
-                await Deletion.DeleteSelection();
+                await DeleteSelection();
                 break;
             case KeyAction.ToggleFavorite when !PreviewOpen:
-                await Organising.ToggleFavoriteOfSelection();
+                await ToggleFavoriteOfSelection();
                 break;
             case KeyAction.AddTags:
-                TagKey.Press();
+                if (PreviewOpen)
+                {
+                    TagKey.Press();
+                }
+                else
+                {
+                    await SelectionKeys.WithSelection(selection => TagKey.PressOnSelection(selection.Items));
+                }
+
                 break;
             case KeyAction.StepBack:
                 PreviewStepping.Step(StepWay.Back);
@@ -354,11 +389,17 @@ public sealed class ListedStash : IDisposable
             case KeyAction.TogglePreview when PreviewOpen:
                 PreviewOpen = false;
                 break;
-            case KeyAction.TogglePreview when Listing.Items.FirstOrDefault(item => item.Id == Listing.Focused) is { } focused:
-                // The preview's opening as it reaches the listing: its item alone selected (G19).
-                PreviewOpen = true;
-                PreviewItem = focused;
-                Listing.FocusForPreview(focused.Id);
+            case KeyAction.TogglePreview:
+            case KeyAction.Rename:
+                await SelectionKeys.WithSelection(selection =>
+                {
+                    if (selection.Focused is { } focused)
+                    {
+                        PreviewOpen = true;
+                        PreviewItem = focused;
+                        Listing.FocusForPreview(focused.Id, input: selection.Input);
+                    }
+                });
                 break;
         }
 

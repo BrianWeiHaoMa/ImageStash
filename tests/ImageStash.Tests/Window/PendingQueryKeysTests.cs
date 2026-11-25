@@ -1,3 +1,4 @@
+using Avalonia.Input;
 using ImageStash.Store;
 using ImageStash.Tests.Support;
 using ImageStash.Window;
@@ -13,7 +14,7 @@ namespace ImageStash.Tests.Window;
 /// given as the window gives them: Enter and <c>Ctrl+C</c> wait for the listing to settle and copy its selection.
 /// </summary>
 [TestClass]
-public sealed class PendingQueryKeysTests
+public sealed partial class PendingQueryKeysTests
 {
     [TestMethod]
     public async Task DownPressedWhileASearchIsPendingReachesTheSecondMatchOnceTheMatchesArrive()
@@ -126,7 +127,7 @@ public sealed class PendingQueryKeysTests
             search = listing.ChooseTag("cat");
             arrow = keys.Move(Direction.Down);
             tagged = listing.ChooseTag("dog");
-            keys.Then(() => handed = HandOver(listed));
+            handed = HandOver(listed);
         }
 
         await Task.WhenAll(search, tagged, arrow);
@@ -148,7 +149,7 @@ public sealed class PendingQueryKeysTests
         {
             _ = listed.Listing.SetQuery("cat");
             drained = keys.Move(Direction.Down);
-            keys.Then(() => handed = HandOver(listed));
+            handed = HandOver(listed);
         }
 
         await drained;
@@ -184,7 +185,7 @@ public sealed class PendingQueryKeysTests
             {
                 _ = listed.Listing.SetQuery("cat");
                 drained = keys.Move(Direction.Down);
-                keys.Then(() => acted = copy ? CopySelection(listed) : HandOver(listed));
+                acted = copy ? CopySelection(listed) : HandOver(listed);
                 _ = keys.Move(Direction.Down);
             }
 
@@ -208,7 +209,7 @@ public sealed class PendingQueryKeysTests
         {
             _ = listed.Listing.SetQuery("cat");
             drained = keys.Move(Direction.Down);
-            keys.Then(() => toggled = listed.Organising.ToggleFavoriteOfSelection());
+            toggled = listed.ToggleFavoriteOfSelection();
             _ = keys.Move(Direction.Down);
         }
 
@@ -232,7 +233,7 @@ public sealed class PendingQueryKeysTests
         {
             _ = listed.Listing.SetQuery("cat");
             drained = keys.Move(Direction.Down);
-            keys.Then(listed.Listing.SelectAll);
+            _ = keys.WithCurrentView(input => listed.Listing.SelectAll(input));
         }
 
         await drained;
@@ -259,7 +260,7 @@ public sealed class PendingQueryKeysTests
         {
             _ = listed.Listing.ShowScope(Scope.Favorites);
             drained = keys.Move(Direction.Down);
-            keys.Then(() => once = listed.Organising.ToggleFavoriteOfSelection());
+            once = listed.ToggleFavoriteOfSelection();
         }
 
         await drained;
@@ -268,18 +269,17 @@ public sealed class PendingQueryKeysTests
         await listed.Stash.Store.SetFavorite([b], true);
         await listed.Listing.ShowScope(Scope.Favorites);
 
-        var toggles = new List<Task<Outcome>>();
+        Task<Outcome> firstToggle, secondToggle;
         using (listed.Stash.HoldStore())
         {
             _ = listed.Listing.ShowScope(Scope.Favorites);
             drained = keys.Move(Direction.Down);
-            keys.Then(() => toggles.Add(listed.Organising.ToggleFavoriteOfSelection()));
-            keys.Then(() => toggles.Add(listed.Organising.ToggleFavoriteOfSelection()));
+            firstToggle = listed.ToggleFavoriteOfSelection();
+            secondToggle = listed.ToggleFavoriteOfSelection();
         }
 
         await drained;
-        Assert.HasCount(2, toggles, "both presses dispatched once Down had applied, the second without waiting for the first's refresh");
-        foreach (var outcome in await Task.WhenAll(toggles))
+        foreach (var outcome in await Task.WhenAll(firstToggle, secondToggle))
         {
             Assert.IsTrue(outcome.Succeeded, outcome.Failure?.Sentence);
         }
@@ -305,16 +305,18 @@ public sealed class PendingQueryKeysTests
         keys.Then(() => acted = true);
         Assert.IsTrue(acted, "an act with no arrow waiting is dispatched at once");
 
-        Task drained;
+        Task drained, copied;
         using (listed.Stash.HoldStore())
         {
             _ = listed.Listing.SetQuery("zebra");
             drained = keys.Move(Direction.Down);
+            copied = listed.Press(Key.C, KeyModifiers.Control, KeyPlace.SearchBox);
         }
 
-        await drained;
+        await Task.WhenAll(drained, copied);
         Assert.IsTrue(listed.Listing.NoMatch, "the no-match state (G5)");
         Assert.IsNull(listed.Listing.Focused);
+        Assert.IsEmpty(listed.Clipboard.Written);
         Assert.IsEmpty(listed.Failures);
     }
 
@@ -360,7 +362,7 @@ public sealed class PendingQueryKeysTests
     private static Task<ListedStash> Listed() => ListedStash.Open(storeRetry: TimeSpan.FromSeconds(10));
 
     /// <summary>The window's queue, its rows laid out as the grid lays them out at its width, one tile per row.</summary>
-    private static PendingQueryKeys Keys(ListedStash listed) => new(listed.Listing, () => JustifiedRows.Layout(listed.Listing.Items, 100, 96));
+    private static PendingQueryKeys Keys(ListedStash listed) => listed.SelectionKeys;
 
     /// <summary><c>dog</c>, then <c>cat older</c> and <c>cat newer</c> added after it, All showing.</summary>
     private static async Task<(StashItem Newer, StashItem Older)> DogAndTwoCats(ListedStash listed)
@@ -389,16 +391,10 @@ public sealed class PendingQueryKeysTests
     }
 
     /// <summary>Enter as the window dispatches it with no paste target: once the listing settles, its selection copied.</summary>
-    private static async Task<Outcome> HandOver(ListedStash listed)
-    {
-        await listed.Listing.Settle();
-        return await listed.Handoff.HandOver(null!, listed.Listing.SelectedItems, null, new PasteHide(() => false));
-    }
+    private static Task<Outcome> HandOver(ListedStash listed) => listed.SelectionKeys.ActOnSelection(selection =>
+        listed.Handoff.HandOver(null!, selection.Items, null, new PasteHide(() => false)), allowExplicitTile: true);
 
     /// <summary><c>Ctrl+C</c> as the window dispatches it: once the listing settles, its selection copied.</summary>
-    private static async Task<Outcome> CopySelection(ListedStash listed)
-    {
-        await listed.Listing.Settle();
-        return await listed.Handoff.Copy(null!, listed.Listing.SelectedItems);
-    }
+    private static Task<Outcome> CopySelection(ListedStash listed) =>
+        listed.SelectionKeys.ActOnSelection(selection => listed.Handoff.Copy(null!, selection.Items), allowExplicitTile: true);
 }

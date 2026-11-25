@@ -16,6 +16,27 @@ namespace ImageStash.Tests.Window;
 public sealed class PreviewStepClicksTests
 {
     [TestMethod]
+    public async Task AFailedScopeReadDoesNotGiveThePreviewStepsFromOldRows()
+    {
+        using var listed = await ListedStash.Open(storeRetry: TimeSpan.Zero);
+        var older = await listed.Stash.ImportFixture("older", "still.png");
+        var newer = await listed.Stash.ImportFixture("newer", "transparent.png");
+        await listed.Listing.ShowScope(Scope.All);
+        listed.PreviewOpen = true;
+        listed.PreviewItem = newer;
+
+        using (listed.Stash.HoldStore())
+        {
+            await listed.Listing.ShowScope(Scope.Favorites);
+            Assert.IsFalse(listed.PreviewStepping.Step(StepWay.On));
+        }
+
+        Assert.AreEqual(newer.Id, listed.PreviewItem?.Id);
+        Assert.IsTrue(listed.Listing.Items.Any(item => item.Id == older.Id));
+        Assert.IsNotEmpty(listed.Failures);
+    }
+
+    [TestMethod]
     public async Task NextAndPreviousStepAsTheArrowsDoEachSelectingTheItemShownAlone()
     {
         using var listed = await ListedStash.Open();
@@ -232,7 +253,7 @@ public sealed class PreviewStepClicksTests
         {
             click = listed.PreviewStepClicks.Click(StepWay.On, Typed(() => listed.Renaming.Rename(listed.PreviewItem!, "renamed")));
             // Ctrl+E in the preview meanwhile: the edit opens on the item shown.
-            editing = listed.Editing.OpenOnSelection(listed.PreviewItem);
+            editing = listed.Editing.Open(listed.PreviewItem!, EditOrigin.Preview);
         }
 
         await click;

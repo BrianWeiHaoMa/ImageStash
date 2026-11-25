@@ -89,7 +89,7 @@ public enum KeyPlace
 /// <summary>
 /// G7's keys, in one place for both states (G2): the search box is an ordinary text box, so Left, Right, Home, End,
 /// Shift with them, <c>Ctrl+A</c>, <c>Ctrl+X</c> and <c>Ctrl+Z</c> are its own; Up and Down move the grid's selection
-/// from the box or the grid without moving focus, and Left and Right move it from the grid; Tab in the box moves focus
+/// from the box or the grid without moving focus, and plain Left and Right move it from the grid or the empty box; Tab in the box moves focus
 /// to the grid; <c>Ctrl+A</c> in the grid selects every item; Enter, Esc, <c>Ctrl+O</c> and G6's <c>Ctrl</c> with
 /// <c>+</c> or <c>-</c>, on the main keys or the numeric keypad's, work from both; <c>Ctrl+T</c>, from both, opens the
 /// tag field on the selection (<see cref="TagKey"/>); <c>Ctrl+C</c> copies the text the
@@ -127,7 +127,8 @@ public static class StashKeys
     public static readonly KeyGesture ImportFilesKey = new(Key.O, KeyModifiers.Control);
 
     /// <param name="boxTextSelected">The search box has text the person selected (<see cref="SummonSelection.PersonSelected"/>), as it can only while it has focus: it clears its selection on losing focus.</param>
-    public static KeyAction Route(Key key, KeyModifiers modifiers, KeyPlace place, bool boxTextSelected = false) => place switch
+    /// <param name="boxHasText">Whether the box contains any text, including spaces that yield no search terms.</param>
+    public static KeyAction Route(Key key, KeyModifiers modifiers, KeyPlace place, bool boxTextSelected = false, bool boxHasText = true) => place switch
     {
         KeyPlace.Field or KeyPlace.PreviewName => (key, modifiers) switch
         {
@@ -167,7 +168,7 @@ public static class StashKeys
             (Key.OemMinus or Key.Subtract, KeyModifiers.Control) => KeyAction.SmallerThumbnails,
             _ => KeyAction.None,
         },
-        _ => Route(key, modifiers, inSearchBox: place == KeyPlace.SearchBox, boxTextSelected),
+        _ => Route(key, modifiers, inSearchBox: place == KeyPlace.SearchBox, boxTextSelected, boxHasText),
     };
 
     /// <summary>
@@ -182,12 +183,12 @@ public static class StashKeys
         : inSearchBox ? KeyPlace.SearchBox
         : KeyPlace.Grid;
 
-    private static KeyAction Route(Key key, KeyModifiers modifiers, bool inSearchBox, bool boxTextSelected) => (key, modifiers) switch
+    private static KeyAction Route(Key key, KeyModifiers modifiers, bool inSearchBox, bool boxTextSelected, bool boxHasText) => (key, modifiers) switch
     {
         (Key.Up, KeyModifiers.None) => KeyAction.MoveUp,
         (Key.Down, KeyModifiers.None) => KeyAction.MoveDown,
-        (Key.Left, KeyModifiers.None) when !inSearchBox => KeyAction.MoveLeft,
-        (Key.Right, KeyModifiers.None) when !inSearchBox => KeyAction.MoveRight,
+        (Key.Left, KeyModifiers.None) when !inSearchBox || !boxHasText => KeyAction.MoveLeft,
+        (Key.Right, KeyModifiers.None) when !inSearchBox || !boxHasText => KeyAction.MoveRight,
         (Key.Escape, KeyModifiers.None) => KeyAction.Escape,
         (Key.Enter, KeyModifiers.None) => KeyAction.Handoff,
         (Key.C, KeyModifiers.Control) when !(inSearchBox && boxTextSelected) => KeyAction.Copy,
@@ -253,7 +254,14 @@ public sealed class PressOnce
     {
         lock (gate)
         {
-            return down.Add(key);
+            if (!down.Add(key))
+            {
+                return false;
+            }
+
+            // A new press after focus was lost cannot lend its release to the earlier press.
+            waiting.Remove(key);
+            return true;
         }
     }
 

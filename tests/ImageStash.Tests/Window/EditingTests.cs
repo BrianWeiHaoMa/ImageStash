@@ -26,18 +26,18 @@ public sealed class EditingTests
         await listed.Listing.Refresh();
         listed.Listing.Select([cat.Id, dog.Id], dog.Id);
 
-        Assert.IsTrue((await listed.Editing.OpenOnSelection(null)).Succeeded);
+        Assert.IsTrue((await listed.OpenSelectionForEdit()).Succeeded);
         Assert.IsFalse(listed.Editing.IsOpen, "G20: unavailable with several selected, on the focused one too");
         Assert.IsEmpty(listed.Notices.Shown, "and named in no notice");
 
-        await listed.Editing.OpenOnSelection(cat);
+        await listed.Editing.Open(cat, EditOrigin.Preview);
         Assert.AreEqual(cat.Id, listed.Editing.Session?.Item.Id, "the preview's item, whatever the grid beneath selects");
         Assert.AreEqual(EditOrigin.Preview, listed.Editing.Origin);
         CollectionAssert.AreEqual(new[] { cat.Id }, listed.Listing.Selection.ToList(), "the item alone selected");
         listed.Editing.Cancel();
 
         listed.Listing.Focus(dog.Id);
-        await listed.Editing.OpenOnSelection(null);
+        await listed.OpenSelectionForEdit();
         Assert.AreEqual(dog.Id, listed.Editing.Session?.Item.Id);
         Assert.AreEqual(EditOrigin.Grid, listed.Editing.Origin);
     }

@@ -169,16 +169,25 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
         }
 
         var menu = new ContextMenu(new TagListDrag()) { Placement = PlacementMode.BottomEdgeAlignedLeft, PlacementRect = anchor, Styles = { TagListHeight.ItemMenuLists(TagListHeight.For(target)) } };
+        var pasteHide = hide;
         if (hide.HeldKeys is { } held)
         {
             // Its own popup, whose keys the window never sees: an Enter pressed on its first entry is held as the window
             // holds one, so its repeats hand nothing off once the menu has closed, and its paste waits for its release (G8, N3).
             menu.AddHandler(InputElement.KeyDownEvent, (_, e) =>
             {
-                if (e.Key == Key.Enter)
+                if (e.Key != Key.Enter)
                 {
-                    held.Pressed(Key.Enter);
+                    return;
                 }
+
+                if (!held.Pressed(Key.Enter))
+                {
+                    e.Handled = true;
+                    return;
+                }
+
+                pasteHide = hide.ForEnterPress();
             }, RoutingStrategies.Tunnel, handledEventsToo: true);
             menu.AddHandler(InputElement.KeyUpEvent, (_, e) => held.Released(e.Key), RoutingStrategies.Tunnel, handledEventsToo: true);
         }
@@ -213,7 +222,7 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
             }
             else
             {
-                item.Click += (_, _) => _ = Act(entry.Action, owner, items, pasteTarget, hide, dialogUp);
+                item.Click += (_, _) => _ = Act(entry.Action, owner, items, pasteTarget, pasteHide, dialogUp);
             }
         }
 
