@@ -78,6 +78,9 @@ internal static class StoreSchema
         """
         ALTER TABLE items ADD COLUMN added_by_capture INTEGER NOT NULL DEFAULT 0;
         """,
+
+        // Version 5 keeps the two saved layer lists' text apart (G5).
+        SavedLayerText.Migration,
     ];
 
     public static int CurrentVersion => Steps.Length;

@@ -114,12 +114,12 @@ internal static class StoreOpen
     /// <see cref="Open"/> opens one up to and including the migration, on <paramref name="live"/>'s thread with its retry,
     /// none of its pending steps resolved and nothing created: its version read first through a connection that cannot
     /// write and a newer one refused, the journal set and read back, an older one brought up to this build's in one
-    /// transaction (G31); then <paramref name="read"/> answered once in one transaction, so a store without the stash's
-    /// tables or columns is refused with <paramref name="notAStore"/>, and the connection closed. Failures name
+    /// transaction (G31); then <paramref name="read"/> gets the version before opening and answers in one transaction,
+    /// so a store without the stash's tables or columns is refused with <paramref name="notAStore"/>. Failures name
     /// <see cref="Action"/> and the store file; a file whose recorded size could not be read again refuses the store by
     /// that file's name and reason, since nothing would read it again once the import commits the version (G35, G36).
     /// </summary>
-    public static Outcome<T> OpenStaged<T>(StoreContext live, StashFolder staging, string notAStore, Func<StoreContext, T> read)
+    public static Outcome<T> OpenStaged<T>(StoreContext live, StashFolder staging, string notAStore, Func<StoreContext, long?, T> read)
     {
         if (!File.Exists(staging.StoreFile))
         {
@@ -164,11 +164,11 @@ internal static class StoreOpen
             return new Failure(Action, StashFolder.StoreFileName, $"{unread.Subject} in it could not be read again: {unread.Reason}");
         }
 
-        var answered = HeldFileRetry.RunTransaction(Action, staging.StoreFile, live.RetryDuration, () =>
+        var answered = staged.Change(Action, () =>
         {
             try
             {
-                return (Answered: true, Value: read(staged));
+                return (Answered: true, Value: read(staged, version.Value));
             }
             catch (SqliteException e) when (e.SqliteErrorCode == SqliteError)
             {
@@ -236,7 +236,12 @@ internal static class StoreOpen
         }
 
         // Set and read back at every open: a store another program left in WAL mode is switched back (S2).
-        var journal = HeldFileRetry.RunTransaction(Action, store.Folder.StoreFile, store.RetryDuration, () => (string?)store.Scalar("PRAGMA journal_mode = DELETE"));
+        var journal = HeldFileRetry.RunTransaction(Action, store.Folder.StoreFile, store.RetryDuration, () =>
+        {
+            var mode = (string?)store.Scalar("PRAGMA journal_mode = DELETE");
+            SavedLayerText.RegisterProjection(store.Connection);
+            return mode;
+        });
         if (!journal.Succeeded)
         {
             return journal.Failure;

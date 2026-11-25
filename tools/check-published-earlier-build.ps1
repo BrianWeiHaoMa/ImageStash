@@ -11,7 +11,7 @@ pictures of the phase's own with a real Ctrl+V of the files, tags two "mood" thr
 tag..., makes one a favorite with Ctrl+D, copies one with Ctrl+C (a use), steps the thumbnails up with Ctrl and +, and
 has its pinned window moved and resized; then Quit ImageStash from its tray menu. Its stash.db reads its own user version,
 below this build's, in its header and its settings.json version 1 with the thumbnail size, the pinned size and the pinned
-position off their defaults. The copy started again over them: the store is migrated to version 4, every column of every item, every
+position off their defaults. The copy started again over them: the store is migrated to version 5, every column of every item, every
 tag, use and picture file and every value of settings.json as the earlier build wrote them, the three items are found by
 name, the tag's chip and its search find the two, Favorites
 the one, Recent the used one, and pinning the window puts it at the saved size and place (G31, F11, Done when 4).
@@ -20,7 +20,7 @@ Exits with the number of checks that failed.
 With -Store, the stash and settings are the check's own and every step runs; without it they are the user's, and the
 phase is skipped, since it replaces them. Without -EarlierCommit, a commit this repository holds whose store is at a
 lower version than this build's, it is skipped as well: there is no earlier build to run. Any commit of this history from
-before the store reached version 4 serves.
+before the store reached version 5 serves.
 
 Stops the copy, empties the check's own %LOCALAPPDATA%\ImageStash, publishes -EarlierCommit under -Work, runs that build and
 quits it, writes three pictures under -Work, replaces the clipboard, sends real keystrokes (Ctrl+Alt+Space, Ctrl+V,
@@ -121,7 +121,7 @@ function StoreVersion {
     try {
         $header = New-Object byte[] 64
         if ($stream.Read($header, 0, 64) -lt 64) { return -1 }
-        ($header[60] -shl 24) -bor ($header[61] -shl 16) -bor ($header[62] -shl 8) -bor $header[63]
+        ([int]$header[60] -shl 24) -bor ([int]$header[61] -shl 16) -bor ([int]$header[62] -shl 8) -bor $header[63]
     }
     finally { $stream.Dispose() }
 }
@@ -129,7 +129,7 @@ function StoreVersion {
 function Settings { Get-Content -Raw -LiteralPath $settingsFile | ConvertFrom-Json }
 
 # The version a store this build creates carries: StoreSchema.CurrentVersion.
-$storeVersion = 4
+$storeVersion = 5
 
 function StashWindow { @([ScreenshotDesk]::Titled($running, 'ImageStash')) | Select-Object -First 1 }
 
@@ -250,7 +250,7 @@ try {
     Need (WaitFor { (StoreVersion) -ge 1 -and (Test-Path -LiteralPath $settingsFile) } 20000) "the earlier build made its stash, $storeFile, and settings.json"
     # Read from the stash it made, not fixed: any earlier build whose store is below this build's version serves (F11).
     $earlierVersion = StoreVersion
-    Need ($earlierVersion -lt $storeVersion) "the earlier build's store is at a lower version than this build's $storeVersion`: user version $earlierVersion"
+    Need (($earlierVersion -ge 1) -and ($earlierVersion -lt $storeVersion)) "the earlier build's store is at a lower version than this build's $storeVersion`: user version $earlierVersion"
     Need (WaitFor { [StashWindows]::Showing($running) -eq 'pinned' } 10000) "on its first run it shows its stash window pinned: '$([StashWindows]::Showing($running))'"
 
     # Three pictures of the phase's own, imported by the earlier build's own Ctrl+V of the files (G13, G12).

@@ -231,8 +231,7 @@ public sealed class TestStash : IDisposable
     {
         Assert.IsNull(Store, "close the store before reaching its file directly");
         string[] words = ["cat", "dance", "lab coat", "abs", "nope", "wow", "yes", "facepalm", "shrug", "clap"];
-        using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Folder.StoreFile, Pooling = false }.ToString());
-        connection.Open();
+        using var connection = OpenFixtureConnection();
         using var transaction = connection.BeginTransaction();
         using var item = connection.CreateCommand();
         item.Transaction = transaction;
@@ -325,8 +324,7 @@ public sealed class TestStash : IDisposable
     /// <summary>Runs SQL through a second connection while the store is open and between its calls, which hold no transaction.</summary>
     public void SqlWhileOpen(string sql, params (string Name, object? Value)[] parameters)
     {
-        using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Folder.StoreFile, Pooling = false }.ToString());
-        connection.Open();
+        using var connection = OpenFixtureConnection();
         using var command = connection.CreateCommand();
         command.CommandText = sql;
         foreach (var (name, value) in parameters)
@@ -346,8 +344,7 @@ public sealed class TestStash : IDisposable
     /// <summary>Reads the store through a second connection, while it is closed or between its calls, which hold no transaction.</summary>
     public List<T> SqlQueryWhileOpen<T>(string sql, Func<SqliteDataReader, T> row, params (string Name, object? Value)[] parameters)
     {
-        using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Folder.StoreFile, Pooling = false }.ToString());
-        connection.Open();
+        using var connection = OpenFixtureConnection();
         using var command = connection.CreateCommand();
         command.CommandText = sql;
         foreach (var (name, value) in parameters)
@@ -366,6 +363,22 @@ public sealed class TestStash : IDisposable
         }
         while (reader.NextResult());
         return rows;
+    }
+
+    private SqliteConnection OpenFixtureConnection()
+    {
+        var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Folder.StoreFile, Pooling = false }.ToString());
+        try
+        {
+            connection.Open();
+            SavedLayerText.RegisterProjection(connection);
+            return connection;
+        }
+        catch
+        {
+            connection.Dispose();
+            throw;
+        }
     }
 
     /// <summary>

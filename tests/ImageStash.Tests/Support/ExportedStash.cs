@@ -172,6 +172,7 @@ public static class ExportedStash
         using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = store, Pooling = false }.ToString()))
         {
             connection.Open();
+            SavedLayerText.RegisterProjection(connection);
             using var command = connection.CreateCommand();
             command.CommandText = sql;
             command.ExecuteNonQuery();

@@ -165,7 +165,7 @@ public sealed class RecentCapturesTests
         var shot = await source.Capture("Screenshot 2026-10-16 17.30.00");
         var written = await ExportedStash.Export(source, MovingStash.Keeper(source, failures));
         // As a build at version 3 wrote it: no column records what added an item.
-        var archive = ExportedStash.WithStore(written, source.Outside("earlier.zip"), "ALTER TABLE items DROP COLUMN added_by_capture; PRAGMA user_version = 3");
+        var archive = ExportedStash.WithStore(written, source.Outside("earlier.zip"), VersionThreeStore.WithoutLaterSteps + " PRAGMA user_version = 3");
         using var target = new TestStash();
         var store = await target.OpenCleanly();
 

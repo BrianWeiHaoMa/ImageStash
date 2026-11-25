@@ -154,6 +154,9 @@ public sealed class StashStore : IDisposable
 
     public Task<Outcome<IReadOnlyList<StashItem>>> Search(string query) => thread.Read(() => ItemQueries.Search(store, query));
 
+    internal Task<Outcome<IReadOnlyDictionary<long, SavedLayerText>>> ReadSavedLayerText() =>
+        thread.Read(() => SavedLayerText.ReadSnapshot(store));
+
     public Task<Outcome<IReadOnlyList<StashItem>>> Favorites() => thread.Read(() => ItemQueries.Favorites(store));
 
     /// <summary>The item of that identity as the stash lists it, or null when the stash does not list it.</summary>

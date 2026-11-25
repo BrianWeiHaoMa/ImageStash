@@ -378,9 +378,9 @@ public sealed class StashImportTests
             "a file name outside" => WithStore(real, refused, @"UPDATE items SET finished_file = '..\victim.png', original_file = '..\victim.png'"),
             "a step outside" => WithStore(real, refused, @"UPDATE items SET pending_steps = '[{""step"":""rename in root"",""from"":""..\victim.png"",""to"":""plain.jpg""}]'"),
             // A store below this build's version, whose recorded sizes are read again before the rest is judged.
-            "an earlier build's unknown format" => WithStore(real, refused, "ALTER TABLE items DROP COLUMN added_by_capture; UPDATE items SET format = 'Bogus'; PRAGMA user_version = 2"),
-            "an earlier build's undecodable steps" => WithStore(real, refused, "ALTER TABLE items DROP COLUMN added_by_capture; UPDATE items SET pending_steps = 'not a list of steps'; PRAGMA user_version = 2"),
-            "an earlier build's file name outside" => WithStore(real, refused, @"ALTER TABLE items DROP COLUMN added_by_capture; UPDATE items SET finished_file = '..\victim.jpg', original_file = '..\victim.jpg'; PRAGMA user_version = 2"),
+            "an earlier build's unknown format" => WithStore(real, refused, VersionThreeStore.WithoutLaterSteps + " UPDATE items SET format = 'Bogus'; PRAGMA user_version = 2"),
+            "an earlier build's undecodable steps" => WithStore(real, refused, VersionThreeStore.WithoutLaterSteps + " UPDATE items SET pending_steps = 'not a list of steps'; PRAGMA user_version = 2"),
+            "an earlier build's file name outside" => WithStore(real, refused, VersionThreeStore.WithoutLaterSteps + @" UPDATE items SET finished_file = '..\victim.jpg', original_file = '..\victim.jpg'; PRAGMA user_version = 2"),
             _ => WithStore(real, refused, @"UPDATE items SET deleted = 1, held_copies = '[{""file"":""finished_file"",""copy"":""..\..\victim.png""}]'"),
         };
         using var target = new TestStash();
@@ -445,7 +445,7 @@ public sealed class StashImportTests
         await source.OpenCleanly();
         var photo = await source.ImportFixture("portrait", "oriented-6.jpg");
         // What the build before orientation exported: the photo at the size its codec decodes, the store at version 2.
-        var archive = WithStore(await Export(source, Keeper(source)), source.Outside("earlier.zip"), "ALTER TABLE items DROP COLUMN added_by_capture; UPDATE items SET width = 40, height = 24; PRAGMA user_version = 2");
+        var archive = WithStore(await Export(source, Keeper(source)), source.Outside("earlier.zip"), VersionThreeStore.WithoutLaterSteps + " UPDATE items SET width = 40, height = 24; PRAGMA user_version = 2");
         using var target = new TestStash();
         var store = await Target(target);
 
@@ -469,7 +469,7 @@ public sealed class StashImportTests
         await source.ImportFixture("portrait", "oriented-6.jpg");
         // Not a picture where the photo was: no build would have taken it in, and its size cannot be read again.
         var archive = Rewritten(
-            WithStore(await Export(source, Keeper(source)), source.Outside("earlier.zip"), "ALTER TABLE items DROP COLUMN added_by_capture; UPDATE items SET width = 40, height = 24; PRAGMA user_version = 2"),
+            WithStore(await Export(source, Keeper(source)), source.Outside("earlier.zip"), VersionThreeStore.WithoutLaterSteps + " UPDATE items SET width = 40, height = 24; PRAGMA user_version = 2"),
             source.Outside("damaged.zip"),
             ("portrait.jpg", TestStash.Bytes(7)));
         using var target = new TestStash();

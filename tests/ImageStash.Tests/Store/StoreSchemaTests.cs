@@ -10,7 +10,7 @@ namespace ImageStash.Tests.Store;
 [TestClass]
 public sealed class StoreSchemaTests
 {
-    private static readonly string[] Tables = ["items", "tags", "uses"];
+    private static readonly string[] Tables = ["items", "tags", "uses", "saved_layer_text"];
 
     private static readonly string[] FinishedFacts = VersionOneStore.SecondStepColumns;
 
@@ -140,7 +140,7 @@ public sealed class StoreSchemaTests
             stash.Sql($"ALTER TABLE items DROP COLUMN {column}");
         }
 
-        stash.Sql("DROP TABLE tags; DROP TABLE uses; PRAGMA user_version = 0;");
+        stash.Sql(VersionThreeStore.WithoutLaterSteps + " DROP TABLE tags; DROP TABLE uses; PRAGMA user_version = 0;");
 
         var opening = await stash.Open();
 
@@ -211,7 +211,7 @@ public sealed class StoreSchemaTests
         await stash.Import("kept");
         stash.Close();
         // The step's column already there: its one statement fails.
-        stash.Sql("PRAGMA user_version = 3");
+        stash.Sql(VersionFourStore.WithoutFifthStep + " PRAGMA user_version = 3");
 
         var opening = await stash.Open();
 

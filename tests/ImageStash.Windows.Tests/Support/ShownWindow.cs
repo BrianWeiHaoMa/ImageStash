@@ -371,6 +371,7 @@ public sealed class ShownWindow : IDisposable
         var root = Path.Combine(settingsFolder, "stash");
         using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Path.Combine(root, StashFolder.StoreFileName), Pooling = false }.ToString());
         connection.Open();
+        SavedLayerText.RegisterProjection(connection);
         using var transaction = connection.BeginTransaction();
         using var item = connection.CreateCommand();
         item.Transaction = transaction;

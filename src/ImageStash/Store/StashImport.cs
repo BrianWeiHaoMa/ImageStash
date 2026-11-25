@@ -259,8 +259,13 @@ public static class StashImport
     /// </summary>
     private sealed record StagedStore(long Listed, IReadOnlyList<StagedStore.Row> Rows, bool Decodes)
     {
-        public static StagedStore Read(StoreContext staged)
+        public static StagedStore Read(StoreContext staged, long? originalVersion)
         {
+            if (!SavedLayerText.HasSchema(staged))
+            {
+                return Undecodable;
+            }
+
             // An Open with… session names a copy outside the stash, kept for an item of the PC that exported it or of the
             // stash this import replaces, whose sessions end with it (State: Open with…): the imported item has none here,
             // so no copy of another item is classified, or adopted, as its rewrite (G36, G27).
@@ -279,6 +284,13 @@ public static class StashImport
                 // missing throws as no such table or column, and the count is the one the export's manifest gives (G36).
                 var listed = StashItem.CountListed(staged);
                 staged.Scalar("SELECT COUNT(item_id) + COUNT(used_at) FROM uses");
+                // Older stores already got their strings in the migration. In a current archive the layer lists alone
+                // determine the text we carry into the replacement.
+                if (originalVersion is null || originalVersion >= StoreSchema.CurrentVersion)
+                {
+                    SavedLayerText.RefreshStaged(staged);
+                }
+
                 return new(listed, rows, Decodes: true);
             }
             catch (Exception e) when (e is not Microsoft.Data.Sqlite.SqliteException)

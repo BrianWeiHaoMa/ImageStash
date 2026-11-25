@@ -15,7 +15,7 @@ internal static class StoreStatements
     /// The result of <paramref name="query"/> and the statements it ran, over a store at this build's version filled by the
     /// SQL <paramref name="fill"/> makes of the stash clock's time in UTC Unix milliseconds.
     /// </summary>
-    public static async Task<(T Result, int Statements)> Count<T>(Func<long, string> fill, Func<StoreContext, T> query)
+    public static async Task<(T Result, int Statements)> Count<T>(Func<long, string> fill, Func<StoreContext, T> query, Action<string>? trace = null)
     {
         using var stash = new TestStash();
         await stash.OpenCleanly();
@@ -30,7 +30,11 @@ internal static class StoreStatements
             return await thread.Read(() =>
             {
                 var run = 0;
-                raw.sqlite3_trace(store.Connection.Handle, (strdelegate_trace)((_, _) => run++), null);
+                raw.sqlite3_trace(store.Connection.Handle, (strdelegate_trace)((_, sql) =>
+                {
+                    run++;
+                    trace?.Invoke(sql);
+                }), null);
                 return (query(store), run);
             });
         }
