@@ -6,6 +6,10 @@ namespace ImageStash.Store;
 /// <summary>How many uses an item has recorded and when the latest was, in UTC; 0 and null while it has none (G19, G10).</summary>
 public sealed record UseHistory(int Count, DateTimeOffset? Latest);
 
+/// <summary>The visible rows and the stash-wide tag catalogue as of the same store read.</summary>
+internal sealed record StoreListing(Outcome<IReadOnlyList<StashItem>> Items, Outcome<IReadOnlyList<TagCount>> Tags,
+    (long Commits, long FileSteps) Version);
+
 /// <summary>
 /// What Edit opens on: the item as the stash lists it; its original, where it is now, to be opened read-only (R3), with
 /// the original's record; the committed layers; the layers the picture on disk was rendered from, which differ while a

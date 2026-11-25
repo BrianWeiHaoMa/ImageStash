@@ -22,13 +22,13 @@ public sealed partial class Listing
             }
 
             var view = started;
-            var all = await opened.All();
+            var read = await opened.ListAll();
+            var (all, counted, _) = read;
             if (!ReferenceEquals(store, opened))
             {
                 return false;
             }
 
-            var (counted, version) = await opened.CountListingTags();
             await settleChoices();
             if (began.MovedOn(this) || !ReferenceEquals(store, opened))
             {
@@ -41,7 +41,7 @@ public sealed partial class Listing
                 return false;
             }
 
-            if (view != started)
+            if (view != started || read.Version != opened.ListingVersion)
             {
                 continue;
             }
@@ -60,8 +60,8 @@ public sealed partial class Listing
                     return false;
                 }
 
-                // If a refresh or summon ran, its rows can be newer than the All read prepared here.
-                if (view != started)
+                // A write can commit before its window action requests a refresh, as Delete does before recycling.
+                if (view != started || read.Version != opened.ListingVersion)
                 {
                     continue;
                 }
@@ -69,7 +69,7 @@ public sealed partial class Listing
                 // Show can outlive the stash that issued its notice, whose item IDs a replacement may reuse.
                 var selected = replacements == Replacements ? ids : [];
                 CountChange(byPerson, began.Input);
-                ApplyImportResult(all, selected, counted, version, byPerson);
+                ApplyImportResult(read, selected, byPerson);
             }
 
             if (!counted.Succeeded)
@@ -83,15 +83,15 @@ public sealed partial class Listing
         }
     }
 
-    private void ApplyImportResult(Outcome<IReadOnlyList<StashItem>> all, IReadOnlyList<long> ids,
-        Outcome<IReadOnlyList<TagCount>> counted, (long Commits, long FileSteps) version, bool byPerson)
+    private void ApplyImportResult(StoreListing read, IReadOnlyList<long> ids, bool byPerson)
     {
+        var (all, counted, version) = read;
         SetScope(Scope.All, byPerson);
         LastSelectionReset = NextInput();
         selectionResetWaiting = false;
         searchRead = null;
         loadFailed = !counted.Succeeded;
-        ApplyLoadedItems(new Loaded(all, Scope.All, all.Value!.Count == 0),
+        ApplyLoadedItems(new Loaded(read, Scope.All, all.Value!.Count == 0),
             searching: false, reset: false, keepSelection: false);
         ApplyListingTags(counted, version, Query, searching: false, itemsLoaded: true);
 

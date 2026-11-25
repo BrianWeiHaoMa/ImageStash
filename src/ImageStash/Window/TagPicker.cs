@@ -63,6 +63,7 @@ public sealed class TagPicker : Popup
     private readonly ScrollViewer list;
     private readonly Border card;
     private Action<string> picked = _ => { };
+    private Action<Button, Row>? attachTagMenu;
     private Control? keyboardReturn;
     private Button? keyboardEntry;
     private double widestName;
@@ -81,7 +82,7 @@ public sealed class TagPicker : Popup
         {
             ItemsSource = rows,
             ItemsPanel = new FuncTemplate<Panel?>(() => new VirtualizingStackPanel()),
-            ItemTemplate = new FuncDataTemplate<Row>((row, _) => row is null ? null : new RowButton(row, tag => picked(tag))),
+            ItemTemplate = new FuncDataTemplate<Row>((row, _) => row is null ? null : MakeEntry(row)),
         };
         list = new ScrollViewer
         {
@@ -107,7 +108,21 @@ public sealed class TagPicker : Popup
     /// <summary>The entries shown, in order.</summary>
     public IReadOnlyList<TagPickerEntry> Entries { get; private set; } = [];
 
-    internal bool Contains(Visual target) => ReferenceEquals(target, card) || card.IsVisualAncestorOf(target);
+    internal bool Contains(Visual target) => ReferenceEquals(target, card) || card.IsVisualAncestorOf(target) ||
+        OpenedPopups.Any(popup => popup.IsInsidePopup(target));
+
+    internal void ConfigureTagManagement(Listing listing, Organising organising, PressOnce? heldKeys)
+    {
+        attachTagMenu = (button, row) => button.ContextMenu = new TagManagementMenu(button, listing, organising, () =>
+            IsOpen && rows.Contains(row) ? new TagCount(row.Entry.Tag, row.Entry.Count) : null, heldKeys);
+    }
+
+    private Button MakeEntry(Row row)
+    {
+        var button = new RowButton(row, tag => picked(tag));
+        attachTagMenu?.Invoke(button, row);
+        return button;
+    }
 
     internal void FocusFirstEntry(Control returnTo)
     {
@@ -210,18 +225,32 @@ public sealed class TagPicker : Popup
             }
         }
 
-        if (replacingFocus && entries.Count > 0)
+        if (replacingFocus)
         {
             var sameTag = IndexOf(focusedTag!);
-            FocusEntry(sameTag >= 0 ? sameTag : Math.Min(index, entries.Count - 1));
+            if (entries.Count == 0 || !FocusEntry(sameTag >= 0 ? sameTag : Math.Min(index, entries.Count - 1)))
+            {
+                keyboardReturn?.Focus();
+            }
         }
 
         card.Focusable = false;
     }
 
-    private Button? FocusedEntry => keyboardReturn is not null &&
-        TopLevel.GetTopLevel(card)?.FocusManager.GetFocusedElement() is Button button && Contains(button)
-            ? button : null;
+    private Button? FocusedEntry
+    {
+        get
+        {
+            if (keyboardReturn is null || TopLevel.GetTopLevel(card)?.FocusManager.GetFocusedElement() is not Visual focused ||
+                !Contains(focused))
+            {
+                return null;
+            }
+
+            // A child menu borrows focus from the keyboard row. Its anchor may be recycled in this refresh.
+            return focused as Button ?? (TagManagementMenu.InTagMenu(focused) ? keyboardEntry : null);
+        }
+    }
 
     private int IndexOf(string tag)
     {
@@ -236,7 +265,7 @@ public sealed class TagPicker : Popup
         return -1;
     }
 
-    private void FocusEntry(int index)
+    private bool FocusEntry(int index)
     {
         card.UpdateLayout();
         items.ScrollIntoView(index);
@@ -255,6 +284,8 @@ public sealed class TagPicker : Popup
 
             keyboardEntry = entry;
         }
+
+        return entry?.IsFocused == true;
     }
 
     private void RestoreBoxFocus()
@@ -278,6 +309,11 @@ public sealed class TagPicker : Popup
 
     private void OnListKeyDown(object? sender, KeyEventArgs e)
     {
+        if (TagManagementMenu.InTagMenu(e.Source))
+        {
+            return;
+        }
+
         if (e.Key == Key.Space)
         {
             // Enter is the picker action. A Space release must not activate a row reached after its press.

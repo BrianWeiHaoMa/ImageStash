@@ -15,6 +15,8 @@ public sealed partial class Listing
 
     internal bool PickerTagsNeedRetry => loadFailed && PickerTagsStale;
 
+    internal TagCount? LiveTag(string tag) => order.Tags.LiveTag(tag);
+
     internal bool CanFilterTag(string tag, bool searching, bool lit) =>
         order.Tags.FilterAvailability(tag, Query, searching, lit) ?? !Settled;
 

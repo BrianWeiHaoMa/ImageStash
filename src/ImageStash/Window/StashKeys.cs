@@ -256,7 +256,8 @@ public static class StashKeys
     /// from under its menus; every other key goes as <paramref name="routed"/>.
     /// </summary>
     public static KeyAction WithTagListOpen(Key key, KeyModifiers modifiers, KeyAction routed) =>
-        (key, modifiers) == (Key.Escape, KeyModifiers.None) ? KeyAction.Escape
+        routed == KeyAction.Held ? routed
+        : (key, modifiers) == (Key.Escape, KeyModifiers.None) ? KeyAction.Escape
         : routed is KeyAction.StepBack or KeyAction.StepOn ? KeyAction.None
         : routed;
 
@@ -298,6 +299,7 @@ public sealed class PressOnce
 {
     private readonly object gate = new();
     private readonly HashSet<Key> down = [];
+    private readonly HashSet<Key> downInMenu = [];
     private readonly Dictionary<Key, TaskCompletionSource> waiting = [];
 
     /// <summary>Whether this press of <paramref name="key"/> acts: not while it is still held from an earlier press.</summary>
@@ -305,15 +307,34 @@ public sealed class PressOnce
     {
         lock (gate)
         {
-            if (!down.Add(key))
+            return MarkDown(key);
+        }
+    }
+
+    internal bool PressedInMenu(Key key)
+    {
+        lock (gate)
+        {
+            if (!MarkDown(key))
             {
                 return false;
             }
 
-            // A new press after focus was lost cannot lend its release to the earlier press.
-            waiting.Remove(key);
+            downInMenu.Add(key);
             return true;
         }
+    }
+
+    private bool MarkDown(Key key)
+    {
+        if (!down.Add(key))
+        {
+            return false;
+        }
+
+        // A new press after focus was lost cannot lend its release to the earlier press.
+        waiting.Remove(key);
+        return true;
     }
 
     /// <summary>
@@ -325,11 +346,19 @@ public sealed class PressOnce
     /// </summary>
     public KeyAction Acting(Key key, KeyAction action, bool tagFieldFocused = false)
     {
-        // Only these are remembered: any other key acts on each press, a held arrow moving on as it repeats.
-        var remembered = key is Key.Enter or Key.Z || action == KeyAction.Paste;
-        return remembered && !Pressed(key) &&
-            (action is KeyAction.Handoff or KeyAction.Paste or KeyAction.UndoNotice || tagFieldFocused && key == Key.Enter)
-            ? KeyAction.Held : action;
+        lock (gate)
+        {
+            if (downInMenu.Contains(key))
+            {
+                return KeyAction.Held;
+            }
+
+            // Outside a menu, other keys act on each press, a held arrow moving on as it repeats.
+            var remembered = key is Key.Enter or Key.Z || action == KeyAction.Paste;
+            return remembered && !MarkDown(key) &&
+                (action is KeyAction.Handoff or KeyAction.Paste or KeyAction.UndoNotice || tagFieldFocused && key == Key.Enter)
+                ? KeyAction.Held : action;
+        }
     }
 
     /// <summary>
@@ -345,10 +374,12 @@ public sealed class PressOnce
             if (key is not { } one)
             {
                 down.Clear();
+                downInMenu.Clear();
                 return;
             }
 
             down.Remove(one);
+            downInMenu.Remove(one);
             if (waiting.Remove(one, out var wait))
             {
                 letGo = wait;

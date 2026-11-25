@@ -6,7 +6,7 @@ namespace ImageStash.Window;
 /// The item menu's two tag lists (G17), as their entries show. Add tag ▸ lists Type a tag… first, so a long list need
 /// not be scrolled to type one, then every tag in the stash, the commonest first; Remove tag ▸ lists the tags the items
 /// carry. An entry is marked while every item carries its tag, by the one rule a click on Add tag ▸'s entry decides by
-/// (<see cref="Organising.AllCarry"/>), so what the mark shows is what the click undoes. A list's entry leaves the menu
+/// (<see cref="ItemTags.AllCarry"/>), so what the mark shows is what the click undoes. A list's entry leaves the menu
 /// open for the next; the menu reads the lists again after each.
 /// </summary>
 public static class TagLists
@@ -39,5 +39,5 @@ public static class TagLists
         list == ItemMenuAction.RemoveTag ? organising.RemoveTag(items, tag) : organising.ToggleTag(items, tag);
 
     private static ItemMenuEntry TagEntry(ItemMenuAction list, string tag, IReadOnlyList<StashItem> items) =>
-        new(list, tag, null, "", Tag: tag, Marked: Organising.AllCarry(items, tag));
+        new(list, tag, null, "", Tag: tag, Marked: ItemTags.AllCarry(items, tag));
 }

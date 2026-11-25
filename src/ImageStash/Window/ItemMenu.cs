@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using ImageStash.Files;
@@ -172,24 +171,7 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
         var pasteHide = hide;
         if (hide.HeldKeys is { } held)
         {
-            // Its own popup, whose keys the window never sees: an Enter pressed on its first entry is held as the window
-            // holds one, so its repeats hand nothing off once the menu has closed, and its paste waits for its release (G8, N3).
-            menu.AddHandler(InputElement.KeyDownEvent, (_, e) =>
-            {
-                if (e.Key != Key.Enter)
-                {
-                    return;
-                }
-
-                if (!held.Pressed(Key.Enter))
-                {
-                    e.Handled = true;
-                    return;
-                }
-
-                pasteHide = hide.ForEnterPress();
-            }, RoutingStrategies.Tunnel, handledEventsToo: true);
-            menu.AddHandler(InputElement.KeyUpEvent, (_, e) => held.Released(e.Key), RoutingStrategies.Tunnel, handledEventsToo: true);
+            MenuKeys.TrackWindowKeys(menu, held, () => pasteHide = hide.ForEnterPress());
         }
 
         var lists = new ShownTagLists(listing, notices, organising, items, typeATag);
@@ -562,7 +544,7 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
             {
                 if (item.Tag is ItemMenuEntry { Tag: { } tag } entry)
                 {
-                    var marked = entry with { Marked = Organising.AllCarry(present, tag) };
+                    var marked = entry with { Marked = ItemTags.AllCarry(present, tag) };
                     item.Tag = marked;
                     item.IsChecked = marked.Marked;
                 }

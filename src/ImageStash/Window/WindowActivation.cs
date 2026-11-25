@@ -293,8 +293,8 @@ public sealed class WindowActivation
         focusLoss.Stop();
         // A key held as the window hides is let go where it will not see it, so its next press acts at the next summon.
         heldKeys.Released();
-        // A window that hides while not the active one keeps its popups: no list is left behind (F4).
-        foreach (var open in window.OpenedPopups.OfType<TagPicker>().ToList())
+        // A window that hides while not the active one keeps its popups: no tag menu or list is left behind (F4).
+        foreach (var open in window.OpenedPopups.Where(popup => popup is TagPicker || popup.Child is TagManagementMenu).ToList())
         {
             open.Close();
         }

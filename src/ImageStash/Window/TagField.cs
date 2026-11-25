@@ -569,13 +569,14 @@ public sealed class TagFieldOverlay : Border
     private IInputElement? returnTo;
     private int reads;
 
-    public TagFieldOverlay(Listing listing, Organising organising, Notices notices)
+    public TagFieldOverlay(Listing listing, Organising organising, Notices notices, PressOnce? heldKeys = null)
     {
         this.listing = listing;
         this.organising = organising;
         this.notices = notices;
         heading = new TextBlock { FontSize = 12, Opacity = 0.75, TextTrimming = TextTrimming.CharacterEllipsis };
         Field = new TagField();
+        Field.Picker.ConfigureTagManagement(listing, organising, heldKeys);
         scroller = new TagFieldScroller(Field);
         Child = new StackPanel { Spacing = 8, Children = { heading, scroller } };
         Padding = new Thickness(14, 10, 14, 12);
@@ -665,7 +666,7 @@ public sealed class TagFieldOverlay : Border
 
     /// <summary>The tags every one of <paramref name="carriers"/> carries, which the list marks (G17).</summary>
     private static IReadOnlyList<string> CarriedByAll(IReadOnlyList<StashItem> carriers) =>
-        Organising.CarriedTags(carriers).Where(tag => Organising.AllCarry(carriers, tag)).ToList();
+        Organising.CarriedTags(carriers).Where(tag => ItemTags.AllCarry(carriers, tag)).ToList();
 
     /// <summary>A ×: the tag off every item, the field still open on what remains.</summary>
     private async Task Remove(string tag)

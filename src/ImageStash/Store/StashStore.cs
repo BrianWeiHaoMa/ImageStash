@@ -226,8 +226,27 @@ public sealed class StashStore : IDisposable
     /// <summary>The in-memory store state against which a listing's tag counts were read.</summary>
     internal (long Commits, long FileSteps) ListingVersion => (store.Commits, store.FileSteps);
 
-    internal Task<(Outcome<IReadOnlyList<TagCount>> Counts, (long Commits, long FileSteps) Version)> CountListingTags() =>
-        thread.Read(() => (ItemTags.Counts(store), ListingVersion));
+    internal Task<StoreListing> ListAll() => ListWithTags(() => ItemQueries.All(store));
+
+    internal Task<StoreListing> ListRecent() => ListWithTags(() => ItemQueries.Recent(store));
+
+    internal Task<StoreListing> ListFavorites() => ListWithTags(() => ItemQueries.Favorites(store));
+
+    internal Task<StoreListing> ListSearch(string query) => ListWithTags(() => ItemQueries.Search(store, query));
+
+    internal Task<(StoreListing Read, bool ShowRecent)> ListInitial() => thread.Read(() =>
+    {
+        var recent = ItemQueries.Recent(store);
+        var showRecent = !recent.Succeeded || recent.Value!.Count > 0;
+        return (ReadWithTags(showRecent ? recent : ItemQueries.All(store)), showRecent);
+    });
+
+    // The window paints these together. A queued write cannot land between the rows and the catalogue.
+    private Task<StoreListing> ListWithTags(Func<Outcome<IReadOnlyList<StashItem>>> read) =>
+        thread.Read(() => ReadWithTags(read()));
+
+    private StoreListing ReadWithTags(Outcome<IReadOnlyList<StashItem>> items) =>
+        new(items, ItemTags.Counts(store), ListingVersion);
 
     /// <summary>How many items the whole stash holds, counted as an export's manifest counts them, whatever the window shows (G36).</summary>
     public Task<Outcome<int>> Count() => thread.Read(() => store.Read("Count the stash", () => StashItem.CountListed(store)));
@@ -255,6 +274,9 @@ public sealed class StashStore : IDisposable
     /// <summary>Removes the tag from its listed carriers if their count still matches the offer at the write.</summary>
     internal Task<Outcome<TagRemoval>> RemoveTagFromAll(string tag, int expectedItems) =>
         thread.Run(() => ItemTags.RemoveFromAll(store, tag, expectedItems));
+
+    internal Task<ItemFactResult> ToggleExistingTag(IReadOnlyList<StashItem> items, string tag) =>
+        thread.Run(() => ItemTags.ToggleExisting(store, items, tag));
 
     /// <summary>Corrects a tag's spelling or gives its listed carriers the new word in its place.</summary>
     internal Task<Outcome<TagRename>> RenameTag(string tag, string text) =>

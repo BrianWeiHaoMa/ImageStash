@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
+using Avalonia.Threading;
 using ImageStash.Store;
 using ImageStash.Tests.Support;
 using ImageStash.Window;
@@ -150,6 +151,55 @@ public sealed class ImportShowTests
         listed.Notices.Close(notice);
         await NoticeButton.Press(listed.Notices, notice);
         Assert.AreEqual("older", listed.Listing.Query, "a notice closed by its × shows nothing");
+    }
+
+    [TestMethod]
+    public async Task ShowRereadsWhenDeleteCommitsBeforeItsResultIsPainted()
+    {
+        using var listed = await ListedStash.Open();
+        var older = await listed.Stash.ImportFixture("older", "still.png");
+        var arrival = new HeldBackFile(MediaFixtures.Path("transparent.png"));
+        var batch = listed.Import.Drop(arrival.Drop);
+        await listed.Listing.SetQuery("older");
+        arrival.Release();
+        var added = (await batch).Single().Item!;
+        var recycling = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var release = new ManualResetEventSlim();
+        listed.Stash.RecycleBin.BeforeEach = _ =>
+        {
+            recycling.TrySetResult();
+            Assert.IsTrue(release.Wait(TimeSpan.FromSeconds(5)));
+        };
+
+        ControlThread.Run(() => ControlThread.FinishOnDispatcher(async () =>
+        {
+            Task showing;
+            Task<Outcome> deleting;
+            using (listed.Stash.HoldStore())
+            {
+                showing = Show(listed);
+                deleting = listed.Deletion.Delete([added]);
+            }
+
+            try
+            {
+                // The All read preceded Delete. Hold its dispatcher continuation until Delete's mark has committed.
+                Assert.IsTrue(recycling.Task.Wait(TimeSpan.FromSeconds(5)));
+                await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+                Assert.IsFalse(showing.IsCompleted, "Show must reread after the deletion mark");
+                Assert.DoesNotContain(added.Id, listed.Listing.Selection);
+            }
+            finally
+            {
+                release.Set();
+            }
+
+            await showing;
+            Assert.IsTrue((await deleting).Succeeded);
+            Assert.AreEqual("", listed.Listing.Query);
+            CollectionAssert.AreEqual(new[] { older.Id }, listed.Listing.Items.Select(item => item.Id).ToArray());
+            Assert.IsEmpty(listed.Listing.Selection);
+        }));
     }
 
     [TestMethod]

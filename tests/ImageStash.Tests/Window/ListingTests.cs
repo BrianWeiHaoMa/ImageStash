@@ -57,6 +57,38 @@ public sealed class ListingTests
     }
 
     [TestMethod]
+    public async Task TheFirstSummonKeepsJudgingRecentIfACaptureCommitsDuringItsListRead()
+    {
+        using var stash = new TestStash();
+        var store = await stash.OpenCleanly();
+        await stash.Import("older", TestStash.Bytes(4));
+        var listing = NewListing();
+        await listing.StashOpened(store);
+        var bytes = TestStash.Bytes(7);
+        var staged = await stash.Stage("captured.png", bytes);
+        var candidate = TestStash.Candidate(staged, "captured", bytes) with { AddedByCapture = true };
+
+        ControlThread.Run(() => ControlThread.FinishOnDispatcher(async () =>
+        {
+            Task showing;
+            Task<Outcome<ImportResult>> recording;
+            using (stash.HoldStore())
+            {
+                showing = listing.Summoned(flyout: true);
+                recording = store.CommitImport(candidate);
+            }
+
+            // The initial read was queued first. Apply it only after the capture's commit.
+            var captured = recording.GetAwaiter().GetResult();
+            Assert.IsTrue(captured.Succeeded, captured.Failure?.Sentence);
+            await showing;
+
+            Assert.AreEqual(Scope.Recent, listing.Scope);
+            Assert.AreEqual(captured.Value!.Item.Id, listing.SelectedItems.Single().Id);
+        }));
+    }
+
+    [TestMethod]
     public async Task ASummonLoadsNothingAnewSoTheScopeTheQueryAndTheSelectionStayAsTheyWereLeft()
     {
         using var stash = new TestStash();

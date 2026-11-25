@@ -136,6 +136,29 @@ public sealed class TagListsTests
     }
 
     [TestMethod]
+    public async Task AToggleWhoseMembershipReadIsRefusedNamesTheTag()
+    {
+        using var listed = await ListedStash.Open(storeRetry: TimeSpan.Zero);
+        var first = await listed.Stash.Import("one");
+        var second = await listed.Stash.Import("two");
+        listed.Stash.Tag(first.Id, "picked");
+        await listed.Listing.ShowScope(Scope.All);
+        var selected = listed.Listing.Items;
+        var entry = TagLists.AddTagEntries(listed.Listing.Tags, selected).Single(tag => tag.Tag == "picked");
+
+        using (listed.Stash.HoldStore())
+        {
+            var refused = await TagLists.Click(listed.Organising, entry.Action, selected, entry.Tag!);
+            Assert.AreEqual("Add a tag", refused.Failure?.Action);
+            Assert.AreEqual("#picked", refused.Failure?.Subject);
+        }
+
+        Assert.AreEqual(1, (await listed.Stash.Store!.TagCounts()).Value!.Single().Items);
+        Assert.HasCount(2, listed.Listing.Items);
+        Assert.IsEmpty((await listed.Stash.Store.Item(second.Id)).Value!.Tags);
+    }
+
+    [TestMethod]
     public async Task AddTagClickReadsTheMembershipJustGivenByADuplicateImport()
     {
         using var listed = await ListedStash.Open();

@@ -7,6 +7,7 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 ### Added
 
 - Every tag shows how many pictures in your stash carry each tag. The counts appear in the chip row's list, the selection's tag field and the preview's tag field, even while a search is active.
+- Right-click a live tag chip or an entry in Every tag to remove that tag from every picture carrying it. The menu gives the stash-wide count, and the notice offers Undo even when only one picture changed.
 
 - Apply a tag or favorite change to a selection of two or more pictures, or drop tiles onto a tag chip or Favorites. A notice shows how many pictures changed. Its Undo takes back the tag changes or restores the favorite flags from that batch. In the grid or in the preview outside its fields, `Ctrl+Z` runs the newest available Undo.
 - Search matches names, tags and words saved in Meme, Label and Caption bar layers, including captions from earlier versions. Press Enter on a caption match to hand off the finished picture.

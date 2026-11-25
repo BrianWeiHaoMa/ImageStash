@@ -59,6 +59,7 @@ public sealed class ChipRow : Panel
 
     private readonly Listing listing;
     private readonly Organising organising;
+    private readonly PressOnce? heldKeys;
     private readonly Func<OwnDrag?> ownDrag;
     private readonly (Button Chip, Scope Scope)[] scopes;
     private readonly List<(Button Chip, string Tag)> tagChips = [];
@@ -80,11 +81,13 @@ public sealed class ChipRow : Panel
     private Button? ringedChip;
 
     /// <param name="ownDrag">The window's own drag in progress, or null.</param>
-    public ChipRow(Listing listing, Organising organising, Func<OwnDrag?> ownDrag)
+    public ChipRow(Listing listing, Organising organising, Func<OwnDrag?> ownDrag, PressOnce? heldKeys = null)
     {
         this.listing = listing;
         this.organising = organising;
         this.ownDrag = ownDrag;
+        this.heldKeys = heldKeys;
+        picker.ConfigureTagManagement(listing, organising, heldKeys);
         // What does not fit is laid beyond the right edge: clipped, it is neither seen nor reached.
         ClipToBounds = true;
         scopes = ScopeFaces.Select(face => (ScopeChip(face.Name, face.Glyph, face.Scope), face.Scope)).ToArray();
@@ -373,6 +376,7 @@ public sealed class ChipRow : Panel
     {
         var chip = Chip("#" + tag, LookStyles.TagChip, TagChipPadding);
         chip.Click += (_, _) => _ = listing.ChooseTag(tag);
+        chip.ContextMenu = new TagManagementMenu(chip, listing, organising, () => listing.LiveTag(tag), heldKeys);
         TakesOwnDrag(chip, tag);
         return chip;
     }

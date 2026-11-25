@@ -742,11 +742,11 @@ public sealed partial class Listing
             return;
         }
 
-        var (counted, version) = await opened.CountListingTags();
-        bool judgedTooLate;
+        var (_, counted, version) = loaded.Read;
+        bool readAgain;
         lock (gate)
         {
-            // Superseded, or abandoned, its store let go of while the tags were counted: the load that replaced it, or
+            // Superseded, or abandoned, its store let go of while the listing was read: the load that replaced it, or
             // StashFailed or Withdraw, settles the listing.
             if (load != started || !ReferenceEquals(store, opened))
             {
@@ -754,13 +754,17 @@ public sealed partial class Listing
             }
 
             // A judgment of the first show that the person's act overtook lists what they acted on instead (G1, G7).
-            judgedTooLate = reset && !resetPending && loaded.Items.Succeeded && !searching;
+            var judgedTooLate = reset && !resetPending && loaded.Items.Succeeded && !searching;
+            // A capture can join Recent after the read but before the first show settles (G1).
+            var changedWhileJudging = reset && resetPending && loaded.Items.Succeeded && version != opened.ListingVersion;
+            readAgain = judgedTooLate || changedWhileJudging;
             if (judgedTooLate)
             {
                 // Its move to the first item gives way with it, so the load listing what they acted on keeps their selection.
                 selectionResetWaiting = false;
             }
-            else
+
+            if (!readAgain)
             {
                 applied = load;
                 loadFailed = !loaded.Items.Succeeded || !counted.Succeeded || coveredRecent is { Succeeded: false };
@@ -782,7 +786,7 @@ public sealed partial class Listing
             }
         }
 
-        if (judgedTooLate)
+        if (readAgain)
         {
             await Load(keepSelection: true);
             return;
@@ -887,7 +891,10 @@ public sealed partial class Listing
     }
 
     /// <summary>The items a load shows, the scope it resolved, and whether it learned that the stash holds nothing.</summary>
-    private sealed record Loaded(Outcome<IReadOnlyList<StashItem>> Items, Scope Scope, bool? StashEmpty);
+    private sealed record Loaded(StoreListing Read, Scope Scope, bool? StashEmpty)
+    {
+        public Outcome<IReadOnlyList<StashItem>> Items => Read.Items;
+    }
 
     /// <summary>
     /// The query for <paramref name="scope"/> or <paramref name="query"/>, asked of <paramref name="store"/> once or
@@ -898,22 +905,28 @@ public sealed partial class Listing
     {
         if (ItemSearch.IsSearch(query))
         {
-            var matches = await store.Search(query);
-            return new Loaded(matches, scope, matches.Succeeded && matches.Value!.Count > 0 ? false : null);
+            var matches = await store.ListSearch(query);
+            return new Loaded(matches, scope, matches.Items.Value is { Count: > 0 } ? false : null);
         }
 
-        if (scope == Scope.All && !reset)
+        if (reset)
         {
-            var all = await store.All();
-            return new Loaded(all, Scope.All, all.Succeeded ? all.Value!.Count == 0 : null);
+            var (initial, showRecent) = await store.ListInitial();
+            return new Loaded(initial, showRecent ? Scope.Recent : Scope.All, initial.Items.Succeeded ? initial.Items.Value!.Count == 0 : null);
         }
 
-        if (scope == Scope.Favorites && !reset)
+        if (scope == Scope.All)
         {
-            var favorites = await store.Favorites();
-            if (!favorites.Succeeded || favorites.Value!.Count > 0)
+            var all = await store.ListAll();
+            return new Loaded(all, Scope.All, all.Items.Succeeded ? all.Items.Value!.Count == 0 : null);
+        }
+
+        if (scope == Scope.Favorites)
+        {
+            var favorites = await store.ListFavorites();
+            if (!favorites.Items.Succeeded || favorites.Items.Value!.Count > 0)
             {
-                return new Loaded(favorites, Scope.Favorites, favorites.Succeeded ? false : null);
+                return new Loaded(favorites, Scope.Favorites, favorites.Items.Succeeded ? false : null);
             }
 
             if (!current())
@@ -926,10 +939,10 @@ public sealed partial class Listing
             return new Loaded(favorites, Scope.Favorites, held.Succeeded ? held.Value!.Count == 0 : null);
         }
 
-        var recent = await store.Recent();
-        if (!recent.Succeeded || recent.Value!.Count > 0)
+        var recent = await store.ListRecent();
+        if (!recent.Items.Succeeded || recent.Items.Value!.Count > 0)
         {
-            return new Loaded(recent, Scope.Recent, recent.Succeeded ? false : null);
+            return new Loaded(recent, Scope.Recent, recent.Items.Succeeded ? false : null);
         }
 
         if (!current())
@@ -937,11 +950,9 @@ public sealed partial class Listing
             return null;
         }
 
-        // Recent is empty: the first show after start opens on All instead (G1), and either way the empty state needs to
-        // know whether the stash holds anything at all.
-        var everything = await store.All();
-        var empty = everything.Succeeded ? everything.Value!.Count == 0 : (bool?)null;
-        return reset ? new Loaded(everything, Scope.All, empty) : new Loaded(recent, Scope.Recent, empty);
+        // An empty Recent is distinct from an empty stash (G2).
+        var allWhenRecentEmpty = await store.All();
+        return new Loaded(recent, Scope.Recent, allWhenRecentEmpty.Succeeded ? allWhenRecentEmpty.Value!.Count == 0 : null);
     }
 
     private void Raise() => Changed?.Invoke();

@@ -316,6 +316,70 @@ public sealed class ImportTagsTests
     }
 
     [TestMethod]
+    public async Task AddTagTogglesBothActualCarriersWhileTheSecondDroppedFileIsHeld()
+    {
+        using var importing = await ListedStash.Open();
+        var carrier = await TaggedItem(importing, "carrier", "Cat");
+        var duplicate = await importing.Stash.ImportFixture("duplicate", "still.png");
+        await importing.Listing.ShowScope(Scope.All);
+        var shownBeforeDrop = importing.Listing.Items.ToArray();
+        var addTag = TagLists.AddTagEntries(importing.Listing.Tags, shownBeforeDrop).Single(entry => entry.Tag == "Cat");
+        Assert.IsFalse(addTag.Marked, "the open list predates the duplicate gaining the tag");
+        await importing.Listing.SetQuery("Cat");
+        var second = new HeldBackFile(MediaFixtures.Path("transparent.png"));
+        var batch = importing.Import.Drop(new DropContents([ListedStash.File(MediaFixtures.Path("still.png")), second.Item], false, false, []));
+        try
+        {
+            Assert.AreSame(second.Requested, await Task.WhenAny(batch, second.Requested));
+            CollectionAssert.AreEqual(new[] { "Cat" }, (await TagsOf(importing, duplicate)).ToArray());
+
+            var toggled = await TagLists.Click(importing.Organising, addTag.Action, shownBeforeDrop, addTag.Tag!);
+
+            Assert.IsTrue(toggled.Succeeded, toggled.Failure?.Sentence);
+            Assert.IsEmpty(await TagsOf(importing, carrier));
+            Assert.IsEmpty(await TagsOf(importing, duplicate));
+            Assert.AreEqual("Removed #Cat from 2 items", importing.Notices.Shown.Single(importing.Notices.OffersUndo).Text);
+        }
+        finally
+        {
+            second.Release();
+            await batch;
+        }
+    }
+
+    [TestMethod]
+    public async Task AddTagQueuedDuringDuplicateComparisonTogglesTheMembershipTheEarlierWriteLeaves()
+    {
+        using var importing = await ListedStash.Open();
+        var carrier = await TaggedItem(importing, "carrier", "Cat");
+        var bytes = TestStash.Bytes(7);
+        var duplicate = await importing.Stash.Import("Cat by name", bytes);
+        await importing.Listing.SetQuery("Cat");
+        var opened = importing.Listing.Items.ToArray();
+        var entry = TagLists.AddTagEntries(importing.Listing.Tags, opened).Single(tag => tag.Tag == "Cat");
+        Assert.HasCount(2, opened);
+        Assert.IsFalse(entry.Marked);
+        var staged = await importing.Stash.Stage("duplicate.png", bytes);
+        var candidate = TestStash.Candidate(staged, "duplicate", bytes) with { Tags = ["Cat"] };
+
+        Task<Outcome<ImportResult>> committing;
+        Task<Outcome> toggling;
+        using (File.Open(duplicate.FilePath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            committing = importing.Stash.Store!.CommitImport(candidate);
+            toggling = TagLists.Click(importing.Organising, entry.Action, opened, entry.Tag!);
+        }
+
+        var imported = await committing;
+        Assert.AreEqual(duplicate.Id, imported.Value?.Item.Id, imported.Failure?.Sentence);
+        Assert.IsTrue(imported.Value!.AlreadyInStash);
+        Assert.IsTrue((await toggling).Succeeded);
+        Assert.IsEmpty(await TagsOf(importing, carrier));
+        Assert.IsEmpty(await TagsOf(importing, duplicate));
+        Assert.AreEqual("Removed #Cat from 2 items", importing.Notices.Shown.Single(importing.Notices.OffersUndo).Text);
+    }
+
+    [TestMethod]
     public async Task AMoveWaitsWhileTheNoticeOfAnImportThatOnlyGaveATagOffersItsUndoWhichRunsBeforeTheCopy()
     {
         using var importing = await ListedStash.Open();

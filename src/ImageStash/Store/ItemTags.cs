@@ -26,7 +26,7 @@ internal static class ItemTags
     private const string UndoRemoveAction = "Undo removing a tag";
 
     private const string CountAction = "Count the tags";
-    private const string RemoveFromAllAction = "Remove tag from all items";
+    public const string RemoveFromAllAction = "Remove tag from all items";
     private const string RenameAction = "Rename tag";
     private static readonly UTF8Encoding StoredText = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
@@ -53,6 +53,45 @@ internal static class ItemTags
         Add(store, items, [tag], () => ListedRows(store, TagRows(store)).Any(row => SameWord(row.Tag, tag))
             ? null : NoCarrier(tag));
 
+    /// <summary>Whether every item carries the tag, as both the menu's mark and its toggle decide.</summary>
+    public static bool AllCarry(IReadOnlyList<StashItem> items, string tag) =>
+        items.Count > 0 && items.All(item => item.Tags.Contains(tag, StringComparer.OrdinalIgnoreCase));
+
+    public static ItemFactResult ToggleExisting(StoreContext store, IReadOnlyList<StashItem> items, string tag)
+    {
+        // Read at the write's turn. In particular, an earlier duplicate import can still be comparing its files.
+        var current = ToggleTargets(store, items);
+        if (current.Failure is { } failure)
+        {
+            var removing = AllCarry(items, tag);
+            var refusal = failure with { Action = removing ? RemoveAction : AddAction, Subject = $"#{tag}" };
+            return new ItemFactResult(store, removing ? UndoRemoveAction : UndoAddAction,
+                [.. items.Select(_ => Outcome.Fail(refusal))], []);
+        }
+
+        return AllCarry(current.Value!, tag) ? Remove(store, items, tag) : AddExisting(store, items, tag);
+    }
+
+    private static Outcome<IReadOnlyList<StashItem>> ToggleTargets(StoreContext store, IReadOnlyList<StashItem> items)
+    {
+        if (items.Count == 1)
+        {
+            var single = ItemQueries.Item(store, items[0].Id);
+            return single.Succeeded
+                ? Outcome<IReadOnlyList<StashItem>>.Of(single.Value is { } item ? [item] : [])
+                : single.Failure;
+        }
+
+        var all = ItemQueries.All(store);
+        if (!all.Succeeded)
+        {
+            return all.Failure;
+        }
+
+        var ids = items.Select(item => item.Id).ToHashSet();
+        return Outcome<IReadOnlyList<StashItem>>.Of(all.Value!.Where(item => ids.Contains(item.Id)).ToList());
+    }
+
     private static ItemFactResult Add(StoreContext store, IReadOnlyList<StashItem> items, IReadOnlyList<string> words, Func<string?>? refusedBecause = null)
     {
         if (words.Count == 0)
@@ -72,7 +111,13 @@ internal static class ItemTags
         ItemFactChange.Apply(store, RemoveAction, UndoRemoveAction, items, listed =>
             [.. listed.Select(item => ChangeMemberships(store, item, [], [tag])).OfType<ItemFactDelta>()]);
 
-    public static Outcome<TagRemoval> RemoveFromAll(StoreContext store, string tag, int expectedItems) =>
+    public static Outcome<TagRemoval> RemoveFromAll(StoreContext store, string tag, int expectedItems)
+    {
+        var removed = RemoveOfferedCarriers(store, tag, expectedItems);
+        return removed.Failure is { } failure ? failure with { Subject = $"#{tag}" } : removed;
+    }
+
+    private static Outcome<TagRemoval> RemoveOfferedCarriers(StoreContext store, string tag, int expectedItems) =>
         Write<TagRemoval>(store, RemoveFromAllAction, () =>
         {
             var carriers = Carriers(ListedRows(store, TagRows(store)), tag);

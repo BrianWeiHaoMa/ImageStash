@@ -27,7 +27,7 @@ internal static class OrganisingNotice
 
         if (!first.RemovedTags.IsEmpty)
         {
-            return $"Removed #{first.RemovedTags[0]} from {items}";
+            return TagRemoved(first.RemovedTags[0], changes.Length);
         }
 
         var added = changes.SelectMany(change => change.AddedTags).GroupBy(tag => tag).ToArray();
@@ -39,5 +39,7 @@ internal static class OrganisingNotice
         return $"Updated tags on {items} · {string.Join(", ", added.Select(tag => $"#{tag.Key} added to {Items(tag.Count())}"))}";
     }
 
-    private static string Items(int count) => count == 1 ? "1 item" : $"{count} items";
+    public static string TagRemoved(string tag, int count) => $"Removed #{tag} from {Items(count)}";
+
+    public static string Items(int count) => count == 1 ? "1 item" : $"{count} items";
 }

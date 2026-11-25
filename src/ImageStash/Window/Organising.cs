@@ -69,16 +69,48 @@ public sealed class Organising(Listing listing, Notices notices)
     public Task<Outcome> RemoveTag(IReadOnlyList<StashItem> items, string tag) =>
         Change(items, ItemTags.RemoveAction, ItemTags.RemoveAction, (store, targets) => store.RemoveTagWithChanges(targets, tag));
 
+    /// <summary>Takes the offered tag off its listed carriers, while the whole-stash count in the offer still holds.</summary>
+    internal Task<Outcome> RemoveTagFromAll(StashStore issuer, TagCount offer)
+    {
+        const string action = ItemTags.RemoveFromAllAction;
+        var reason = listing.CannotStartReason ?? (listing.Store != issuer ? Listing.ReplacedSinceReason : null);
+        if (reason is not null)
+        {
+            using var acting = UserAct.Begin(action);
+            var refusal = new Failure(action, $"#{offer.Tag}", reason);
+            notices.Raise(refusal);
+            return Task.FromResult<Outcome>(refusal);
+        }
+
+        return OneAtATime(action, async () =>
+        {
+            var removal = await issuer.RemoveTagFromAll(offer.Tag, offer.Items);
+            await listing.Refresh();
+            if (removal.Value is { Receipt: { } receipt, Count: var count })
+            {
+                OfferUndo(OrganisingNotice.TagRemoved(count.Tag, receipt.Changes.Length), receipt);
+                return Outcome.Done;
+            }
+
+            var failure = removal.Failure ?? new Failure(action, $"#{offer.Tag}", removal.Value!.Count.Items switch
+            {
+                0 => "no item carries this tag any more",
+                1 => "1 item now carries this tag. Open the tag menu again",
+                var items => $"{OrganisingNotice.Items(items)} now carry this tag. Open the tag menu again",
+            });
+            notices.Raise(failure);
+            return failure;
+        });
+    }
+
     /// <summary>
     /// A click on a tag Add tag ▸ lists (G17): while every item still in the stash carries <paramref name="tag"/>, it is
     /// taken off them all; else every item is given it. Each click reads the current memberships.
     /// An item gone meanwhile is handed on and refused by name.
     /// </summary>
     public Task<Outcome> ToggleTag(IReadOnlyList<StashItem> items, string tag) =>
-        Change(items, TagAct, AllCarry(items, tag) ? ItemTags.RemoveAction : ItemTags.AddAction, async (store, targets) =>
-            AllCarry((await Now(store, targets)).OfType<StashItem>().ToArray(), tag)
-                ? await store.RemoveTagWithChanges(targets, tag)
-                : await store.AddExistingTag(targets, tag));
+        Change(items, TagAct, ItemTags.AllCarry(items, tag) ? ItemTags.RemoveAction : ItemTags.AddAction,
+            (store, targets) => store.ToggleExistingTag(targets, tag));
 
     /// <summary>
     /// The requested items still in the stash, as of the latest read.
@@ -88,13 +120,6 @@ public sealed class Organising(Listing listing, Notices notices)
 
     /// <summary>Whether every item is a favorite, so the menu offers Remove from Favorites and <c>Ctrl+D</c> unsets the flag.</summary>
     public static bool AllFavorites(IReadOnlyList<StashItem> items) => items.Count > 0 && items.All(item => item.Favorite);
-
-    /// <summary>
-    /// Whether every item carries <paramref name="tag"/>, in any spelling: the mark a tag list shows, and what a click on
-    /// Add tag ▸'s entry decides by (G17).
-    /// </summary>
-    public static bool AllCarry(IReadOnlyList<StashItem> items, string tag) =>
-        items.Count > 0 && items.All(item => item.Tags.Contains(tag, StringComparer.OrdinalIgnoreCase));
 
     /// <summary>
     /// The tags the items carry, each once, in spelling order ignoring case as the store compares tags: what Remove tag ▸
@@ -199,12 +224,14 @@ public sealed class Organising(Listing listing, Notices notices)
             var words = OrganisingNotice.For(result, targets.Length, alreadyOnChip);
             if (words is not null)
             {
-                notices.Raise(words, "Undo", () => Undo(result));
+                OfferUndo(words, result);
             }
 
             return FirstFailure(failures);
         });
     }
+
+    private void OfferUndo(string words, ItemFactResult result) => notices.Raise(words, "Undo", () => Undo(result));
 
     private Task<Outcome> Undo(ItemFactResult result) => OneAtATime(Notices.Undoing, async () =>
     {
