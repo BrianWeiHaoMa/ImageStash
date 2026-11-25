@@ -108,6 +108,10 @@ public static class LookKeys
     /// <summary>A tile's ground behind a picture that does not fill it or lets it through: a neutral grey (G6).</summary>
     public const string TileGround = Prefix + "TileGround";
 
+    public const string TileHoverGround = Prefix + "TileHoverGround";
+
+    public const string TileHoverBorder = Prefix + "TileHoverBorder";
+
     /// <summary>The mark on a tile whose picture could not be read.</summary>
     public const string TileMark = Prefix + "TileMark";
 
@@ -240,6 +244,8 @@ public static class LookKeys
         (SelectionRingGap, LookKind.Thickness),
         (NoteGround, LookKind.Brush),
         (TileGround, LookKind.Brush),
+        (TileHoverGround, LookKind.Brush),
+        (TileHoverBorder, LookKind.Brush),
         (TileMark, LookKind.Brush),
         (FocusRing, LookKind.Brush),
         (PictureSurround, LookKind.Brush),

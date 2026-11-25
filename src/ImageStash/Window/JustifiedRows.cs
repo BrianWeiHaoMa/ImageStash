@@ -8,6 +8,8 @@ namespace ImageStash.Window;
 public sealed record GridTile(long Id, int Index, double X, double Y, double Width, double Height)
 {
     public double CentreX => X + Width / 2;
+
+    internal Rect Bounds => new(X, Y, Width, Height);
 }
 
 /// <summary>One row of the grid, top to bottom.</summary>

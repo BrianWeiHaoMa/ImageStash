@@ -1,5 +1,7 @@
+using Avalonia;
 using ImageStash.Look;
 using ImageStash.Tests.Support;
+using ImageStash.Window;
 
 namespace ImageStash.Tests.Look;
 
@@ -11,6 +13,26 @@ namespace ImageStash.Tests.Look;
 [TestClass]
 public sealed class ToolTipRuleTests
 {
+    [TestMethod]
+    [DataRow(1.0, -200.0, 620.0)]
+    [DataRow(1.5, -300.0, 600.0)]
+    public void ATileTipNearACornerFitsAboveTheTileAtTheTipsScale(double displayScaleRatio, double x, double y)
+    {
+        // Positions are in the owner's units. The destination display is to its left and may use a larger scale.
+        var workingArea = new Rect(-900, 80, 900, 620);
+        var tile = new Rect(-100, 660, 80, 60);
+        var at = ToolTips.DrawnTipPosition(tile, workingArea, new Size(200, 36), displayScaleRatio);
+        Assert.AreEqual(new Point(x, y), at);
+    }
+
+    [TestMethod]
+    public void ATileSpanningDisplaysAnchorsToThePartOnThePointersDisplay()
+    {
+        var tile = new Rect(-40, 10, 120, 60);
+        Assert.AreEqual(new Rect(-40, 10, 40, 60), ToolTips.VisiblePart(tile, new Rect(-900, 0, 900, 700)));
+        Assert.AreEqual(new Rect(0, 10, 80, 60), ToolTips.VisiblePart(tile, new Rect(0, 0, 1200, 900)));
+    }
+
     [TestMethod]
     [DataRow("Meme", "Meme")]
     [DataRow("Black box", "black box")]

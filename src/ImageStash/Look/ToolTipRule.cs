@@ -4,7 +4,7 @@ using Avalonia.Controls;
 namespace ImageStash.Look;
 
 /// <summary>
-/// Whether a control carries a tooltip, and the only way one is set (F10, the look's one home): a control whose visible
+/// Whether a control carries an attached tooltip (F10, the look's one home): a control whose visible
 /// words are its action carries none, since a tip would repeat them; a control shown as a glyph alone carries one naming
 /// its action; a tip that adds what the words do not say (a key, the role of a word that changes, the whole of a text
 /// trimmed to fit) stays. Where a tip opens is <c>Window/ToolTips.cs</c>'s, for every tip set here.
@@ -19,6 +19,9 @@ public static class ToolTipRule
 
     /// <summary>Gives <paramref name="control"/>, which shows a text that may be trimmed or wrapped to fit, that whole text as its tip; none for none.</summary>
     public static void ShowWhole(Control control, string? whole) => ToolTip.SetTip(control, string.IsNullOrWhiteSpace(whole) ? null : whole);
+
+    /// <summary>The Fluent tooltip face for a drawn target whose hover and popup are managed by its control.</summary>
+    internal static ToolTip ForDrawnTarget() => new() { Opacity = 1 };
 
     /// <summary>
     /// Gives <paramref name="control"/>, whose words <paramref name="shown"/> are its action and may be trimmed to fit,

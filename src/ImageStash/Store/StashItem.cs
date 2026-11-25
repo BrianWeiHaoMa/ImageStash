@@ -25,6 +25,8 @@ public sealed record StashItem(
     long RenderedRevision,
     bool Edited)
 {
+    internal string NameOrFileName => Name.Length > 0 ? Name : FileName;
+
     /// <summary>
     /// The store's <see cref="StoreContext.Commits"/> when this item was read, or after the commit that returned it: while
     /// the store has committed nothing since, no other item can have come to its file name, so its file is where it was

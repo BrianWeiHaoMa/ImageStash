@@ -1,5 +1,8 @@
 using Avalonia;
 using Avalonia.Input;
+using Avalonia.Media.Imaging;
+using Avalonia.Threading;
+using ImageStash.Media;
 using ImageStash.Store;
 using ImageStash.Tests.Support;
 using ImageStash.Window;
@@ -15,6 +18,159 @@ namespace ImageStash.Tests.Window;
 [TestClass]
 public sealed class ThumbnailGridTests
 {
+    [TestMethod]
+    public async Task AHoverTipUsesTheTileUnderThePointerAndWaitsAgainAcrossTheGutter()
+    {
+        using var listed = await ListedStash.Open();
+        var first = await listed.Stash.Import("Plain still", [1]);
+        var second = await listed.Stash.Import("Favorite still", [2]);
+        var store = listed.Stash.Store!;
+        await store.SetFavorite([second], true);
+        await store.AddTag([second], "cat mood reaction spare");
+        await listed.Listing.ShowScope(Scope.All);
+        listed.Listing.Focus(first.Id);
+
+        var clock = new SteppedClock();
+        var hover = new TileHover(clock);
+        var view = new Rect(0, 0, 300, 90);
+        ControlThread.Run(() =>
+        {
+            var grid = LayOut(listed.Listing, view.Width);
+            var favorite = grid.Rows[0].Tiles.Single(tile => tile.Id == second.Id);
+            var plain = grid.Rows[0].Tiles.Single(tile => tile.Id == first.Id);
+            Assert.IsTrue(hover.Track(grid.HoverAt(favorite.Bounds.Center, view)?.Item, listed.Listing.Replacements));
+            clock.Pass(TimeSpan.FromMilliseconds(599));
+            Assert.IsNull(hover.Words);
+            clock.Pass(TimeSpan.FromMilliseconds(1));
+            Assert.AreEqual("Favorite still\n#cat #mood #reaction\n★", hover.Words);
+            Assert.AreEqual(first.Id, listed.Listing.Focused, "hover leaves selection with the plain still");
+            CollectionAssert.AreEqual(new[] { first.Id }, listed.Listing.Selection.ToArray());
+
+            Assert.IsTrue(hover.Track(grid.HoverAt(plain.Bounds.Center, view)?.Item, listed.Listing.Replacements));
+            Assert.IsNull(hover.Words, "moving within the grid starts the new tile's own delay");
+            clock.Pass(TimeSpan.FromMilliseconds(600));
+            Assert.AreEqual("Plain still", hover.Words);
+
+            var gap = new Point(favorite.Bounds.Right + 1, favorite.Bounds.Center.Y);
+            Assert.IsTrue(hover.Track(grid.HoverAt(gap, view)?.Item, listed.Listing.Replacements));
+            Assert.IsNull(hover.Words);
+
+            Assert.IsTrue(hover.Track(grid.HoverAt(plain.Bounds.Center, view)?.Item, listed.Listing.Replacements));
+            Assert.IsNull(hover.Words, "returning from the gutter also starts a fresh delay");
+            clock.Pass(TimeSpan.FromMilliseconds(600));
+            Assert.AreEqual("Plain still", hover.Words);
+        });
+    }
+
+    [TestMethod]
+    public void AnUnnamedTileIsIdentifiedByItsFileName()
+    {
+        var clock = new SteppedClock();
+        var hover = new TileHover(clock);
+        hover.Track(TestItems.Sized(1, 8, 6) with { Name = "", FileName = "Untitled.png" }, replacements: 0);
+        clock.Pass(TimeSpan.FromMilliseconds(600));
+        Assert.AreEqual("Untitled.png", hover.Words);
+    }
+
+    [TestMethod]
+    public void AHoverAtFractionalScalingKeepsTheInputPixel()
+    {
+        var at = new Point(230 / 1.75, 308 / 1.75);
+        Assert.AreEqual(new PixelPoint(-1370, 313), ThumbnailGrid.PointerScreenPoint(at, new PixelPoint(-1600, 5), 1.75));
+    }
+
+    [TestMethod]
+    public async Task AStationaryPointerUsesTheVisibleTileAfterScrollOrThumbnailSizeChange()
+    {
+        using var listed = await ListedStash.Open();
+        for (var i = 1; i <= 8; i++)
+        {
+            await listed.Stash.Import($"Still {i}", [(byte)i]);
+        }
+
+        var listing = listed.Listing;
+        await listing.ShowScope(Scope.All);
+        var clock = new SteppedClock();
+        var hover = new TileHover(clock);
+        ControlThread.Run(() =>
+        {
+            var size = ThumbnailSize.Medium;
+            var grid = LayOut(listing, 240, () => size);
+            var view = new Rect(0, 0, 240, 70);
+            var pointer = new Point(20, 20);
+            var initial = grid.HoverAt(pointer, view)!.Value;
+            hover.Track(initial.Item, listing.Replacements);
+            clock.Pass(TimeSpan.FromMilliseconds(600));
+            Assert.AreEqual(initial.Item.Name, hover.Words);
+            Assert.AreEqual(view.Bottom, initial.VisibleBox.Bottom, "anchor stops at the viewport edge");
+
+            var offset = new Vector(0, grid.Rows[1].Y);
+            var scrolled = grid.HoverAt(pointer + offset, view.Translate(offset))!.Value;
+            Assert.AreNotEqual(initial.Item.Id, scrolled.Item.Id);
+            hover.Track(scrolled.Item, listing.Replacements);
+            Assert.IsNull(hover.Words);
+            clock.Pass(TimeSpan.FromMilliseconds(600));
+            Assert.AreEqual(scrolled.Item.Name, hover.Words);
+            Assert.IsNull(grid.HoverAt(pointer, view.Translate(offset)), "clipped tiles cannot supply hover");
+
+            size = ThumbnailSize.Huge;
+            grid.InvalidateMeasure();
+            grid.Measure(new Size(240, double.PositiveInfinity));
+            var resized = grid.HoverAt(pointer + offset, view.Translate(offset))!.Value;
+            Assert.AreNotEqual(scrolled.Item.Id, resized.Item.Id);
+            hover.Track(resized.Item, listing.Replacements);
+            Assert.IsNull(hover.Words);
+        });
+    }
+
+    [TestMethod]
+    public async Task AReplacementUnderTheSamePointAndItemNumberStillStartsANewTip()
+    {
+        using var before = new TestStash();
+        using var after = new TestStash();
+        await before.OpenCleanly();
+        await after.OpenCleanly();
+        var old = await before.Import("Before", [1]);
+        var replacement = await after.Import("Replacement", [2]);
+        Assert.AreEqual(old.Id, replacement.Id);
+        after.Tag(replacement.Id, "new");
+        var listing = new Listing(failure => Assert.Fail(failure.Sentence));
+        await listing.StashOpened(before.Store!);
+        await listing.ShowScope(Scope.All);
+        var clock = new SteppedClock();
+        var hover = new TileHover(clock);
+        var view = new Rect(0, 0, 220, 90);
+        var at = new Point(20, 20);
+        ControlThread.Run(() => hover.Track(LayOut(listing, view.Width).HoverAt(at, view)!.Value.Item, listing.Replacements));
+        clock.Pass(TimeSpan.FromMilliseconds(600));
+        Assert.AreEqual("Before", hover.Words);
+
+        await listing.Withdraw();
+        listing.StashReplaced();
+        await listing.StashOpened(after.Store!);
+        ControlThread.Run(() => hover.Track(LayOut(listing, view.Width).HoverAt(at, view)!.Value.Item, listing.Replacements));
+        Assert.IsNull(hover.Words, "the earlier store's item cannot lend its completed delay to the replacement");
+        clock.Pass(TimeSpan.FromMilliseconds(600));
+        Assert.AreEqual("Replacement\n#new", hover.Words);
+
+        await after.Store!.Rename(replacement, "Renamed");
+        await after.Store.AddTag([replacement], "extra");
+        await after.Store.SetFavorite([replacement], true);
+        await listing.Refresh();
+        ControlThread.Run(() => hover.Track(LayOut(listing, view.Width).HoverAt(at, view)!.Value.Item, listing.Replacements));
+        Assert.AreEqual("Renamed\n#new #extra\n★", hover.Words, "the same tile supplies its latest listed facts");
+    }
+
+    private static ThumbnailGrid LayOut(Listing listing, double width, Func<ThumbnailSize>? size = null)
+    {
+        var thumbnails = new Thumbnails<Bitmap>(1, 1, TimeSpan.Zero, FrameBitmap.Of,
+            action => Dispatcher.UIThread.Post(action), image => image.Dispose(), failure => Assert.Fail(failure.Sentence));
+        var grid = new ThumbnailGrid(listing, thumbnails, size ?? (() => ThumbnailSize.Medium));
+        // Measuring lays out the real grid. Arranging would request pixels from a platform the portable checks lack.
+        grid.Measure(new Size(width, double.PositiveInfinity));
+        return grid;
+    }
+
     [TestMethod]
     public void AnAnimatedItemNamesItsFileAndAStillCarriesNoBadge()
     {

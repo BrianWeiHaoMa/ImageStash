@@ -108,7 +108,7 @@ public sealed class NameField : Panel
     public void Show(StashItem item)
     {
         Shown = item.Name;
-        nameText.Text = item.Name.Length > 0 ? item.Name : item.FileName;
+        nameText.Text = item.NameOrFileName;
         nameText.Opacity = item.Name.Length > 0 ? 1 : 0.6;
     }
 

@@ -82,6 +82,8 @@ public sealed class Paper : Take
 
         // Neutral to the channel, so a transparent picture is never tinted (G6).
         into[LookKeys.TileGround] = Solid(dark ? Rgb(0x313131) : Rgb(0xEFEFEF));
+        into[LookKeys.TileHoverGround] = Solid(dark ? Rgb(0x424242) : Rgb(0xFCFCFC));
+        into[LookKeys.TileHoverBorder] = Solid(dark ? Rgb(0x888888) : Rgb(0x868686));
         into[LookKeys.TileMark] = Solid(dark ? Rgb(0x8C8C8C) : Rgb(0x8A8A8A));
         into[LookKeys.FocusRing] = Solid(dark ? Rgb(0xFFFFFF) : Rgb(0x1B1C20));
         into[LookKeys.PictureSurround] = Solid(dark ? Rgb(0x18191C) : Rgb(0xF2F3F5));

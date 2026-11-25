@@ -55,7 +55,8 @@ grid, then click it in the same place to remove it from the search. Typing updat
 the unfinished last word, as in `cat jo` becoming `cat joy`. Every tag lets you pick existing tags that are dimmed or
 missing from the row. Drop tiles onto a tag chip to give them that tag, or drop files or a folder onto the window to
 add them. `Ctrl+D` makes the selected pictures favorites, or takes them off: a favorite's tile carries a small star,
-and so does its preview, where a click on the star does the same. The tray icon's right-click menu holds the captures, Pause shortcuts, Settings
+and so does its preview, where a click on the star does the same. Rest the pointer on a tile to see its name, up to
+three tags and a star for a favorite. The tray icon's right-click menu holds the captures, Pause shortcuts, Settings
 (where each shortcut can be changed) and Quit. While shortcuts are paused, Settings offers Resume. The stash footer
 offers it too when it fits. The tray icon shows a red dot during a recording. At other times it shows a pause badge
 while shortcuts are paused, or a warning badge when Pause is off and a shortcut is unavailable. The tooltip names

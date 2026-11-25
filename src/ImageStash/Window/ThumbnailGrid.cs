@@ -40,7 +40,7 @@ public static class TileBadge
 /// <c>Ctrl</c> for the preview; a drag from a tile drags the selection out, and a right-click on a tile asks for the
 /// item menu (G8, G9, G19).
 /// </summary>
-public sealed class ThumbnailGrid : Control
+public sealed partial class ThumbnailGrid : Control
 {
     /// <summary>How far beyond the view, in viewport heights, thumbnails are asked for ahead of scrolling.</summary>
     private const double AheadOfView = 1;
@@ -69,9 +69,6 @@ public sealed class ThumbnailGrid : Control
     private long? shownFocus;
     private int? shownFocusPlace;
     private int shownRecentReorders;
-
-    /// <summary>Where the pointer last was over the grid, in the window's coordinates, which scrolling does not move; null once it left.</summary>
-    private Point? pointer;
 
     private bool playQueued;
 
@@ -106,6 +103,8 @@ public sealed class ThumbnailGrid : Control
         GotFocus += (_, _) => InvalidateVisual();
         LostFocus += (_, _) => InvalidateVisual();
         AddHandler(ContextRequestedEvent, OnContextRequested);
+        hoverTip = ToolTips.ForDrawnTarget(this);
+        WatchHover();
     }
 
     /// <summary>
@@ -139,6 +138,11 @@ public sealed class ThumbnailGrid : Control
         set
         {
             covered = value;
+            if (value)
+            {
+                ForgetPointer();
+            }
+
             QueuePlay();
         }
     }
@@ -158,6 +162,11 @@ public sealed class ThumbnailGrid : Control
         {
             window.PropertyChanged += OnWindowChanged;
         }
+
+        if (window is WindowBase windowBase)
+        {
+            windowBase.PositionChanged += OnHoverWindowMoved;
+        }
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -172,6 +181,12 @@ public sealed class ThumbnailGrid : Control
             window.PropertyChanged -= OnWindowChanged;
         }
 
+        if (window is WindowBase windowBase)
+        {
+            windowBase.PositionChanged -= OnHoverWindowMoved;
+        }
+
+        ForgetPointer();
         scroller = null;
         viewport = null;
         window = null;
@@ -185,6 +200,7 @@ public sealed class ThumbnailGrid : Control
     /// </summary>
     public Task LetGo()
     {
+        EndHover();
         playback.Play(null);
         thumbnails.LetGo();
         return Task.WhenAll(playback.Idle(), thumbnails.Idle());
@@ -211,6 +227,8 @@ public sealed class ThumbnailGrid : Control
         var (first, last) = JustifiedRows.InView(rows, top, height, 0);
         var corner = look.Radius(LookKeys.TileRadius);
         var neutral = look.Brush(LookKeys.TileGround);
+        var hoverGround = look.Brush(LookKeys.TileHoverGround);
+        var hoverBorder = new Pen(look.Brush(LookKeys.TileHoverBorder), 1);
         var accent = new Pen(look.Brush(LookKeys.SelectionRing), RingWidth);
         // Held inside the space between tiles, so a selected tile's ring never lies over its neighbour (G6).
         var standOff = Math.Clamp(look.Width(LookKeys.SelectionRingGap), 1, JustifiedRows.Gap - RingWidth - 0.5);
@@ -230,9 +248,10 @@ public sealed class ThumbnailGrid : Control
             foreach (var tile in rows[r].Tiles)
             {
                 var item = laidOutItems[tile.Index];
-                var box = new Rect(tile.X, tile.Y, tile.Width, tile.Height);
+                var box = tile.Bounds;
                 var rounded = new RoundedRect(box, corner);
-                context.DrawRectangle(neutral, null, rounded);
+                var hovered = hover.Item?.Id == item.Id;
+                context.DrawRectangle(hovered ? hoverGround : neutral, null, rounded);
                 var key = ThumbnailKey.Of(item, step);
                 if ((playback.Frame(key) ?? thumbnails.Get(key)) is { } picture)
                 {
@@ -245,6 +264,11 @@ public sealed class ThumbnailGrid : Control
                 {
                     var glyph = Text("", IconFace, 16, mark);
                     context.DrawText(glyph, box.Center - new Point(glyph.Width / 2, glyph.Height / 2));
+                }
+
+                if (hovered)
+                {
+                    context.DrawRectangle(null, hoverBorder, new RoundedRect(box.Deflate(0.5), Math.Max(0, corner - 0.5)));
                 }
 
                 if (TileBadge.Of(item) is { } badge)
@@ -302,6 +326,7 @@ public sealed class ThumbnailGrid : Control
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
+        TrackPointer(e);
         dragFrom = null;
         collapseTo = null;
         if (!TakeFocusFrom(e))
@@ -353,8 +378,7 @@ public sealed class ThumbnailGrid : Control
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
-        pointer = window is null ? null : e.GetPosition(window);
-        QueuePlay();
+        TrackPointer(e);
         if (dragFrom is { } from && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
             var moved = e.GetPosition(this) - from.At;
@@ -362,6 +386,7 @@ public sealed class ThumbnailGrid : Control
             {
                 dragFrom = null;
                 collapseTo = null;
+                ForgetPointer();
                 DragStarted?.Invoke(from.Press);
             }
         }
@@ -370,6 +395,7 @@ public sealed class ThumbnailGrid : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
+        TrackPointer(e);
         if (e.InitialPressMouseButton != MouseButton.Left)
         {
             return;
@@ -405,20 +431,19 @@ public sealed class ThumbnailGrid : Control
         }
 
         Focus(NavigationMethod.Pointer);
+        ForgetPointer();
         // A pixel at the pointer, never an empty rectangle: Avalonia cuts the anchor to the grid's bounds, and what that
         // leaves of an empty one is the grid's top-left corner.
-        ItemMenuRequested?.Invoke(fromPointer ? new Rect(at, new Size(1, 1)) : new Rect(tile.X, tile.Y, tile.Width, tile.Height));
-    }
-
-    protected override void OnPointerExited(PointerEventArgs e)
-    {
-        base.OnPointerExited(e);
-        pointer = null;
-        QueuePlay();
+        ItemMenuRequested?.Invoke(fromPointer ? new Rect(at, new Size(1, 1)) : tile.Bounds);
     }
 
     private void OnListingChanged()
     {
+        if (listing.Items.Count == 0 && hover.Item is not null)
+        {
+            EndHover();
+        }
+
         InvalidateMeasure();
         InvalidateVisual();
         // A fresh Recent order can move the selected item to the top. Bring it into view even when its identity is unchanged (G1, G7).
@@ -440,6 +465,7 @@ public sealed class ThumbnailGrid : Control
     {
         InvalidateVisual();
         AskForThumbnails();
+        UpdateHover();
         QueuePlay();
     }
 
@@ -448,6 +474,11 @@ public sealed class ThumbnailGrid : Control
     {
         if (e.Property == IsVisibleProperty || e.Property == Avalonia.Controls.Window.WindowStateProperty)
         {
+            if (!ShowsGrid)
+            {
+                ForgetPointer();
+            }
+
             QueuePlay();
         }
     }
@@ -474,8 +505,7 @@ public sealed class ThumbnailGrid : Control
     /// </summary>
     private ThumbnailRequest? PlayRequest()
     {
-        if (covered || window is null || !window.IsVisible || window is Avalonia.Controls.Window { WindowState: WindowState.Minimized } || !IsEffectivelyVisible
-            || LaidOutStale)
+        if (!ShowsGrid || LaidOutStale)
         {
             return null;
         }
@@ -483,14 +513,10 @@ public sealed class ThumbnailGrid : Control
         var (top, height) = View();
         var (first, last) = JustifiedRows.InView(rows, top, height, 0);
         var step = size();
-        StashItem? Playable(GridTile? tile) =>
-            tile is null || tile.Index >= laidOutItems.Count || thumbnails.CouldNotRead(ThumbnailKey.Of(laidOutItems[tile.Index], step))
-                ? null
-                : laidOutItems[tile.Index];
+        StashItem? Playable(StashItem? item) => item is null || thumbnails.CouldNotRead(ThumbnailKey.Of(item, step)) ? null : item;
         var inView = Enumerable.Range(first, Math.Max(0, last - first + 1)).SelectMany(r => rows[r].Tiles);
-        var hovered = pointer is { } at && window.TranslatePoint(at, this) is { } here ? TileAt(here) : null;
         var focused = listing.Focused is { } id ? inView.FirstOrDefault(tile => tile.Id == id) : null;
-        var playing = Listing.PlayingItem(Playable(hovered), Playable(focused));
+        var playing = Listing.PlayingItem(Playable(HoveredTile()?.Item), Playable(focused is null ? null : laidOutItems[focused.Index]));
         return playing is null ? null : Request(laidOutItems.First(item => item.Id == playing), step);
     }
 
@@ -551,7 +577,7 @@ public sealed class ThumbnailGrid : Control
         {
             if (row.Tiles.FirstOrDefault(tile => tile.Id == focused) is { } tile)
             {
-                this.BringIntoView(new Rect(tile.X, tile.Y, tile.Width, tile.Height).Inflate(JustifiedRows.Gap));
+                this.BringIntoView(tile.Bounds.Inflate(JustifiedRows.Gap));
                 return;
             }
         }
@@ -562,7 +588,7 @@ public sealed class ThumbnailGrid : Control
         var (first, last) = JustifiedRows.InView(rows, point.Y, 0, 0);
         for (var r = first; r <= last; r++)
         {
-            if (rows[r].Tiles.FirstOrDefault(tile => tile.X <= point.X && point.X < tile.X + tile.Width && tile.Y <= point.Y && point.Y < tile.Y + tile.Height) is { } tile)
+            if (rows[r].Tiles.FirstOrDefault(tile => tile.Bounds.ContainsExclusive(point)) is { } tile)
             {
                 return tile;
             }
