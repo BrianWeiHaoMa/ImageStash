@@ -60,7 +60,8 @@ public sealed class TagManagementWindowTests
         var remove = TrayDesktop.Get(() => ShownTagLists.Entry(source.ContextMenu!, "Remove from all 1 item"));
 
         TestMouse.Click(await HitPoint(remove));
-        await Eventually(() => TrayDesktop.Get(() => shown.Notices.Shown.Any(notice => notice.Text == $"Removed #{tag} from 1 item")));
+        var removalText = $"Removed #{tag} from 1 item";
+        await Eventually(() => TrayDesktop.Get(() => shown.Notices.Shown.Any(notice => notice.Text == removalText)));
         Assert.DoesNotContain(tag, shown.TagsOf(carrier.Id));
         Assert.DoesNotContain(tag, shown.TagsOf(match.Id));
 
@@ -82,10 +83,12 @@ public sealed class TagManagementWindowTests
             await Eventually(() => TrayDesktop.Get(() =>
             {
                 undo = shown.Window.GetVisualDescendants().OfType<Button>()
-                    .SingleOrDefault(button => Equals(button.Content, "Undo") && button.IsEffectivelyVisible);
+                    .SingleOrDefault(button => Equals(button.Content, "Undo") && button.IsEffectivelyVisible
+                        && button.GetVisualParent() is Control row
+                        && row.GetVisualDescendants().OfType<TextBlock>().Any(text => text.Text == removalText));
                 return undo is not null;
             }));
-            TestMouse.Click(await HitPoint(undo!));
+            TestMouse.Click(await HitPoint(undo!, allowLightDismissPassThrough: true));
         }
 
         await Eventually(() => TrayDesktop.Get(() => shown.Listing.Tags.Any(count => count.Tag == tag && count.Items == 1)));
@@ -180,14 +183,16 @@ public sealed class TagManagementWindowTests
         return TrayDesktop.Get(() => Entry(picker, tag));
     }
 
-    private static async Task<PixelPoint> HitPoint(Control control)
+    private static async Task<PixelPoint> HitPoint(Control control, bool allowLightDismissPassThrough = false)
     {
         PixelPoint at = default;
         await Eventually(() => TrayDesktop.Get(() =>
         {
             at = TestMouse.Centre(control);
+            // Every tag's light-dismiss layer forwards an outside click to the control underneath it.
             return TopLevel.GetTopLevel(control) is { } root
-                && root.InputHitTest(root.PointToClient(at)) is Visual hit
+                && root.InputHitTest(root.PointToClient(at),
+                    visual => !allowLightDismissPassThrough || visual.GetType().Name != "LightDismissOverlayLayer") is Visual hit
                 && hit.GetSelfAndVisualAncestors().Contains(control);
         }));
         return at;
