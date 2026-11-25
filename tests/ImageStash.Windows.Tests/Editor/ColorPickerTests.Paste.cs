@@ -100,6 +100,135 @@ public sealed partial class ColorPickerTests
     }
 
     [TestMethod]
+    [DataRow(Key.Z)]
+    [DataRow(Key.Y)]
+    public async Task AHexDraftCannotColourTheDifferentMarkSelectedByUndoOrRedo(Key history)
+    {
+        using var shown = ShownWindow.Open();
+        using var editor = new ShownEditor(shown);
+        var items = await shown.OpenStash(shown.Picture("checker.png", 400, 300, EditorCanvasTests.Checker));
+        await EditorOverlayTests.Open(shown, items[0]);
+
+        TrayDesktop.Run(() =>
+        {
+            editor.Choose("Draw");
+            editor.Choose("Box");
+            editor.Drag((0.1, 0.1), (0.3, 0.3));
+            var first = (DrawMarkLayer)editor.Session!.SelectedLayer!;
+            editor.Drag((0.6, 0.6), (0.9, 0.9));
+            var second = (DrawMarkLayer)editor.Session.SelectedLayer!;
+            if (history == Key.Y)
+            {
+                ShownWindow.Tap(editor.Canvas, Key.Z, KeyModifiers.Control);
+            }
+
+            editor.Choose("More colors");
+            var hex = FocusHex(shown, editor);
+            hex.SelectAll();
+            ShownWindow.Type(hex, "#123ABC");
+            Assert.AreEqual("#123ABC", hex.Text);
+
+            ShownWindow.Tap(hex, history, KeyModifiers.Control);
+            var restored = history == Key.Z ? first : second;
+            Assert.AreSame(restored, editor.Session.SelectedLayer, "history selects the other mark");
+            ShownWindow.Tap(shown.Focused as Control ?? editor.Canvas, Key.Enter);
+            Assert.AreEqual(restored.Color, ((DrawMarkLayer)editor.Session.SelectedLayer!).Color, "Enter leaves the restored mark's colour alone");
+            Assert.IsNull(Picker(editor), "the restored mark needs its own picker opening");
+            Assert.AreSame(editor.Canvas, shown.Focused);
+        });
+    }
+
+    [TestMethod]
+    public async Task UndoThatRestoresAnotherMarkInTheSameSlotEndsItsTypedDraftAndPendingPaste()
+    {
+        var read = new TaskCompletionSource<Outcome<ClipboardReading>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var clipboard = new PresetDrags { ReadClipboard = () => read.Task };
+        using var shown = ShownWindow.Open(drags: clipboard);
+        using var editor = new ShownEditor(shown);
+        var items = await shown.OpenStash(shown.Picture("checker.png", 400, 300, EditorCanvasTests.Checker));
+        await EditorOverlayTests.Open(shown, items[0]);
+
+        var (first, reopened) = TrayDesktop.Get(() =>
+        {
+            var session = editor.Session!;
+            editor.Choose("Draw");
+            editor.Choose("Box");
+            editor.Drag((0.1, 0.1), (0.3, 0.3));
+            var first = (DrawMarkLayer)session.SelectedLayer!;
+            editor.Drag((0.6, 0.6), (0.9, 0.9));
+            var second = (DrawMarkLayer)session.SelectedLayer!;
+            editor.Click(0.1, 0.2);
+            Assert.AreSame(first, session.SelectedLayer);
+            ShownWindow.Tap(editor.Canvas, Key.Delete);
+            editor.Click(0.6, 0.75);
+            Assert.AreSame(second, session.SelectedLayer);
+            Assert.AreEqual(0, session.Selected);
+
+            editor.Choose("More colors");
+            var hex = FocusHex(shown, editor);
+            hex.SelectAll();
+            ShownWindow.Type(hex, "#123ABC");
+            hex.SelectAll();
+            ShownWindow.Tap(hex, Key.V, KeyModifiers.Control);
+            Assert.AreEqual(1, clipboard.Reads);
+            Assert.AreEqual("#123ABC", hex.Text, "the draft was typed before the clipboard read answered");
+
+            ShownWindow.Tap(hex, Key.Z, KeyModifiers.Control);
+            Assert.AreSame(first, session.SelectedLayer);
+            Assert.AreEqual(0, session.Selected, "the restored mark occupies the same slot");
+            ShownWindow.Tap(shown.Focused as Control ?? editor.Canvas, Key.Enter);
+            Assert.AreEqual(first.Color, ((DrawMarkLayer)session.SelectedLayer!).Color, "Enter leaves the restored mark alone");
+
+            editor.Choose("More colors");
+            var reopened = FocusHex(shown, editor);
+            reopened.SelectAll();
+            return (first, reopened);
+        });
+
+        read.SetResult(Words("#ABC123"));
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            Assert.AreEqual(ColorChoices.Hex(first.Color), reopened.Text, "the new opening keeps the restored mark's colour");
+            Assert.AreSame(first, editor.Session!.SelectedLayer);
+        }, DispatcherPriority.Background);
+    }
+
+    [TestMethod]
+    public async Task UndoFromThePickerOpenerAcrossToolsLeavesRedoAvailable()
+    {
+        using var shown = ShownWindow.Open();
+        using var editor = new ShownEditor(shown);
+        var items = await shown.OpenStash(shown.Picture("checker.png", 400, 300, EditorCanvasTests.Checker));
+        await EditorOverlayTests.Open(shown, items[0]);
+
+        TrayDesktop.Run(() =>
+        {
+            var session = editor.Session!;
+            editor.Choose("Draw");
+            editor.Choose("Box");
+            editor.Drag((0.1, 0.1), (0.3, 0.3));
+            editor.Choose("Hide");
+            editor.Drag((0.6, 0.6), (0.9, 0.9));
+            editor.Choose("Black box");
+            editor.Click(0.1, 0.2);
+
+            var opener = editor.Button("More colors");
+            Assert.IsTrue(opener.Focus());
+            ShownWindow.Tap(opener, Key.Enter);
+            Assert.IsNotNull(Picker(editor));
+            Assert.AreSame(opener, shown.Focused);
+
+            ShownWindow.Tap(opener, Key.Z, KeyModifiers.Control);
+            Assert.AreEqual(HideKind.Blur, ((HideLayer)session.SelectedLayer!).Kind);
+            Assert.IsNull(Picker(editor));
+
+            ShownWindow.Tap(shown.Focused as Control ?? shown.Window, Key.Y, KeyModifiers.Control);
+            Assert.AreEqual(HideKind.Black, session.Layers.Layers.OfType<HideLayer>().Single().Kind, "Redo still works from the focus left by Undo");
+            Assert.AreSame(editor.Canvas, shown.Focused);
+        });
+    }
+
+    [TestMethod]
     public async Task TheHexBoxKeepsItsDraftAndStashWhenTheReadReturnsFilesAnImageOrNothingOrFails()
     {
         var clipboard = new PresetDrags();

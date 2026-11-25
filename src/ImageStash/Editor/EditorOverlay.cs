@@ -56,7 +56,7 @@ public sealed class EditorOverlay : Border
     private readonly TextBlock busyText;
     private readonly Button save;
     private EditorSession? session;
-    private (EditorTool? Tool, int? Selected) refreshedFor;
+    private (EditorTool? Tool, int? Index, Layer? Layer, int Count) refreshedFor;
     private IInputElement? focusLeft;
     private bool focusByKeys;
     private bool spaceTaken;
@@ -302,6 +302,15 @@ public sealed class EditorOverlay : Border
         return true;
     }
 
+    private void ClosePane(bool returnFocus)
+    {
+        pane.Hide();
+        if (returnFocus && !TypingGoesOn(paneClosed: true))
+        {
+            canvas.Focus();
+        }
+    }
+
     /// <summary>Focus where it was left in the editor, as a summon gives it back (G1), else on the canvas.</summary>
     public void FocusAsLeft()
     {
@@ -440,14 +449,23 @@ public sealed class EditorOverlay : Border
             return;
         }
 
-        // A colour being picked is for the tool and the layer its picker was opened on: either replaced ends it, so the next
-        // press is the tools' (G21, G23); the picker's own closing as the pick starts changes neither.
-        if (!ReferenceEquals(refreshedFor.Tool, shown.Tool) || refreshedFor.Selected != shown.Selected)
+        var target = (Tool: shown.Tool, Index: shown.Selected, Layer: shown.SelectedLayer, Count: shown.Layers.Layers.Count);
+        // An edit replaces a layer in its slot. Undoing an addition or removal can put a different layer in that same slot.
+        var layerChanged = !ReferenceEquals(refreshedFor.Layer, target.Layer)
+            && (refreshedFor.Index != target.Index || refreshedFor.Count != target.Count);
+        var toolChanged = !ReferenceEquals(refreshedFor.Tool, target.Tool);
+        refreshedFor = target;
+        if (toolChanged || layerChanged)
         {
             canvas.StopPicking();
+            if (pane.Shown is ColorPicker)
+            {
+                var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
+                var inReplacedRow = toolChanged && focused is Visual inside && options.IsVisualAncestorOf(inside);
+                ClosePane(returnFocus: pane.Holds(focused) || inReplacedRow);
+            }
         }
 
-        refreshedFor = (shown.Tool, shown.Selected);
         name.Text = shown.Subject;
         ToolTipRule.ShowWhole(name, shown.Subject);
         foreach (var choice in tools.Children.OfType<ToggleButton>())
@@ -518,12 +536,7 @@ public sealed class EditorOverlay : Border
             // Esc closes the picker, its hex included, or ends the colour being picked, before it reaches the layers; a field
             // still open keeps its layer, and the focus.
             canvas.StopPicking();
-            pane.Hide();
-            if (!TypingGoesOn(paneClosed: true))
-            {
-                canvas.Focus();
-            }
-
+            ClosePane(returnFocus: true);
             e.Handled = true;
             return;
         }

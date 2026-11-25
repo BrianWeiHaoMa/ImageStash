@@ -219,11 +219,9 @@ public sealed class EditorPaneTests
             editor.Choose("Draw");
             editor.Choose("Box");
             editor.Drag((0.25, 0.25), (0.75, 0.75));
-        });
-        await OpenFrom(shown, editor, "More colors");
+            editor.Choose("More colors");
+            shown.Window.UpdateLayout();
 
-        TrayDesktop.Run(() =>
-        {
             var square = Surface(editor, "ValueSquare");
             editor.Press(square, new Point(10, 10));
             editor.Move(square, new Point(square.Bounds.Width - 10, 20));
@@ -235,7 +233,11 @@ public sealed class EditorPaneTests
             Assert.AreEqual(ColorChoices.Red, Mark(editor).Color, "one step (G25)");
 
             editor.Session.Deselect();
+            Assert.IsNull(Card(editor), "deselecting the mark ends its picker opening");
+            editor.Choose("More colors");
+            shown.Window.UpdateLayout();
             var layers = editor.Session.Layers;
+            square = Surface(editor, "ValueSquare");
             editor.Press(square, new Point(30, 30));
             editor.Release(square, new Point(30, 30));
             var next = ColorChoices.ParseHex(Hex(editor).Text ?? "")!.Value;
