@@ -66,6 +66,7 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 
 ### Fixed
 
+- Opening the tag field with Ctrl+T during a search keeps a quick Page Down and Delete from deleting a picture beneath it.
 - Holding Enter down no longer pastes the picture twice or reaches the chat as Send: one press hands over once, however long it is held, and the chat is brought forward only once Enter is let go. Still held a second after the picture is ready, nothing is pasted: the picture is on the clipboard and the "Copied · press Ctrl+V" notification says so. An Enter that committed a name or a tag in the preview does not also paste.
 
 ## [0.2.2] - 2026-11-16

@@ -42,7 +42,8 @@ public sealed class ListedStash : IDisposable
         WindowShowing.Seen(visible: true, minimised: false);
         Listing = new Listing(Failures.Add);
         SelectionKeys = new PendingQueryKeys(Listing,
-            () => (JustifiedRows.Layout(Listing.Items, GridViewport.Width, 96), GridViewport.Height));
+            () => (JustifiedRows.Layout(Listing.Items, GridViewport.Width, 96), GridViewport.Height),
+            tagFieldOwnsKeys: () => TagFieldItems.Count > 0);
         Import = new Import(Listing, Notices, TestStash.ShortRetry);
         Import.FollowScopeChoices(SelectionKeys);
         Clipboard = new RecordingClipboard(stash.Clock);

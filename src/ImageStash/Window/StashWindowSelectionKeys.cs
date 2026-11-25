@@ -1,6 +1,8 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 
 namespace ImageStash.Window;
 
@@ -9,6 +11,10 @@ public sealed partial class StashWindow
     private Task keyboardHandoff = Task.CompletedTask;
 
     private bool BrowsingOverlayOpen => preview.IsOpen || editing.IsOpen || tagField.IsVisible;
+
+    private TagField? TagFieldTakingKeys => tagField.IsVisible
+        ? tagField.Field
+        : (FocusManager?.GetFocusedElement() as Visual)?.FindAncestorOfType<TagField>();
 
     // A scope hint is a popup too. The shortcut is available while the hint is visible.
     private bool CanUseBrowsingKeys() => !BrowsingOverlayOpen &&

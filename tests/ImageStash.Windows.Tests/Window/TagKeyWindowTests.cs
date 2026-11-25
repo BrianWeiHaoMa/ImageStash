@@ -1,4 +1,5 @@
 using Avalonia.Input;
+using Avalonia.Threading;
 using ImageStash.Windows.Tests.Support;
 using static ImageStash.Windows.Tests.Support.ShownWindow;
 
@@ -67,6 +68,71 @@ public sealed class TagKeyWindowTests
         {
             Assert.IsTrue(shown.Search.IsFocused, "focus back where the key was pressed");
             Assert.AreEqual("match", shown.Search.Text);
+        });
+    }
+
+    [TestMethod]
+    [DataRow(false, false)]
+    [DataRow(true, false)]
+    [DataRow(false, true)]
+    [DataRow(true, true)]
+    public async Task HeldSearchResolvesKeysAfterCtrlTInTheTagField(bool openPreview, bool escape)
+    {
+        using var shown = ShownWindow.Open();
+        var pictures = Enumerable.Range(1, 8).Select(index => shown.Picture($"cat {index:00}.png"))
+            .Append(shown.Picture("dog.png"));
+        var items = await shown.OpenStash(pictures.ToArray());
+        TrayDesktop.Run(() => shown.Listing.Focus(items[^1].Id));
+        var store = shown.Listing.Store!;
+        var matches = (await store.Search("cat")).Value!.Select(item => item.Id).ToArray();
+        using (shown.HoldStore())
+        {
+            TrayDesktop.Run(() =>
+            {
+                shown.Search.Text = "cat";
+                Assert.IsFalse(shown.Listing.Settled);
+                Assert.IsTrue(shown.Grid.Focus());
+                if (openPreview)
+                {
+                    Tap(shown.Grid, Key.Space);
+                }
+
+                Tap(shown.Grid, Key.T, KeyModifiers.Control);
+                if (!escape)
+                {
+                    Tap(shown.Grid, Key.PageDown);
+                }
+
+                Tap(shown.Grid, escape ? Key.Escape : Key.Delete);
+            });
+        }
+
+        await TrayDesktop.Get(() => shown.Listing.Settle());
+        await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+        CollectionAssert.AreEqual(matches, (await store.Search("cat")).Value!.Select(item => item.Id).ToArray());
+        TrayDesktop.Run(() =>
+        {
+            Assert.AreEqual("cat", shown.Search.Text);
+            Assert.AreEqual(matches[0], shown.Listing.Focused);
+            Assert.AreEqual(openPreview, shown.Preview.IsOpen);
+            Assert.AreEqual(!openPreview && !escape, shown.TagField.IsVisible);
+            if (openPreview)
+            {
+                Assert.AreEqual(matches[0], shown.Preview.Item?.Id);
+            }
+            else if (!escape)
+            {
+                CollectionAssert.AreEqual(new[] { matches[0] }, shown.TagField.Items.Select(item => item.Id).ToArray());
+            }
+
+            var focused = (openPreview, escape) switch
+            {
+                (true, true) => shown.PreviewPicture.IsFocused,
+                (true, false) => shown.PreviewTagBox.IsFocused,
+                (false, true) => shown.Grid.IsFocused,
+                _ => shown.TagBox.IsFocused,
+            };
+            Assert.IsTrue(focused, "focus follows the tag field's Esc or stays in its box");
         });
     }
 

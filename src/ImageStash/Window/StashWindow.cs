@@ -122,7 +122,8 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
             grid.InvalidateMeasure();
             grid.InvalidateVisual();
         };
-        keys = new PendingQueryKeys(listing, grid.ReadNavigationLayout, HandleMovementOutsideGrid);
+        keys = new PendingQueryKeys(listing, grid.ReadNavigationLayout, HandleMovementOutsideGrid,
+            () => TagFieldTakingKeys is not null);
         import.FollowScopeChoices(keys);
         scroller = WindowLayout.GridScroller(grid);
         var dropTarget = new DropTarget(this, drops, import, () => DragInProgress, () => listing.LitTags);
@@ -548,7 +549,7 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
                 ThumbnailSizing.Step(action == KeyAction.LargerThumbnails ? 1 : -1);
                 break;
             case KeyAction.Escape:
-                // After a Space still waiting behind an arrow, so it closes the preview that Space opens (G2).
+                // Stay in press order with a queued Space or Ctrl+T that can open a preview or tag field.
                 keys.Then(Escape);
                 break;
             default:
@@ -558,10 +559,16 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
         return true;
     }
 
-    /// <summary>Esc: closes an open tag list, else the preview, else clears the search, else hides the flyout; pinned, it goes no further (G2).</summary>
+    /// <summary>Esc closes an open tag list, cancels a tag edit, dismisses the preview, clears search or hides the flyout, in that order (G2, G17).</summary>
     private void Escape()
     {
         var openLists = OpenTagLists();
+        if (openLists.Count == 0 && TagFieldTakingKeys is { } field)
+        {
+            field.CancelAsEscape();
+            return;
+        }
+
         switch (Summon.OnEscape(search.Text ?? "", chrome.Pinned, preview.IsOpen, openLists.Count > 0))
         {
             case EscapeAction.ClosePicker:

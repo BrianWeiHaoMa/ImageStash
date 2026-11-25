@@ -317,7 +317,12 @@ public sealed class Preview : Border
     /// <c>Ctrl+T</c> in the preview: focus in its tag box (G17); from the name in edit that is focus leaving the name,
     /// which commits it (<see cref="FieldLeaving"/>).
     /// </summary>
-    public void FocusTags() => tags.FocusBox();
+    public void FocusTags()
+    {
+        // A preview opened by the preceding queued key can still need its tag box laid out before it can take focus.
+        UpdateLayout();
+        tags.FocusBox();
+    }
 
     /// <summary>
     /// Whether its name field holds a name typed and not yet committed, or its tag field words not yet added, which a hide

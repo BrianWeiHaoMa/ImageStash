@@ -8,12 +8,13 @@ namespace ImageStash.Window;
 /// while the person moves on. Listing remains the owner of the displayed selection.
 /// </summary>
 public sealed class PendingQueryKeys(Listing listing, Func<(IReadOnlyList<GridRow> Rows, double ViewportHeight)> gridLayout,
-    Func<Direction, long, bool>? handleOutsideGrid = null)
+    Func<Direction, long, bool>? handleOutsideGrid = null, Func<bool>? tagFieldOwnsKeys = null)
 {
     private readonly Queue<Pressed> pressed = new();
     private bool draining;
     private Task drained = Task.CompletedTask;
     private long lastSelectionKey;
+    private (long Key, long BeforeInput) discardedTagSelection;
 
     internal Task PendingScopeChoice { get; private set; } = Task.CompletedTask;
 
@@ -66,7 +67,7 @@ public sealed class PendingQueryKeys(Listing listing, Func<(IReadOnlyList<GridRo
             (allowExplicitTile && listing.ShowsPriorViewAfterFailure && lastSelectionKey <= listing.LastSelectionReset);
         (IReadOnlyList<StashItem> Items, StashItem? Focused)? chosen =
             takesShownSelection ? ReadSelection() : null;
-        var waitFor = chosen is not null ? WaitFor.EarlierKeys
+        var waitFor = chosen is not null ? WaitFor.ShownSelection
             : allowExplicitTile ? WaitFor.ExplicitTileOrSelection : WaitFor.Selection;
         return Dispatch(input =>
         {
@@ -153,7 +154,7 @@ public sealed class PendingQueryKeys(Listing listing, Func<(IReadOnlyList<GridRo
     {
         try
         {
-            if (!Current(next))
+            if (!Current(next) || TagFieldBlocksSelection(next))
             {
                 return;
             }
@@ -173,14 +174,40 @@ public sealed class PendingQueryKeys(Listing listing, Func<(IReadOnlyList<GridRo
         }
     }
 
+    private bool TagFieldBlocksSelection(Pressed next)
+    {
+        if (next.WaitFor is WaitFor.EarlierKeys or WaitFor.AfterScopeChoice)
+        {
+            return false;
+        }
+
+        if (next.SelectionKey == discardedTagSelection.Key && next.Input < discardedTagSelection.BeforeInput)
+        {
+            return true;
+        }
+
+        if (tagFieldOwnsKeys?.Invoke() != true)
+        {
+            return false;
+        }
+
+        if (next.Input == next.SelectionKey)
+        {
+            // Keys already waiting for this selection change cannot use a different item if Escape closes the field.
+            discardedTagSelection = (next.Input, listing.NextInput());
+        }
+
+        return true;
+    }
+
     private bool HasSelectionFor(Pressed next) =>
-        next.WaitFor is WaitFor.EarlierKeys or WaitFor.ScopeChoice or WaitFor.AfterScopeChoice || listing.ShowsRequestedView ||
+        next.WaitFor is WaitFor.EarlierKeys or WaitFor.ShownSelection or WaitFor.ScopeChoice or WaitFor.AfterScopeChoice || listing.ShowsRequestedView ||
         (next.WaitFor == WaitFor.ExplicitTileOrSelection && listing.HasExplicitSelectionAfter(next.SelectionKey));
 
     private sealed record Pressed(Action<long> Act, WaitFor WaitFor, long Input, long SelectionKey, StashStore? Store, int Replacements,
         TaskCompletionSource? Decided, Action? ViewUnavailable);
 
-    private enum WaitFor { EarlierKeys, Selection, ExplicitTileOrSelection, CurrentView, Layout, ScopeChoice, AfterScopeChoice }
+    private enum WaitFor { EarlierKeys, ShownSelection, Selection, ExplicitTileOrSelection, CurrentView, Layout, ScopeChoice, AfterScopeChoice }
 }
 
 internal sealed record KeySelection(IReadOnlyList<StashItem> Items, StashItem? Focused, long Input);

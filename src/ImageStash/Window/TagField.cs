@@ -205,6 +205,18 @@ public sealed class TagField : StackPanel
     /// </summary>
     public void CommitAsEnter() => Committed?.Invoke(EnterCommits);
 
+    internal void CancelAsEscape()
+    {
+        if (Picker.IsOpen)
+        {
+            Picker.Close();
+        }
+        else
+        {
+            Cancelled?.Invoke();
+        }
+    }
+
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
         switch (e.Key, e.KeyModifiers)
@@ -212,12 +224,8 @@ public sealed class TagField : StackPanel
             case (Key.Enter, KeyModifiers.None):
                 CommitAsEnter();
                 break;
-            case (Key.Escape, KeyModifiers.None) when Picker.IsOpen:
-                // One thing at a time (G2): the list, and Esc again the field.
-                Picker.Close();
-                break;
             case (Key.Escape, KeyModifiers.None):
-                Cancelled?.Invoke();
+                CancelAsEscape();
                 break;
             case (Key.Down, KeyModifiers.None) when Suggestions.Count > 0:
                 Choose(Math.Min(chosen + 1, Suggestions.Count - 1));

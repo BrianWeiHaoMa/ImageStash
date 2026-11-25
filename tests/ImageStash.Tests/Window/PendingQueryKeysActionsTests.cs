@@ -96,6 +96,68 @@ public sealed partial class PendingQueryKeysTests
     }
 
     [TestMethod]
+    [DataRow(Key.PageDown)]
+    [DataRow(Key.Down)]
+    public async Task AQueuedTagFieldKeepsMovementAndDeleteOffTheGrid(Key move)
+    {
+        using var listed = await Listed();
+        var (newer, older) = await DogAndTwoCats(listed);
+        Task opened, moved, deleted;
+        using (listed.Stash.HoldStore())
+        {
+            _ = listed.Listing.SetQuery("cat");
+            Assert.IsFalse(listed.Listing.Settled);
+            opened = listed.Press(Key.T, KeyModifiers.Control, KeyPlace.Grid);
+            moved = listed.Press(move, KeyModifiers.None, KeyPlace.Grid);
+            deleted = listed.Press(Key.Delete, KeyModifiers.None, KeyPlace.Grid);
+        }
+
+        await Task.WhenAll(opened, moved, deleted);
+        Assert.AreEqual(newer.Id, listed.TagFieldItems.Single().Id);
+        Assert.IsEmpty(listed.Stash.RecycleBin.Asked);
+        Assert.AreEqual(newer.Id, listed.Listing.Focused);
+        CollectionAssert.AreEqual(new[] { newer.Id, older.Id },
+            (await listed.Stash.Store!.Search("cat")).Value!.Select(item => item.Id).ToArray());
+    }
+
+    [TestMethod]
+    [DataRow(Key.Down, KeyModifiers.None)]
+    [DataRow(Key.D3, KeyModifiers.Control)]
+    public async Task ADiscardedTagFieldMoveCannotRetargetTheWaitingDeleteAfterEscape(Key blocked, KeyModifiers modifiers)
+    {
+        using var listed = await Listed();
+        var (newer, older) = await DogAndTwoCats(listed);
+        var listing = listed.Listing;
+        Assert.IsTrue((await listing.Store!.SetFavorite([older], true)).Single().Succeeded);
+        await listing.ShowScope(Scope.All);
+
+        Task scope, beforeClick, opened, moved, deleted;
+        using (listed.Stash.HoldStore())
+        {
+            scope = listing.ShowScope(Scope.Favorites);
+            Assert.IsFalse(listing.Settled);
+            beforeClick = listed.Press(Key.Down, KeyModifiers.None, KeyPlace.Grid);
+            listing.Focus(newer.Id);
+            opened = listed.Press(Key.T, KeyModifiers.Control, KeyPlace.Grid);
+            moved = listed.Press(blocked, modifiers, KeyPlace.Grid);
+            listed.SelectionKeys.Then(() =>
+            {
+                Assert.AreEqual(newer.Id, listed.TagFieldItems.Single().Id);
+                listed.TagFieldItems = [];
+            });
+            deleted = listed.Press(Key.Delete, KeyModifiers.None, KeyPlace.Grid);
+        }
+
+        await Task.WhenAll(scope, beforeClick, opened, moved, deleted);
+        Assert.IsEmpty(listed.Stash.RecycleBin.Asked);
+        Assert.AreEqual(older.Id, listing.Focused);
+        Assert.IsTrue(File.Exists(newer.FilePath) && File.Exists(older.FilePath));
+
+        await listed.Press(Key.Delete, KeyModifiers.None, KeyPlace.Grid);
+        CollectionAssert.AreEqual(new[] { older.FilePath }, listed.Stash.RecycleBin.Asked);
+    }
+
+    [TestMethod]
     public async Task DeletePressedOnAnExplicitTileDuringAScopeReadCannotFollowItsReplacementSelection()
     {
         using var listed = await Listed();
