@@ -129,7 +129,7 @@ public sealed class SavedLayerTextTests
     public async Task CaptionedItemsAtStashCapacityUseOneBulkRead()
     {
         var sql = new List<string>();
-        var (read, statements) = await StoreStatements.Count(CaptionedItems.Fill, SavedLayerText.ReadSnapshot, sql.Add);
+        var (read, statements) = await StoreStatements.Count(now => CaptionedItems.Fill(now), SavedLayerText.ReadSnapshot, sql.Add);
 
         Assert.IsTrue(read.Succeeded, read.Failure?.ToString());
         Assert.HasCount(CaptionedItems.Count, read.Value!);

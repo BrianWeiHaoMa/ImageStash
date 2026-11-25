@@ -8,6 +8,15 @@ namespace ImageStash.Store;
 /// <summary>Whole strings from each of an item's two saved layer lists, in list order (G5, State: The store).</summary>
 internal readonly record struct SavedLayerText(IReadOnlyList<string> Current, IReadOnlyList<string> Previous)
 {
+    // The current source comes first, then the previous one. Both joins use the projection's primary key.
+    internal const string Columns = "committed.strings, previous.strings";
+
+    internal const string PictureListJoins =
+        """
+        LEFT JOIN saved_layer_text committed ON committed.item_id = i.id AND committed.list_slot = 0
+        LEFT JOIN saved_layer_text previous ON previous.item_id = i.id AND previous.list_slot = 1
+        """;
+
     // These version-5 definitions also identify a readable projection in a staged archive. Keep them verbatim.
     // Separate rows leave the item row's space for the original layer lists and its other facts.
     private const string CreateTable = """
@@ -90,10 +99,9 @@ internal readonly record struct SavedLayerText(IReadOnlyList<string> Current, IR
     internal static IReadOnlyDictionary<long, SavedLayerText> Read(StoreContext store) =>
         store.Query(
             $"""
-            SELECT i.id, committed.strings, previous.strings
+            SELECT i.id, {Columns}
             FROM items i
-            LEFT JOIN saved_layer_text committed ON committed.item_id = i.id AND committed.list_slot = 0
-            LEFT JOIN saved_layer_text previous ON previous.item_id = i.id AND previous.list_slot = 1
+            {PictureListJoins}
             WHERE {StashItem.NotDeleted}
             """,
             row => (Id: row.GetInt64(0), Text: new SavedLayerText(Strings(row, 1), Strings(row, 2))))
@@ -168,7 +176,7 @@ internal readonly record struct SavedLayerText(IReadOnlyList<string> Current, IR
         return JsonSerializer.Serialize(strings);
     }
 
-    private static string[] Strings(SqliteDataReader row, int index)
+    internal static string[] Strings(SqliteDataReader row, int index)
     {
         var json = row.IsDBNull(index) ? "[]" : row.GetString(index);
         if (json is "[]")

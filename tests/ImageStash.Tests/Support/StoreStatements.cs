@@ -13,9 +13,11 @@ internal static class StoreStatements
 {
     /// <summary>
     /// The result of <paramref name="query"/> and the statements it ran, over a store at this build's version filled by the
-    /// SQL <paramref name="fill"/> makes of the stash clock's time in UTC Unix milliseconds.
+    /// SQL <paramref name="fill"/> makes of the stash clock's time in UTC Unix milliseconds. If supplied,
+    /// <paramref name="progress"/> counts batches of 1,000 SQLite instructions.
     /// </summary>
-    public static async Task<(T Result, int Statements)> Count<T>(Func<long, string> fill, Func<StoreContext, T> query, Action<string>? trace = null)
+    public static async Task<(T Result, int Statements)> Count<T>(Func<long, string> fill, Func<StoreContext, T> query,
+        Action<string>? trace = null, Action? progress = null)
     {
         using var stash = new TestStash();
         await stash.OpenCleanly();
@@ -35,6 +37,15 @@ internal static class StoreStatements
                     run++;
                     trace?.Invoke(sql);
                 }), null);
+                if (progress is not null)
+                {
+                    raw.sqlite3_progress_handler(store.Connection.Handle, 1000, _ =>
+                    {
+                        progress();
+                        return 0;
+                    }, null);
+                }
+
                 return (query(store), run);
             });
         }

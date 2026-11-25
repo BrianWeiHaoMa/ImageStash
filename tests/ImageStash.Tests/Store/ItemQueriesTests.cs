@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using ImageStash.Files;
 using ImageStash.Layers;
 using ImageStash.Media;
@@ -525,9 +526,7 @@ public sealed class ItemQueriesTests
         stash.Close();
         // Inserted directly, as an earlier session's imports would have left them; only the queries are timed.
         stash.Sql($"""
-            WITH RECURSIVE n(k) AS (SELECT 1 UNION ALL SELECT k + 1 FROM n WHERE k < 5000)
-            INSERT INTO items (name, added_at, format, width, height, animated, frame_count, duration_ms, original_file, finished_file, original_sha256)
-            SELECT 'reaction ' || k, {stash.Clock.Now.ToUnixTimeMilliseconds()} + k, 'Png', 8, 6, 0, 1, 0, 'reaction ' || k || '.png', 'reaction ' || k || '.png', randomblob(32) FROM n;
+            {CaptionedItems.Fill(stash.Clock.Now.ToUnixTimeMilliseconds())};
             INSERT INTO tags (item_id, tag) SELECT id, 'tag' || (id % 50) FROM items;
             INSERT INTO uses (item_id, used_at) SELECT id, {stash.Clock.Now.ToUnixTimeMilliseconds()} + id FROM items WHERE id % 2 = 0;
             UPDATE items SET favorite = 1 WHERE id % 5 = 0;
@@ -537,7 +536,7 @@ public sealed class ItemQueriesTests
 
         var (all, allTime) = await Timed(store.All);
         var (recent, recentTime) = await Timed(store.Recent);
-        var (search, searchTime) = await Timed(() => store.Search("reaction #tag4"));
+        var (search, searchTime) = await Timed(() => store.Search("picture #tag4 caption"));
         var (favorites, favoritesTime) = await Timed(store.Favorites);
         var (counts, countsTime) = await Timed(store.TagCounts);
         var (item, itemTime) = await Timed(() => store.Item(4000));
@@ -547,7 +546,7 @@ public sealed class ItemQueriesTests
         Assert.HasCount(5000, all.Value!);
         Assert.HasCount(2500, recent.Value!);
         Assert.HasCount(1100, search.Value!, "tag4 and tag40 to tag49 contain the word, each carried by 100 items");
-        Assert.AreEqual("reaction 4998", search.Value![0].Name, "the search timed orders by use: the match used last first");
+        Assert.AreEqual("picture 4998", search.Value![0].Name, "the search timed orders by use: the match used last first");
         Assert.HasCount(1000, favorites.Value!);
         Assert.HasCount(50, counts.Value!);
         Assert.IsTrue(counts.Value!.All(c => c.Items == 100));
@@ -557,35 +556,71 @@ public sealed class ItemQueriesTests
         Assert.IsLessThan(500, searchTime.TotalMilliseconds);
         Assert.IsLessThan(500, favoritesTime.TotalMilliseconds);
         Assert.IsLessThan(500, countsTime.TotalMilliseconds);
-        Assert.AreEqual("reaction 4000", item.Value!.Name);
+        Assert.AreEqual("picture 4000", item.Value!.Name);
         Assert.AreEqual(1, history.Value!.Count);
         Assert.IsLessThan(100, itemTime.TotalMilliseconds, "one item's own rows, not the stash's");
         Assert.IsLessThan(100, historyTime.TotalMilliseconds, "one item's own uses, not the stash's");
     }
 
     [TestMethod]
-    public async Task ASearchIsAsManyStatementsOverHundredsOfItemsWithUsesAsOverAHandful()
+    public async Task CaptionSearchUsesAsManyStatementsAtStashCapacityAsOverAHandful()
     {
         var few = await StatementsOfASearch(3);
-        var many = await StatementsOfASearch(1200);
+        var many = await StatementsOfASearch(CaptionedItems.Count);
 
+        TestContext.WriteLine($"Caption search: {few} statements over 3 items, {many} over {CaptionedItems.Count:N0} items.");
         Assert.IsGreaterThan(0, few);
         Assert.AreEqual(few, many, "a fixed number of statements over the whole stash, whatever its size (E4)");
     }
 
-    /// <summary>The statements SQLite runs for one search over <paramref name="count"/> items, each with two uses (<see cref="StoreStatements"/>).</summary>
+    [TestMethod]
+    public async Task CaptionSearchDoesNotScanUseHistoryOfADeletedItem()
+    {
+        var withoutHistory = await SearchWorkWithADeletedItem(0);
+        var withHistory = await SearchWorkWithADeletedItem(200_000);
+
+        Assert.AreEqual(withoutHistory, withHistory, "Use history on a deleted row adds no SQLite work to search.");
+    }
+
+    /// <summary>Statements for a search over captioned items, each with two uses and a drawing-heavy layer list.</summary>
     private static async Task<int> StatementsOfASearch(int count)
     {
+        var sql = new List<string>();
         var (found, statements) = await StoreStatements.Count(now => $"""
-            WITH RECURSIVE n(k) AS (SELECT 1 UNION ALL SELECT k + 1 FROM n WHERE k < {count})
-            INSERT INTO items (name, added_at, format, width, height, animated, frame_count, duration_ms, original_file, finished_file, original_sha256)
-            SELECT 'reaction ' || k, {now} + k, 'Png', 8, 6, 0, 1, 0, 'reaction ' || k || '.png', 'reaction ' || k || '.png', randomblob(32) FROM n;
+            {CaptionedItems.Fill(now, count)};
             INSERT INTO tags (item_id, tag) SELECT id, 'tag' || (id % 5) FROM items;
             INSERT INTO uses (item_id, used_at) SELECT id, {now} + id FROM items;
             INSERT INTO uses (item_id, used_at) SELECT id, {now} - id FROM items;
-            """, store => ItemQueries.Search(store, "reaction"));
+            """, store => ItemQueries.Search(store, "picture caption"), sql.Add);
+        Assert.IsTrue(found.Succeeded, found.Failure?.ToString());
         Assert.HasCount(count, found.Value!);
+        Assert.IsFalse(sql.Any(statement => Regex.IsMatch(statement
+            .Replace("i.layers <> '[]'", "")
+            .Replace("COALESCE(i.previous_layers, '[]') <> '[]'", ""),
+            @"\b(?:previous_)?layers\b|\bi\s*\.\s*\*|\bSELECT\s+\*", RegexOptions.IgnoreCase)),
+            "Search reads edited flags and saved text without transferring or parsing the layer lists.");
         return statements;
+    }
+
+    private static async Task<int> SearchWorkWithADeletedItem(int uses)
+    {
+        var batches = 0;
+        var (found, _) = await StoreStatements.Count(now => $"""
+            {CaptionedItems.Fill(now, count: 4)};
+            WITH RECURSIVE history(n) AS (
+                SELECT 1 WHERE {uses} > 0
+                UNION ALL SELECT n + 1 FROM history WHERE n < {uses})
+            INSERT INTO uses (item_id, used_at) SELECT 4, {now} + n FROM history;
+            """,
+            store =>
+            {
+                var marked = store.Change("Mark the held row", () => store.Execute("UPDATE items SET deleted = 1 WHERE id = 4"));
+                Assert.IsTrue(marked.Succeeded, marked.Failure?.ToString());
+                return ItemQueries.Search(store, "caption");
+            }, progress: () => batches++);
+        Assert.IsTrue(found.Succeeded, found.Failure?.ToString());
+        CollectionAssert.AreEqual(new long[] { 3, 2, 1 }, found.Value!.Select(item => item.Id).ToArray());
+        return batches;
     }
 
     private static async Task<(T Result, TimeSpan Time)> Timed<T>(Func<Task<T>> query)

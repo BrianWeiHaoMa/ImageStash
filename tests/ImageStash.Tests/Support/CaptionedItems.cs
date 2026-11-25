@@ -7,6 +7,7 @@ namespace ImageStash.Tests.Support;
 internal static class CaptionedItems
 {
     public const int Count = 5000;
+    public const string CompletionRefused = "completion refused for the check";
 
     private static readonly Rgba Black = new(0, 0, 0, 255);
 
@@ -33,7 +34,21 @@ internal static class CaptionedItems
         return read.Value!;
     }
 
-    public static string Fill(long addedAt)
+    public static async Task<IReadOnlyList<StashItem>> Finds(StashStore store, string query, params long[] ids)
+    {
+        var found = await store.Search(query);
+        Assert.IsTrue(found.Succeeded, found.Failure?.ToString());
+        CollectionAssert.AreEqual(ids, found.Value!.Select(item => item.Id).ToArray(), $"query: {query}");
+        return found.Value!;
+    }
+
+    public static void RefusePictureCompletion(TestStash stash) => stash.SqlWhileOpen($"""
+        CREATE TRIGGER refuse_finish BEFORE UPDATE OF pending_steps ON items
+        WHEN OLD.pending_steps IS NOT NULL AND NEW.pending_steps IS NULL
+        BEGIN SELECT RAISE(ABORT, '{CompletionRefused}'); END;
+        """);
+
+    public static string Fill(long addedAt, int count = Count)
     {
         var points = Enumerable.Range(0, 1500).Select(i => new PixelPoint(i % 512, i / 8)).ToArray();
         var layers = new LayerList([
@@ -41,7 +56,7 @@ internal static class CaptionedItems
             new DrawMarkLayer(MarkKind.Pen, points, null, Black, Thickness.Thin, null),
         ]);
         return $"""
-            WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM numbers WHERE n < {Count})
+            WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM numbers WHERE n < {count})
             INSERT INTO items (id, name, added_at, format, width, height, animated, frame_count, duration_ms,
                 original_file, finished_file, original_sha256, layers, layer_revision, rendered_revision)
             SELECT n, 'picture ' || n, {addedAt} + n, 'Png', 512, 512, 0, 1, 0,

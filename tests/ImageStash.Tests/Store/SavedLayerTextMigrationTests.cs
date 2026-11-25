@@ -15,6 +15,7 @@ public sealed class SavedLayerTextMigrationTests
         await stash.OpenCleanly();
         var first = await Save(stash, await stash.ImportFixture("first", "still.png"), Caption("first caption"));
         var second = await Save(stash, await stash.ImportFixture("second", "transparent.png"), Caption("second caption"));
+        var firstPicture = File.ReadAllBytes(first.FilePath);
         stash.Close();
         VersionFourStore.Make(stash.Folder.StoreFile);
         var before = LayersOnDisk(stash);
@@ -40,6 +41,9 @@ public sealed class SavedLayerTextMigrationTests
         Assert.AreEqual(5L, StoreVersion(stash.Folder.StoreFile));
         await HasText(reopened, first.Id, ["first caption"], []);
         await HasText(reopened, second.Id, ["second caption"], []);
+        var found = (await Finds(reopened, "first caption", first.Id)).Single();
+        CollectionAssert.AreEqual(firstPicture, File.ReadAllBytes(found.FilePath));
+        await Finds(reopened, "second caption", second.Id);
     }
 
     [TestMethod]
@@ -51,8 +55,10 @@ public sealed class SavedLayerTextMigrationTests
         using var stash = new TestStash();
         var store = await stash.OpenCleanly();
         var item = await Save(stash, await stash.ImportFixture("pending edit", "still.png"), Caption("on disk"));
+        var oldPicture = File.ReadAllBytes(item.FilePath);
         var unrelated = await Save(stash, await stash.ImportFixture("other", "transparent.png"), Caption("different"));
-        Assert.IsTrue((await store.AddTag([item], "pending")).Single().Succeeded);
+        Assert.IsTrue((await store.AddTag([item], "queued")).Single().Succeeded);
+        Assert.IsTrue((await store.AddTag([unrelated], "spare")).Single().Succeeded);
         var next = Caption("committed");
         var render = await stash.Render(item, next);
 
@@ -83,7 +89,7 @@ public sealed class SavedLayerTextMigrationTests
             damagedColumn == "previous_layers" ? [] : ["on disk"]);
         await HasText(opening.Store, unrelated.Id, ["different"], []);
         var itemRead = (await opening.Store.Item(item.Id)).Value!;
-        Assert.AreEqual(("pending edit", "pending"), (itemRead.Name, itemRead.Tags.Single()));
+        Assert.AreEqual(("pending edit", "queued"), (itemRead.Name, itemRead.Tags.Single()));
         var edit = await opening.Store.ForEdit(item.Id);
         if (damagedColumn == "none")
         {
@@ -94,6 +100,21 @@ public sealed class SavedLayerTextMigrationTests
             Assert.IsFalse(edit.Succeeded);
             Assert.AreEqual("pending edit", edit.Failure!.Subject);
         }
+
+        await Finds(opening.Store, "committed");
+        await Finds(opening.Store, "leak");
+        await Finds(opening.Store, "edit #queued", item.Id);
+        await Finds(opening.Store, "other #spare", unrelated.Id);
+        await Finds(opening.Store, "different", unrelated.Id);
+        if (damagedColumn == "previous_layers")
+        {
+            await Finds(opening.Store, "on disk");
+        }
+        else
+        {
+            var found = (await Finds(opening.Store, "on disk", item.Id)).Single();
+            CollectionAssert.AreEqual(oldPicture, File.ReadAllBytes(found.FilePath));
+        }
     }
 
     [TestMethod]
@@ -102,6 +123,7 @@ public sealed class SavedLayerTextMigrationTests
         using var source = new TestStash();
         await source.OpenCleanly();
         var incoming = await Save(source, await source.ImportFixture("incoming", "still.png"), Caption("incoming caption"));
+        var incomingPicture = File.ReadAllBytes(incoming.FilePath);
         var archive = await Export(source, MovingStash.Keeper(source, []));
         var olderFile = source.Outside("older-stash.db");
         File.WriteAllBytes(olderFile, Entry(archive, StashFolder.StoreFileName));
@@ -114,6 +136,7 @@ public sealed class SavedLayerTextMigrationTests
         var outgoing = await Save(target, await target.ImportFixture("outgoing", "transparent.png"), Caption("outgoing caption"));
         Assert.AreEqual(incoming.Id, outgoing.Id);
         await HasText(store, outgoing.Id, ["outgoing caption"], []);
+        await Finds(store, "outgoing caption", outgoing.Id);
 
         var imported = await store.Import(MovingStash.Keeper(target, []), older);
 
@@ -122,6 +145,20 @@ public sealed class SavedLayerTextMigrationTests
         var reopened = await target.OpenCleanly();
         Assert.AreEqual(incoming.Name, (await target.All()).Single().Name);
         await HasText(reopened, incoming.Id, ["incoming caption"], []);
+        await Finds(reopened, "outgoing");
+        var importedPicture = (await Finds(reopened, "incoming caption", incoming.Id)).Single();
+        CollectionAssert.AreEqual(incomingPicture, File.ReadAllBytes(importedPicture.FilePath));
+        var edit = await reopened.ForEdit(importedPicture.Id);
+        Assert.IsTrue(edit.Succeeded, edit.Failure?.ToString());
+        Assert.IsNotNull(edit.Value);
+        Assert.AreEqual(Caption("incoming caption"), edit.Value.RenderedLayers);
+        CollectionAssert.AreEqual(MediaFixtures.Bytes("still.png"), File.ReadAllBytes(edit.Value.OriginalPath));
+
+        using var confirmation = await reopened.Confirm([importedPicture], "Copy");
+        var confirmed = confirmation.Items.Single();
+        Assert.IsTrue(confirmed.Succeeded, confirmed.Failure?.ToString());
+        TestStash.AssertSameItem(importedPicture, confirmed.Value);
+        CollectionAssert.AreEqual(incomingPicture, File.ReadAllBytes(confirmed.Value!.FilePath));
     }
 
     [TestMethod]

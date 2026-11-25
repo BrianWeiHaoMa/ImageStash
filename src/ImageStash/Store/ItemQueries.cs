@@ -24,9 +24,6 @@ internal static class ItemQueries
     // Newest-added first, equal times the later identity first: All's and Favorites' order, and the search's for its never-used matches (G4).
     private const string NewestAdded = "i.added_at DESC, i.id DESC";
 
-    // Latest use first, equal times the later identity first: the search's order for its matches with a use (G4).
-    private const string LatestUsed = "MAX(u.used_at) DESC, i.id DESC";
-
     /// <summary>Every item, newest-added first; equal times put the later identity first.</summary>
     public static Outcome<IReadOnlyList<StashItem>> All(StoreContext store) =>
         Listed(store, "List the stash", $"SELECT {StashItem.Columns} FROM items i WHERE {StashItem.NotDeleted} ORDER BY {NewestAdded}");
@@ -56,29 +53,48 @@ internal static class ItemQueries
     public static Outcome<IReadOnlyList<StashItem>> Search(StoreContext store, string query)
     {
         var words = ItemSearch.Words(query);
-        if (words.Count == 0)
-        {
-            return All(store);
-        }
+        return words.Count == 0 ? All(store) : store.Read("List the stash", () => SearchListed(store, words));
+    }
 
-        // Every item's latest use in the one statement, never a look-up per item (E4): the items with a use by their latest,
-        // then the never-used as All does, a capture among them (G4 orders search results by uses alone). Named as All's listing is: a search reads the stash as listing it does.
-        var byUse = Listed(store, "List the stash", $"""
-            SELECT {StashItem.Columns} FROM items i LEFT JOIN uses u ON u.item_id = i.id
-            WHERE {StashItem.NotDeleted} GROUP BY i.id
-            ORDER BY MAX(u.used_at) IS NULL,
-                CASE WHEN MAX(u.used_at) IS NULL THEN row_number() OVER (ORDER BY {NewestAdded}) ELSE row_number() OVER (ORDER BY {LatestUsed}) END
-            """);
-        if (!byUse.Succeeded)
-        {
-            return byUse.Failure;
-        }
+    private static IReadOnlyList<StashItem> SearchListed(StoreContext store, IReadOnlyList<string> words)
+    {
+        var tags = StashItem.AllTags(store);
+        const int latestUseColumn = StashItem.ColumnCount;
+        const int currentTextColumn = latestUseColumn + 1;
+        // Match each row as it is read and sort only the resulting metadata. Look up use history by item after the deletion filter.
+        return store.Query($"""
+            SELECT {StashItem.Columns}, (SELECT MAX(used_at) FROM uses WHERE item_id = i.id), {SavedLayerText.Columns}
+            FROM items i
+            {SavedLayerText.PictureListJoins}
+            WHERE {StashItem.NotDeleted}
+            """, row =>
+            {
+                if (StashItem.ListedFromRow(row, store, tags.GetValueOrDefault(row.GetInt64(0)) ?? []) is not { } item)
+                {
+                    return null;
+                }
 
-        // A stable sort, so each group keeps the order of use read above.
-        return Outcome<IReadOnlyList<StashItem>>.Of(byUse.Value!
-            .Where(item => ItemSearch.Matches(item, words))
-            .OrderBy(item => ItemSearch.MatchesAtWordStarts(item, words) ? 0 : 1)
-            .ToList());
+                var atWordStarts = ItemSearch.MatchesAtWordStarts(item, words);
+                if (!atWordStarts && !ItemSearch.Matches(item, words))
+                {
+                    // The displayed revision can advance as soon as a file lands, before its final transaction.
+                    var previous = StashItem.RenderedFromPreviousList(item.RenderedRevision, StashItem.RecordedLayerRevision(row));
+                    var text = SavedLayerText.Strings(row, previous ? currentTextColumn + 1 : currentTextColumn);
+                    if (!ItemSearch.Matches(item, words, text))
+                    {
+                        return null;
+                    }
+                }
+
+                return new SearchMatch(item, atWordStarts, row.IsDBNull(latestUseColumn) ? null : row.GetInt64(latestUseColumn));
+            })
+            .OfType<SearchMatch>()
+            .OrderByDescending(match => match.AtWordStarts)
+            .ThenByDescending(match => match.LatestUse.HasValue)
+            .ThenByDescending(match => match.LatestUse ?? match.Item.AddedAt.ToUnixTimeMilliseconds())
+            .ThenByDescending(match => match.Item.Id)
+            .Select(match => match.Item)
+            .ToList();
     }
 
     /// <summary>
@@ -267,6 +283,8 @@ internal static class ItemQueries
 
     /// <summary>The name a failure gives an item: its name, or its file's when it has none (G35, G17).</summary>
     public static string Named(string name, string fileName) => name.Length > 0 ? name : fileName;
+
+    private sealed record SearchMatch(StashItem Item, bool AtWordStarts, long? LatestUse);
 
     /// <summary>A row <see cref="ForEdit"/> read, its layer lists still as the store holds them.</summary>
     private sealed record EditRow(StashItem Item, string OriginalPath, MediaFacts OriginalFacts, string Layers, string? PreviousLayers, long LayerRevision, byte[] OriginalSha256)
