@@ -267,7 +267,7 @@ public sealed class ChipRowRoomTests
         var entry = TrayDesktop.Get(() =>
         {
             Assert.AreEqual("pear", shown.Search.Text, "clicking the grey plum chip leaves the query alone (G5)");
-            CollectionAssert.AreEqual(new[] { new TagPickerEntry("pear", true), new TagPickerEntry("plum", false) },
+            CollectionAssert.AreEqual(new[] { new TagPickerEntry("pear", 1, true), new TagPickerEntry("plum", 1, false) },
                 shown.ChipRow.Picker.Entries.ToArray());
             return Entry(shown.ChipRow.Picker, "plum");
         });

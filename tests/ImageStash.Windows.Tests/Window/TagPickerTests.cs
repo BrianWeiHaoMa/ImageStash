@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Automation;
+using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -21,8 +22,8 @@ namespace ImageStash.Windows.Tests.Window;
 /// commonest first, the lit ones marked, whatever the query (G4); a pick adding or taking out its word, the list staying
 /// open and focus in the box (G4, G7); Esc closing it and nothing else (G2); a real press outside closing it and acting
 /// as it would have (G7); sixty tags scrolling inside the display (G4); standing as the item menu's Add tag ▸ list does,
-/// its bar at its edge and its words as clear of the bar, and as wide from the moment it opens as its widest name needs,
-/// by the words' own width, a name wider than the list trimmed with its tip. Its entries are found as the user sees them.
+/// its bar at its edge, its right-aligned counts clear of that bar, and as wide from the moment it opens as its names
+/// and counts need. A name wider than the list is trimmed with its tip.
 /// </summary>
 [TestClass]
 public sealed class TagPickerTests
@@ -190,7 +191,7 @@ public sealed class TagPickerTests
         TrayDesktop.Run(() =>
         {
             shown.Search.Focus();
-            shown.ChipRow.Picker.Open(shown.Chip(EveryTag), [new TagPickerEntry("kept", false)], _ => { });
+            shown.ChipRow.Picker.Open(shown.Chip(EveryTag), [new TagPickerEntry("kept", 1, false)], _ => { });
             Assert.IsTrue(shown.ChipRow.Picker.IsOpen);
         });
 
@@ -339,12 +340,12 @@ public sealed class TagPickerTests
             Assert.AreEqual(320, card.Bounds.Width, 0.5, "the list at its widest");
             Assert.IsTrue(words.TextLayout.TextLines.Any(line => line.HasCollapsed), "the name trimmed with its ellipsis");
             Assert.AreEqual(longest, ToolTip.GetTip(words), "its tip names it whole");
-            Assert.AreEqual(19, Measures(card, List(shown), words).WordsToBar, 1, "its words end as clear of the bar as an untrimmed name's");
+            Assert.AreEqual(19, Measures(card, List(shown), Count(card, longest)).TextToBar, 1, "the count clears the bar");
         });
     }
 
     [TestMethod]
-    public async Task TheListsBarAndWordsStandWhereTheItemMenusListsStand()
+    public async Task TheListsBarAndRightmostTextClearanceMatchTheItemMenu()
     {
         using var shown = Open();
         var (item, tags) = await TwelveLong(shown);
@@ -372,9 +373,57 @@ public sealed class TagPickerTests
         TrayDesktop.Run(() => RaiseClick(shown.Chip(EveryTag)));
         await AsWideAtOpenAsAtTheEnd(shown, Widest);
 
-        var picker = TrayDesktop.Get(() => Measures(Card(shown), List(shown), Words(Card(shown), Widest)));
+        var picker = TrayDesktop.Get(() => Measures(Card(shown), List(shown), Count(Card(shown), Widest)));
         Assert.AreEqual(menu.BarToEdge, picker.BarToEdge, 1, $"the bar as near the list's edge as the menu's: {picker} against {menu}");
-        Assert.AreEqual(menu.WordsToBar, picker.WordsToBar, 1, $"the widest words as clear of the bar as the menu's: {picker} against {menu}");
+        Assert.AreEqual(menu.TextToBar, picker.TextToBar, 1, $"the count clears the bar by the same margin: {picker} against {menu}");
+    }
+
+    [TestMethod]
+    public async Task FourDigitCountsAlignBesideShortAndTrimmedNamesInAScrollingPicker()
+    {
+        using var pointer = TestMouse.PutBackAfterwards();
+        using var shown = Open();
+        await TwelveLong(shown);
+        const string shortName = "iii";
+        var longName = new string('W', 60);
+        IReadOnlyList<TagPickerEntry> entries =
+            [new(shortName, 5000, true), new(longName, 1234, false), .. Enumerable.Range(1, 60).Select(i => new TagPickerEntry($"tag-{i:00}", 1, false))];
+        string? picked = null;
+        TrayDesktop.Run(() =>
+        {
+            shown.Search.Focus();
+            shown.ChipRow.Picker.Open(shown.Chip(EveryTag), entries, tag => picked = tag);
+        });
+        await Eventually(() => TrayDesktop.Get(() => List(shown).Extent.Height > List(shown).Viewport.Height &&
+            Card(shown).GetVisualDescendants().OfType<Button>().Any(button => AutomationProperties.GetName(button) == longName)));
+
+        var longEntry = TrayDesktop.Get(() =>
+        {
+            var card = Card(shown);
+            card.UpdateLayout();
+            var list = List(shown);
+            var firstCount = Count(card, shortName);
+            var secondCount = Count(card, longName);
+            Assert.AreEqual("5000", firstCount.Text);
+            Assert.AreEqual("1234", secondCount.Text);
+            Assert.IsGreaterThanOrEqualTo(WidthOf(firstCount), firstCount.Bounds.Width + 0.01);
+            Assert.IsGreaterThanOrEqualTo(WidthOf(secondCount), secondCount.Bounds.Width + 0.01);
+            Assert.AreEqual(Measures(card, list, firstCount).TextToBar, Measures(card, list, secondCount).TextToBar, 0.5);
+            Assert.IsGreaterThan(0, Measures(card, list, secondCount).TextToBar);
+            Assert.IsFalse(Words(card, shortName).TextLayout.TextLines.Any(line => line.HasCollapsed));
+            Assert.IsTrue(Words(card, longName).TextLayout.TextLines.Any(line => line.HasCollapsed));
+            Assert.AreEqual(longName, ToolTip.GetTip(Words(card, longName)));
+            Assert.IsLessThan(entries.Count, card.GetVisualDescendants().OfType<Button>().Count());
+            var button = Entry(shown.ChipRow.Picker, longName);
+            var peer = ControlAutomationPeer.CreatePeerForElement(button)!;
+            Assert.AreEqual(longName, peer.GetName());
+            Assert.AreEqual("1234 items", peer.GetHelpText());
+            return button;
+        });
+
+        TestMouse.Click(await ChipRowTests.ClickPoint(longEntry));
+        await Eventually(() => TrayDesktop.Get(() => picked == longName));
+        TrayDesktop.Run(() => Assert.IsTrue(shown.Search.IsFocused && shown.ChipRow.Picker.IsOpen));
     }
 
     /// <summary>
@@ -412,19 +461,25 @@ public sealed class TagPickerTests
 
     /// <summary>
     /// In <paramref name="root"/>'s units: from the scroller's vertical bar's right edge to the root's right edge, and from
-    /// the right edge of <paramref name="words"/> to the bar's left edge.
+    /// the right edge of <paramref name="text"/> to the bar's left edge.
     /// </summary>
-    private static (double BarToEdge, double WordsToBar) Measures(Visual root, ScrollViewer scroller, TextBlock words)
+    private static (double BarToEdge, double TextToBar) Measures(Visual root, ScrollViewer scroller, TextBlock text)
     {
         var bar = Bar(scroller);
         var barLeft = bar.TranslatePoint(default, root)!.Value.X;
-        var wordsRight = words.TranslatePoint(new Point(words.Bounds.Width, 0), root)!.Value.X;
-        return (root.Bounds.Width - (barLeft + bar.Bounds.Width), barLeft - wordsRight);
+        var textRight = text.TranslatePoint(new Point(text.Bounds.Width, 0), root)!.Value.X;
+        return (root.Bounds.Width - (barLeft + bar.Bounds.Width), barLeft - textRight);
     }
 
     /// <summary>The words of the entry for <paramref name="tag"/>, once made.</summary>
     private static TextBlock Words(Control card, string tag) =>
-        card.GetVisualDescendants().OfType<Button>().Single(button => AutomationProperties.GetName(button) == tag).GetVisualDescendants().OfType<TextBlock>().Single(text => text.Text == tag);
+        EntryText(card, tag, 1);
+
+    private static TextBlock Count(Control card, string tag) => EntryText(card, tag, 2);
+
+    private static TextBlock EntryText(Control card, string tag, int column) =>
+        card.GetVisualDescendants().OfType<Button>().Single(button => AutomationProperties.GetName(button) == tag)
+            .GetVisualDescendants().OfType<TextBlock>().Single(text => Grid.GetColumn(text) == column);
 
     /// <summary>The width the words need to show whole, in their own font.</summary>
     private static double WidthOf(TextBlock words)

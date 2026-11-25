@@ -98,7 +98,7 @@ public sealed class ChipRow : Panel
         }
 
         everyTag = EveryTagChip();
-        everyTag.Click += (_, _) => ToggleEveryTag();
+        everyTag.Click += (_, _) => _ = ToggleEveryTag();
         picker.Closed += (_, _) => InvalidateMeasure();
         Children.Add(everyTag);
         LogicalChildren.Add(picker);
@@ -174,7 +174,7 @@ public sealed class ChipRow : Panel
         fitting = Fitting(besidePicker);
         var selectable = tagChips.Take(Math.Max(0, fitting - scopes.Length - 1))
             .Count(entry => !entry.Chip.Classes.Contains(LookStyles.FilterUnavailable));
-        everyTagShown = picker.IsOpen || selectable < listing.Tags.Count;
+        everyTagShown = picker.IsOpen || listing.PickerTagsNeedRetry || selectable < listing.Tags.Count;
     }
 
     /// <summary>
@@ -219,7 +219,11 @@ public sealed class ChipRow : Panel
         // The chips can stay the same while the stash's tags change, and with them whether the last chip shows.
         InvalidateMeasure();
         LightTagChips();
-        if (picker.IsOpen)
+        if (picker.IsOpen && (listing.PickerTagsStale || listing.Tags.Count == 0))
+        {
+            picker.Close();
+        }
+        else if (picker.IsOpen)
         {
             picker.Show(EveryTag());
         }
@@ -248,22 +252,41 @@ public sealed class ChipRow : Panel
     }
 
     /// <summary>Every tag, the commonest first, whatever the query, the lit ones marked (G4); made when the list opens, not at every load (G1).</summary>
-    private List<TagPickerEntry> EveryTag()
-    {
-        var lit = listing.LitTags;
-        return listing.Tags.Select(count => new TagPickerEntry(count.Tag, lit.Contains(count.Tag))).ToList();
-    }
+    private IReadOnlyList<TagPickerEntry> EveryTag() => TagPickerEntry.FromCounts(listing.Tags, listing.LitTags);
 
-    private void ToggleEveryTag()
+    private async Task ToggleEveryTag()
     {
         if (picker.IsOpen)
         {
             picker.Close();
+            return;
         }
-        else
+
+        if (await ReadEveryTag() && everyTag.IsEffectivelyVisible && !picker.IsOpen && listing.Tags.Count > 0)
         {
-            picker.Open(everyTag, EveryTag(), tag => _ = listing.ChooseTag(tag, fromPicker: true));
+            picker.Open(everyTag, EveryTag(), tag => _ = PickEveryTag(tag));
         }
+    }
+
+    private async Task PickEveryTag(string tag)
+    {
+        var revision = listing.TagChoiceRevision;
+        if (await ReadEveryTag() && revision == listing.TagChoiceRevision)
+        {
+            await listing.ChooseTag(tag, fromPicker: true);
+        }
+    }
+
+    private async Task<bool> ReadEveryTag()
+    {
+        var store = listing.Store;
+        if (listing.PickerTagsStale)
+        {
+            await listing.Refresh();
+            await listing.Settle();
+        }
+
+        return store == listing.Store && !listing.PickerTagsStale;
     }
 
     /// <summary>

@@ -198,6 +198,31 @@ public sealed class StashStore : IDisposable
     /// <summary>Every tag the stash's items carry, with how many carry it, the most carried first (G4).</summary>
     public Task<Outcome<IReadOnlyList<TagCount>>> TagCounts() => thread.Read(() => ItemTags.Counts(store));
 
+    internal Task<Outcome<(IReadOnlyList<StashItem> Items, IReadOnlyList<TagCount> Counts)>> AllWithTagCounts() =>
+        WithTagCounts(() => ItemQueries.All(store));
+
+    internal Task<Outcome<(StashItem? Items, IReadOnlyList<TagCount> Counts)>> ItemWithTagCounts(long id) =>
+        WithTagCounts(() => ItemQueries.Item(store, id));
+
+    // Read the memberships and the catalogue in the same store operation so a write cannot split the two reads.
+    private Task<Outcome<(T Items, IReadOnlyList<TagCount> Counts)>> WithTagCounts<T>(Func<Outcome<T>> read) =>
+        thread.Read<Outcome<(T, IReadOnlyList<TagCount>)>>(() =>
+        {
+            var items = read();
+            if (!items.Succeeded)
+            {
+                return items.Failure;
+            }
+
+            if (items.Value is null)
+            {
+                return Outcome<(T, IReadOnlyList<TagCount>)>.Of((items.Value!, []));
+            }
+
+            var counts = ItemTags.Counts(store);
+            return counts.Succeeded ? Outcome<(T, IReadOnlyList<TagCount>)>.Of((items.Value, counts.Value!)) : counts.Failure;
+        });
+
     /// <summary>The in-memory store state against which a listing's tag counts were read.</summary>
     internal (long Commits, long FileSteps) ListingVersion => (store.Commits, store.FileSteps);
 

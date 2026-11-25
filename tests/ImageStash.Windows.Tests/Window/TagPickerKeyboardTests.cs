@@ -47,7 +47,7 @@ public sealed class TagPickerKeyboardTests
             ShownWindow.Press(beta, Key.Enter);
         });
         await ShownWindow.Eventually(() => TrayDesktop.Get(() =>
-            field.Picker.Entries.FirstOrDefault() is { Tag: "beta", Marked: true }));
+            field.Picker.Entries.FirstOrDefault() is { Tag: "beta", Count: 3, Marked: true }));
 
         TrayDesktop.Run(() =>
         {
@@ -64,7 +64,7 @@ public sealed class TagPickerKeyboardTests
 
         TrayDesktop.Run(() => ShownWindow.Tap(FocusedEntry(shown, "beta"), Key.Enter));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() =>
-            field.Picker.Entries.LastOrDefault() is { Tag: "beta", Marked: false }));
+            field.Picker.Entries.LastOrDefault() is { Tag: "beta", Count: 1, Marked: false }));
         foreach (var item in targets)
         {
             Assert.IsEmpty(shown.TagsOf(item.Id));
@@ -102,14 +102,14 @@ public sealed class TagPickerKeyboardTests
             ShownWindow.Tap(shown.PreviewTagBox, Key.Down);
             ShownWindow.Tap(FocusedEntry(shown, "alpha"), Key.Enter);
         });
-        await ShownWindow.Eventually(() => TrayDesktop.Get(() => field.Picker.Entries.SequenceEqual([new("beta", false)])));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => field.Picker.Entries.SequenceEqual([new("beta", 1, false)])));
 
         TrayDesktop.Run(() =>
         {
             Assert.IsTrue(shown.Preview.IsOpen && field.Picker.IsOpen);
             ShownWindow.Tap(FocusedEntry(shown, "beta"), Key.Enter);
         });
-        await ShownWindow.Eventually(() => TrayDesktop.Get(() => field.Picker.Entries.SequenceEqual([new("beta", true)])));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => field.Picker.Entries.SequenceEqual([new("beta", 2, true)])));
         CollectionAssert.AreEqual(new[] { "beta" }, shown.TagsOf(picked.Id));
         CollectionAssert.AreEqual(new[] { "beta" }, shown.TagsOf(keeper.Id));
         Assert.AreEqual(0L, shown.Uses());

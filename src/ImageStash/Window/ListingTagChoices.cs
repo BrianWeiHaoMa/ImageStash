@@ -8,6 +8,13 @@ public sealed partial class Listing
 
     internal bool TagChoicePending => !order.Tags.PendingChoice.IsCompleted;
 
+    internal int TagChoiceRevision => order.Tags.Revision;
+
+    // The held chip order can use its last read. Every tag needs the current store version.
+    internal bool PickerTagsStale => store is { } opened && tagsVersion != opened.ListingVersion;
+
+    internal bool PickerTagsNeedRetry => loadFailed && PickerTagsStale;
+
     internal bool CanFilterTag(string tag, bool searching, bool lit) =>
         order.Tags.FilterAvailability(tag, Query, searching, lit) ?? !Settled;
 
@@ -70,8 +77,18 @@ public sealed partial class Listing
         using var acting = UserAct.Begin(SearchAct);
         lock (gate)
         {
-            if (chips != order.Tags || revision != chips.Revision || chips.LiveTag(tag) is not { } live)
+            if (chips != order.Tags || revision != chips.Revision)
             {
+                return Task.CompletedTask;
+            }
+
+            if (chips.LiveTag(tag) is not { } live)
+            {
+                if (fromPicker)
+                {
+                    failed(new Failure(SearchAct, $"#{tag}", "no item carries this tag any more"));
+                }
+
                 return Task.CompletedTask;
             }
 

@@ -30,7 +30,8 @@ public static class ToolTipRule
     /// </summary>
     public static void ShowWhenTrimmed(Control control, TextBlock shown, string? whole)
     {
-        void Decide() => ToolTip.SetTip(control, !string.IsNullOrWhiteSpace(whole) && shown.TextLayout.TextLines.Any(line => line.HasCollapsed) ? whole : null);
+        void Decide() => ToolTip.SetTip(control, shown.Bounds.Width > 0 && !string.IsNullOrWhiteSpace(whole)
+            && shown.TextLayout.TextLines.Any(line => line.HasCollapsed) ? whole : null);
         shown.PropertyChanged += (_, e) =>
         {
             if (e.Property == Visual.BoundsProperty || e.Property == TextBlock.TextProperty)

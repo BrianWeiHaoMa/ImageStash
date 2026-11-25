@@ -350,7 +350,7 @@ public sealed class TagFieldTests
         {
             var picker = shown.TagField.Field.Picker;
             Assert.IsTrue(picker.IsOpen, "on one click (G17)");
-            CollectionAssert.AreEqual(new[] { new TagPickerEntry("a", true), new TagPickerEntry("b", false), new TagPickerEntry("c", false) }, picker.Entries.ToList(), "every tag, the commonest first, the one it carries marked");
+            CollectionAssert.AreEqual(new[] { new TagPickerEntry("a", 3, true), new TagPickerEntry("b", 2, false), new TagPickerEntry("c", 1, false) }, picker.Entries.ToList(), "every tag, the commonest first, the one it carries marked");
             Assert.IsTrue(shown.TagBox.IsFocused, "focus stays in the box");
             ShownWindow.RaiseClick(ShownWindow.Entry(picker, "b"));
         });

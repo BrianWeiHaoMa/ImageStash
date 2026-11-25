@@ -45,7 +45,7 @@ public sealed class PreviewTagsTests
         TrayDesktop.Run(() =>
         {
             var picker = shown.PreviewTags.Field.Picker;
-            CollectionAssert.AreEquivalent(new[] { new TagPickerEntry("lion", true), new TagPickerEntry("stare", false) }, picker.Entries.ToList(), "the same list (G17)");
+            CollectionAssert.AreEquivalent(new[] { new TagPickerEntry("lion", 1, true), new TagPickerEntry("stare", 1, false) }, picker.Entries.ToList(), "the same list (G17)");
             ShownWindow.RaiseClick(ShownWindow.Entry(picker, "stare"));
         });
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.PreviewTags.Field.Tags.Contains("stare")));

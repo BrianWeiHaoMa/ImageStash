@@ -166,6 +166,7 @@ public sealed class Preview : Border
         tags.Removed += tag => _ = Act(ItemTags.RemoveAction, item => organising.RemoveTag([item], tag));
         // A pick in the list of every tag gives the tag or takes it off, as Add tag ▸ does (G17).
         tags.Picked += tag => _ = Act(Organising.TagAct, item => organising.ToggleTag([item], tag));
+        tags.Field.CatalogueRequested += () => _ = Refresh();
 
         handOff = new Button { Classes = { "accent" }, HorizontalAlignment = HorizontalAlignment.Left };
         AutomationProperties.SetAutomationId(handOff, "Handoff");
@@ -447,34 +448,40 @@ public sealed class Preview : Border
         }
 
         var read = ++reads;
-        var found = await store.Item(item.Id);
-        var uses = found.Value is null ? null : await store.UseHistory(item.Id);
-        var counts = found.Value is null ? null : await store.TagCounts();
-        var fileBytes = found.Value is { } current ? await Task.Run(() => PreviewFacts.FileLength(current.FilePath)) : null;
-        var layers = found.Value is { } edited ? await PreviewFacts.EditedLayers(store, edited) : null;
+        var found = await store.ItemWithTagCounts(item.Id);
+        var (current, counts) = found.Value;
+        var uses = current is null ? null : await store.UseHistory(item.Id);
+        var fileBytes = current is null ? null : await Task.Run(() => PreviewFacts.FileLength(current.FilePath));
+        var layers = current is null ? null : await PreviewFacts.EditedLayers(store, current);
         if (read != reads)
         {
             return;
         }
 
-        if (!found.Succeeded || uses is { Succeeded: false } || counts is { Succeeded: false } || layers is { Succeeded: false })
+        if (!found.Succeeded)
         {
             tags.Field.CatalogueReadFailed();
-            notices.Raise(found.Failure ?? uses?.Failure ?? counts?.Failure ?? layers!.Failure!);
+            notices.Raise(found.Failure);
             return;
         }
 
-        if (found.Value is not { } now)
+        if (current is null)
         {
             Close();
             return;
         }
 
-        Item = now;
-        name.Show(now);
-        tags.Show(Organising.CarriedTags([now]), counts!.Value!.Select(count => count.Tag).ToList());
-        picture.Show(now);
-        stated = (now, fileBytes, uses!.Value!, layers!.Value!);
+        tags.Show(Organising.CarriedTags([current]), counts);
+        if (uses is { Succeeded: false } || layers is { Succeeded: false })
+        {
+            notices.Raise(uses?.Failure ?? layers!.Failure!);
+            return;
+        }
+
+        Item = current;
+        name.Show(current);
+        picture.Show(current);
+        stated = (current, fileBytes, uses!.Value!, layers!.Value!);
         RestateTimes();
         Changed?.Invoke();
     }

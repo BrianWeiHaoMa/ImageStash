@@ -408,7 +408,7 @@ public sealed class CaptureHidingTests
         TrayDesktop.Run(() =>
         {
             shown.Notices.Hover(notice, over: true);
-            shown.ChipRow.Picker.Open(shown.Search, [new TagPickerEntry("hovered", false)], _ => { });
+            shown.ChipRow.Picker.Open(shown.Search, [new TagPickerEntry("hovered", 1, false)], _ => { });
         });
         TrayDesktop.Run(() => Assert.IsTrue(shown.ChipRow.Picker.IsOpen, "the list open when the capture starts"));
 

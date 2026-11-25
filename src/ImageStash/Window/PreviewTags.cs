@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
+using ImageStash.Store;
 
 namespace ImageStash.Window;
 
@@ -75,7 +76,7 @@ public sealed class PreviewTags : Grid
     /// Shows <paramref name="tags"/>, the item's, each with its ×, and takes the existing tags the suggestions and the list
     /// come from; the list marks the item's tags, since its one item carries every one of them (G17).
     /// </summary>
-    public void Show(IReadOnlyList<string> tags, IReadOnlyList<string>? existingTags) => Field.Show(tags, existingTags, tags);
+    public void Show(IReadOnlyList<string> tags, IReadOnlyList<TagCount>? existingTags) => Field.Show(tags, existingTags, tags);
 
     /// <summary>Empties the box and closes the list, as the preview opening on another item or closing does.</summary>
     public void Clear()

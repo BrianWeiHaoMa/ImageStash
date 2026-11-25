@@ -147,9 +147,9 @@ public sealed class TagFieldKeyboardWindowTests
 
         PressKey(shown, Key.Down);
         await PickerFocus(picker, "amber");
-        TrayDesktop.Run(() => CollectionAssert.AreEqual(new[] { new TagPickerEntry("amber", false), new TagPickerEntry("blue", true) }, picker.Entries.ToArray()));
+        TrayDesktop.Run(() => CollectionAssert.AreEqual(new[] { new TagPickerEntry("amber", 3, false), new TagPickerEntry("blue", 3, true) }, picker.Entries.ToArray()));
         PressKey(shown, Key.Enter, picker: picker);
-        await Eventually(() => TrayDesktop.Get(() => picker.IsOpen && picker.Entries.SequenceEqual([new("amber", true), new("blue", true)])
+        await Eventually(() => TrayDesktop.Get(() => picker.IsOpen && picker.Entries.SequenceEqual([new("amber", 4, true), new("blue", 3, true)])
             && field.Tags.SequenceEqual(["amber", "blue"])));
         await PickerFocus(picker, "amber");
         CollectionAssert.AreEqual(new[] { "amber", "blue" }, shown.TagsOf(items[0].Id));
@@ -158,7 +158,7 @@ public sealed class TagFieldKeyboardWindowTests
         PressKey(shown, Key.Down, picker: picker);
         await PickerFocus(picker, "blue");
         PressKey(shown, Key.Enter, picker: picker);
-        await Eventually(() => TrayDesktop.Get(() => picker.IsOpen && picker.Entries.SequenceEqual([new("amber", true), new("blue", false)])
+        await Eventually(() => TrayDesktop.Get(() => picker.IsOpen && picker.Entries.SequenceEqual([new("amber", 4, true), new("blue", preview ? 2 : 1, false)])
             && field.Tags.SequenceEqual(["amber"])));
         await PickerFocus(picker, "blue");
         PressKey(shown, Key.Up, picker: picker);

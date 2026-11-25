@@ -2,6 +2,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.VisualTree;
+using ImageStash.Store;
 using ImageStash.Tests.Support;
 using ImageStash.Window;
 
@@ -32,10 +33,10 @@ public sealed class TagFieldTests
     [TestMethod]
     public void TheListHoldsEveryExistingTagInTheStoresOrderTheOnesEveryItemCarriesMarked()
     {
-        var listed = TagField.Listed(["reaction", "cat", "Dog"], ["DOG", "cat"]);
+        var listed = TagPickerEntry.FromCounts([new("reaction", 5), new("cat", 3), new("Dog", 2)], ["DOG", "cat"]);
 
         CollectionAssert.AreEqual(
-            new[] { new TagPickerEntry("reaction", false), new TagPickerEntry("cat", true), new TagPickerEntry("Dog", true) },
+            new[] { new TagPickerEntry("reaction", 5, false), new TagPickerEntry("cat", 3, true), new TagPickerEntry("Dog", 2, true) },
             listed.ToList(),
             "every tag, not the suggestions' few, and a tag every item carries marked ignoring case (G17)");
     }
@@ -141,7 +142,7 @@ public sealed class TagFieldTests
     public void EmptyBackspaceHighlightsTheLastTagAndOnlyAnotherPressRemovesIt() => ControlThread.Run(() =>
     {
         var (field, box) = Field();
-        field.Show(["cat", "dog"], ["cat", "dog"], ["cat", "dog"]);
+        field.Show(["cat", "dog"], [new("cat", 1), new("dog", 1)], ["cat", "dog"]);
         var removed = new List<string>();
         object? reveal = null;
         field.Removed += removed.Add;
@@ -280,7 +281,7 @@ public sealed class TagFieldTests
     private static (TagField Field, TextBox Box) Field(params string[] existing)
     {
         var field = new TagField();
-        field.Show([], existing, []);
+        field.Show([], existing.Select(tag => new TagCount(tag, 1)).ToList(), []);
         return (field, field.GetVisualDescendants().OfType<TextBox>().Single());
     }
 

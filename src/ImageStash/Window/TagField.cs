@@ -36,10 +36,12 @@ public sealed class TagField : StackPanel
     private readonly Button everyTag;
     private readonly Grid pickerAnchor;
     private readonly WrapPanel suggestionRow;
-    private IReadOnlyList<string>? existing = [];
+    private IReadOnlyList<TagCount>? existing = [];
     private IReadOnlyList<string> marked = [];
     private int chosen = -1;
-    private bool openPickerAfterRead;
+    // True for a keyboard request, false for a pointer request, null while no open is waiting.
+    private bool? openPickerAfterRead;
+    private bool catalogueNeedsRetry;
     private readonly PressOnce backspace = new();
     private Border? armedRemoval;
 
@@ -59,7 +61,7 @@ public sealed class TagField : StackPanel
         box.TextChanging += (_, _) =>
         {
             // Typing drops the choice, and its highlight with it: a suggestion lit is one Enter takes (G17).
-            openPickerAfterRead = false;
+            openPickerAfterRead = null;
             ClearRemovalHighlight();
             Choose(-1);
             ShowSuggestions();
@@ -68,7 +70,7 @@ public sealed class TagField : StackPanel
         box.LostFocus += (_, _) =>
         {
             backspace.Released();
-            openPickerAfterRead = false;
+            openPickerAfterRead = null;
             ClearRemovalHighlight();
         };
         // Not focusable, so a click leaves focus in the box and the field open (G17).
@@ -93,6 +95,8 @@ public sealed class TagField : StackPanel
 
     /// <summary>A pick in the list of every tag: that tag is to be given to every item, or taken off all of them when all carry it (G17).</summary>
     public event Action<string>? Picked;
+
+    internal event Action? CatalogueRequested;
 
     /// <summary>Esc, with no list open: nothing is committed.</summary>
     public event Action? Cancelled;
@@ -132,16 +136,6 @@ public sealed class TagField : StackPanel
         source is Visual focused && (this.IsVisualAncestorOf(focused) || Picker.Contains(focused));
 
     /// <summary>
-    /// Every existing tag in <paramref name="existingTags"/>' order, the commonest first as the store answers them, those
-    /// in <paramref name="markedTags"/>, the tags every item carries, marked, in any spelling (G17).
-    /// </summary>
-    public static IReadOnlyList<TagPickerEntry> Listed(IEnumerable<string> existingTags, IEnumerable<string> markedTags)
-    {
-        var marks = markedTags.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return existingTags.Select(tag => new TagPickerEntry(tag, marks.Contains(tag))).ToList();
-    }
-
-    /// <summary>
     /// The existing tags, which suggestions come from, but for the tags the field shows, which are carried already (G17);
     /// for a word being typed, those containing it, ignoring case and its leading <c>#</c>s as a tag drops them, the ones
     /// that start with it first, then by spelling; at most <see cref="MostSuggestions"/>. Only existing tags' spellings
@@ -172,8 +166,9 @@ public sealed class TagField : StackPanel
     /// marks in the list <paramref name="carriedByAll"/>, the tags every item carries. A null catalogue is still being read.
     /// An open list follows at once.
     /// </summary>
-    public void Show(IReadOnlyList<string> tags, IReadOnlyList<string>? existingTags, IReadOnlyList<string> carriedByAll)
+    public void Show(IReadOnlyList<string> tags, IReadOnlyList<TagCount>? existingTags, IReadOnlyList<string> carriedByAll)
     {
+        catalogueNeedsRetry = false;
         existing = existingTags;
         marked = carriedByAll;
         if (!tags.SequenceEqual(Tags))
@@ -204,7 +199,7 @@ public sealed class TagField : StackPanel
     public void Clear()
     {
         edits++;
-        openPickerAfterRead = false;
+        openPickerAfterRead = null;
         ClearRemovalHighlight();
         box.Text = "";
         Choose(-1);
@@ -213,11 +208,11 @@ public sealed class TagField : StackPanel
 
     internal void CatalogueReadFailed()
     {
-        if (existing is null)
-        {
-            existing = [];
-            openPickerAfterRead = false;
-        }
+        existing = null;
+        catalogueNeedsRetry = true;
+        openPickerAfterRead = null;
+        ShowSuggestions();
+        ShowEveryTag();
     }
 
     /// <summary>
@@ -249,7 +244,11 @@ public sealed class TagField : StackPanel
     public bool FocusBox() => box.Focus();
 
     /// <summary>Closes the list of every tag, as the field going away does.</summary>
-    public void CloseList() => Picker.Close();
+    public void CloseList()
+    {
+        openPickerAfterRead = null;
+        Picker.Close();
+    }
 
     /// <summary>
     /// Enter's commit: <see cref="EnterCommits"/> raised as <see cref="Committed"/>; also a click on the preview's ‹ or ›,
@@ -262,7 +261,7 @@ public sealed class TagField : StackPanel
         ClearRemovalHighlight();
         if (Picker.IsOpen)
         {
-            Picker.Close();
+            CloseList();
         }
         else
         {
@@ -382,31 +381,43 @@ public sealed class TagField : StackPanel
     {
         if (Picker.IsOpen)
         {
-            Picker.Close();
+            CloseList();
         }
         else
         {
-            OpenList();
+            OpenList(focusEntry: false);
         }
     }
-
-    private void OpenList() => Picker.Open(everyTag, Listed(existing ?? [], marked), tag => Picked?.Invoke(tag));
 
     private void OpenListFromBox()
     {
         ClearRemovalHighlight();
+        OpenList(focusEntry: true);
+    }
+
+    private void OpenList(bool focusEntry)
+    {
         if (existing is null)
         {
-            openPickerAfterRead = true;
+            openPickerAfterRead = focusEntry;
+            if (catalogueNeedsRetry)
+            {
+                catalogueNeedsRetry = false;
+                CatalogueRequested?.Invoke();
+            }
+
             return;
         }
 
         if (!Picker.IsOpen)
         {
-            OpenList();
+            Picker.Open(everyTag, TagPickerEntry.FromCounts(existing, marked), tag => Picked?.Invoke(tag));
         }
 
-        Picker.FocusFirstEntry(box);
+        if (focusEntry)
+        {
+            Picker.FocusFirstEntry(box);
+        }
     }
 
     /// <summary>The button while nothing is typed and there is a tag to pick (G17); typing hides it and closes its list, and an open list shows what the field now shows.</summary>
@@ -419,17 +430,16 @@ public sealed class TagField : StackPanel
         }
         else if (Picker.IsOpen)
         {
-            Picker.Show(Listed(existing ?? [], marked));
+            Picker.Show(TagPickerEntry.FromCounts(existing ?? [], marked));
         }
 
-        pickerAnchor.IsVisible = available;
-        everyTag.IsVisible = available;
-        if (openPickerAfterRead && existing is not null)
+        pickerAnchor.IsVisible = everyTag.IsVisible = available || Text.Length == 0 && catalogueNeedsRetry;
+        if (openPickerAfterRead is { } focusEntry && existing is not null)
         {
-            openPickerAfterRead = false;
-            if (available && box.IsFocused)
+            openPickerAfterRead = null;
+            if (available && (!focusEntry || box.IsFocused))
             {
-                OpenListFromBox();
+                OpenList(focusEntry);
             }
         }
     }
@@ -445,7 +455,7 @@ public sealed class TagField : StackPanel
 
     private void ShowSuggestions()
     {
-        var now = SuggestionsFor(Text, existing ?? [], Tags);
+        var now = SuggestionsFor(Text, (existing ?? []).Select(count => count.Tag), Tags);
         if (now.SequenceEqual(Suggestions))
         {
             return;
@@ -578,6 +588,7 @@ public sealed class TagFieldOverlay : Border
 
         Field.Committed += text => _ = Commit(text);
         Field.Picked += tag => _ = Toggle(tag);
+        Field.CatalogueRequested += () => _ = Read();
         Field.Cancelled += () => Close(giveFocusBack: true);
         Field.Removed += tag => _ = Remove(tag);
         listing.Changed += () =>
@@ -700,22 +711,22 @@ public sealed class TagFieldOverlay : Border
 
         var read = ++reads;
         var ids = items.Select(item => item.Id).ToHashSet();
-        var all = await store.All();
-        var counts = await store.TagCounts();
+        var loaded = await store.AllWithTagCounts();
         if (read != reads)
         {
             return;
         }
 
-        if (!all.Succeeded || !counts.Succeeded)
+        if (!loaded.Succeeded)
         {
             Field.CatalogueReadFailed();
-            notices.Raise(all.Failure ?? counts.Failure!);
+            notices.Raise(loaded.Failure);
             return;
         }
 
-        var present = all.Value!.Where(item => ids.Contains(item.Id)).ToList();
-        Field.Show(Organising.CarriedTags(present), counts.Value!.Select(count => count.Tag).ToList(), CarriedByAll(present));
+        var (all, counts) = loaded.Value;
+        var present = all.Where(item => ids.Contains(item.Id)).ToList();
+        Field.Show(Organising.CarriedTags(present), counts, CarriedByAll(present));
     }
 
     private void FocusMoved(object? sender, FocusChangedEventArgs e)

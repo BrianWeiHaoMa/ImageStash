@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -10,13 +11,24 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.TextFormatting;
+using Avalonia.Utilities;
 using Avalonia.VisualTree;
 using ImageStash.Look;
+using ImageStash.Store;
 
 namespace ImageStash.Window;
 
-/// <summary>One tag in a <see cref="TagPicker"/>, with a check mark while <paramref name="Marked"/>.</summary>
-public sealed record TagPickerEntry(string Tag, bool Marked);
+/// <summary>A tag's stash-wide carrier count and whether the opener marks it.</summary>
+public sealed record TagPickerEntry(string Tag, int Count, bool Marked)
+{
+    public static IReadOnlyList<TagPickerEntry> FromCounts(IEnumerable<TagCount> counts, IEnumerable<string> markedTags)
+    {
+        var marks = markedTags.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return counts.Select(count => new TagPickerEntry(count.Tag, count.Items, marks.Contains(count.Tag))).ToList();
+    }
+
+    internal string CountText => Count.ToString(CultureInfo.InvariantCulture);
+}
 
 /// <summary>
 /// The shared tag list (G4, G17): a popup of the window, its entries in the order the opener gives, scrolling inside
@@ -26,8 +38,8 @@ public sealed record TagPickerEntry(string Tag, bool Marked);
 /// would have, and the window going away close it. It never reads the store and never changes an item or the query:
 /// the opener decides what a pick means, and tells it what to show afterwards. Whoever holds one keeps it in its own
 /// logical tree, so it takes the window's theme, and keeps the anchor in the visual tree while it is open, since a
-/// popup closes with its anchor. It stands as the item menu's Add tag ▸ list does: its scroll bar at its edge, its words
-/// clear of the bar, and as wide, from the moment it opens, as its widest name needs.
+/// popup closes with its anchor. The card measures the names and counts before it opens, keeping both clear of the
+/// scrollbar. Counts align at the end of the row.
 /// </summary>
 public sealed class TagPicker : Popup
 {
@@ -40,18 +52,21 @@ public sealed class TagPicker : Popup
     private const double MarkColumn = 20;
     private const double EntryLeft = 8;
     private const double EntryRight = 24 + 11;
+    private const double CountGap = 10;
     private const double Edge = 1;
     private const double NarrowestCard = 180;
     private const double WidestCard = 320;
 
-    private readonly ObservableCollection<TagPickerEntry> shown = [];
+    private readonly ObservableCollection<Row> rows = [];
+    private readonly Dictionary<string, double> measuredText = new(StringComparer.Ordinal);
     private readonly ItemsControl items;
     private readonly ScrollViewer list;
     private readonly Border card;
     private Action<string> picked = _ => { };
     private Control? keyboardReturn;
     private Button? keyboardEntry;
-    private double widestWords;
+    private double widestName;
+    private double widestCount;
 
     /// <summary>The window the list shows in while it is open, whose scaling its width follows; null otherwise.</summary>
     private TopLevel? openIn;
@@ -64,9 +79,9 @@ public sealed class TagPicker : Popup
         // Made as they scroll into view: every tag of a stash may be thousands (E4).
         items = new ItemsControl
         {
-            ItemsSource = shown,
+            ItemsSource = rows,
             ItemsPanel = new FuncTemplate<Panel?>(() => new VirtualizingStackPanel()),
-            ItemTemplate = new FuncDataTemplate<TagPickerEntry>((entry, _) => EntryButton(entry)),
+            ItemTemplate = new FuncDataTemplate<Row>((row, _) => row is null ? null : new RowButton(row, tag => picked(tag))),
         };
         list = new ScrollViewer
         {
@@ -90,13 +105,13 @@ public sealed class TagPicker : Popup
     }
 
     /// <summary>The entries shown, in order.</summary>
-    public IReadOnlyList<TagPickerEntry> Entries => shown;
+    public IReadOnlyList<TagPickerEntry> Entries { get; private set; } = [];
 
     internal bool Contains(Visual target) => ReferenceEquals(target, card) || card.IsVisualAncestorOf(target);
 
     internal void FocusFirstEntry(Control returnTo)
     {
-        if (IsOpen && shown.Count > 0)
+        if (IsOpen && Entries.Count > 0)
         {
             keyboardReturn = returnTo;
             FocusEntry(0);
@@ -106,8 +121,7 @@ public sealed class TagPicker : Popup
     /// <summary>
     /// Opens beside <paramref name="anchor"/> showing <paramref name="entries"/>; a click on one calls
     /// <paramref name="onPick"/> with its tag. A press on the anchor is left to it, so it can close the list. Its width is
-    /// found here, from the widest of every entry's words, and kept while it stays open, made again only for the scaling
-    /// of the display it shows on.
+    /// found from the names and counts before opening, and grows if a later entry needs more room.
     /// </summary>
     public void Open(Control anchor, IReadOnlyList<TagPickerEntry> entries, Action<string> onPick)
     {
@@ -115,10 +129,15 @@ public sealed class TagPicker : Popup
         PlacementTarget = anchor;
         OverlayInputPassThroughElement = anchor;
         list.MaxHeight = TagListHeight.For(anchor);
-        widestWords = WidestWords(entries);
-        card.Width = CardWidth(widestWords, TopLevel.GetTopLevel(anchor)?.RenderScaling ?? 1);
+        measuredText.Clear();
+        widestName = widestCount = 0;
+        if (TopLevel.GetTopLevel(anchor) is { } host)
+        {
+            MeasureEntries(entries, host.RenderScaling);
+        }
+
         Show(entries);
-        Open();
+        SetCurrentValue(IsOpenProperty, true);
         // The list shows in a window of its own beside its anchor, which may lie on another display than the opener's
         // window, at another scaling: its width follows that window's.
         FollowScaling(TopLevel.GetTopLevel(card));
@@ -136,7 +155,7 @@ public sealed class TagPicker : Popup
         if (window is not null)
         {
             window.ScalingChanged += Rescaled;
-            Rescaled(window, EventArgs.Empty);
+            MeasureEntries(Entries, window.RenderScaling);
         }
     }
 
@@ -144,25 +163,30 @@ public sealed class TagPicker : Popup
     {
         if (openIn is { } window)
         {
-            card.Width = CardWidth(widestWords, window.RenderScaling);
+            card.Width = CardWidth(widestName, widestCount, window.RenderScaling);
         }
     }
 
     /// <summary>
-    /// Shows <paramref name="entries"/> instead, the state after a pick: the list keeps its scroll where the tags are the
-    /// same ones, only the marks that changed being redrawn.
+    /// Shows the current names, counts and marks. A row whose place stays keeps its button through a refresh.
     /// </summary>
     public void Show(IReadOnlyList<TagPickerEntry> entries)
     {
-        if (entries.SequenceEqual(shown))
+        if (entries.SequenceEqual(Entries))
         {
             return;
         }
 
+        if (openIn is not null)
+        {
+            MeasureEntries(entries, openIn.RenderScaling);
+        }
+
         var focusedTag = FocusedEntry?.Tag as string;
         var index = focusedTag is not null ? IndexOf(focusedTag) : -1;
-        var sameTags = entries.Select(entry => entry.Tag).SequenceEqual(shown.Select(entry => entry.Tag));
-        var replacingFocus = index >= 0 && (!sameTags || entries[index] != shown[index]);
+        var sameTags = entries.Select(entry => entry.Tag).SequenceEqual(Entries.Select(entry => entry.Tag));
+        var replacingFocus = index >= 0 && !sameTags;
+        Entries = entries;
         if (replacingFocus)
         {
             // Recycling a focused row can send focus out of the field. Keep it in this popup during the refresh.
@@ -174,25 +198,22 @@ public sealed class TagPicker : Popup
         {
             for (var i = 0; i < entries.Count; i++)
             {
-                if (entries[i] != shown[i])
-                {
-                    shown[i] = entries[i];
-                }
+                rows[i].Entry = entries[i];
             }
         }
         else
         {
-            shown.Clear();
+            rows.Clear();
             foreach (var entry in entries)
             {
-                shown.Add(entry);
+                rows.Add(new Row(entry));
             }
         }
 
-        if (replacingFocus && shown.Count > 0)
+        if (replacingFocus && entries.Count > 0)
         {
             var sameTag = IndexOf(focusedTag!);
-            FocusEntry(sameTag >= 0 ? sameTag : Math.Min(index, shown.Count - 1));
+            FocusEntry(sameTag >= 0 ? sameTag : Math.Min(index, entries.Count - 1));
         }
 
         card.Focusable = false;
@@ -204,9 +225,9 @@ public sealed class TagPicker : Popup
 
     private int IndexOf(string tag)
     {
-        for (var i = 0; i < shown.Count; i++)
+        for (var i = 0; i < Entries.Count; i++)
         {
-            if (StringComparer.OrdinalIgnoreCase.Equals(shown[i].Tag, tag))
+            if (StringComparer.OrdinalIgnoreCase.Equals(Entries[i].Tag, tag))
             {
                 return i;
             }
@@ -270,67 +291,115 @@ public sealed class TagPicker : Popup
         else if (e.KeyModifiers == KeyModifiers.None && e.Key is Key.Up or Key.Down && FocusedEntry?.Tag is string tag)
         {
             var index = IndexOf(tag);
-            FocusEntry(Math.Clamp(index + (e.Key == Key.Up ? -1 : 1), 0, shown.Count - 1));
+            FocusEntry(Math.Clamp(index + (e.Key == Key.Up ? -1 : 1), 0, Entries.Count - 1));
             e.Handled = true;
         }
     }
 
     /// <summary>
-    /// The card's width for words <paramref name="widestWords"/> wide at <paramref name="scaling"/>, between the card's
-    /// narrowest and widest (a wider name is trimmed): in physical pixels, the entry's fixed measures as the layout rounds
-    /// each to the pixel grid (to the nearest, halves to even: at 1.5 the card's edges take 2 pixels each and the words'
-    /// right margin 52) beside the words rounded up to a whole pixel. Their sum in layout units alone falls a fraction of a
-    /// pixel short of the words at some fractional scalings, and the widest name then shows trimmed.
+    /// Round each fixed measure the same way as layout, with each text column rounded up to a whole physical pixel.
+    /// Adding up layout units first can leave either column a fraction of a pixel short at fractional scaling.
     /// </summary>
-    public static double CardWidth(double widestWords, double scaling)
+    public static double CardWidth(double nameWidth, double countWidth, double scaling)
     {
         double Rounded(double length) => Math.Round(length * scaling, MidpointRounding.ToEven);
-        var pixels = Rounded(Edge) + Rounded(EntryLeft) + Rounded(MarkColumn) + Math.Ceiling(widestWords * scaling) + Rounded(EntryRight) + Rounded(Edge);
+        var pixels = 2 * Rounded(Edge) + Rounded(EntryLeft) + Rounded(MarkColumn) + Math.Ceiling(nameWidth * scaling)
+            + Rounded(CountGap) + Math.Ceiling(countWidth * scaling) + Rounded(EntryRight);
         return Math.Clamp(pixels / scaling, NarrowestCard, WidestCard);
     }
 
     /// <summary>
-    /// The widest of <paramref name="entries"/>' words, measured each: the entries themselves are made only as they scroll
-    /// into view (E4), so the panel alone would widen the card as a longer name shows.
+    /// The list sizes from text alone. The row controls are made as they scroll into view (E4).
     /// </summary>
-    private double WidestWords(IReadOnlyList<TagPickerEntry> entries)
+    private void MeasureEntries(IReadOnlyList<TagPickerEntry> entries, double scaling)
     {
         var typeface = new Typeface(TextElement.GetFontFamily(list), TextElement.GetFontStyle(list), TextElement.GetFontWeight(list), TextElement.GetFontStretch(list));
         var size = TextElement.GetFontSize(list);
-        var widest = 0.0;
         foreach (var entry in entries)
         {
-            using var words = new TextLayout(entry.Tag, typeface, size, null);
-            widest = Math.Max(widest, words.WidthIncludingTrailingWhitespace);
+            widestName = Math.Max(widestName, Measure(entry.Tag));
+            widestCount = Math.Max(widestCount, Measure(entry.CountText));
         }
 
-        return widest;
+        card.Width = CardWidth(widestName, widestCount, scaling);
+
+        double Measure(string text)
+        {
+            if (!measuredText.TryGetValue(text, out var width))
+            {
+                using var layout = new TextLayout(text, typeface, size, null);
+                measuredText[text] = width = layout.WidthIncludingTrailingWhitespace;
+            }
+
+            return width;
+        }
     }
 
-    private Button EntryButton(TagPickerEntry? entry)
+    private sealed class RowButton : Button, IWeakEventSubscriber<AvaloniaPropertyChangedEventArgs>
     {
-        var tag = entry?.Tag ?? "";
-        var mark = IconGlyph.Of("", 12);
-        mark.Opacity = entry is { Marked: true } ? 1 : 0;
-        var words = new TextBlock { Text = tag, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-        Grid.SetColumn(words, 1);
-        var button = new Button
+        private readonly TextBlock mark = IconGlyph.Of("", 12);
+        private readonly TextBlock count = new()
         {
-            Tag = tag,
-            Content = new Grid { ColumnDefinitions = [new ColumnDefinition(MarkColumn, GridUnitType.Pixel), new ColumnDefinition(1, GridUnitType.Star)], Children = { mark, words } },
-            // FocusEntry enables focus for the keyboard's current row. Pointer-only lists keep the opener's focus.
-            Focusable = false,
-            IsTabStop = false,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            Background = Brushes.Transparent,
-            BorderThickness = default,
-            Height = 30,
-            Padding = new Thickness(EntryLeft, 0, EntryRight, 0),
+            TextAlignment = TextAlignment.Right,
+            Opacity = 0.7,
+            Margin = new Thickness(CountGap, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
         };
-        AutomationProperties.SetName(button, tag);
-        ToolTipRule.ShowWhenTrimmed(words, words, tag);
-        button.Click += (_, _) => picked(tag);
-        return button;
+
+        public RowButton(Row row, Action<string> pick)
+        {
+            var tag = row.Entry.Tag;
+            Tag = tag;
+            var words = new TextBlock { Text = tag, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+            Grid.SetColumn(words, 1);
+            Grid.SetColumn(count, 2);
+            Content = new Grid
+            {
+                ColumnDefinitions = [new ColumnDefinition(MarkColumn, GridUnitType.Pixel), new ColumnDefinition(1, GridUnitType.Star), new ColumnDefinition(1, GridUnitType.Auto)],
+                Children = { mark, words, count },
+            };
+            // FocusEntry enables focus for the keyboard's current row. Pointer-only lists keep the opener's focus.
+            Focusable = false;
+            IsTabStop = false;
+            HorizontalAlignment = HorizontalAlignment.Stretch;
+            HorizontalContentAlignment = HorizontalAlignment.Stretch;
+            Background = Brushes.Transparent;
+            BorderThickness = default;
+            Height = 30;
+            Padding = new Thickness(EntryLeft, 0, EntryRight, 0);
+
+            AutomationProperties.SetName(this, tag);
+            ToolTipRule.ShowWhenTrimmed(words, words, tag);
+            Click += (_, _) => pick(tag);
+            Show(row.Entry);
+            // A row model outlives the controls virtualization discards as it scrolls.
+            WeakEvents.AvaloniaPropertyChanged.Subscribe(row, this);
+        }
+
+        protected override Type StyleKeyOverride => typeof(Button);
+
+        void IWeakEventSubscriber<AvaloniaPropertyChangedEventArgs>.OnEvent(object? sender, WeakEvent ev, AvaloniaPropertyChangedEventArgs e) =>
+            Show(e.GetNewValue<TagPickerEntry>());
+
+        private void Show(TagPickerEntry entry)
+        {
+            mark.Opacity = entry.Marked ? 1 : 0;
+            count.Text = entry.CountText;
+            AutomationProperties.SetHelpText(this, entry.CountText + (entry.Count == 1 ? " item" : " items"));
+        }
+    }
+
+    private sealed class Row(TagPickerEntry entry) : AvaloniaObject
+    {
+        public static readonly DirectProperty<Row, TagPickerEntry> EntryProperty =
+            AvaloniaProperty.RegisterDirect<Row, TagPickerEntry>(nameof(Entry), row => row.Entry);
+
+        private TagPickerEntry current = entry;
+
+        public TagPickerEntry Entry
+        {
+            get => current;
+            set => SetAndRaise(EntryProperty, ref current, value);
+        }
     }
 }
