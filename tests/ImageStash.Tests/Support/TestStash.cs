@@ -421,14 +421,14 @@ public sealed class TestStash : IDisposable
         return (gone, marked, listed);
     }
 
-    /// <summary>Every file in the stash folder but the store's with a hash of its bytes, then every row of <c>uses</c>, read with the store closed.</summary>
+    /// <summary>Every file in the stash folder but the store's with a hash of its bytes, then every row of <c>uses</c>, read between store calls.</summary>
     public List<string> FilesAndUses() =>
         [
             .. Directory.GetFiles(Folder.Root, "*", SearchOption.AllDirectories)
                 .Where(path => !System.IO.Path.GetFileName(path).StartsWith(StashFolder.StoreFileName))
                 .Order()
                 .Select(path => $"{System.IO.Path.GetRelativePath(Folder.Root, path)} {Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)))}"),
-            .. SqlQuery("SELECT item_id, used_at FROM uses ORDER BY rowid", r => $"use {r.GetInt64(0)} {r.GetInt64(1)}"),
+            .. SqlQueryWhileOpen("SELECT item_id, used_at FROM uses ORDER BY rowid", r => $"use {r.GetInt64(0)} {r.GetInt64(1)}"),
         ];
 
     /// <summary>The failures among <paramref name="outcomes"/>, joined, for an assertion's message.</summary>

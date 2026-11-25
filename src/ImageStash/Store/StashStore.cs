@@ -211,16 +211,70 @@ public sealed class StashStore : IDisposable
     /// Gives each item the tags <paramref name="text"/> commits, one per word (G17); one outcome per item, in order, an
     /// item no longer in the stash named as it was handed in.
     /// </summary>
-    public Task<IReadOnlyList<Outcome>> AddTag(IReadOnlyList<StashItem> items, string text) => thread.Run(() => ItemTags.Add(store, items, text));
+    public async Task<IReadOnlyList<Outcome>> AddTag(IReadOnlyList<StashItem> items, string text) =>
+        (await AddTagWithChanges(items, text).ConfigureAwait(false)).Outcomes;
 
-    internal Task<IReadOnlyList<Outcome>> AddExistingTag(IReadOnlyList<StashItem> items, string tag) =>
+    internal Task<ItemFactResult> AddTagWithChanges(IReadOnlyList<StashItem> items, string text) =>
+        thread.Run(() => ItemTags.Add(store, items, text));
+
+    internal Task<ItemFactResult> AddExistingTag(IReadOnlyList<StashItem> items, string tag) =>
         thread.Run(() => ItemTags.AddExisting(store, items, tag));
 
     /// <summary>Takes <paramref name="tag"/>, in any spelling, off each item; one outcome per item, in order.</summary>
-    public Task<IReadOnlyList<Outcome>> RemoveTag(IReadOnlyList<StashItem> items, string tag) => thread.Run(() => ItemTags.Remove(store, items, tag));
+    public async Task<IReadOnlyList<Outcome>> RemoveTag(IReadOnlyList<StashItem> items, string tag) =>
+        (await RemoveTagWithChanges(items, tag).ConfigureAwait(false)).Outcomes;
+
+    internal Task<ItemFactResult> RemoveTagWithChanges(IReadOnlyList<StashItem> items, string tag) =>
+        thread.Run(() => ItemTags.Remove(store, items, tag));
 
     /// <summary>Sets the favorite flag on each item as given, never toggling it; one outcome per item, in order.</summary>
-    public Task<IReadOnlyList<Outcome>> SetFavorite(IReadOnlyList<StashItem> items, bool favorite) => thread.Run(() => ItemFavorite.Set(store, items, favorite));
+    public async Task<IReadOnlyList<Outcome>> SetFavorite(IReadOnlyList<StashItem> items, bool favorite) =>
+        (await SetFavoriteWithChanges(items, favorite).ConfigureAwait(false)).Outcomes;
+
+    internal Task<ItemFactResult> SetFavoriteWithChanges(IReadOnlyList<StashItem> items, bool favorite) =>
+        thread.Run(() => ItemFavorite.Set(store, items, favorite));
+
+    /// <summary>Reverses the changed facts of the issuing store's result in one transaction.</summary>
+    internal Task<ItemFactResult> UndoItemFacts(ItemFactResult result)
+    {
+        const string closed = "the stash is closed";
+        if (!result.IssuedBy(store))
+        {
+            return Task.FromResult(result.RefuseUndo("the change belongs to another stash"));
+        }
+
+        try
+        {
+            // Closing can begin before this call is queued or while it waits for the store's thread.
+            return thread.Run(() => Volatile.Read(ref disposed) != 0 ? result.RefuseUndo(closed) : ReverseItemFacts(result));
+        }
+        catch (InvalidOperationException) when (Volatile.Read(ref disposed) != 0)
+        {
+            return Task.FromResult(result.RefuseUndo(closed));
+        }
+    }
+
+    private ItemFactResult ReverseItemFacts(ItemFactResult result)
+    {
+        if (result.Changes.IsEmpty)
+        {
+            return new ItemFactResult(store, result.UndoAction, [], []);
+        }
+
+        var byId = result.Changes.ToDictionary(change => change.Item.Id);
+        var targets = result.Changes.Select(change => change.Item).ToArray();
+        return ItemFactChange.Apply(store, result.UndoAction, result.UndoAction, targets, listed =>
+        {
+            var restoring = listed.SelectMany(item => byId[item.Id].RemovedTags).ToArray();
+            var spellings = ItemTags.Spellings(store, restoring);
+            return [.. listed.Select(item => Reverse(item, byId[item.Id], spellings)).OfType<ItemFactDelta>()];
+        });
+
+        ItemFactDelta? Reverse(ItemFactTarget item, ItemFactDelta change, IReadOnlyDictionary<string, string> spellings) =>
+            change.PreviousFavorite is { } favorite
+                ? ItemFavorite.SetFlag(store, item, favorite)
+                : ItemTags.ChangeMemberships(store, item, [.. change.RemovedTags.Select(tag => spellings[tag])], change.AddedTags);
+    }
 
     /// <summary>Records one use at <paramref name="at"/> on each item, after the handoff, copy or drag has completed (G10); answers the items no longer in the stash, which got none.</summary>
     public Task<Outcome<IReadOnlyList<StashItem>>> RecordUses(IReadOnlyList<StashItem> items, DateTimeOffset at) => thread.Run(() => ItemQueries.RecordUses(store, items, at));

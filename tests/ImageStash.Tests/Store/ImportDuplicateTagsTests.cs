@@ -94,22 +94,61 @@ public sealed class ImportDuplicateTagsTests
     }
 
     [TestMethod]
-    public async Task AnImportsUndoThatCannotMarkItsItemsTakesBackNoTagEither()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task AnImportsUndoRollsBackTheMarkAndTheTakenBackTagsOnRefusal(bool refuseTag)
     {
         using var stash = new TestStash();
         var store = await stash.OpenCleanly();
         var bytes = TestStash.Bytes(45);
         var existing = await stash.Import("cat", bytes);
-        var found = (await store.CommitImport(TestStash.Candidate(await stash.Stage("cat.png", bytes), "cat", bytes) with { Tags = ["funny"] })).Value!;
+        var found = (await store.CommitImport(TestStash.Candidate(await stash.Stage("cat.png", bytes), "cat", bytes) with { Tags = ["funny", "nice"] })).Value!;
         var fresh = TestStash.Bytes(46);
         var added = (await store.CommitImport(TestStash.Candidate(await stash.Stage("new.png", fresh), "new", fresh) with { Tags = ["funny"] })).Value!;
-        // The store refuses the removal's mark (E3: a refused write): the Undo is one change, absent or complete (G28).
-        stash.SqlWhileOpen("CREATE TRIGGER refuse_mark BEFORE UPDATE OF deleted ON items BEGIN SELECT RAISE(ABORT, 'refused'); END");
+        var before = stash.TagRows();
+        // Refuse the mark or the second tag's deletion after the item was marked and the first tag was deleted.
+        stash.SqlWhileOpen(refuseTag
+            ? $"""
+                CREATE TRIGGER refuse_tag BEFORE DELETE ON tags
+                WHEN OLD.item_id = {existing.Id} AND (SELECT COUNT(*) FROM tags WHERE item_id = OLD.item_id) = 1
+                BEGIN SELECT RAISE(ABORT, 'refused'); END
+                """
+            : "CREATE TRIGGER refuse_mark BEFORE UPDATE OF deleted ON items BEGIN SELECT RAISE(ABORT, 'refused'); END");
 
         var undone = await store.UndoImport([added.Item.Id], [(existing.Id, found.GainedTags)]);
 
-        Assert.IsTrue(undone.All(outcome => !outcome.Succeeded), "the Undo is named as failed");
-        CollectionAssert.AreEqual(new[] { (existing.Id, "funny"), (added.Item.Id, "funny") }, stash.TagRows(), "the tag given stays with the item that stays");
+        var failure = undone.Single().Failure;
+        Assert.IsNotNull(failure);
+        Assert.AreEqual((BatchRemoval.Action, StashFolder.StoreFileName), (failure.Action, failure.Subject));
+        StringAssert.Contains(failure.Reason, "refused");
+        CollectionAssert.AreEqual(before, stash.TagRows(), "the tags given stay with the items that stay");
         Assert.HasCount(2, await stash.All());
+        Assert.IsTrue(File.Exists(added.Item.FilePath), "the new item's file stays with its row");
+    }
+
+    [TestMethod]
+    public async Task ImportUndoTakesBackItsTagAfterOrganisingUndoRestoresItInTheCurrentSpelling()
+    {
+        using var stash = new TestStash();
+        var store = await stash.OpenCleanly();
+        var bytes = TestStash.Bytes(1);
+        var existing = await stash.Import("existing", bytes);
+        var carrier = await stash.Import("carrier", TestStash.Bytes(2));
+        var later = await stash.Import("later", TestStash.Bytes(3));
+        await store.AddTag([carrier], "ÄRGER");
+        var staged = await stash.Stage("duplicate.png", bytes);
+        var found = await store.CommitImport(TestStash.Candidate(staged, "duplicate", bytes) with { Tags = ["ÄRGER"] });
+        Assert.IsTrue(found.Succeeded, found.Failure?.ToString());
+        CollectionAssert.AreEqual(new[] { "ÄRGER" }, found.Value!.GainedTags.ToList());
+        var removed = await store.RemoveTagWithChanges([existing, carrier], "ÄRGER");
+        await store.AddTag([later], "ärger");
+        var restored = await store.UndoItemFacts(removed);
+        Assert.HasCount(2, restored.Changes);
+        CollectionAssert.AreEqual(new[] { (existing.Id, "ärger"), (carrier.Id, "ärger"), (later.Id, "ärger") }, stash.TagRows());
+
+        var undone = await store.UndoImport([], [(existing.Id, found.Value.GainedTags)]);
+
+        Assert.AreEqual("", TestStash.Failures(undone));
+        CollectionAssert.AreEqual(new[] { (carrier.Id, "ärger"), (later.Id, "ärger") }, stash.TagRows());
     }
 }

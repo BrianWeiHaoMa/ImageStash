@@ -43,7 +43,7 @@ public sealed class Organising(Listing listing, Notices notices)
 
     /// <summary>Gives every item the tags <paramref name="text"/> commits, as typed; the store splits it into one tag per word.</summary>
     public Task<Outcome> AddTag(IReadOnlyList<StashItem> items, string text) =>
-        OneAtATime(ItemTags.AddAction, () => Change(items, ItemTags.AddAction, store => store.AddTag(items, text)));
+        OneAtATime(ItemTags.AddAction, () => Change(items, ItemTags.AddAction, store => store.AddTagWithChanges(items, text)));
 
     /// <summary>Applies the tag of a chip drop, which can only give an existing tag (G17).</summary>
     internal Task<Outcome> AddExistingTag(IReadOnlyList<StashItem> items, string tag) =>
@@ -51,7 +51,7 @@ public sealed class Organising(Listing listing, Notices notices)
 
     /// <summary>Takes <paramref name="tag"/>, in any spelling, off every item.</summary>
     public Task<Outcome> RemoveTag(IReadOnlyList<StashItem> items, string tag) =>
-        OneAtATime(ItemTags.RemoveAction, () => Change(items, ItemTags.RemoveAction, store => store.RemoveTag(items, tag)));
+        OneAtATime(ItemTags.RemoveAction, () => Change(items, ItemTags.RemoveAction, store => store.RemoveTagWithChanges(items, tag)));
 
     /// <summary>
     /// A click on a tag Add tag ▸ lists (G17): while every item still in the stash carries <paramref name="tag"/>, it is
@@ -60,7 +60,7 @@ public sealed class Organising(Listing listing, Notices notices)
     /// </summary>
     public Task<Outcome> ToggleTag(IReadOnlyList<StashItem> items, string tag) => OneAtATime(TagAct, async () =>
         AllCarry(await Present(items), tag)
-            ? await Change(items, ItemTags.RemoveAction, store => store.RemoveTag(items, tag))
+            ? await Change(items, ItemTags.RemoveAction, store => store.RemoveTagWithChanges(items, tag))
             : await Change(items, ItemTags.AddAction, store => store.AddExistingTag(items, tag)));
 
     /// <summary>
@@ -143,14 +143,14 @@ public sealed class Organising(Listing listing, Notices notices)
     }
 
     private Task<Outcome> Favorite(IReadOnlyList<StashItem> items, bool favorite) =>
-        Change(items, favorite ? ItemFavorite.AddAction : ItemFavorite.RemoveAction, store => store.SetFavorite(items, favorite));
+        Change(items, favorite ? ItemFavorite.AddAction : ItemFavorite.RemoveAction, store => store.SetFavoriteWithChanges(items, favorite));
 
     /// <summary>
     /// One change over <paramref name="items"/>: nothing to change is done with nothing shown; while the stash is not
     /// open the items are refused by name and nothing is asked of the store; otherwise the store's outcomes, the
     /// listing refreshed, and each distinct failure named once, the first returned.
     /// </summary>
-    private async Task<Outcome> Change(IReadOnlyList<StashItem> items, string action, Func<StashStore, Task<IReadOnlyList<Outcome>>> change)
+    private async Task<Outcome> Change(IReadOnlyList<StashItem> items, string action, Func<StashStore, Task<ItemFactResult>> change)
     {
         if (items.Count == 0)
         {
@@ -164,9 +164,9 @@ public sealed class Organising(Listing listing, Notices notices)
 
         var store = listing.Store!;
 
-        var outcomes = await change(store);
+        var result = await change(store);
         await listing.Refresh();
-        var failures = outcomes.Where(outcome => !outcome.Succeeded).Select(outcome => outcome.Failure!).DistinctBy(failure => failure.Sentence).ToList();
+        var failures = result.Outcomes.Where(outcome => !outcome.Succeeded).Select(outcome => outcome.Failure!).DistinctBy(failure => failure.Sentence).ToList();
         foreach (var failure in failures)
         {
             notices.Raise(failure);

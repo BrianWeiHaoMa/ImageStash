@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace ImageStash.Store;
 
 /// <summary>A tag and how many items the stash lists carrying it.</summary>
@@ -12,6 +14,8 @@ internal static class ItemTags
 {
     public const string AddAction = "Add a tag";
     public const string RemoveAction = "Remove a tag";
+    private const string UndoAddAction = "Undo adding a tag";
+    private const string UndoRemoveAction = "Undo removing a tag";
 
     private const string CountAction = "Count the tags";
 
@@ -30,46 +34,44 @@ internal static class ItemTags
     /// Gives each listed item the tags <paramref name="text"/> commits; no words change nothing (G17: nothing requires
     /// a tag). An item already carrying a tag is left as it is.
     /// </summary>
-    public static IReadOnlyList<Outcome> Add(StoreContext store, IReadOnlyList<StashItem> items, string text) =>
+    public static ItemFactResult Add(StoreContext store, IReadOnlyList<StashItem> items, string text) =>
         Add(store, items, Words(text));
 
     /// <summary>Assigns a picked or dropped tag only while it still has a carrier at the tagging write (G17).</summary>
-    public static IReadOnlyList<Outcome> AddExisting(StoreContext store, IReadOnlyList<StashItem> items, string tag) =>
+    public static ItemFactResult AddExisting(StoreContext store, IReadOnlyList<StashItem> items, string tag) =>
         Add(store, items, [tag], () => TagRows(store).Any(row => string.Equals(row.Tag, tag, StringComparison.OrdinalIgnoreCase)
             && StashItem.IsListed(store.Folder, row.PendingSteps))
             ? null
             : $"no item carries #{tag} any more");
 
-    private static IReadOnlyList<Outcome> Add(StoreContext store, IReadOnlyList<StashItem> items, IReadOnlyList<string> words, Func<string?>? refusedBecause = null)
+    private static ItemFactResult Add(StoreContext store, IReadOnlyList<StashItem> items, IReadOnlyList<string> words, Func<string?>? refusedBecause = null)
     {
         if (words.Count == 0)
         {
-            return items.Select(_ => Outcome.Done).ToList();
+            return new ItemFactResult(store, UndoAddAction, [.. items.Select(_ => Outcome.Done)], []);
         }
 
-        return ItemFactChange.Apply(store, AddAction, items, listed =>
+        return ItemFactChange.Apply(store, AddAction, UndoAddAction, items, listed =>
         {
             var tags = Spelled(store, words);
-            foreach (var id in listed)
-            {
-                Insert(store, id, tags);
-            }
+            return [.. listed.Select(item => ChangeMemberships(store, item, tags, [])).OfType<ItemFactDelta>()];
         }, refusedBecause);
     }
 
     /// <summary>Takes the tag, in any spelling, off each listed item; an item not carrying it is left as it is.</summary>
-    public static IReadOnlyList<Outcome> Remove(StoreContext store, IReadOnlyList<StashItem> items, string tag) =>
-        ItemFactChange.Apply(store, RemoveAction, items, listed =>
-        {
-            var spellings = StoredTags(store).Where(stored => string.Equals(stored, tag, StringComparison.OrdinalIgnoreCase)).ToList();
-            foreach (var id in listed)
-            {
-                foreach (var spelling in spellings)
-                {
-                    Delete(store, id, spelling);
-                }
-            }
-        });
+    public static ItemFactResult Remove(StoreContext store, IReadOnlyList<StashItem> items, string tag) =>
+        ItemFactChange.Apply(store, RemoveAction, UndoRemoveAction, items, listed =>
+            [.. listed.Select(item => ChangeMemberships(store, item, [], [tag])).OfType<ItemFactDelta>()]);
+
+    /// <summary>Changes the requested memberships and reports just the gains and losses in this transaction.</summary>
+    public static ItemFactDelta? ChangeMemberships(
+        StoreContext store, ItemFactTarget item, IReadOnlyList<string> give, IReadOnlyList<string> take)
+    {
+        var carried = Carried(store, item.Id);
+        var removed = RemoveMatching(store, item.Id, take, carried);
+        var added = InsertMissing(store, item.Id, give, carried);
+        return added.IsEmpty && removed.IsEmpty ? null : new ItemFactDelta(item, added, removed, null);
+    }
 
     /// <summary>
     /// Writes <paramref name="tags"/> on a row inside the caller's transaction (G28): a new row's, in the transaction
@@ -86,25 +88,18 @@ internal static class ItemTags
             return [];
         }
 
-        var carried = store.Query("SELECT tag FROM tags WHERE item_id = $id", r => r.GetString(0), ("$id", id));
-        var gained = Spelled(store, words).Where(tag => !carried.Contains(tag, StringComparer.OrdinalIgnoreCase)).ToList();
-        Insert(store, id, gained);
-        return gained;
+        return InsertMissing(store, id, Spelled(store, words), Carried(store, id));
     }
 
     /// <summary>
     /// An import's Undo of the tags it gave items already in the stash (G12), inside the caller's transaction (G28):
-    /// each tag taken off its item in the spelling <see cref="AddMissing"/> wrote, so a tag no item carries any more
-    /// ceases to exist (G17); a tag the item no longer carries, or an item gone, leaves nothing to take.
+    /// each tag taken off its item if the item still carries it, using the same case-insensitive identity as adding it.
     /// </summary>
     public static void TakeBackImported(StoreContext store, IReadOnlyList<(long Item, IReadOnlyList<string> Tags)> given)
     {
         foreach (var (id, tags) in given)
         {
-            foreach (var tag in tags)
-            {
-                Delete(store, id, tag);
-            }
+            RemoveMatching(store, id, tags, Carried(store, id));
         }
     }
 
@@ -153,33 +148,68 @@ internal static class ItemTags
         r => (r.GetInt64(0), r.GetString(1), r.IsDBNull(2) ? null : r.GetString(2)));
 
     /// <summary>
-    /// The words as the tags they are: each in the spelling first stored for it across every row's tags, those of rows
-    /// marked deleted included, so an item a Delete's Undo brings back and one tagged meanwhile share one; else as typed.
+    /// Maps tag words to the first spelling stored across every row's tags, including rows marked deleted, or the first
+    /// spelling proposed for a tag without a row. A Delete's Undo and a later tag assignment therefore share a spelling.
     /// Compared in code, ignoring case for every script, because SQLite's NOCASE folds ASCII only.
     /// </summary>
-    private static IReadOnlyList<string> Spelled(StoreContext store, IReadOnlyList<string> words)
+    public static IReadOnlyDictionary<string, string> Spellings(StoreContext store, IReadOnlyList<string> words)
     {
         var spellings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (words.Count == 0)
+        {
+            return spellings;
+        }
+
         foreach (var stored in StoredTags(store))
         {
             spellings.TryAdd(stored, stored);
         }
 
-        return words.Select(word => spellings.TryAdd(word, word) ? word : spellings[word]).Distinct().ToList();
+        foreach (var word in words)
+        {
+            spellings.TryAdd(word, word);
+        }
+
+        return spellings;
+    }
+
+    private static IReadOnlyList<string> Spelled(StoreContext store, IReadOnlyList<string> words)
+    {
+        var spellings = Spellings(store, words);
+        return words.Select(word => spellings[word]).Distinct().ToList();
     }
 
     /// <summary>Every spelling in <c>tags</c>, marked rows included, the first stored first.</summary>
     private static List<string> StoredTags(StoreContext store) =>
         store.Query("SELECT tag FROM tags GROUP BY tag ORDER BY MIN(rowid)", r => r.GetString(0));
 
-    private static void Delete(StoreContext store, long id, string spelling) =>
-        store.Execute("DELETE FROM tags WHERE item_id = $id AND tag = $tag", ("$id", id), ("$tag", spelling));
+    private static List<string> Carried(StoreContext store, long id) =>
+        store.Query("SELECT tag FROM tags WHERE item_id = $id", r => r.GetString(0), ("$id", id));
 
-    private static void Insert(StoreContext store, long id, IReadOnlyList<string> tags)
+    private static bool Delete(StoreContext store, long id, string spelling) =>
+        store.Execute("DELETE FROM tags WHERE item_id = $id AND tag = $tag", ("$id", id), ("$tag", spelling)) > 0;
+
+    private static ImmutableArray<string> RemoveMatching(StoreContext store, long id, IReadOnlyList<string> tags, IReadOnlyList<string> carried) =>
+        [.. carried.Where(tag => tags.Contains(tag, StringComparer.OrdinalIgnoreCase) && Delete(store, id, tag))];
+
+    private static ImmutableArray<string> InsertMissing(StoreContext store, long id, IReadOnlyList<string> tags, IReadOnlyList<string> carried)
     {
+        if (tags.Count == 0)
+        {
+            return [];
+        }
+
+        var existing = carried.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var gained = ImmutableArray.CreateBuilder<string>();
         foreach (var tag in tags)
         {
-            store.Execute("INSERT OR IGNORE INTO tags (item_id, tag) VALUES ($id, $tag)", ("$id", id), ("$tag", tag));
+            if (existing.Add(tag) &&
+                store.Execute("INSERT OR IGNORE INTO tags (item_id, tag) VALUES ($id, $tag)", ("$id", id), ("$tag", tag)) > 0)
+            {
+                gained.Add(tag);
+            }
         }
+
+        return gained.ToImmutable();
     }
 }
