@@ -125,8 +125,8 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
         scroller = WindowLayout.GridScroller(grid);
         var dropTarget = new DropTarget(this, drops, import, () => DragInProgress, () => listing.LitTags);
         tagField = new TagFieldOverlay(listing, organising, notices);
-        preview = new Preview(listing, handoff, organising, deletion, renaming, itemMenu, notices, notices.Clock, pasteTarget, DialogShown, grid);
-        keys = new PendingQueryKeys(listing, grid.ReadNavigationLayout, HandleMovementOutsideGrid,
+        preview = new Preview(listing, handoff, organising, deletion, renaming, editing, itemMenu, notices, notices.Clock, pasteTarget, DialogShown, grid);
+        keys = new PendingQueryKeys(listing, grid.ReadNavigationLayout, editing, HandleMovementOutsideGrid,
             () => TagFieldTakingKeys is not null || preview.EditingName, () => import.Busy is not null);
         import.FollowScopeChoices(keys);
         // Esc in the field gives focus back to where Ctrl+T was pressed, the box or the grid (G7).
@@ -380,7 +380,6 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
         // The preview's buttons are Enter's and Ctrl+C's own path on its item (G19, G8, G9).
         preview.HandOverRequested += () => _ = preview.HandOver(this, activation.TargetNow(), activation.ForPaste);
         preview.CopyRequested += () => _ = preview.Copy(this);
-        preview.EditRequested += item => _ = editing.Open(item, EditOrigin.Preview);
         new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) =>
         {
             notices.Sweep();

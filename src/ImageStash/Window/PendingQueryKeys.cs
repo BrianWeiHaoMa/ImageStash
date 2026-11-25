@@ -8,7 +8,7 @@ namespace ImageStash.Window;
 /// while the person moves on. Listing remains the owner of the displayed selection.
 /// </summary>
 public sealed class PendingQueryKeys(Listing listing, Func<(IReadOnlyList<GridRow> Rows, double ViewportHeight)> gridLayout,
-    Func<Direction, long, bool, bool>? handleOutsideGrid = null, Func<bool>? fieldOwnsSelection = null,
+    Editing editing, Func<Direction, long, bool, bool>? handleOutsideGrid = null, Func<bool>? fieldOwnsSelection = null,
     Func<bool>? importRunning = null)
 {
     private readonly Queue<Pressed> pressed = new();
@@ -64,6 +64,12 @@ public sealed class PendingQueryKeys(Listing listing, Func<(IReadOnlyList<GridRo
             viewUnavailable is null ? null : () => finished = Task.FromResult(viewUnavailable()));
         return await finished;
     }
+
+    internal Task<Outcome> DeleteOnSelection(Func<KeySelection, Task<Outcome>> delete) =>
+        ActOnSelection(selection => DeleteWhileBrowsing(() => delete(selection)));
+
+    internal Task<Outcome> DeleteWhileBrowsing(Func<Task<Outcome>> delete) =>
+        editing.TakesDeleteKey ? Task.FromResult(Outcome.Done) : delete();
 
     internal Task WithSelection(Action<KeySelection> apply, bool allowExplicitTile = false, Action? viewUnavailable = null)
     {

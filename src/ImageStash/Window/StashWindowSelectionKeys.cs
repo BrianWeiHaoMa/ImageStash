@@ -89,7 +89,7 @@ public sealed partial class StashWindow
                 _ = keys.ActOnSelection(selection => preview.IsOpen ? preview.Edit() : editing.OpenOnSelection(selection.Items));
                 break;
             case KeyAction.Delete:
-                _ = keys.ActOnSelection(selection => preview.IsOpen ? preview.Delete() : deletion.Delete(selection.Items));
+                _ = keys.DeleteOnSelection(selection => preview.IsOpen ? preview.Delete() : deletion.Delete(selection.Items));
                 break;
             case KeyAction.ToggleFavorite:
                 _ = keys.ActOnSelection(selection => preview.IsOpen ? preview.ToggleFavorite() : organising.ToggleFavorite(selection.Items));
@@ -132,7 +132,7 @@ public sealed partial class StashWindow
                 _ = preview.Edit();
                 break;
             case KeyAction.Delete:
-                _ = preview.Delete();
+                _ = keys.DeleteWhileBrowsing(preview.Delete);
                 break;
             case KeyAction.ToggleFavorite:
                 _ = preview.ToggleFavorite();

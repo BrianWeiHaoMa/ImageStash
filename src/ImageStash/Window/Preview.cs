@@ -42,6 +42,7 @@ public sealed class Preview : Border
     private readonly Organising organising;
     private readonly Deletion deletion;
     private readonly Renaming renaming;
+    private readonly Editing editing;
     private readonly ItemMenu itemMenu;
     private readonly Notices notices;
     private readonly TimeProvider clock;
@@ -79,7 +80,7 @@ public sealed class Preview : Border
     /// <param name="pasteTarget">The paste target the footer names, which names the handoff button.</param>
     /// <param name="dialogUp">Told while Save a copy…'s picker or Open with…'s dialog is up, so the flyout stays (G2).</param>
     /// <param name="returnFocusTo">Where focus goes when the preview closes: the grid.</param>
-    public Preview(Listing listing, Handoff handoff, Organising organising, Deletion deletion, Renaming renaming, ItemMenu itemMenu, Notices notices, TimeProvider clock,
+    public Preview(Listing listing, Handoff handoff, Organising organising, Deletion deletion, Renaming renaming, Editing editing, ItemMenu itemMenu, Notices notices, TimeProvider clock,
         PasteTargetHolder pasteTarget, Action<bool> dialogUp, IInputElement returnFocusTo)
     {
         this.listing = listing;
@@ -87,6 +88,7 @@ public sealed class Preview : Border
         this.organising = organising;
         this.deletion = deletion;
         this.renaming = renaming;
+        this.editing = editing;
         this.itemMenu = itemMenu;
         this.notices = notices;
         this.clock = clock;
@@ -228,9 +230,6 @@ public sealed class Preview : Border
 
     /// <summary>Raised by a click on Copy: the window copies the item as <c>Ctrl+C</c> does (G19, G9).</summary>
     public event Action? CopyRequested;
-
-    /// <summary>Raised by Edit and the ⋯ menu's Edit: the window opens the editor on the item given (G19, G20).</summary>
-    public event Action<StashItem>? EditRequested;
 
     public bool IsOpen { get; private set; }
 
@@ -493,11 +492,8 @@ public sealed class Preview : Border
     /// <summary><c>Ctrl+D</c> and its star: the item's favorite flag toggled through the window's one organising entry (G17).</summary>
     public Task<Outcome> ToggleFavorite() => Act(Organising.FavoriteAct, item => organising.ToggleFavorite([item]));
 
-    internal Task<Outcome> Edit() => OnItem(Editing.Action, item =>
-    {
-        EditRequested?.Invoke(item);
-        return Task.FromResult(Outcome.Done);
-    });
+    internal Task<Outcome> Edit(bool afterMenu = false) => editing.StartOpening(() => OnItem(Editing.Action,
+        afterMenu ? EditOnceTheMenuHasClosed : item => editing.Open(item, EditOrigin.Preview)));
 
     /// <summary>
     /// The name field's Enter, or focus leaving it: the item renamed through the window's one rename path; the head shows
@@ -524,7 +520,7 @@ public sealed class Preview : Border
     /// </summary>
     private Task<Outcome> FromMenu(ItemMenuAction action) => action switch
     {
-        ItemMenuAction.Edit => OnItem(Editing.Action, EditOnceTheMenuHasClosed),
+        ItemMenuAction.Edit => Edit(afterMenu: true),
         ItemMenuAction.Rename => EditNameOnceTheMenuHasClosed(),
         ItemMenuAction.RevertToOriginal => Act(Editing.RevertAction, item => itemMenu.OnEdited(action, item, EditOrigin.Preview)),
         ItemMenuAction.SaveAsNewItem => OnItem(Editing.SaveAsNewItemAction, item => itemMenu.OnEdited(action, item, EditOrigin.Preview)),
@@ -536,11 +532,8 @@ public sealed class Preview : Border
     };
 
     /// <summary>The ⋯ menu's Edit, posted until the menu has closed, whose own focus going back would otherwise land beneath the editor.</summary>
-    private Task<Outcome> EditOnceTheMenuHasClosed(StashItem item)
-    {
-        Dispatcher.UIThread.Post(() => EditRequested?.Invoke(item), DispatcherPriority.Background);
-        return Task.FromResult(Outcome.Done);
-    }
+    private Task<Outcome> EditOnceTheMenuHasClosed(StashItem item) =>
+        Dispatcher.UIThread.InvokeAsync(() => editing.Open(item, EditOrigin.Preview), DispatcherPriority.Background);
 
     /// <summary>The ⋯ menu's Rename, posted until the menu has closed, whose own focus going back would otherwise end the edit at once.</summary>
     private Task<Outcome> EditNameOnceTheMenuHasClosed()

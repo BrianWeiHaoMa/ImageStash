@@ -42,10 +42,6 @@ public sealed class ListedStash : IDisposable
         WindowShowing.Seen(visible: true, minimised: false);
         Listing = new Listing(Failures.Add);
         Import = new Import(Listing, Notices, TestStash.ShortRetry);
-        SelectionKeys = new PendingQueryKeys(Listing,
-            () => (JustifiedRows.Layout(Listing.Items, GridViewport.Width, 96), GridViewport.Height),
-            fieldOwnsSelection: () => TagFieldItems.Count > 0, importRunning: () => Import.Busy is not null);
-        Import.FollowScopeChoices(SelectionKeys);
         Clipboard = new RecordingClipboard(stash.Clock);
         Paste = new ClipboardPaste(Listing, Notices, Import, Clipboard, stash.Clock, TestStash.ShortRetry);
         Deletion = new Deletion(Listing, Notices);
@@ -55,6 +51,10 @@ public sealed class ListedStash : IDisposable
         FooterHints = new FooterHints(Listing, PasteTarget, Handoff, stash.Clock);
         Renaming = new Renaming(Listing, Notices, Handoff);
         Editing = new Editing(Listing, Notices, Handoff, (original, name, layers, format, work, retry) => Renderer(original, name, layers, format, work, retry), new ColorChoices(), editRetry ?? TestStash.ShortRetry);
+        SelectionKeys = new PendingQueryKeys(Listing,
+            () => (JustifiedRows.Layout(Listing.Items, GridViewport.Width, 96), GridViewport.Height), Editing,
+            fieldOwnsSelection: () => TagFieldItems.Count > 0, importRunning: () => Import.Busy is not null);
+        Import.FollowScopeChoices(SelectionKeys);
         // As the window: an import's result, at its end or its Show, closes the preview unless an edit covers it (G12, G26).
         Import.Finishing += () => PreviewOpen &= Editing.IsOpen;
         OpenWith = new OpenWith(Listing, Notifications, Editing, Dialogs, OpenWithClock, action => action());
@@ -266,7 +266,7 @@ public sealed class ListedStash : IDisposable
     public PendingQueryKeys SelectionKeys { get; }
     internal (double Width, double Height) GridViewport { get; set; } = (100, 96);
 
-    public Task<Outcome> DeleteSelection() => SelectionKeys.ActOnSelection(selection => Deletion.Delete(selection.Items));
+    public Task<Outcome> DeleteSelection() => SelectionKeys.DeleteOnSelection(selection => Deletion.Delete(selection.Items));
 
     public Task<Outcome> ToggleFavoriteOfSelection() =>
         SelectionKeys.ActOnSelection(selection => Organising.ToggleFavorite(selection.Items));

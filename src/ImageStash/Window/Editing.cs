@@ -64,6 +64,7 @@ public sealed class Editing
     private readonly ColorChoices colors;
     private readonly TimeSpan heldFileRetry;
     private int openings;
+    private object? openingRequest;
 
     /// <summary>The item the latest open is reading, from its read of the item until its session opens or it ends; null otherwise.</summary>
     private long? openingOn;
@@ -111,6 +112,9 @@ public sealed class Editing
     public EditorSession? Session { get; private set; }
 
     public bool IsOpen => Session is not null;
+
+    // A superseded read can finish after Cancel returns the current edit's keys to the grid.
+    internal bool TakesDeleteKey => IsOpen || openingOn is not null || openingRequest is not null;
 
     /// <summary>
     /// Whether the item of <paramref name="id"/> has an edit open, or one still opening, reading what it opens on: Store
@@ -169,6 +173,29 @@ public sealed class Editing
             return new Failure(Action, Name(item), asked);
         }
 
+        return await StartOpening(() => OpenWhenReady(item, from, startOn, trim));
+    }
+
+    // Preview Edit can still be waiting for a field's commit before it has the item to open.
+    internal async Task<Outcome> StartOpening(Func<Task<Outcome>> open)
+    {
+        var request = new object();
+        openingRequest = request;
+        try
+        {
+            return await open();
+        }
+        finally
+        {
+            if (ReferenceEquals(openingRequest, request))
+            {
+                openingRequest = null;
+            }
+        }
+    }
+
+    private async Task<Outcome> OpenWhenReady(StashItem item, EditOrigin from, LayerList? startOn, bool trim)
+    {
         // The store cannot see a menu's change while it renders, so Edit waits for it here.
         var replacements = listing.Replacements;
         await ChangesOf(item.Id);

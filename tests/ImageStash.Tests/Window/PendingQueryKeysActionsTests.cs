@@ -97,6 +97,92 @@ public sealed partial class PendingQueryKeysTests
     }
 
     [TestMethod]
+    public void AQueuedEditKeepsDeleteOffTheGridUntilTheEditorCloses() =>
+        ControlThread.Run(() => ControlThread.FinishOnDispatcher(async () =>
+        {
+            using var listed = await Listed();
+            var (newer, older) = await DogAndTwoCats(listed);
+            var store = listed.Stash.Store!;
+            Task moved, edited, deleted, copied;
+            using (listed.Stash.HoldStore())
+            {
+                _ = listed.Listing.SetQuery("cat");
+                Assert.IsFalse(listed.Listing.Settled);
+                moved = listed.Press(Key.Down, KeyModifiers.None, KeyPlace.Grid);
+                edited = listed.Press(Key.E, KeyModifiers.Control, KeyPlace.Grid);
+                deleted = listed.Press(Key.Delete, KeyModifiers.None, KeyPlace.Grid);
+                copied = listed.Press(Key.C, KeyModifiers.Control, KeyPlace.Grid);
+            }
+
+            await Task.WhenAll(moved, edited, deleted, copied);
+            Assert.IsNotNull((await store.Item(older.Id)).Value, "Del behind Edit removed the selected cat");
+            Assert.IsTrue(File.Exists(older.FilePath), "Del behind Edit recycled the selected cat's finished file");
+            Assert.IsEmpty(listed.Stash.RecycleBin.Asked);
+            Assert.AreEqual(older.Id, listed.Editing.Session?.Item.Id);
+            Assert.HasCount(1, listed.Clipboard.Written, "the queued Copy still runs");
+            CollectionAssert.AreEqual(new[] { older.FilePath }, listed.Clipboard.Written.Single().Content.FilePaths.ToArray());
+
+            Assert.IsTrue(listed.Editing.Cancel());
+            await listed.Press(Key.Delete, KeyModifiers.None, KeyPlace.Grid);
+
+            CollectionAssert.AreEqual(new[] { older.FilePath }, listed.Stash.RecycleBin.Asked);
+            Assert.IsNull((await store.Item(older.Id)).Value);
+            Assert.IsFalse(File.Exists(older.FilePath));
+            Assert.IsTrue(File.Exists(newer.FilePath));
+        }));
+
+    [TestMethod]
+    public void DeleteAfterAnUnavailableQueuedEditRecyclesTheMultiSelection() =>
+        ControlThread.Run(() => ControlThread.FinishOnDispatcher(async () =>
+        {
+            using var listed = await Listed();
+            var (newer, older) = await DogAndTwoCats(listed);
+            var store = listed.Stash.Store!;
+            Task selected, edited, deleted;
+            using (listed.Stash.HoldStore())
+            {
+                _ = listed.Listing.SetQuery("cat");
+                Assert.IsFalse(listed.Listing.Settled);
+                selected = listed.Press(Key.Down, KeyModifiers.Shift, KeyPlace.Grid);
+                edited = listed.Press(Key.E, KeyModifiers.Control, KeyPlace.Grid);
+                deleted = listed.Press(Key.Delete, KeyModifiers.None, KeyPlace.Grid);
+            }
+
+            await Task.WhenAll(selected, edited, deleted);
+            Assert.IsNull(listed.Editing.Session);
+            CollectionAssert.AreEquivalent(new[] { newer.FilePath, older.FilePath }, listed.Stash.RecycleBin.Asked);
+            Assert.AreEqual("dog", (await store.All()).Value!.Single().Name);
+        }));
+
+    [TestMethod]
+    public void ASupersededOpeningDoesNotBlockDeleteAfterTheCurrentEditCloses() =>
+        ControlThread.Run(() => ControlThread.FinishOnDispatcher(async () =>
+        {
+            using var listed = await ListedStash.Open(editRetry: TimeSpan.FromSeconds(10));
+            var (newer, older) = await DogAndTwoCats(listed);
+            var store = listed.Stash.Store!;
+            var original = (await store.ForEdit(older.Id)).Value!.OriginalPath;
+            Task earlierEdit;
+            using (File.Open(original, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                listed.Listing.Focus(older.Id);
+                earlierEdit = listed.Press(Key.E, KeyModifiers.Control, KeyPlace.Grid);
+                // Let the earlier Edit's store read reach its held file before starting another Edit.
+                await store.ForEdit(older.Id);
+                Assert.IsTrue((await listed.Editing.Open(newer, EditOrigin.Grid)).Succeeded);
+                Assert.AreEqual(newer.Id, listed.Editing.Session?.Item.Id);
+                Assert.IsTrue(listed.Editing.Cancel());
+                Assert.IsFalse(earlierEdit.IsCompleted, "the superseded edit's original is still held");
+
+                await listed.Press(Key.Delete, KeyModifiers.None, KeyPlace.Grid);
+            }
+
+            await earlierEdit;
+            CollectionAssert.AreEqual(new[] { newer.FilePath }, listed.Stash.RecycleBin.Asked);
+            Assert.IsTrue(File.Exists(older.FilePath));
+        }));
+
+    [TestMethod]
     [DataRow(Key.PageDown)]
     [DataRow(Key.Down)]
     public async Task AQueuedTagFieldKeepsMovementAndDeleteOffTheGrid(Key move)
