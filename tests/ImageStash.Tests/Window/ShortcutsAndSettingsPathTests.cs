@@ -20,6 +20,51 @@ public sealed class ShortcutsAndSettingsPathTests
     private static readonly Shortcut StashClipboardImage = Shortcut.Parse("Win+Alt+V").Value!;
 
     [TestMethod]
+    public async Task Ctrl2CanStillBeRecordedSavedAndImportedAsAGlobalShortcut()
+    {
+        using var folder = new ScratchFolder();
+        var started = StartedShortcuts.Start(settingsFolder: folder.Path);
+        var combination = Shortcut.Parse("Ctrl+2").Value!;
+        var field = started.Page().ShortcutField(ShortcutAct.Screenshot);
+        field.Begin();
+        field.Press(Key.D2, KeyModifiers.Control);
+        await started.Settings.Flush();
+
+        Assert.IsFalse(field.IsRecording);
+        Assert.AreEqual("Ctrl+2", started.Saved.Screenshot);
+        Assert.IsTrue(started.Seam.Press(combination));
+        started.RunPosted();
+        Assert.AreEqual(1, started.Screenshots);
+
+        var saved = Settings.Load(folder.Path, TestStash.ShortRetry);
+        var reloaded = StartedShortcuts.Start(screenshot: saved.Settings.Shortcuts.Screenshot);
+        Assert.IsTrue(reloaded.Seam.Press(combination));
+        reloaded.RunPosted();
+        Assert.AreEqual(1, reloaded.Screenshots);
+
+        using var walked = await StashWithTray.Open();
+        var listed = walked.Listed;
+        var archive = await ExportedStash.Of(listed.Stash.Outside("export.zip"), _ => saved.Settings, "one");
+        var page = walked.Page();
+        listed.Dialogs.OpenFileAnswer = () => Task.FromResult<string?>(archive);
+        Assert.IsTrue((await page.Import(null!)).Succeeded);
+        Assert.IsTrue((await page.ConfirmImport()).Succeeded);
+        Assert.IsTrue(listed.ShortcutsSeam.Press(combination));
+        CollectionAssert.AreEqual(new[] { ShortcutAct.Screenshot }, listed.ShortcutActsRun);
+    }
+
+    [TestMethod]
+    public void SettingsGearNamesTheKeyAndDoesNotTakeFocus() => ControlThread.Run(() =>
+    {
+        var asked = 0;
+        var gear = WindowLayout.SettingsButton(() => asked++);
+        gear.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Assert.AreEqual(1, asked);
+        Assert.AreEqual("Settings (Ctrl+,)", ToolTip.GetTip(gear));
+        Assert.IsFalse(gear.Focusable);
+    });
+
+    [TestMethod]
     public async Task AWalkThroughShortcutsAndSettings()
     {
         using var walked = await StashWithTray.Open(held: TakeScreenshot);

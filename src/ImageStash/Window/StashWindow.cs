@@ -128,6 +128,7 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
             grid.UpdateLayout();
             return grid.Rows;
         }, MoveInKeyboardPreview);
+        import.FollowScopeChoices(keys);
         scroller = WindowLayout.GridScroller(grid);
         var dropTarget = new DropTarget(this, drops, import, () => DragInProgress, () => listing.LitTags);
         tagField = new TagFieldOverlay(listing, organising, notices);
@@ -458,8 +459,7 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
         // Its own menu would then offer a Paste that does nothing (G35); Cut and Copy of its text stay on their keys.
         search.ContextFlyout = null;
         new SearchBoxClipboard(search, drops, notices, HeldClipboard.Retry).Wire();
-        summonSelection.Follow(search);
-        SearchBoxQuery.Wire(search, listing);
+        SearchBoxQuery.Wire(search, listing, summonSelection);
     }
 
     /// <summary>The window's keys, the wheel's size steps and typing in the grid (G6, G7).</summary>
@@ -529,17 +529,19 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
             case KeyAction.FocusGrid:
                 grid.Focus(NavigationMethod.Tab);
                 break;
+            case KeyAction.ShowRecent or KeyAction.ShowFavorites or KeyAction.ShowAll or KeyAction.Settings:
+                return RunBrowsingKey(action);
             case KeyAction.ImportFiles:
-                ImportFiles();
+                AfterScopeChoice(place, ImportFiles);
                 break;
             case KeyAction.Paste:
                 // The words replace the box's selection, or go in at its caret, as a text box's paste does: the search
                 // box's, a tag field's or a layer's open text in the editor as typed text; in any other field the
                 // notice says so (G13).
                 var focused = FocusManager?.GetFocusedElement();
-                _ = pasteKey.Press(editor.OpenTextAt(focused), place == KeyPlace.SearchBox ? words => search.SelectedText = words
+                AfterScopeChoice(place, () => _ = pasteKey.Press(editor.OpenTextAt(focused), place == KeyPlace.SearchBox ? words => search.SelectedText = words
                     : (focused as Visual)?.FindAncestorOfType<TagField>() is { } field ? field.PasteNow()
-                    : null);
+                    : null));
                 break;
             case KeyAction.Held:
                 break;

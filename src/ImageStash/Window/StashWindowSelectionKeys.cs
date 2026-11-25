@@ -1,3 +1,4 @@
+using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Threading;
 
@@ -5,6 +6,54 @@ namespace ImageStash.Window;
 
 public sealed partial class StashWindow
 {
+    private Task keyboardHandoff = Task.CompletedTask;
+
+    // A scope hint is a popup too. The shortcut is available while the hint is visible.
+    private bool CanUseBrowsingKeys() => !preview.IsOpen && !editing.IsOpen && !tagField.IsVisible &&
+        !OpenedPopups.Any(popup => popup.Child is not ToolTip);
+
+    private bool RunBrowsingKey(KeyAction action)
+    {
+        if (!(search.IsFocused || grid.IsFocused) || !CanUseBrowsingKeys())
+        {
+            return false;
+        }
+
+        if (action == KeyAction.Settings)
+        {
+            var earlierHandoff = keyboardHandoff;
+            keys.Then(() => _ = OpenSettingsAfter(earlierHandoff));
+        }
+        else if (StashKeys.ScopeChoice(action) is { } scope)
+        {
+            _ = keys.ChooseScope(scope, CanUseBrowsingKeys);
+        }
+
+        return true;
+    }
+
+    private async Task OpenSettingsAfter(Task earlierHandoff)
+    {
+        // The handoff still needs the Enter release in the stash window before another window takes focus.
+        await earlierHandoff;
+        if (CanUseBrowsingKeys())
+        {
+            SettingsRequested?.Invoke();
+        }
+    }
+
+    private void AfterScopeChoice(KeyPlace place, Action act)
+    {
+        if (place is (KeyPlace.SearchBox or KeyPlace.Grid) && !keys.PendingScopeChoice.IsCompleted)
+        {
+            keys.AfterScopeChoice(act);
+        }
+        else
+        {
+            act();
+        }
+    }
+
     private bool RunSelectionKey(KeyAction action, KeyPlace place)
     {
         if (place is not (KeyPlace.Grid or KeyPlace.SearchBox))
@@ -17,12 +66,14 @@ public sealed partial class StashWindow
             case KeyAction.Handoff:
                 var target = activation.TargetNow();
                 var hide = activation.ForPaste.ForEnterPress();
-                _ = keys.ActOnSelection(selection => preview.IsOpen
-                    ? preview.HandOver(this, target, hide) : handoff.HandOver(this, selection.Items, target, hide), allowExplicitTile: true);
+                keyboardHandoff = keys.ActOnSelection(selection => preview.IsOpen
+                    ? preview.HandOver(this, target, hide) : handoff.HandOver(this, selection.Items, target, hide),
+                    allowExplicitTile: true, viewUnavailable: () => handoff.UnreadSelection(target is null ? Handoff.Action : Handoff.HandOverAct));
                 break;
             case KeyAction.Copy:
                 _ = keys.ActOnSelection(selection => preview.IsOpen
-                    ? preview.Copy(this) : handoff.Copy(this, selection.Items), allowExplicitTile: true);
+                    ? preview.Copy(this) : handoff.Copy(this, selection.Items),
+                    allowExplicitTile: true, viewUnavailable: () => handoff.UnreadSelection(Handoff.Action));
                 break;
             case KeyAction.Edit:
                 _ = keys.ActOnSelection(selection => preview.IsOpen ? preview.Edit() : editing.OpenOnSelection(selection.Items));
@@ -61,7 +112,7 @@ public sealed partial class StashWindow
         switch (action)
         {
             case KeyAction.Handoff:
-                _ = preview.HandOver(this, activation.TargetNow(), activation.ForPaste.ForEnterPress());
+                keyboardHandoff = preview.HandOver(this, activation.TargetNow(), activation.ForPaste.ForEnterPress());
                 break;
             case KeyAction.Copy:
                 // The editor copies the last saved picture, without rendering the live edit.

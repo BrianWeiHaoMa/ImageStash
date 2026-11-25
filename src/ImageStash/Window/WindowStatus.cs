@@ -100,7 +100,8 @@ public sealed class WindowStatus
         }
 
         stashState.IsVisible = state is not null;
-        scroller.IsVisible = state is null;
+        // An empty scope or no-match state covers an empty grid. Keeping it visible lets the keyboard stay there.
+        scroller.IsVisible = state is null || (listing.State == StashState.Open && listing.Items.Count == 0);
         count.Text = listing.State != StashState.Open ? "" : StashStateView.CountText(listing.Items.Count, listing.Selection.Count);
         ShowHints();
     }

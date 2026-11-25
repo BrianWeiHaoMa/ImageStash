@@ -299,6 +299,11 @@ public sealed class StashKeysTests
         box.Text = "my d";
         Assert.IsFalse(mark.Summons, "typing changed the text");
 
+        box.Text = "";
+        mark.Made();
+        box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Right, Handled = true });
+        Assert.IsTrue(mark.Summons, "Right in an empty box moves the grid, leaving the box's selection alone");
+
         mark.Made();
         box.RaiseEvent(new FocusChangedEventArgs(InputElement.LostFocusEvent));
         Assert.IsFalse(mark.Summons, "focus left the box, which clears its selection");
@@ -310,6 +315,22 @@ public sealed class StashKeysTests
         box.RaiseEvent(new PointerPressedEventArgs(box, pointer, box, new Point(2, 2), 0, new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None, 1));
         Assert.IsFalse(mark.Summons, "a click or a drag's start in the box");
     });
+
+    [TestMethod]
+    [DataRow(Key.D1, KeyAction.ShowRecent)]
+    [DataRow(Key.D2, KeyAction.ShowFavorites)]
+    [DataRow(Key.D3, KeyAction.ShowAll)]
+    [DataRow(Key.OemComma, KeyAction.Settings)]
+    public void ScopeAndSettingsKeysWorkFromTheBoxAndGridOutsideOverlays(Key key, KeyAction expected)
+    {
+        Assert.AreEqual(expected, StashKeys.Route(key, KeyModifiers.Control, KeyPlace.SearchBox));
+        Assert.AreEqual(expected, StashKeys.Route(key, KeyModifiers.Control, KeyPlace.Grid));
+        Assert.AreEqual(KeyAction.None, StashKeys.Route(key, KeyModifiers.Control | KeyModifiers.Shift, KeyPlace.Grid));
+        foreach (var place in new[] { KeyPlace.Field, KeyPlace.Preview, KeyPlace.PreviewButton, KeyPlace.PreviewName, KeyPlace.Editor })
+        {
+            Assert.AreEqual(KeyAction.None, StashKeys.Route(key, KeyModifiers.Control, place), place.ToString());
+        }
+    }
 
     [TestMethod]
     [DataRow(KeyPlace.Preview)]

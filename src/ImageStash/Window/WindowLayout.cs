@@ -41,7 +41,7 @@ public static class WindowLayout
         var settings = new Button { Content = IconGlyph.Of("", 16), Width = 36, Height = 36, Padding = default, Focusable = false };
         settings.Classes.Add(LookStyles.IconButton);
         settings.Click += (_, _) => clicked();
-        ToolTipRule.Set(settings, "Settings");
+        ToolTipRule.Set(settings, $"Settings ({StashKeys.SettingsHint})");
         AutomationProperties.SetName(settings, "Settings");
         return settings;
     }

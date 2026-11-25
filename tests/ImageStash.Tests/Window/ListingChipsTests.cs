@@ -1,4 +1,8 @@
 using System.Diagnostics;
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using ImageStash.Store;
 using ImageStash.Tests.Support;
 using ImageStash.Window;
@@ -16,6 +20,50 @@ public sealed class ListingChipsTests
     private readonly List<Failure> failures = [];
 
     private Listing NewListing() => new(failures.Add);
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task ChoosingRecentAgainTakesBothHeldOrdersAndSelectsItsFirstItem(bool keyboard)
+    {
+        using var listed = await ListedStash.Open();
+        var older = await listed.Stash.Import("old picture");
+        var newer = await listed.Stash.Import("new picture");
+        var store = listed.Listing.Store!;
+        await store.AddTag([older], "owl");
+        await store.AddTag([newer], "cat");
+        var time = listed.Stash.Clock.Now;
+        await store.RecordUses([older], time);
+        await store.RecordUses([newer], time.AddSeconds(1));
+        await listed.Listing.ShowScope(Scope.Recent);
+        CollectionAssert.AreEqual(new[] { "cat", "owl" }, ChipTags(listed.Listing));
+        Assert.AreEqual(newer.Id, listed.Listing.Focused);
+
+        await store.AddTag([newer], "owl");
+        await store.RecordUses([older], time.AddSeconds(2));
+        await listed.Listing.Refresh();
+        CollectionAssert.AreEqual(new[] { "cat", "owl" }, ChipTags(listed.Listing));
+        CollectionAssert.AreEqual(new[] { newer.Id, older.Id }, listed.Listing.Items.Select(item => item.Id).ToArray());
+
+        if (keyboard)
+        {
+            await listed.Press(Key.D1, KeyModifiers.Control, KeyPlace.SearchBox);
+        }
+        else
+        {
+            ControlThread.Run(() => ControlThread.FinishOnDispatcher(() =>
+            {
+                var row = new ChipRow(listed.Listing, listed.Organising, () => null);
+                var recent = row.Children.OfType<Button>().Single(chip => AutomationProperties.GetName(chip) == "Recent");
+                recent.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                return listed.Listing.Settle();
+            }));
+        }
+
+        CollectionAssert.AreEqual(new[] { "owl", "cat" }, ChipTags(listed.Listing));
+        CollectionAssert.AreEqual(new[] { older.Id, newer.Id }, listed.Listing.Items.Select(item => item.Id).ToArray());
+        Assert.AreEqual(older.Id, listed.Listing.Focused);
+    }
 
     [TestMethod]
     public async Task ChipsHoldTheirOrderAndADeadTagKeepsAnInactivePlaceUntilRevivedOrReordered()

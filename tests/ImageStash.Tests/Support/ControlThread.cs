@@ -31,6 +31,25 @@ public static class ControlThread
         done.Task.GetAwaiter().GetResult();
     }
 
+    /// <summary>While a check is on this thread, runs a control's asynchronous work to completion on its dispatcher.</summary>
+    public static void FinishOnDispatcher(Func<Task> act)
+    {
+        var previous = SynchronizationContext.Current;
+        AvaloniaSynchronizationContext.InstallIfNeeded();
+        try
+        {
+            var settled = act().WaitAsync(TimeSpan.FromSeconds(5));
+            var frame = new DispatcherFrame();
+            _ = settled.ContinueWith(_ => frame.Continue = false, TaskScheduler.FromCurrentSynchronizationContext());
+            Dispatcher.UIThread.PushFrame(frame);
+            settled.GetAwaiter().GetResult();
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+    }
+
     private static BlockingCollection<(Action Check, TaskCompletionSource Done)> Start()
     {
         var checks = new BlockingCollection<(Action Check, TaskCompletionSource Done)>();

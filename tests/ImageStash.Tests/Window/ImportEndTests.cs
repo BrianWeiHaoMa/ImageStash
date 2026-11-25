@@ -79,6 +79,7 @@ public sealed class ImportEndTests
     [DataRow("an arrow")]
     [DataRow("a click")]
     [DataRow("a scope chip")]
+    [DataRow("a scope key")]
     [DataRow("a tag chip")]
     [DataRow("Space")]
     public async Task EachActAloneLeavesTheWindowAsThePersonLeftItAndTheNoticeOffersShow(string act)
@@ -104,6 +105,9 @@ public sealed class ImportEndTests
                 break;
             case "a scope chip":
                 await listed.Listing.ShowScope(Scope.Favorites);
+                break;
+            case "a scope key":
+                await listed.Press(Key.D2, KeyModifiers.Control, KeyPlace.SearchBox);
                 break;
             case "a tag chip":
                 await listed.Listing.ChooseTag("cat");

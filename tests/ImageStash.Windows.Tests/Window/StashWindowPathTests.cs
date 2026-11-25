@@ -24,7 +24,7 @@ namespace ImageStash.Windows.Tests.Window;
 /// Recent at the next summon, unused, ahead of the picture used before it (G4, G1).
 /// </summary>
 [TestClass]
-public sealed class StashWindowPathTests
+public sealed partial class StashWindowPathTests
 {
     [TestInitialize]
     public void UseProductTheme() => TrayDesktop.UseProductTheme();

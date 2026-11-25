@@ -113,6 +113,9 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
 
     private readonly SemaphoreSlim oneBatchAtATime = new(1, 1);
     private readonly PictureImport pictures = new(heldFileRetry, failure => notices.Raise(failure));
+    private PendingQueryKeys? scopeKeys;
+
+    internal void FollowScopeChoices(PendingQueryKeys keys) => scopeKeys = keys;
 
     /// <summary>Raised whenever <see cref="Busy"/> changes.</summary>
     public event Action? Changed;
@@ -373,10 +376,7 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
             IReadOnlyList<(long Item, IReadOnlyList<string> Tags)> given = results.Where(file => file.Result == ImportResultKind.AlreadyInStash && file.GainedTags.Count > 0)
                 .Select(file => (file.Item!.Id, file.GainedTags)).ToList();
             var undoes = batch.Count > 0 || given.Count > 0;
-            if (listing.TagChoicePending)
-            {
-                await listing.Settle();
-            }
+            await SettleScopeAndTagChoices();
 
             var kept = began.MovedOn(listing);
             if (kept)
@@ -420,6 +420,7 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
         // A change's refresh asked meanwhile, as a name's commit the preview's close made (G19), replaces All's load
         // before it applies: the items are selected in the list the latest load applies.
         await listing.Settle();
+        await SettleScopeAndTagChoices();
         if (loadAsked.MovedOn(listing))
         {
             return false;
@@ -431,6 +432,22 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
         }
 
         return true;
+    }
+
+    private async Task SettleScopeAndTagChoices()
+    {
+        // Only an accepted choice counts. An import's own scope reset must wait for one ordered behind an earlier key.
+        while (scopeKeys?.PendingScopeChoice is { IsCompleted: false } || listing.TagChoicePending)
+        {
+            if (scopeKeys?.PendingScopeChoice is { IsCompleted: false } choosing)
+            {
+                await choosing;
+            }
+            else if (listing.TagChoicePending)
+            {
+                await listing.Settle();
+            }
+        }
     }
 
     /// <summary>

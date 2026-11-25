@@ -15,6 +15,8 @@ public sealed class PendingQueryKeys(Listing listing, Func<IReadOnlyList<GridRow
     private Task drained = Task.CompletedTask;
     private long lastSelectionKey;
 
+    internal Task PendingScopeChoice { get; private set; } = Task.CompletedTask;
+
     public Task Move(Direction direction) => Dispatch(input =>
     {
         if (moveInPreview?.Invoke(direction, input) != true)
@@ -23,26 +25,46 @@ public sealed class PendingQueryKeys(Listing listing, Func<IReadOnlyList<GridRow
         }
     }, WaitFor.Layout);
 
+    internal async Task ChooseScope(Scope scope, Func<bool> browsing)
+    {
+        var reading = Task.CompletedTask;
+        var decided = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        PendingScopeChoice = decided.Task;
+        await Dispatch(input =>
+        {
+            if (browsing())
+            {
+                reading = listing.ShowScope(scope, byPerson: true, input);
+            }
+        }, WaitFor.ScopeChoice, decided);
+        await reading;
+    }
+
     /// <summary>Starts the act with the selected and focused items before the next queued key can move either.</summary>
-    internal async Task<Outcome> ActOnSelection(Func<KeySelection, Task<Outcome>> act, bool allowExplicitTile = false)
+    internal async Task<Outcome> ActOnSelection(Func<KeySelection, Task<Outcome>> act, bool allowExplicitTile = false,
+        Func<Outcome>? viewUnavailable = null)
     {
         var finished = Task.FromResult(Outcome.Done);
-        await WithSelection(selection => finished = act(selection), allowExplicitTile);
+        await WithSelection(selection => finished = act(selection), allowExplicitTile,
+            viewUnavailable is null ? null : () => finished = Task.FromResult(viewUnavailable()));
         return await finished;
     }
 
-    internal Task WithSelection(Action<KeySelection> apply, bool allowExplicitTile = false)
+    internal Task WithSelection(Action<KeySelection> apply, bool allowExplicitTile = false, Action? viewUnavailable = null)
     {
         // A tile chosen during a scope load already has an identity, even if the arriving scope will omit it.
+        // After a failed read, a fresh handoff can take the selection still on screen unless a newer move needed the failed view.
+        var takesShownSelection = (listing.SelectionReadPending && listing.HasExplicitSelectionAfter(lastSelectionKey)) ||
+            (allowExplicitTile && listing.ShowsPriorViewAfterFailure && lastSelectionKey <= listing.LastSelectionReset);
         (IReadOnlyList<StashItem> Items, StashItem? Focused)? chosen =
-            listing.SelectionReadPending && listing.HasExplicitSelectionAfter(lastSelectionKey) ? ReadSelection() : null;
+            takesShownSelection ? ReadSelection() : null;
         var waitFor = chosen is not null ? WaitFor.EarlierKeys
             : allowExplicitTile ? WaitFor.ExplicitTileOrSelection : WaitFor.Selection;
         return Dispatch(input =>
         {
             var selection = chosen ?? ReadSelection();
             apply(new KeySelection(selection.Items, selection.Focused, input));
-        }, waitFor);
+        }, waitFor, viewUnavailable: viewUnavailable);
     }
 
     internal Task WithCurrentView(Action<long> act) => Dispatch(act, WaitFor.CurrentView);
@@ -56,15 +78,18 @@ public sealed class PendingQueryKeys(Listing listing, Func<IReadOnlyList<GridRow
     /// <summary>An ordered command that has no item target, such as Escape or the notice's Undo.</summary>
     public void Then(Action act) => _ = Dispatch(_ => act(), WaitFor.EarlierKeys);
 
-    private Task Dispatch(Action<long> act, WaitFor waitFor)
+    // A new search can supersede a scope without cancelling a separate request to import or paste.
+    internal void AfterScopeChoice(Action act) => _ = Dispatch(_ => act(), WaitFor.AfterScopeChoice);
+
+    private Task Dispatch(Action<long> act, WaitFor waitFor, TaskCompletionSource? decided = null, Action? viewUnavailable = null)
     {
         var input = listing.NextInput();
-        if (waitFor is WaitFor.Layout or WaitFor.CurrentView)
+        if (waitFor is WaitFor.Layout or WaitFor.CurrentView or WaitFor.ScopeChoice)
         {
             lastSelectionKey = input;
         }
 
-        var next = new Pressed(act, waitFor, input, lastSelectionKey, listing.Store, listing.Replacements);
+        var next = new Pressed(act, waitFor, input, lastSelectionKey, listing.Store, listing.Replacements, decided, viewUnavailable);
         if (!draining && Ready(next))
         {
             Run(next);
@@ -102,7 +127,8 @@ public sealed class PendingQueryKeys(Listing listing, Func<IReadOnlyList<GridRow
         }
     }
 
-    private bool Ready(Pressed next) => !listing.TagChoicePending && (next.WaitFor switch
+    // At the front of the queue, a scope can replace a pending tag choice and recover from a failed listing.
+    private bool Ready(Pressed next) => next.WaitFor == WaitFor.ScopeChoice || !listing.TagChoicePending && (next.WaitFor switch
     {
         WaitFor.Layout => listing.Settled,
         // During a selection-preserving refresh, an act takes the selection the person can still see.
@@ -112,23 +138,41 @@ public sealed class PendingQueryKeys(Listing listing, Func<IReadOnlyList<GridRow
 
     private bool Current(Pressed next) =>
         ReferenceEquals(next.Store, listing.Store) && next.Replacements == listing.Replacements &&
-        next.Input >= listing.LastSelectionReset && next.Input >= listing.LastPersonChange && next.Input >= listing.LastSelectionInput;
+        (next.WaitFor == WaitFor.AfterScopeChoice ||
+            next.Input >= listing.LastSelectionReset && next.Input >= listing.LastPersonChange && next.Input >= listing.LastSelectionInput);
 
     private void Run(Pressed next)
     {
-        if (Current(next) && HasSelectionFor(next))
+        try
         {
-            next.Act(next.Input);
+            if (!Current(next))
+            {
+                return;
+            }
+
+            if (HasSelectionFor(next))
+            {
+                next.Act(next.Input);
+            }
+            else if (listing.ShowsPriorViewAfterFailure)
+            {
+                next.ViewUnavailable?.Invoke();
+            }
+        }
+        finally
+        {
+            next.Decided?.SetResult();
         }
     }
 
     private bool HasSelectionFor(Pressed next) =>
-        next.WaitFor == WaitFor.EarlierKeys || listing.ShowsRequestedView ||
+        next.WaitFor is WaitFor.EarlierKeys or WaitFor.ScopeChoice or WaitFor.AfterScopeChoice || listing.ShowsRequestedView ||
         (next.WaitFor == WaitFor.ExplicitTileOrSelection && listing.HasExplicitSelectionAfter(next.SelectionKey));
 
-    private sealed record Pressed(Action<long> Act, WaitFor WaitFor, long Input, long SelectionKey, StashStore? Store, int Replacements);
+    private sealed record Pressed(Action<long> Act, WaitFor WaitFor, long Input, long SelectionKey, StashStore? Store, int Replacements,
+        TaskCompletionSource? Decided, Action? ViewUnavailable);
 
-    private enum WaitFor { EarlierKeys, Selection, ExplicitTileOrSelection, CurrentView, Layout }
+    private enum WaitFor { EarlierKeys, Selection, ExplicitTileOrSelection, CurrentView, Layout, ScopeChoice, AfterScopeChoice }
 }
 
 internal sealed record KeySelection(IReadOnlyList<StashItem> Items, StashItem? Focused, long Input);

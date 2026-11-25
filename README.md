@@ -49,6 +49,10 @@ Start Menu or its `ImageStash.Windows.exe`, opens the stash window, as a click o
 | `Ctrl+T` | Tag the selected pictures: type a word and press Enter. In a picture's preview, it goes to the preview's tag box. |
 | `Space`, then the arrows | Preview the selected picture, then step to the previous or next one in the grid; the preview's ‹ and › do the same. |
 | `Left` / `Right` | Move to the previous or next picture from the grid or from an empty search box. |
+| `Ctrl+1`, `Ctrl+2`, `Ctrl+3` | Clear the search and show Recent, Favorites or All from the search box or grid. |
+| `Ctrl+,` | Open Settings from the search box or grid. |
+
+A registered global shortcut takes precedence if you assign it one of these scope or Settings combinations.
 
 A new screenshot, recording or stashed clipboard image appears in Recent before you use it. Recent keeps its order
 while you work. Opening ImageStash again or choosing a scope applies the latest order. Click a tag chip to filter the

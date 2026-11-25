@@ -32,6 +32,76 @@ public sealed class SettingsWindowTests
     private const ushort VkEscape = 0x1B;
 
     [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task CtrlCommaFromSearchAndGridOpensAndBringsForwardTheSameSettingsPage(bool shortcutUnavailable)
+    {
+        using var settings = new SettingsFolder();
+        using var holder = shortcutUnavailable
+            ? OtherProgramHoldingAHotKey.Start(Shortcut.Parse("Ctrl+PrtScn").Value!) : null;
+        if (shortcutUnavailable)
+        {
+            Assert.IsNotNull(holder, "the check must hold the screenshot shortcut");
+        }
+
+        using var shown = ShownWindow.Open();
+        await shown.OpenStash(shown.Picture("settings.png"));
+        SettingsWindow? open = null;
+        try
+        {
+            TrayDesktop.Run(() =>
+            {
+                settings.Shortcuts.Start();
+                Assert.AreEqual(shortcutUnavailable ? ShortcutAct.Screenshot : (ShortcutAct?)null, settings.Shortcuts.FirstUnavailable);
+                shown.Window.SettingsRequested += () =>
+                {
+                    var was = open;
+                    open = SettingsWindow.Open(was, () => settings.Page(), settings.Shortcuts.FirstUnavailable);
+                    if (!ReferenceEquals(was, open))
+                    {
+                        shown.Window.Follow(open);
+                    }
+                };
+                shown.Window.SummonPinned();
+                Assert.IsTrue(shown.Search.IsFocused);
+                ShownWindow.Tap(shown.Search, Key.OemComma, KeyModifiers.Control);
+            });
+            await ShownWindow.Eventually(() => TrayDesktop.Get(() => open is { IsActive: true }));
+            var first = open!;
+            if (shortcutUnavailable)
+            {
+                await ShownWindow.Eventually(() => TrayDesktop.Get(() => Control(first, SettingsPage.TakeScreenshotTitle).IsFocused));
+                TrayDesktop.Run(() =>
+                {
+                    var otherField = Control(first, SettingsPage.OpenTitle);
+                    otherField.Focus();
+                    Assert.IsTrue(otherField.IsFocused);
+                });
+            }
+
+            var windows = ProcessWindows.Visible();
+            TrayDesktop.Run(() =>
+            {
+                shown.Window.SummonPinned();
+                ShownWindow.Tap(shown.Search, Key.Tab);
+                Assert.IsTrue(shown.Grid.IsFocused);
+                ShownWindow.Tap(shown.Grid, Key.OemComma, KeyModifiers.Control);
+            });
+            await ShownWindow.Eventually(() => TrayDesktop.Get(() => first.IsActive));
+            Assert.AreSame(first, open);
+            Assert.AreEqual(windows, ProcessWindows.Visible());
+            if (shortcutUnavailable)
+            {
+                await ShownWindow.Eventually(() => TrayDesktop.Get(() => Control(first, SettingsPage.TakeScreenshotTitle).IsFocused));
+            }
+        }
+        finally
+        {
+            TrayDesktop.Run(() => open?.Close());
+        }
+    }
+
+    [TestMethod]
     public async Task SettingsChosenInTheRealTrayMenuBringsTheOnePageBehindAnotherWindowToTheFront()
     {
         using var settings = new SettingsFolder();

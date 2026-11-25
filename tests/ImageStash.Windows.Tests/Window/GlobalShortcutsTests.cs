@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using ImageStash.Seams;
 using ImageStash.Store;
@@ -22,6 +24,63 @@ public sealed class GlobalShortcutsTests
     private static readonly Shortcut TakeScreenshot = Shortcut.Parse("Ctrl+PrtScn").Value!;
     private static readonly Shortcut RecordClip = Shortcut.Parse("Ctrl+Shift+PrtScn").Value!;
     private static readonly Shortcut StashClipboardImage = Shortcut.Parse("Win+Alt+V").Value!;
+
+    [TestMethod]
+    public async Task RegisteredCtrl2TakesThePressOverTheGridAndPauseLetsFavoritesTakeIt()
+    {
+        using var settings = new ShownSettings.SettingsFolder();
+        using var shown = ShownWindow.Open();
+        var favorite = (await shown.OpenStash(shown.Picture("favorite.png"))).Single();
+        await shown.Listing.Store!.SetFavorite([favorite], true);
+        var combination = Shortcut.Parse("Ctrl+2").Value!;
+        var reachedGrid = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        TrayDesktop.Run(() =>
+        {
+            shown.Window.ShowActivated = true;
+            shown.Window.SummonPinned();
+            shown.Grid.Focus();
+            shown.Grid.AddHandler(InputElement.KeyDownEvent, (_, e) =>
+            {
+                if (e.Key == Key.F8)
+                {
+                    reachedGrid.TrySetResult();
+                }
+            }, RoutingStrategies.Tunnel, handledEventsToo: true);
+        });
+        FrontWindow.WaitUntilInFront(TrayDesktop.Get(() => shown.Window.TryGetPlatformHandle()!.Handle));
+        TrayDesktop.Run(() =>
+        {
+            settings.Shortcuts.Start();
+            using (settings.Shortcuts.Suspend())
+            {
+                var refusal = settings.Shortcuts.Rebind(ShortcutAct.Screenshot, combination);
+                Assert.IsNull(refusal, "this check needs a layout on which Ctrl+2 types nothing and the combination free");
+            }
+
+            Assert.AreEqual(Scope.All, shown.Listing.LitChip);
+            Assert.IsTrue(shown.Grid.IsFocused);
+        });
+
+        TestHotKeys.Press(combination);
+        // A following key reaching the grid shows the local input queue has had its turn too.
+        TestHotKeys.Tap(0x77); // F8
+        await reachedGrid.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await ShownWindow.Eventually(() => settings.Pressed(ShortcutAct.Screenshot) == 1);
+        TrayDesktop.Run(() =>
+        {
+            Assert.AreEqual(Scope.All, shown.Listing.LitChip);
+            settings.Shortcuts.TogglePause();
+        });
+
+        TestHotKeys.Press(combination);
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.LitChip == Scope.Favorites));
+        TrayDesktop.Run(() =>
+        {
+            Assert.IsTrue(shown.Grid.IsFocused);
+            Assert.AreEqual(favorite.Id, shown.Listing.Focused);
+            Assert.AreEqual(1, settings.Pressed(ShortcutAct.Screenshot));
+        });
+    }
 
     [TestMethod]
     [DataRow("Ctrl+Alt+Space", "Ctrl+Alt+Space is used by another app, so Open ImageStash has no shortcut.", DisplayName = "the open shortcut held")]

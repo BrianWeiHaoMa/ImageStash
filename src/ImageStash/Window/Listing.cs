@@ -223,6 +223,7 @@ public sealed partial class Listing
     // A refresh failure can leave an unchanged, already-listed item usable for G8.
     // Rows belonging to a different query or scope cannot answer a keyboard command.
     internal bool ShowsRequestedView => displayedView == ListingView(Scope, Query);
+    internal bool ShowsPriorViewAfterFailure => Settled && loadFailed && displayedView is not null && !ShowsRequestedView;
     internal bool SelectionReadPending => !Settled && selectionResetWaiting;
     // Reaffirming a tile or opening an overlay can supersede keys without changing the import's selection count.
     internal long LastSelectionInput { get; private set; }
@@ -348,10 +349,12 @@ public sealed partial class Listing
     /// Recent, Favorites or All: clears the search and shows that scope (G4); <paramref name="byPerson"/> false for the
     /// window's own, as an import's end and a paste's return to Recent, which are not the person's change (G12).
     /// </summary>
-    public Task ShowScope(Scope scope, bool byPerson = true)
+    public Task ShowScope(Scope scope, bool byPerson = true) => ShowScope(scope, byPerson, input: null);
+
+    internal Task ShowScope(Scope scope, bool byPerson, long? input)
     {
         using var acting = UserAct.Begin(ScopeAct);
-        CountChange(byPerson);
+        CountChange(byPerson, input);
         lock (gate)
         {
             var changesView = Query.Length > 0 || Scope != scope;
@@ -375,7 +378,7 @@ public sealed partial class Listing
         }
 
         QueryChangedByWindow?.Invoke();
-        return Load(keepSelection: false);
+        return Load(keepSelection: false, selectionAt: input);
     }
 
     /// <summary>The search box changed: its matches, or once it has no words, the scope the user was in (G5).</summary>

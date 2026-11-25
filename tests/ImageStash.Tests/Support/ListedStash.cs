@@ -43,6 +43,7 @@ public sealed class ListedStash : IDisposable
         Listing = new Listing(Failures.Add);
         SelectionKeys = new PendingQueryKeys(Listing, () => JustifiedRows.Layout(Listing.Items, 100, 96));
         Import = new Import(Listing, Notices, TestStash.ShortRetry);
+        Import.FollowScopeChoices(SelectionKeys);
         Clipboard = new RecordingClipboard(stash.Clock);
         Paste = new ClipboardPaste(Listing, Notices, Import, Clipboard, stash.Clock, TestStash.ShortRetry);
         Deletion = new Deletion(Listing, Notices);
@@ -324,6 +325,12 @@ public sealed class ListedStash : IDisposable
     public async Task<KeyAction> Press(Key key, KeyModifiers modifiers, KeyPlace place)
     {
         var action = Keys.Acting(key, StashKeys.Route(key, modifiers, place, boxHasText: Listing.Query.Length > 0));
+        if (StashKeys.ScopeChoice(action) is { } scope)
+        {
+            await SelectionKeys.ChooseScope(scope, () => !PreviewOpen && !Editing.IsOpen && TagFieldItems.Count == 0);
+            return action;
+        }
+
         if (StashKeys.Direction(action) is { } direction)
         {
             await SelectionKeys.Move(direction);
@@ -341,10 +348,12 @@ public sealed class ListedStash : IDisposable
                     break;
                 }
 
-                await SelectionKeys.ActOnSelection(selection => Handoff.HandOver(null!, selection.Items, target, hide), allowExplicitTile: true);
+                await SelectionKeys.ActOnSelection(selection => Handoff.HandOver(null!, selection.Items, target, hide),
+                    allowExplicitTile: true, viewUnavailable: () => Handoff.UnreadSelection(target is null ? Handoff.Action : Handoff.HandOverAct));
                 break;
             case KeyAction.Copy:
-                await SelectionKeys.ActOnSelection(selection => Handoff.Copy(null!, selection.Items), allowExplicitTile: true);
+                await SelectionKeys.ActOnSelection(selection => Handoff.Copy(null!, selection.Items),
+                    allowExplicitTile: true, viewUnavailable: () => Handoff.UnreadSelection(Handoff.Action));
                 break;
             case KeyAction.Edit:
                 if (PreviewOpen && PreviewItem is { } previewItem)

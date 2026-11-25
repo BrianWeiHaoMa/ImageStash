@@ -428,6 +428,9 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
         return Outcome<ClipboardContent>.Of(new ClipboardContent(current.Select(item => item.FilePath).ToList(), still?.Png, still?.Frame, current.Select(item => item.Id).ToList()));
     }
 
+    internal Outcome UnreadSelection(string act) =>
+        Named(new Failure(act, "the selection", "the requested list could not be read. Choose a scope or item and try again"));
+
     private Outcome Named(Failure failure)
     {
         notices.Raise(failure);

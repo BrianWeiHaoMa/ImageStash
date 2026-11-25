@@ -14,8 +14,14 @@ namespace ImageStash.Window;
 /// </summary>
 public sealed class SummonSelection
 {
+    private enum Origin { Default, Summon, Person }
+
+    private Origin origin;
+
     /// <summary>The box's selection is still the one the summon made.</summary>
-    public bool Summons { get; private set; }
+    public bool Summons => origin == Origin.Summon;
+
+    internal bool PositionedByPerson => origin == Origin.Person;
 
     /// <summary>Whether the box's <paramref name="selectedText"/> is text the person selected: selected text that is not the summon's.</summary>
     public bool PersonSelected(string? selectedText) => !Summons && !string.IsNullOrEmpty(selectedText);
@@ -24,13 +30,20 @@ public sealed class SummonSelection
     public void Follow(TextBox searchBox)
     {
         // Seen whoever handles them, the window's own keys included, so the rule alone decides which change the selection.
-        searchBox.AddHandler(InputElement.KeyDownEvent, (_, e) => KeyDown(e.Key, e.KeyModifiers), RoutingStrategies.Tunnel, handledEventsToo: true);
+        searchBox.AddHandler(InputElement.KeyDownEvent, (_, e) =>
+        {
+            var routed = StashKeys.Route(e.Key, e.KeyModifiers, KeyPlace.SearchBox, boxHasText: !string.IsNullOrEmpty(searchBox.Text));
+            if (StashKeys.Direction(routed) is null)
+            {
+                KeyDown(e.Key, e.KeyModifiers);
+            }
+        }, RoutingStrategies.Tunnel, handledEventsToo: true);
         // The left button's press, a click or a drag's start; a right-click inside the selected text keeps it as it is.
         searchBox.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
         {
             if (e.Properties.IsLeftButtonPressed)
             {
-                Changed();
+                MovedByPerson();
             }
         }, RoutingStrategies.Tunnel, handledEventsToo: true);
         searchBox.TextChanging += (_, _) => Changed();
@@ -38,17 +51,19 @@ public sealed class SummonSelection
     }
 
     /// <summary>The summon has just selected the box's whole text (G1).</summary>
-    public void Made() => Summons = true;
+    public void Made() => origin = Origin.Summon;
 
     /// <summary>The person changed the box's selection or its text, or the box lost focus: whatever it selects now is the person's.</summary>
-    public void Changed() => Summons = false;
+    public void Changed() => origin = Origin.Default;
+
+    internal void MovedByPerson() => origin = Origin.Person;
 
     /// <summary>A key pressed with the box focused: one that selects in the box makes its selection the person's.</summary>
     public void KeyDown(Key key, KeyModifiers modifiers)
     {
         if (SelectsInBox(key, modifiers))
         {
-            Changed();
+            MovedByPerson();
         }
     }
 

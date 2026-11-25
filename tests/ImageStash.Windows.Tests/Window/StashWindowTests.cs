@@ -37,7 +37,7 @@ public sealed class StashWindowTests
         {
             shown.Window.SettingsRequested += () => asked++;
             var button = shown.SettingsButton;
-            Assert.AreEqual("Settings", ToolTip.GetTip(button), "tipped as the + button is");
+            Assert.AreEqual("Settings (Ctrl+,)", ToolTip.GetTip(button), "the tip names the button and its key");
             Assert.IsFalse(button.Focusable, "Tab goes from the box to the grid (G7)");
             Assert.AreEqual(Grid.GetColumn(shown.AddButton) - 1, Grid.GetColumn(button), "beside the + button, on its left (G32)");
             ShownWindow.RaiseClick(button);

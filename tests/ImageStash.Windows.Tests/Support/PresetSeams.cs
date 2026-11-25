@@ -8,7 +8,7 @@ using ImageStash.Windows.Seams;
 namespace ImageStash.Windows.Tests.Support;
 
 /// <summary>
-/// The dialogs seam with the save and folder pickers answered by the check, the import picker counted and cancelled, and each file
+/// The dialogs seam with the save, folder and import pickers answered by the check, and each file
 /// the Open-with dialog was asked on, each file revealed and each folder opened kept, so no picker, dialog or File
 /// Explorer window opens.
 /// </summary>
@@ -19,13 +19,16 @@ public sealed class PresetDialogs : IDialogsAndExplorer
 
     public List<string> Revealed { get; } = [];
 
-    /// <summary>How many times the import picker was asked for; each answered as cancelled, since the checks hand an import its files themselves.</summary>
+    /// <summary>What the import picker answers when it opens, or null for a cancel.</summary>
+    public IReadOnlyList<string>? PickedImports { get; set; }
+
+    /// <summary>How many times the import picker was asked for.</summary>
     public int OpenedImportPickers { get; private set; }
 
     public Task<IReadOnlyList<string>?> OpenFiles(TopLevel owner, string title, IReadOnlyList<PickerFilter> filters)
     {
         OpenedImportPickers++;
-        return Task.FromResult<IReadOnlyList<string>?>(null);
+        return Task.FromResult(PickedImports);
     }
 
     public Task<string?> SaveFile(TopLevel owner, string title, string suggestedFileName, PickerFilter fileType) => Task.FromResult(Saves);

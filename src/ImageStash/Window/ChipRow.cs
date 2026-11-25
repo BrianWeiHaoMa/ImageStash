@@ -327,7 +327,7 @@ public sealed class ChipRow : Panel
         chip.Width = ScopeChipWidth;
         chip.HorizontalContentAlignment = HorizontalAlignment.Center;
         AutomationProperties.SetName(chip, name);
-        ToolTipRule.Set(chip, name);
+        ToolTipRule.Set(chip, $"{name} ({StashKeys.ScopeHint(scope)})");
         chip.Click += (_, _) => _ = listing.ShowScope(scope);
         return chip;
     }

@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using ImageStash.Store;
 using ImageStash.Tests.Support;
 using ImageStash.Window;
+using static ImageStash.Tests.Support.ControlThread;
 
 namespace ImageStash.Tests.Window;
 
@@ -26,13 +27,13 @@ public sealed class ChipRowTests
         ControlThread.Run(() =>
         {
             var row = Row(new Listing(_ => { }));
-            var expected = new[] { ("Recent", ""), ("Favorites", FavoriteStar.Outlined), ("All", "") };
+            var expected = new[] { ("Recent", "", "Ctrl+1"), ("Favorites", FavoriteStar.Outlined, "Ctrl+2"), ("All", "", "Ctrl+3") };
             Assert.HasCount(4, row.Children.OfType<Button>(), "the three scopes and the chip listing every tag, with no tag yet");
             var scopes = row.Children.OfType<Button>().Take(3).ToList();
-            foreach (var ((name, glyph), chip) in expected.Zip(scopes))
+            foreach (var ((name, glyph, hint), chip) in expected.Zip(scopes))
             {
                 Assert.AreEqual(name, AutomationProperties.GetName(chip), "the name G4 gives it, which a screen reader reads");
-                Assert.AreEqual(name, ToolTip.GetTip(chip), "the name in its tooltip: its face shows no words");
+                Assert.AreEqual($"{name} ({hint})", ToolTip.GetTip(chip), "the name and key in its tooltip");
                 var face = chip.Content as TextBlock;
                 Assert.IsNotNull(face, $"{name}: a glyph, not words");
                 Assert.AreEqual(glyph, face.Text, $"{name}: its glyph (a clock, the favorite star, a grid)");
@@ -327,7 +328,7 @@ public sealed class ChipRowTests
         {
             var row = Row(listed.Listing, listed.Organising);
             var box = WindowLayout.SearchBox();
-            SearchBoxQuery.Wire(box, listed.Listing);
+            SearchBoxQuery.Wire(box, listed.Listing, new SummonSelection());
             row.Measure(new Size(400, 40));
             Dispatcher.UIThread.RunJobs();
             var dogChip = row.Children.OfType<Button>().Single(chip => chip.Content as string == "#dog");
@@ -371,7 +372,7 @@ public sealed class ChipRowTests
         {
             var row = Row(listed.Listing, listed.Organising);
             var box = WindowLayout.SearchBox();
-            SearchBoxQuery.Wire(box, listed.Listing);
+            SearchBoxQuery.Wire(box, listed.Listing, new SummonSelection());
             Type(box, listed.Listing, typed);
             row.Measure(new Size(700, 40));
             Dispatcher.UIThread.RunJobs();
@@ -416,7 +417,7 @@ public sealed class ChipRowTests
         ControlThread.Run(() =>
         {
             var box = WindowLayout.SearchBox();
-            SearchBoxQuery.Wire(box, listed.Listing);
+            SearchBoxQuery.Wire(box, listed.Listing, new SummonSelection());
             Type(box, listed.Listing, "ca");
             var row = Row(listed.Listing, listed.Organising);
             row.Measure(new Size(700, 40));
@@ -457,24 +458,6 @@ public sealed class ChipRowTests
             box.Text = text;
             return listing.Settle();
         });
-
-    private static void FinishOnDispatcher(Func<Task> act)
-    {
-        var previous = SynchronizationContext.Current;
-        AvaloniaSynchronizationContext.InstallIfNeeded();
-        try
-        {
-            var settled = act().WaitAsync(TimeSpan.FromSeconds(5));
-            var frame = new DispatcherFrame();
-            _ = settled.ContinueWith(_ => frame.Continue = false, TaskScheduler.FromCurrentSynchronizationContext());
-            Dispatcher.UIThread.PushFrame(frame);
-            settled.GetAwaiter().GetResult();
-        }
-        finally
-        {
-            SynchronizationContext.SetSynchronizationContext(previous);
-        }
-    }
 
     private static DragDropEffects DropOn(ChipRow row, string tag)
     {

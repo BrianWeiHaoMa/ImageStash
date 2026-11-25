@@ -1,4 +1,5 @@
 using Avalonia.Input;
+using ImageStash.Seams;
 
 namespace ImageStash.Window;
 
@@ -14,6 +15,10 @@ public enum KeyAction
     FocusGrid,
     SelectAll,
     Escape,
+    ShowRecent,
+    ShowFavorites,
+    ShowAll,
+    Settings,
 
     /// <summary><c>Ctrl+O</c>: Import files… (G7, G12).</summary>
     ImportFiles,
@@ -120,6 +125,22 @@ public enum KeyPlace
 /// </summary>
 public static class StashKeys
 {
+    private static readonly (Key Key, KeyAction Action, Scope Scope)[] ScopeKeys =
+    [
+        (Key.D1, KeyAction.ShowRecent, Scope.Recent),
+        (Key.D2, KeyAction.ShowFavorites, Scope.Favorites),
+        (Key.D3, KeyAction.ShowAll, Scope.All),
+    ];
+
+    internal const string SettingsHint = "Ctrl+,";
+
+    internal static string ScopeHint(Scope scope) =>
+        Shortcut.Of(new KeyGesture(ScopeKeys.Single(choice => choice.Scope == scope).Key, KeyModifiers.Control)).Text;
+
+    internal static Scope? ScopeChoice(KeyAction action) =>
+        action is KeyAction.ShowRecent or KeyAction.ShowFavorites or KeyAction.ShowAll
+            ? ScopeKeys.Single(choice => choice.Action == action).Scope : null;
+
     /// <summary><c>Ctrl+V</c>, the window's paste, as the <c>+</c> menu and the empty stash name it; <see cref="Route"/> routes it.</summary>
     public static readonly KeyGesture PasteKey = new(Key.V, KeyModifiers.Control);
 
@@ -196,6 +217,7 @@ public static class StashKeys
         (Key.O, KeyModifiers.Control) => KeyAction.ImportFiles,
         (Key.V, KeyModifiers.Control) => KeyAction.Paste,
         (Key.T, KeyModifiers.Control) => KeyAction.AddTags,
+        (Key.OemComma, KeyModifiers.Control) => KeyAction.Settings,
         // The main keyboard's + is Shift with = on many layouts, so Ctrl+= and Ctrl+Shift+= both mean Ctrl with +.
         (Key.OemPlus or Key.Add, KeyModifiers.Control or (KeyModifiers.Control | KeyModifiers.Shift)) => KeyAction.LargerThumbnails,
         (Key.OemMinus or Key.Subtract, KeyModifiers.Control) => KeyAction.SmallerThumbnails,
@@ -206,6 +228,7 @@ public static class StashKeys
         (Key.Space, KeyModifiers.None) when !inSearchBox => KeyAction.TogglePreview,
         (Key.F2, KeyModifiers.None) when !inSearchBox => KeyAction.Rename,
         (Key.Z, KeyModifiers.Control) when !inSearchBox => KeyAction.UndoNotice,
+        (_, KeyModifiers.Control) => ScopeKeys.FirstOrDefault(choice => choice.Key == key).Action,
         _ => KeyAction.None,
     };
 
