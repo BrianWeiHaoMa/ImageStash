@@ -30,13 +30,15 @@ paste phases, captures, edits and adoptions that would record a use in the user'
 an item's picture, the Settings phase, which would change the user's settings, and the Move and earlier-build phases,
 which would move or replace the user's stash, printing a line beginning "skipped:" for each, and still exits 0 when
 every check it ran held. Without -EarlierCommit, a commit this repository holds whose store is at a lower version than
-this build's (any from before store version 5), the earlier-build phase is skipped too.
+this build's (any from before store version 5), the earlier-build phase is skipped too. Pass -EarlierCaption with
+an editor-capable commit to save a caption there and find and paste it after the upgrade.
 
 .EXAMPLE
 powershell.exe -NoProfile -File tools/check-published.ps1
 #>
-param([string] $EarlierCommit = '')
+param([string] $EarlierCommit = '', [switch] $EarlierCaption)
 $ErrorActionPreference = 'Stop'
+if ($EarlierCaption -and -not $EarlierCommit) { throw '-EarlierCaption needs -EarlierCommit with an editor-capable build' }
 
 $work = Join-Path $env:TEMP ('ImageStash-published-check-' + [guid]::NewGuid().ToString('N'))
 $publish = Join-Path $work 'publish'
@@ -418,7 +420,7 @@ try {
 
     # G31, F11, Done when 4, last: the copy stopped, an earlier build fills a stash and saves settings, and the copy
     # opens them; over the user's stash and settings it is skipped, since it replaces them.
-    & (Join-Path $PSScriptRoot 'check-published-earlier-build.ps1') -Exe $exe -Store $pasteStore -Work $work -EarlierCommit $EarlierCommit
+    & (Join-Path $PSScriptRoot 'check-published-earlier-build.ps1') -Exe $exe -Store $pasteStore -Work $work -EarlierCommit $EarlierCommit -EarlierCaption:$EarlierCaption
     Check ($LASTEXITCODE -eq 0) "the earlier-build phase held: $LASTEXITCODE of its checks failed"
 }
 finally {

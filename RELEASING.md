@@ -126,6 +126,10 @@ is at a lower user version than the current build's, which it reads from the sta
 history from before the store reached version 5 (the one that stores saved layer text for search), and any release since,
 once a later version step follows it.
 
+Add `-EarlierCaption` if that earlier build has the editor. The phase saves a Caption bar in the earlier build,
+then searches by its text and pastes the finished file after upgrading. For the version 5 upgrade, use
+`powershell.exe -NoProfile -File tools/check-published.ps1 -EarlierCommit 08a3651 -EarlierCaption`.
+
 ## When a run fails
 
 - A failed local run or CI run: the last `check-release: phase <phase> failed ...` line names the phase and the

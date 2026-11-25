@@ -6,7 +6,7 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 
 ### Added
 
-- Search finds words saved in Meme, Label and Caption bar layers, including captions from earlier versions.
+- Search matches names, tags and words saved in Meme, Label and Caption bar layers, including captions from earlier versions. Press Enter on a caption match to hand off the finished picture.
 - Hold Shift with an arrow to extend a range of pictures in the grid. Reverse direction to shrink the range, or keep going past its starting picture. Shift+Up and Shift+Down also work from the search box, keeping its text selection.
 - Tab to the grid, then use Home or End to select the first or last picture, or Page Up and Page Down to move by one visible page of rows. The picture you reach scrolls into view and is ready to copy, paste or preview.
 - From the search box or grid, `Ctrl+1` opens Recent, `Ctrl+2` opens Favorites and `Ctrl+3` opens All. Each clears the search and selects the first picture in that scope. `Ctrl+,` opens Settings. Hover a scope chip or the gear to see its key.

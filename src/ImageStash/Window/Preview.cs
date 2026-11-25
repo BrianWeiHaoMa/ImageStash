@@ -261,7 +261,7 @@ public sealed class Preview : Border
     public bool ButtonFocused => TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is Button button && this.IsVisualAncestorOf(button);
 
     /// <summary>
-    /// Opens on <paramref name="item"/>, or moves to it from the item it showed: the item alone selected in the grid,
+    /// Opens on <paramref name="item"/>, or moves to it from the item it showed: the item alone selected when listed,
     /// focus inside the preview, its picture and name at once and its facts once read (G19, G7); with
     /// <paramref name="editingName"/>, as F2 and the item menu's Rename open it, its name in edit, selected (G17); with
     /// <paramref name="byPerson"/> false, as an edit returning to it opens it, not the person's change (G12).

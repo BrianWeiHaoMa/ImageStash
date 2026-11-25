@@ -289,7 +289,7 @@ public sealed class Editing
         // Before the editor first shows, so it opens on the tool asked for.
         SelectTrim(Session, trim);
         Session.Changed += OnSessionChanged;
-        listing.Focus(edit.Item.Id, byPerson: false);
+        listing.FocusIfListed(edit.Item.Id);
         Changed?.Invoke();
         return Outcome.Done;
     }
@@ -366,14 +366,19 @@ public sealed class Editing
     private async Task<Outcome> Saved(EditorSession session, bool asNewItem)
     {
         var origin = Origin;
-        var result = await (asNewItem ? session.SaveAsNewItem() : session.Save());
+        var result = await session.Save(asNewItem, failure =>
+        {
+            // A refusal can leave a fully placed copy or finish a pending change of the source.
+            notices.Raise(failure);
+            return listing.Refresh();
+        });
         switch (result.Ending)
         {
             case EditEnding.Refused:
-                return Named(result.Failure!);
+                return result.Failure!;
             case EditEnding.Continued:
                 await listing.Refresh();
-                listing.Focus(result.Item!.Id, byPerson: false);
+                listing.FocusIfListed(result.Item!.Id);
                 Continued?.Invoke(result.Item);
                 Changed?.Invoke();
                 return Outcome.Done;
@@ -551,10 +556,10 @@ public sealed class Editing
         return Outcome.Done;
     }
 
-    /// <summary>The window back where Edit was started, the item selected there.</summary>
+    /// <summary>The window back where Edit was started, with the item selected if it is listed.</summary>
     private void ReturnTo(EditOrigin origin, StashItem item)
     {
-        listing.Focus(item.Id, byPerson: false);
+        listing.FocusIfListed(item.Id);
         Returned?.Invoke(new EditReturn(origin, item));
     }
 

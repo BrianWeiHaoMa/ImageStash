@@ -7,12 +7,12 @@
 Discord, Facebook, WeChat, and other social media platforms each keep their own collection of your reaction pictures and GIFs, and none of them carry
 over: the perfect reaction you saved in one is nowhere to be found in the next. ImageStash is one collection for every
 app you chat in. It keeps all your reaction pictures and GIFs in a single stash on your own PC, one shortcut away from
-any chat on Windows 11: while you type a message, press `Ctrl+Alt+Space`, type two letters of a picture's name or tag
-and press Enter, and the picture is in the message box you were typing in, the message still yours to send.
+any chat on Windows 11: while you type a message, press `Ctrl+Alt+Space`, type two letters of a picture's name, tag or
+saved caption and press Enter. The picture is in the message box you were typing in, the message still yours to send.
 
 Fill the stash by dropping files or folders on it, pasting, screenshotting a region or recording a few seconds of the
-screen as a GIF; find any picture again by thumbnail, tag, name, favorite or recent use; caption, crop, trim, blur or
-draw on it while the original stays untouched.
+screen as a GIF. Find any picture again by thumbnail, tag, name, saved caption, favorite or recent use. Caption,
+crop, trim, blur or draw on it while the original stays untouched.
 
 <img src="docs/screenshots/paste.png" width="600" alt="A chat window: a friend says the movie starts at 8 and asks where you are; you have answered that you are leaving now, once you find your keys and your other shoe, and the message box holds be right there. Over it, beside the message box's caret, the ImageStash flyout: the search box holds my, the All chip, a grid, is lit, the one match, a photograph of a snail captioned ON MY WAY, is selected, and the footer reads Enter · Paste into Chat and Ctrl+C · Copy.">
 
@@ -56,6 +56,10 @@ Start Menu or its `ImageStash.Windows.exe`, opens the stash window, as a click o
 | `Ctrl+,` | Open Settings from the search box or grid. |
 
 A registered global shortcut takes precedence if you assign it one of these scope or Settings combinations.
+
+Search matches names, tags and words you saved in the Text tool's Meme, Label or Caption bar, including edits from
+earlier versions. Type part of the caption, click a tag chip to narrow the results, and press Enter to hand off the
+selected picture with its edits.
 
 A new screenshot, recording or stashed clipboard image appears in Recent before you use it. Recent keeps its order
 while you work. Opening ImageStash again or choosing a scope applies the latest order. Click a tag chip to filter the

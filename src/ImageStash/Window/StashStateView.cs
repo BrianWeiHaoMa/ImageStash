@@ -79,7 +79,7 @@ public static class StashStateView
             clear.Click += (_, _) => clearSearch();
             view.Children.Add(IconGlyph.Of("", 28));
             view.Children.Add(Line($"Nothing matches “{listing.Query}”", 16, FontWeight.SemiBold));
-            view.Children.Add(Line("Every word has to appear in a name or a tag. Try fewer words.", 12.5));
+            view.Children.Add(Line("Every word has to appear in a name, tag or saved caption. Try fewer words.", 12.5));
             view.Children.Add(clear);
         }
         else if (listing.Scope == Scope.Favorites)

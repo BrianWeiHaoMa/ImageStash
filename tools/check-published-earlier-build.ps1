@@ -15,6 +15,8 @@ position off their defaults. The copy started again over them: the store is migr
 tag, use and picture file and every value of settings.json as the earlier build wrote them, the three items are found by
 name, the tag's chip and its search find the two, Favorites
 the one, Recent the used one, and pinning the window puts it at the saved size and place (G31, F11, Done when 4).
+With -EarlierCaption, the earlier build also saves a Caption bar. After the upgrade, the caption alone finds the
+picture and a real Enter pastes its finished file into the check's own target (G5, G8, G10).
 Exits with the number of checks that failed.
 
 With -Store, the stash and settings are the check's own and every step runs; without it they are the user's, and the
@@ -32,7 +34,8 @@ param(
     [Parameter(Mandatory)] [string] $Exe,
     [string] $Store = '',
     [string] $Work = $env:TEMP,
-    [string] $EarlierCommit = ''
+    [string] $EarlierCommit = '',
+    [switch] $EarlierCaption
 )
 $ErrorActionPreference = 'Stop'
 $failed = 0
@@ -44,6 +47,7 @@ $storeFile = Join-Path $stash 'stash.db'
 $tag = 'mood'
 
 Add-Type -AssemblyName System.Drawing, System.Windows.Forms, UIAutomationClient, UIAutomationTypes
+. (Join-Path $PSScriptRoot 'check-published-paste-target.ps1')
 
 Add-Type -TypeDefinition @'
 using System;
@@ -167,6 +171,60 @@ function SelectNamed([string] $name) {
     $searched.Root
 }
 
+function SaveEarlierCaption([string] $name, [string] $caption) {
+    $root = SelectNamed $name
+    Need ([PasteDesk]::Press([uint16[]]@(0x11, 0x45))) 'Ctrl+E pressed on the selected picture'
+    Need (WaitFor { (Elements $root 'Caption bar' $button).Count -eq 1 } 5000) 'the earlier editor offers Caption bar'
+    ClickOn (One (Elements $root 'Caption bar' $button) 'the Caption bar preset')
+    $head = (One (Elements $root 'Back' $button) "the editor's Back").Current.BoundingRectangle
+    $tools = (One (Elements $root 'Text' $button) "the editor's Text tool").Current.BoundingRectangle
+    $whole = $root.Current.BoundingRectangle
+    [PasteDesk]::Click([int]($whole.X + $whole.Width / 2), [int](($head.Bottom + $tools.Top) / 2))
+    Need (WaitFor { (Elements $root 'Text' $edit).Count -eq 1 } 3000) 'the caption field opened on the picture'
+    $field = One (Elements $root 'Text' $edit) 'the caption field'
+    Need ([OpenWithDesk]::Type($caption)) 'the words were typed into the earlier editor'
+    Need (WaitFor { $field.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).Current.Value -eq $caption } 3000) 'the layer field holds those words'
+    Need ([PasteDesk]::Press([uint16[]]@(0x11, 0x53))) 'Ctrl+S pressed in the earlier editor'
+    Need (WaitFor {
+        (Elements $root 'Back' $button).Count -eq 0 -and
+        (Count "SELECT COUNT(*) FROM items WHERE name = '$name' AND rendered_revision = layer_revision AND pending_steps IS NULL AND original_in_originals = 1") -eq 1
+    } 10000) 'the earlier build published the caption and returned to browsing'
+    $layers = @((Query "SELECT layers FROM items WHERE name = '$name'") | ConvertFrom-Json | ForEach-Object { $_ })
+    Need ($layers.Count -eq 1 -and $layers[0].kind -ceq 'captionBar' -and $layers[0].text -ceq $caption) 'the earlier store kept one Caption bar with the exact typed words'
+    Need ((Count "SELECT (SELECT count(*) FROM items WHERE instr(lower(name), '$caption') > 0) + (SELECT count(*) FROM tags WHERE instr(lower(tag), '$caption') > 0)") -eq 0) 'the caption is absent from every name and tag'
+}
+
+function PasteEarlierCaption([string] $name, [string] $caption, [string] $finished, [string] $savedHash) {
+    $target = StartTarget (Join-Path $mine 'caption-target.log') $finished
+    try {
+        Need (ClickToFront $target) 'the check target is in front before searching by caption'
+        $mixed = Search "$name $tag $caption" '1 item'
+        Need $mixed.Found "one picture matches the name, tag and saved caption (G5): $($mixed.Counted)"
+        $searched = Search $caption '1 item'
+        Need ($searched.Found -and (StashInFront)) "only one picture matches '$caption' (G5, G31): $($searched.Counted)"
+        $useQuery = "SELECT COUNT(*) FROM uses JOIN items ON items.id = uses.item_id WHERE items.name = '$name'"
+        $uses = Count $useQuery
+        $allUses = Count 'SELECT COUNT(*) FROM uses'
+        $mark = @(Lines $target.Log).Count
+        Set-Clipboard -Value 'words before caption paste'
+        Need ([PasteDesk]::Press([uint16[]]@(0x0D))) 'Enter pressed on the caption match'
+        $pasted = WaitFor {
+            (@(Lines $target.Log | Select-Object -Skip $mark) -ccontains 'paste-file matched') -and
+            ([CopyReadBack]::Clipboard() -eq "files=$finished png=True dibv5=True effect=1") -and
+            ([StashWindows]::Showing($running) -eq '')
+        } 5000
+        Check $pasted 'Enter hid the flyout and the target read the finished file at paste time (G8)'
+        Check ($pasted -and (Get-FileHash -LiteralPath $finished).Hash -eq $savedHash) 'the handed-off file matches the earlier render byte for byte (G8, G31)'
+        $null = WaitFor { (Count $useQuery) -ge ($uses + 1) } 3000
+        Check ((Count $useQuery) -eq ($uses + 1) -and (Count 'SELECT COUNT(*) FROM uses') -eq ($allUses + 1)) 'the caption handoff recorded one use, of the selected item (G10)'
+        $null = WaitFor { (KeysAfter $target $mark).Count -ge 4 } 2000
+        Check (((KeysAfter $target $mark) -join ',') -eq $oneCtrlV -and ((OthersAfter $target $mark) -join ',') -eq $ctrlVMakes) 'the target received one Ctrl+V (N3)'
+    }
+    finally {
+        if (-not $target.Process.HasExited) { $target.Process.Kill(); $null = $target.Process.WaitForExit(5000) }
+    }
+}
+
 function ChooseInTrayMenu([string] $name) {
     Need ([StashWindows]::RightClickTrayIcon($running)) 'a right-click posted to the tray icon'
     $null = WaitFor { (Elements $desktop 'Quit ImageStash' $menuItem).Count -gt 0 } 3000
@@ -221,6 +279,8 @@ $publish = Join-Path $mine 'publish'
 $pictures = Join-Path $mine 'pictures'
 $earlierExe = Join-Path $publish 'ImageStash.Windows.exe'
 $running = 0
+$captionName = 'earlier-red'
+$caption = 'echidna'
 try {
     # E1, G3: the earlier build runs alone, on a first run of its own.
     StopEvery $Exe
@@ -233,7 +293,8 @@ try {
     $archive = Join-Path $mine 'source.tar'
     & git -C $repository archive --format=tar -o $archive $earlierCommit Directory.Build.props src tools
     Need ($LASTEXITCODE -eq 0) "git archive took commit $earlierCommit's Directory.Build.props, src and tools"
-    & tar -x -f $archive -C $source
+    # PowerShell can resolve Git's tar first, which treats the drive letter of an absolute archive path as a remote host.
+    & (Join-Path $env:SystemRoot 'System32\tar.exe') -x -f $archive -C $source
     Need ($LASTEXITCODE -eq 0) 'the archive unpacked'
     # Its tools/publish.ps1's own command, leaving no build server or Avalonia's build-time collector (opted out as
     # its package's README says) running in the folder, which cleanup removes.
@@ -305,6 +366,7 @@ try {
     Need ([EarlierDesk]::Place($window, 140, 90, [int](760 * $scale), [int](580 * $scale))) 'the pinned window moved and resized'
     $placed = [PasteDesk]::WindowRect($window)
     Need (WaitFor { $saved = Settings; ($saved.pinnedPosition.x -eq $placed[0]) -and ($saved.pinnedPosition.y -eq $placed[1]) -and ([math]::Abs($saved.pinnedSize.width * $scale - ($placed[2] - $placed[0])) -le 1) -and ([math]::Abs($saved.pinnedSize.height * $scale - ($placed[3] - $placed[1])) -le 1) } 3000) "settings.json holds the pinned window's place and size: $($placed -join ', ') at $scale pixels a unit"
+    if ($EarlierCaption) { SaveEarlierCaption $captionName $caption }
     ChooseInTrayMenu 'Quit ImageStash'
     Need (WaitFor { $earlier.HasExited } 10000) "the earlier build's Quit ImageStash ended it"
     $running = 0
@@ -317,6 +379,10 @@ try {
     $columns = Query "SELECT group_concat('quote(' || name || ')', ' || ''|'' || ') FROM pragma_table_info('items')"
     $itemsWritten = Query "SELECT group_concat(line, char(10)) FROM (SELECT $columns AS line FROM items ORDER BY id)"
     $picturesWritten = PictureFiles
+    if ($EarlierCaption) {
+        $file = Join-Path $stash (Query "SELECT finished_file FROM items WHERE name = '$captionName'")
+        $captionHash = (Get-FileHash -LiteralPath $file).Hash
+    }
     $tagsWritten = Query "SELECT group_concat(line, char(10)) FROM (SELECT item_id || '|' || tag AS line FROM tags ORDER BY item_id, tag)"
     $usesWritten = Query "SELECT group_concat(line, char(10)) FROM (SELECT item_id || '|' || used_at AS line FROM uses ORDER BY item_id, used_at)"
 
@@ -329,7 +395,8 @@ try {
     Check (-not $current.HasExited) 'the current build keeps running over them'
     Check ((Query "SELECT group_concat(line, char(10)) FROM (SELECT $columns AS line FROM items ORDER BY id)") -eq $itemsWritten) "every item is as the earlier build recorded it, in every column its store has (G31, F11)"
     $pictures = PictureFiles
-    Check (($pictures.Count -eq 3) -and (($pictures -join "`n") -eq ($picturesWritten -join "`n"))) "every picture file the earlier build wrote is there byte for byte (G31, G29): $($pictures.Count) of $($picturesWritten.Count)"
+    $expectedPictures = if ($EarlierCaption) { 4 } else { 3 }
+    Check (($pictures.Count -eq $expectedPictures) -and (($pictures -join "`n") -eq ($picturesWritten -join "`n"))) "every picture file the earlier build wrote is there byte for byte (G31, G29): $($pictures.Count) of $($picturesWritten.Count)"
     Check (((Query "SELECT group_concat(line, char(10)) FROM (SELECT item_id || '|' || tag AS line FROM tags ORDER BY item_id, tag)") -eq $tagsWritten) -and ((Query "SELECT group_concat(line, char(10)) FROM (SELECT item_id || '|' || used_at AS line FROM uses ORDER BY item_id, used_at)") -eq $usesWritten)) 'every tag and use is as it recorded them (G31)'
     $now = Settings
     $changed = @($written.PSObject.Properties | Where-Object { ($now.PSObject.Properties.Name -notcontains $_.Name) -or (($now.($_.Name) | ConvertTo-Json -Compress -Depth 5) -ne ($_.Value | ConvertTo-Json -Compress -Depth 5)) } | ForEach-Object { $_.Name })
@@ -365,6 +432,10 @@ try {
     # The grid draws its tiles itself, with nothing UI Automation can measure: their size on screen is the person's.
     Check ((Settings).thumbnailSize -eq 'large') 'settings.json still holds the thumbnail size the earlier build saved (G6, G31)'
     foreach ($shown in @([ScreenshotDesk]::Titled($running, 'ImageStash'))) { [PasteDesk]::Close($shown) }
+    if ($EarlierCaption) {
+        Need (WaitFor { [StashWindows]::Showing($running) -eq '' } 3000) 'the pinned window closed before the caption paste'
+        PasteEarlierCaption $captionName $caption $files[$captionName] $captionHash
+    }
 }
 catch {
     Write-Host "FAIL the earlier-build phase stopped: $($_.Exception.Message)"

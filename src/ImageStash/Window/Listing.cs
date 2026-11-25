@@ -525,14 +525,23 @@ public sealed partial class Listing
         Select([id], id, byPerson);
     }
 
+    /// <summary>Focuses an item from an overlay without clearing the selection when the search omits it.</summary>
+    internal void FocusIfListed(long id)
+    {
+        if (PlaceOf(id) is not null)
+        {
+            Focus(id, byPerson: false);
+        }
+    }
+
     /// <summary>
-    /// The preview opened on an item, or moved to it: the item alone selected, as <see cref="Focus"/>; by the person, a
+    /// The preview opened on an item, or moved to it: the item alone selected if listed; by the person, a
     /// change of theirs even when the item already was the selection, since opening the preview is one (G12).
     /// </summary>
     public void FocusForPreview(long id, bool byPerson = true, long? input = null)
     {
         CountChange(byPerson, input);
-        Select([id], id, byPerson: false);
+        FocusIfListed(id);
     }
 
     /// <summary>Replaces the selection; the focus goes to <paramref name="focus"/>, or to the first selected item in order.</summary>

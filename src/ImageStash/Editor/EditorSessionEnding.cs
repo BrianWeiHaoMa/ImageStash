@@ -18,14 +18,14 @@ public sealed partial class EditorSession
     /// it answers, inside <see cref="Busy"/>. Saved, failed after the commit and gone end the session; refused leaves it
     /// open on its layers. A second call while one runs answers the running one.
     /// </summary>
-    public Task<EditResult> Save() => Saving(asNewItem: false);
+    public Task<EditResult> Save() => Save(asNewItem: false);
 
     /// <summary>
     /// Makes a second item from a copy of the original with the live layers and the same tags (G26), and continues the
     /// session on it with undo and redo emptied; the item edited until now stays as it was. A refusal, or a failure after
     /// the new item's insert, leaves the session on the item it was on.
     /// </summary>
-    public Task<EditResult> SaveAsNewItem() => Saving(asNewItem: true);
+    public Task<EditResult> SaveAsNewItem() => Save(asNewItem: true);
 
     /// <summary>
     /// Leaves the item as it was and ends the session, answering the discarded layers for the notice's Undo (G20); null,
@@ -56,7 +56,8 @@ public sealed partial class EditorSession
         }
     }
 
-    private Task<EditResult> Saving(bool asNewItem)
+    /// <summary>Lets the window name a refusal and refresh the listing before the editor accepts input again.</summary>
+    internal Task<EditResult> Save(bool asNewItem, Func<Failure, Task>? beforeRefusal = null)
     {
         ThrowIfEnded();
         if (saving is { IsCompleted: false } running)
@@ -64,10 +65,10 @@ public sealed partial class EditorSession
             return running;
         }
 
-        return saving = Saved(asNewItem);
+        return saving = Saved(asNewItem, beforeRefusal);
     }
 
-    private async Task<EditResult> Saved(bool asNewItem)
+    private async Task<EditResult> Saved(bool asNewItem, Func<Failure, Task>? beforeRefusal)
     {
         tool.Abandon();
         // What is being typed is on screen, so it is what Save saves.
@@ -95,6 +96,10 @@ public sealed partial class EditorSession
             if (result.Ending == EditEnding.Refused)
             {
                 await Reread();
+                if (beforeRefusal is not null)
+                {
+                    await beforeRefusal(result.Failure!);
+                }
             }
 
             // Closed before the gate opens, so no estimate starts for an edit that has ended.
@@ -133,7 +138,7 @@ public sealed partial class EditorSession
     {
         if (!saved.Succeeded)
         {
-            // A new item whose step failed after its insert is not listed, and the next start removes it; this one is as it was.
+            // A refused copy leaves the editor on the source, even when the copy's files have all landed.
             return saved.Value is null && await Gone(item) ? new EditResult(EditEnding.Gone, null, null, null) : new EditResult(EditEnding.Refused, null, saved.Failure, null);
         }
 
