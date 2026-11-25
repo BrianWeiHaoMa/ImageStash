@@ -200,10 +200,11 @@ public sealed class WindowsClipboardAndDropsTests
     [TestMethod]
     public void OnlyThePasteReadsTheClipboard()
     {
+        const string pasteKey = "ImageStash.Window.PasteKey.Press";
         var avalonia = Product.SelectMany(assembly => CompiledCalls.ClipboardReads(assembly, ReadingTypes, [])).ToList();
         var reads = Product.SelectMany(assembly => CompiledCalls.ClipboardReads(assembly, [], ReadingEntryPoints)).Order(StringComparer.Ordinal).ToList();
-        var callers = Product.SelectMany(assembly => CompiledCalls.CallersOf(assembly, ["ImageStash.Seams.IClipboardAndDrops.Read", "ImageStash.Windows.Seams.WindowsClipboardAndDrops.Read"])).ToList();
-        var imageCallers = Product.SelectMany(assembly => CompiledCalls.CallersOf(assembly, ["ImageStash.Seams.IClipboardAndDrops.ReadImage", "ImageStash.Windows.Seams.WindowsClipboardAndDrops.ReadImage"])).ToList();
+        var callers = CallersOf("ImageStash.Seams.IClipboardAndDrops.Read", "ImageStash.Windows.Seams.WindowsClipboardAndDrops.Read");
+        var imageCallers = CallersOf("ImageStash.Seams.IClipboardAndDrops.ReadImage", "ImageStash.Windows.Seams.WindowsClipboardAndDrops.ReadImage");
         var outsideTheRead = Product.SelectMany(assembly => CompiledCalls.ReadsOutsideTheRead(assembly, ReadingEntryPoints, TheReads)).ToList();
 
         Assert.IsEmpty(avalonia, $"Avalonia's clipboard: {string.Join(", ", avalonia)}");
@@ -216,18 +217,36 @@ public sealed class WindowsClipboardAndDropsTests
             },
             reads,
             $"Clipboard reads, each declared once, in the seam, and no listener: {string.Join(", ", reads)}");
-        Assert.IsEmpty(callers.Where(caller => !caller.StartsWith(ThePaste + ".", StringComparison.Ordinal) && !caller.StartsWith(ThePaste + "+", StringComparison.Ordinal)).ToList(), $"Callers of the read: {string.Join(", ", callers)}");
-        Assert.IsNotEmpty(callers, "the paste does read the clipboard through the seam, so the rule above has its one caller to find");
+        Assert.HasCount(1, callers, $"Callers of the read: {string.Join(", ", callers)}");
+        Assert.StartsWith(ThePaste + "+<ReadOnce>", callers[0], "the window paste's shared read");
+        var readers = CallersOf(ThePaste + ".ReadOnce");
+        Assert.HasCount(2, readers, $"Callers of ReadOnce: {string.Join(", ", readers)}");
+        Assert.StartsWith(ThePaste + "+<Paste>", readers[0], "ordinary paste");
+        Assert.StartsWith(ThePaste + "+<PasteText>", readers[1], "paste into an editor text field (G13)");
         // Inside the act's one entry, Stash (its state machine), so nothing of the type reads at construction or elsewhere.
         Assert.IsEmpty(imageCallers.Where(caller => !caller.StartsWith(TheStash + "+<Stash>", StringComparison.Ordinal)).ToList(), $"Callers of the image-only read: {string.Join(", ", imageCallers)}");
         Assert.IsNotEmpty(imageCallers, "Stash clipboard image does read the clipboard through the seam, so the rule above has its one caller to find");
-        // And the paste runs only from the user's two acts: Ctrl+V's key and Paste image's menu entry.
-        var pastes = Product.SelectMany(assembly => CompiledCalls.CallersOf(assembly, [ThePaste + ".Paste"])).Order(StringComparer.Ordinal).ToList();
-        Assert.HasCount(2, pastes, $"Callers of the paste: {string.Join(", ", pastes)}");
-        // A lambda of the + menu's builder, compiled into a closure type of AddMenu whose number the compiler chooses.
+        // N9 and R5 permit the explicit acts Paste image and Ctrl+V. Each has more than one control route.
+        var pastes = CallersOf(ThePaste + ".Paste");
+        Assert.HasCount(4, pastes, $"Callers of the paste: {string.Join(", ", pastes)}");
+        // The compiler chooses the numbers in lambda names, so check the owning type and method.
         Assert.StartsWith("ImageStash.Window.AddMenu+", pastes[0], "the + menu's Paste image");
         Assert.Contains(".<Button>b__", pastes[0], "the + menu's Paste image");
-        Assert.AreEqual("ImageStash.Window.StashWindow.RunKeyAction", pastes[1], "Ctrl+V");
+        Assert.AreEqual(pasteKey, pastes[1], "the window's Ctrl+V");
+        Assert.StartsWith("ImageStash.Window.StashWindow+", pastes[2], "the empty stash's Paste image row");
+        Assert.Contains(".<.ctor>b__", pastes[2], "the empty stash's Paste image row");
+        Assert.AreEqual("ImageStash.Window.TagRenameBox.OnKeyDown", pastes[3], "Ctrl+V in a tag rename");
+
+        var textPastes = CallersOf(ThePaste + ".PasteText");
+        CollectionAssert.AreEqual(new[] { pasteKey, pasteKey }, textPastes, "Ctrl+V in a layer's text or the color picker's hex box (G13)");
+        var keyPresses = CallersOf(pasteKey);
+        Assert.HasCount(1, keyPresses, $"Callers of the paste key: {string.Join(", ", keyPresses)}");
+        Assert.StartsWith("ImageStash.Window.StashWindow+", keyPresses[0], "the window's Ctrl+V");
+        Assert.Contains(".<RunKeyAction>b__", keyPresses[0], "the window's Ctrl+V");
+
+        string[] CallersOf(params string[] targets) => Product
+            .SelectMany(assembly => CompiledCalls.CallersOf(assembly, targets))
+            .Order(StringComparer.Ordinal).ToArray();
     }
 
     [TestMethod]
