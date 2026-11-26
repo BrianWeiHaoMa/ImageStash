@@ -18,7 +18,9 @@ public enum TextKind
 /// band above the picture with near-black text and no outline) or Label (Segoe UI with an automatic outline where the
 /// click was). A drag moves a text layer, a corner resizes a text layer or a caption bar by its font size, and the round
 /// handle turns a text layer; dragging never draws one. The font, the fill and the outline, chosen with such a layer
-/// selected, change that layer; a new one takes its preset's own (F8). Its letters are measured by Media alone.
+/// selected, change that layer; a new one takes, property by property, the ones last chosen in this edit for a layer of
+/// its preset, else its preset's own (F8, G21). Its letters are measured by Media alone; a Meme a click adds stays on two
+/// lines as it is typed (<see cref="EditorSession.Laid"/>).
 /// </summary>
 public sealed class TextTool : EditorTool
 {
@@ -27,6 +29,12 @@ public sealed class TextTool : EditorTool
     private const double MemeSizeOfWidth = 0.10, CaptionSizeOfWidth = 0.065, LabelSizeOfWidth = 0.08, MarginOfSize = 0.4;
 
     private const string MemeFont = "Impact", OtherFont = "Segoe UI";
+
+    // What was last chosen in this edit for a layer of each preset (F8, G21): recorded as a layer takes the choice, kept
+    // through Undo and Save as new item, as the Draw tool keeps its last mark's options, and gone with the session.
+    private readonly Dictionary<TextKind, string> fonts = [];
+    private readonly Dictionary<TextKind, Rgba> fills = [];
+    private readonly Dictionary<TextKind, Outline> outlines = [];
 
     internal TextTool(EditorSession session)
         : base(session)
@@ -46,13 +54,7 @@ public sealed class TextTool : EditorTool
     public TextKind Kind { get; private set; } = TextKind.Meme;
 
     /// <summary>The preset the option row shows: the selected text or caption-bar layer's, else <see cref="Kind"/>.</summary>
-    public TextKind KindShown => Session.SelectedLayer switch
-    {
-        TextLayer { Preset: TextPreset.Meme } => TextKind.Meme,
-        TextLayer => TextKind.Label,
-        CaptionBarLayer => TextKind.CaptionBar,
-        _ => Kind,
-    };
+    public TextKind KindShown => Session.SelectedLayer is { } layer && KindOf(layer) is { } kind ? kind : Kind;
 
     /// <summary>The selected text or caption-bar layer's font family; null while none is selected.</summary>
     public string? FontShown => Session.SelectedLayer switch
@@ -102,9 +104,9 @@ public sealed class TextTool : EditorTool
             return;
         }
 
-        ApplyToSelected(layer => layer switch
+        ApplyToSelected(layer => Chosen(fonts, layer, family) switch
         {
-            TextLayer text => LayerGeometry.Measured(text with { Font = family }, Session.Layers, Session.OriginalSize),
+            TextLayer text => Session.Laid(text, text with { Font = family }),
             CaptionBarLayer bar => bar with { Font = family },
             _ => layer,
         });
@@ -115,14 +117,14 @@ public sealed class TextTool : EditorTool
     {
         // Recorded as the choice applies, before the change is shown, so the picker shows it among the recent ones.
         Session.Colors.Use(color);
-        return WithFill(layer, color);
+        return WithFill(Chosen(fills, layer, color), color);
     });
 
     /// <summary>Shows the selected text or caption-bar layer's text in the fill <paramref name="color"/> the picker is dragged to, as no step (G21, G25); false when the drag was ended meanwhile.</summary>
     public bool PreviewFill(Rgba color) => PreviewOnSelected(layer => WithFill(layer, color));
 
     /// <summary>The picker's drag let go on the fill <paramref name="color"/>: one step and one recent colour; false, applying nothing, when the drag was abandoned meanwhile.</summary>
-    public bool LetGoFill(Rgba color) => LetGo(color, layer => WithFill(layer, color));
+    public bool LetGoFill(Rgba color) => LetGo(color, layer => WithFill(Chosen(fills, layer, color), color));
 
     /// <summary>Gives the selected text or caption-bar layer the outline Auto, None or a color, as one step; a color that is not a swatch becomes a recent one (G21).</summary>
     public void ChooseOutline(Outline outline)
@@ -139,7 +141,7 @@ public sealed class TextTool : EditorTool
                 Session.Colors.Use(color);
             }
 
-            return WithOutline(layer, outline);
+            return WithOutline(Chosen(outlines, layer, outline), outline);
         });
     }
 
@@ -147,9 +149,33 @@ public sealed class TextTool : EditorTool
     public bool PreviewOutline(Rgba color) => PreviewOnSelected(layer => WithOutline(layer, Outline.Of(color)));
 
     /// <summary>The picker's drag let go on the outline <paramref name="color"/>: one step and one recent colour; false, applying nothing, when the drag was abandoned meanwhile.</summary>
-    public bool LetGoOutline(Rgba color) => LetGo(color, layer => WithOutline(layer, Outline.Of(color)));
+    public bool LetGoOutline(Rgba color) => LetGo(color, layer => WithOutline(Chosen(outlines, layer, Outline.Of(color)), Outline.Of(color)));
 
     public override bool Owns(Layer layer) => layer is TextLayer or CaptionBarLayer;
+
+    /// <summary>The preset <paramref name="layer"/> is a layer of, or null for a layer of none.</summary>
+    private static TextKind? KindOf(Layer layer) => layer switch
+    {
+        TextLayer { Preset: TextPreset.Meme } => TextKind.Meme,
+        TextLayer => TextKind.Label,
+        CaptionBarLayer => TextKind.CaptionBar,
+        _ => null,
+    };
+
+    /// <summary>
+    /// Records <paramref name="value"/> as last chosen for <paramref name="layer"/>'s preset, for the next layer of that
+    /// preset, and returns the layer; called only as a layer takes the choice, so nothing no layer took (a colour only
+    /// previewed on the picker, a choice while a Save is busy) is recorded.
+    /// </summary>
+    private static Layer Chosen<T>(Dictionary<TextKind, T> last, Layer layer, T value)
+    {
+        if (KindOf(layer) is { } kind)
+        {
+            last[kind] = value;
+        }
+
+        return layer;
+    }
 
     private static Layer WithFill(Layer layer, Rgba color) => layer switch
     {
@@ -202,12 +228,21 @@ public sealed class TextTool : EditorTool
         }
 
         Kind = KindShown;
+        var atTop = point.Y < shown.Y + shown.Height / 2f;
+        var font = fonts.GetValueOrDefault(Kind, Kind == TextKind.Meme ? MemeFont : OtherFont);
+        var fill = fills.GetValueOrDefault(Kind, Kind == TextKind.CaptionBar ? CaptionFill : White);
+        var outline = outlines.GetValueOrDefault(Kind, Kind == TextKind.CaptionBar ? Outline.None : Outline.Auto);
         Layer added = Kind switch
         {
-            TextKind.CaptionBar => new CaptionBarLayer("", OtherFont, SizeOf(shown, CaptionSizeOfWidth), CaptionFill, Outline.None),
-            TextKind.Label => Label("", OtherFont, SizeOf(shown, LabelSizeOfWidth), LayerGeometry.PixelUnder(point, shown)),
-            _ => Meme("", MemeFont, SizeOf(shown, MemeSizeOfWidth), shown, atTop: point.Y < shown.Y + shown.Height / 2f),
+            TextKind.CaptionBar => new CaptionBarLayer("", font, SizeOf(shown, CaptionSizeOfWidth), fill, outline),
+            TextKind.Label => Label("", font, SizeOf(shown, LabelSizeOfWidth), fill, outline, LayerGeometry.PixelUnder(point, shown)),
+            _ => Meme("", font, SizeOf(shown, MemeSizeOfWidth), fill, outline, shown, atTop),
         };
+        if (added is TextLayer { Preset: TextPreset.Meme } meme)
+        {
+            Session.FitAsTyped(meme, atBottom: !atTop);
+        }
+
         Session.TypeIntoAdded(new LayerList([.. layers.Layers, added]), layers.Layers.Count);
     }
 
@@ -221,9 +256,9 @@ public sealed class TextTool : EditorTool
         (TextLayer { Preset: TextPreset.Meme } meme, TextKind.Label) => LayerGeometry.Measured(meme with { Preset = TextPreset.Label }, Session.Layers, Session.OriginalSize),
         (TextLayer { Preset: TextPreset.Label } label, TextKind.Meme) => LayerGeometry.Measured(label with { Preset = TextPreset.Meme, Box = label.Box with { Width = MemeWidth(label) } }, Session.Layers, Session.OriginalSize),
         (TextLayer text, TextKind.CaptionBar) => new CaptionBarLayer(text.Text, text.Font, text.FontSize, CaptionFill, Outline.None),
-        (CaptionBarLayer bar, TextKind.Meme) when LayerGeometry.Shown(Session.Layers, Session.OriginalSize) is { } shown => Meme(bar.Text, bar.Font, bar.FontSize, shown, atTop: true),
+        (CaptionBarLayer bar, TextKind.Meme) when LayerGeometry.Shown(Session.Layers, Session.OriginalSize) is { } shown => Meme(bar.Text, bar.Font, bar.FontSize, White, Outline.Auto, shown, atTop: true),
         (CaptionBarLayer bar, TextKind.Label) when LayerGeometry.Shown(Session.Layers, Session.OriginalSize) is { } shown =>
-            Label(bar.Text, bar.Font, bar.FontSize, new PixelPoint((int)Math.Min((long)shown.X + MarginOf(bar.FontSize), int.MaxValue), (int)Math.Min((long)shown.Y + MarginOf(bar.FontSize), int.MaxValue))),
+            Label(bar.Text, bar.Font, bar.FontSize, White, Outline.Auto, new PixelPoint((int)Math.Min((long)shown.X + MarginOf(bar.FontSize), int.MaxValue), (int)Math.Min((long)shown.Y + MarginOf(bar.FontSize), int.MaxValue))),
         _ => layer,
     };
 
@@ -251,18 +286,18 @@ public sealed class TextTool : EditorTool
     /// its bottom (G21); above and below, no more margin than the picture has room for beside the box, so on a picture
     /// cropped shorter than that it still lies at the edge it was put at and shows there.
     /// </summary>
-    private TextLayer Meme(string text, string font, int size, PixelRect shown, bool atTop)
+    private TextLayer Meme(string text, string font, int size, Rgba fill, Outline outline, PixelRect shown, bool atTop)
     {
         var margin = MarginOf(size);
         var width = (int)Math.Clamp((long)shown.Width - 2L * margin, 1, int.MaxValue);
         var origin = new PixelRect((int)Math.Min((long)shown.X + margin, int.MaxValue), shown.Y, width, 1);
-        var meme = LayerGeometry.Measured(new TextLayer(TextPreset.Meme, text, font, size, White, Outline.Auto, origin, 0, null), Session.Layers, Session.OriginalSize);
+        var meme = LayerGeometry.Measured(new TextLayer(TextPreset.Meme, text, font, size, fill, outline, origin, 0, null), Session.Layers, Session.OriginalSize);
         var room = Math.Clamp((long)shown.Height - meme.Box.Height, 0, margin);
         var y = atTop ? (long)shown.Y + room : (long)shown.Y + shown.Height - room - meme.Box.Height;
         return LayerGeometry.Measured(meme with { Box = meme.Box with { Y = (int)Math.Clamp(y, 0, int.MaxValue) } }, Session.Layers, Session.OriginalSize);
     }
 
     /// <summary>A Label whose box's top-left is at <paramref name="at"/>, moved only as far as keeps it inside the original.</summary>
-    private TextLayer Label(string text, string font, int size, PixelPoint at) =>
-        LayerGeometry.Measured(new TextLayer(TextPreset.Label, text, font, size, White, Outline.Auto, new PixelRect(at.X, at.Y, 1, 1), 0, null), Session.Layers, Session.OriginalSize);
+    private TextLayer Label(string text, string font, int size, Rgba fill, Outline outline, PixelPoint at) =>
+        LayerGeometry.Measured(new TextLayer(TextPreset.Label, text, font, size, fill, outline, new PixelRect(at.X, at.Y, 1, 1), 0, null), Session.Layers, Session.OriginalSize);
 }

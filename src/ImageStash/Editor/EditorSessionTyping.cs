@@ -83,8 +83,9 @@ public sealed partial class EditorSession
     /// <summary>
     /// Shows <paramref name="text"/> as the open field's layer's text, no step of its own, a text layer's box following
     /// its letters as measured from where the box was when the field opened, so letters typed and taken back leave it
-    /// where it was; a Meme keeps the uppercase letters it shows (G21: "Meme is uppercase"), so a field laid out on its
-    /// text puts the caret on the letters drawn, and as a Label later it keeps them. A text that is not well-formed
+    /// where it was, a Meme a click added at the size that keeps it on two lines (<see cref="Laid"/>); a Meme keeps the
+    /// uppercase letters it shows (G21: "Meme is uppercase"), so a field laid out on its text puts the caret on the
+    /// letters drawn, and as a Label later it keeps them. A text that is not well-formed
     /// UTF-16, as a field typed one code unit at a time holds for a moment halfway through an emoji, is not shown: the
     /// layer keeps the last text that was.
     /// </summary>
@@ -101,7 +102,7 @@ public sealed partial class EditorSession
         var layer = Layers.Layers[index];
         Layer typed = (layer, open.Start) switch
         {
-            (TextLayer, TextLayer lettered) => LayerGeometry.Measured(lettered with { Text = lettered.Preset == TextPreset.Meme ? Uppercase.Of(text) : text }, Layers, OriginalSize),
+            (TextLayer, TextLayer lettered) => Laid(lettered, lettered with { Text = lettered.Preset == TextPreset.Meme ? Uppercase.Of(text) : text }),
             (CaptionBarLayer bar, _) => bar with { Text = text },
             _ => layer,
         };

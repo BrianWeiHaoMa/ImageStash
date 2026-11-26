@@ -9,14 +9,14 @@ namespace ImageStash.Tests.Editor;
 
 /// <summary>
 /// The Text tool (G20, G21, G22, F7, F8): first on the tool row and current at open; a click on the picture adding a
-/// layer of the current preset with that preset's own defaults, a Meme at the top or the bottom by the click's half, a
+/// layer of the current preset with that preset's own defaults until the edit chose others for it, a Meme at the top or the bottom by the click's half, a
 /// Label at the click, a caption bar above the picture, while a click on a layer still selects it; a drag moving a text
 /// layer and never drawing one; a corner scaling the font with a Meme's width or a caption's band, the opposite corner
 /// kept; the round handle turning a text layer from its centre, Shift snapping to 15° and a double-click resetting it; a
 /// preset chosen converting the selected layer; the font, fill and outline changing the selected layer only.
 /// </summary>
 [TestClass]
-public sealed class TextToolTests
+public sealed partial class TextToolTests
 {
     private static readonly PixelSize Still = StillInTheEditor.Size;
     private static readonly Rgba White = ColorChoices.Swatches[0];
@@ -107,7 +107,7 @@ public sealed class TextToolTests
     }
 
     [TestMethod]
-    public async Task EachPresetStartsFromItsOwnDefaultsNotFromTheLastChoices()
+    public async Task ANewMemeTakesTheFontAndColoursLastChosenForAMeme()
     {
         using var editing = await StillInTheEditor.Open();
         var session = editing.Session;
@@ -122,7 +122,7 @@ public sealed class TextToolTests
         session.Click(10, 40);
 
         var next = (TextLayer)session.Layers.Layers[1];
-        Assert.AreEqual(("Impact", White, Outline.Auto), (next.Font, next.Fill, next.Outline), "F8: a Meme starts in Impact; G21: Meme defaults to Auto");
+        Assert.AreEqual(("Comic Sans MS", Blue, Outline.None), (next.Font, next.Fill, next.Outline), "F8: within one edit a new layer takes instead the font last chosen in that edit for a layer of its preset; G21: and the fill and the outline");
         Assert.AreEqual(("Comic Sans MS", Blue, Outline.None), (((TextLayer)session.Layers.Layers[0]).Font, ((TextLayer)session.Layers.Layers[0]).Fill, ((TextLayer)session.Layers.Layers[0]).Outline));
     }
 

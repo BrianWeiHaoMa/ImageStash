@@ -145,9 +145,16 @@ public abstract class EditorTool
         gesture = null;
         if (done.Dragging)
         {
+            // Before the commit, whose Changed may already run another change.
+            if (done.Grip == Grip.Resize)
+            {
+                Session.SizedByCorner(done.Before);
+            }
+
             Session.Commit(done.Before, Session.Layers, Session.Selected);
         }
-        else if (done.Grip is not (Grip.Rotate or Grip.Own) && LayerGeometry.TopmostAt(Session.Layers, point, Session.HitTolerance, Session.OriginalSize) is { } index)
+        else if
+ (done.Grip is not (Grip.Rotate or Grip.Own) && LayerGeometry.TopmostAt(Session.Layers, point, Session.HitTolerance, Session.OriginalSize) is { } index)
         {
             // A click on the round handle is the handle's, so its double-click resets the turn whatever lies beneath (G21).
             Session.Select(index);

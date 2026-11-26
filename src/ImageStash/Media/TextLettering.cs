@@ -65,6 +65,9 @@ internal sealed class TextLettering : IDisposable
     public static Rgba AutoOutline(Rgba fill) =>
         0.299 * fill.R + 0.587 * fill.G + 0.114 * fill.B > 0.5 * 255 ? new Rgba(0, 0, 0, 255) : new Rgba(255, 255, 255, 255);
 
+    /// <summary>How many lines the letters are laid out on: the typed lines, a Meme's and a caption's each wrapped at its width.</summary>
+    public int LineCount => lines.Count;
+
     /// <summary>The laid-out size: the widest line and the lines' pitch, each rounded up and at least 1.</summary>
     public PixelSize Size()
     {

@@ -103,6 +103,13 @@ public static class LayerComposer
         return lettering.Size();
     }
 
+    /// <summary>How many lines a text layer's letters are laid out on as <see cref="Compose"/> lays them out: a Meme's typed lines each wrapped at its box's width, a Label's typed lines.</summary>
+    public static int TextLines(TextLayer layer)
+    {
+        using var lettering = TextLettering.Of(layer);
+        return lettering.LineCount;
+    }
+
     /// <summary>The colour an outline set to Auto draws in for <paramref name="fill"/>: black on a light fill, white on a dark one (G21).</summary>
     public static Rgba AutoOutline(Rgba fill) => TextLettering.AutoOutline(fill);
 

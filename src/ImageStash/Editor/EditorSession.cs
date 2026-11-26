@@ -400,6 +400,7 @@ public sealed partial class EditorSession : IDisposable
     /// <summary>Shows <paramref name="layers"/> while a drag runs, as no step of its own.</summary>
     internal void Show(LayerList layers, int? selected)
     {
+        CarrySizes(Layers, layers);
         Layers = layers;
         Selected = selected;
         RaiseChanged();

@@ -414,7 +414,6 @@ public sealed class EditorSessionTypingTests
         var session = editing.Session;
         var text = session.Text();
         session.Click(10, 5);
-        var white = ((TextLayer)session.Layers.Layers.Single()).Fill;
         var (dragged, kept) = (new Rgba(0x10, 0x20, 0x30, 0xFF), new Rgba(0x40, 0x50, 0x60, 0xFF));
 
         text.BeginColor();
@@ -435,11 +434,14 @@ public sealed class EditorSessionTypingTests
 
         // Letters typed while a colour is still dragged put the drag back, so its let-go takes back no letter.
         session.Click(10, 5);
+        // G21: the new Meme takes the fill let go on the last one, which its Undo did not take back as a choice.
+        var added = ((TextLayer)session.Layers.Layers.Single()).Fill;
+        Assert.AreEqual(kept, added);
         text.BeginColor();
         text.PreviewFill(dragged);
         session.SetTypedText("a");
         var lettered = (TextLayer)session.Layers.Layers.Single();
-        Assert.AreEqual(("A", white), (lettered.Text, lettered.Fill));
+        Assert.AreEqual(("A", added), (lettered.Text, lettered.Fill));
         Assert.IsFalse(text.LetGoFill(kept), "the drag was ended by the letter");
         Assert.AreSame(lettered, session.Layers.Layers.Single());
         session.EndTyping();
