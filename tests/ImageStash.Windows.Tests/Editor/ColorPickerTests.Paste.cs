@@ -1,6 +1,7 @@
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -11,6 +12,7 @@ using ImageStash.Seams;
 using ImageStash.Store;
 using ImageStash.Window;
 using ImageStash.Windows.Tests.Support;
+using SkiaSharp;
 
 namespace ImageStash.Windows.Tests.Editor;
 
@@ -79,11 +81,16 @@ public sealed partial class ColorPickerTests
             var hex = (TextBox)Named(content, "Hex")!;
             Assert.AreEqual(("#123456", 7, 7), (hex.Text, hex.SelectionStart, hex.SelectionEnd), "a delayed read uses the open hex's current caret");
             Assert.AreEqual(new Rgba(255, 122, 26, 255), ((DrawMarkLayer)editor.Session!.SelectedLayer!).Color, "paste edits the draft");
+            Assert.DoesNotContain("#123456", ((ColorPicker)content).RecentSwatches.Select(AutomationProperties.GetName).ToList(), "Recent changes on confirmation");
             ShownWindow.Tap(hex, Key.Enter);
             Assert.AreEqual(new Rgba(0x12, 0x34, 0x56, 255), ((DrawMarkLayer)editor.Session.SelectedLayer!).Color, "Enter applies the pasted hex");
             Assert.AreEqual(Color.FromRgb(0x12, 0x34, 0x56), MoreSwatchFill(editor));
             Assert.Contains("#123456", content.GetVisualDescendants().OfType<Button>().Select(AutomationProperties.GetName).ToList());
             Assert.AreEqual("", shown.Said(), "no paste notice for text");
+            ShownWindow.Tap(hex, Key.Z, KeyModifiers.Control);
+            Assert.AreEqual(new Rgba(255, 122, 26, 255), ((DrawMarkLayer)editor.Session.SelectedLayer!).Color, "Undo restores the prior color");
+            ShownWindow.Tap(hex, Key.Y, KeyModifiers.Control);
+            Assert.AreEqual(new Rgba(0x12, 0x34, 0x56, 255), ((DrawMarkLayer)editor.Session.SelectedLayer!).Color, "Redo reapplies the color");
         }, DispatcherPriority.Background);
         Assert.HasCount(1, (await shown.Listing.Store!.All()).Value!);
 
@@ -190,6 +197,9 @@ public sealed partial class ColorPickerTests
         {
             Assert.AreEqual(ColorChoices.Hex(first.Color), reopened.Text, "the new opening keeps the restored mark's colour");
             Assert.AreSame(first, editor.Session!.SelectedLayer);
+            Assert.AreEqual("Paste failed: the editor field, it closed before the paste could complete", shown.Said());
+            ShownWindow.Tap(reopened, Key.Enter);
+            Assert.AreEqual(first.Color, ((DrawMarkLayer)editor.Session.SelectedLayer!).Color, "Enter after the read cannot apply the delayed colour");
         }, DispatcherPriority.Background);
     }
 
@@ -248,11 +258,11 @@ public sealed partial class ColorPickerTests
             (new Failure(ClipboardPaste.Action, "the clipboard", HeldClipboard.Reason), $"Paste failed: the clipboard, {HeldClipboard.Reason}"),
         };
 
-        await OpenLabel(shown, editor, item);
+        await OpenTextFill(shown, editor, item, "Meme");
         var hex = TrayDesktop.Get(() =>
         {
             var field = FocusHex(shown, editor);
-            Assert.IsTrue(editor.Session!.Typing, "the empty label's text is still open with focus in the picker");
+            Assert.IsTrue(editor.Session!.Typing, "the empty Meme's text is still open with focus in the picker");
             return field;
         });
         foreach (var (read, notice) in cases)
@@ -299,7 +309,7 @@ public sealed partial class ColorPickerTests
         using var shown = ShownWindow.Open(drags: clipboard);
         using var editor = new ShownEditor(shown);
         var item = (await shown.OpenStash(shown.Picture("grey.png", 200, 150, (_, _) => TextFieldTests.Grey))).Single();
-        await OpenLabel(shown, editor, item);
+        await OpenTextFill(shown, editor, item);
 
         var (original, target, draft) = TrayDesktop.Get(() =>
         {
@@ -328,7 +338,7 @@ public sealed partial class ColorPickerTests
             Assert.AreEqual(draft, original.Text, "the original opening is gone");
             Assert.AreEqual(targetText, target.Text, "the new target does not take the paste");
             Assert.AreEqual("", editor.Field!.Text);
-            Assert.AreEqual("", shown.Said());
+            Assert.AreEqual("Paste failed: the editor field, it closed before the paste could complete", shown.Said(), "the dropped paste is named without its words (G35)");
         }, DispatcherPriority.Background);
         Assert.HasCount(1, (await shown.Listing.Store!.All()).Value!);
     }
@@ -342,7 +352,7 @@ public sealed partial class ColorPickerTests
         var item = (await shown.OpenStash(shown.Picture("grey.png", 200, 150, (_, _) => TextFieldTests.Grey))).Single();
         var png = File.ReadAllBytes(shown.Fixture("transparent.png", "other.png"));
         clipboard.ReadClipboard = () => Task.FromResult(Outcome<ClipboardReading>.Of(new ClipboardReading([], png, null, false)));
-        await OpenLabel(shown, editor, item);
+        await OpenTextFill(shown, editor, item);
 
         TrayDesktop.Run(() =>
         {
@@ -357,15 +367,108 @@ public sealed partial class ColorPickerTests
         Assert.AreEqual(1, clipboard.Reads);
     }
 
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task PastedHexColorsRenderAndReopenFromAllThreePickers(bool docked)
+    {
+        var clipboard = new PresetDrags();
+        using var shown = ShownWindow.Open(drags: clipboard);
+        using var editor = new ShownEditor(shown);
+        var item = (await shown.OpenStash(shown.Picture("white.png", 400, 300, (_, _) => SKColors.White))).Single();
+        if (docked)
+        {
+            TrayDesktop.Run(shown.Window.SummonPinned);
+        }
+
+        await OpenTextFill(shown, editor, item, "Meme");
+        var fill = new Rgba(240, 97, 35, 255);
+        var outline = new Rgba(40, 99, 208, 255);
+        var mark = new Rgba(36, 158, 89, 255);
+        TrayDesktop.Run(() =>
+        {
+            var hex = FocusHex(shown, editor);
+            Assert.AreEqual(docked, Picker(editor)!.GetVisualAncestors().OfType<ScrollViewer>().Any());
+            var before = Text(editor).Fill;
+            const string invalid = "not-hex";
+            hex.SelectAll();
+            ShownWindow.Type(hex, invalid);
+            var typed = hex.Text;
+            ShownWindow.Tap(hex, Key.Enter);
+            hex.SelectAll();
+            ShownWindow.Type(hex, "#102030");
+            Assert.AreEqual("#102030", hex.Text, "the paste starts from a different draft");
+            hex.SelectAll();
+            PasteHex(hex, clipboard, invalid);
+            Assert.AreEqual(typed, hex.Text, "paste uses the same text input as typing");
+            ShownWindow.Tap(hex, Key.Enter);
+            Assert.AreEqual(before, Text(editor).Fill, "neither invalid draft applies a colour");
+            Assert.AreEqual(typed, hex.Text);
+            Assert.IsNull(hex.ContextFlyout, "the native paste menu is removed");
+            var nativePaste = new RoutedEventArgs(TextBox.PastingFromClipboardEvent);
+            hex.RaiseEvent(nativePaste);
+            Assert.IsTrue(nativePaste.Handled, "the native TextBox clipboard read is suppressed");
+            Assert.AreEqual(1, clipboard.Reads);
+
+            ApplyHex(hex, clipboard, fill);
+            Assert.AreEqual("", editor.Field!.Text, "the open caption did not receive the hex");
+            ShownWindow.Tap(hex, Key.Escape);
+            ShownWindow.Type(editor.Field, "HELLO");
+            editor.Choose("Outline color");
+            hex = FocusHex(shown, editor);
+            ApplyHex(hex, clipboard, outline);
+            ShownWindow.Tap(hex, Key.Escape);
+
+            editor.Choose("Draw");
+            editor.Choose("Box");
+            editor.Drag((0.1, 0.6), (0.3, 0.85));
+            editor.Choose("More colors");
+            ApplyHex(FocusHex(shown, editor), clipboard, mark);
+            Assert.AreEqual(4, clipboard.Reads);
+            editor.Choose("Save");
+        });
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => !shown.Editing.IsOpen));
+
+        var store = shown.Listing.Store!;
+        var saved = (await store.All()).Value!.Single();
+        Assert.AreEqual(item.Id, saved.Id);
+        using var picture = SKBitmap.Decode(store.Folder.InRoot(saved.FileName));
+        var pixels = picture.Pixels;
+        Assert.Contains(new SKColor(fill.R, fill.G, fill.B), pixels, "the caption fill is rendered");
+        Assert.Contains(new SKColor(outline.R, outline.G, outline.B), pixels, "the caption outline is rendered");
+        Assert.AreEqual(new SKColor(mark.R, mark.G, mark.B), picture.GetPixel(40, 210), "the Draw box is rendered");
+
+        await EditorOverlayTests.Open(shown, saved);
+        TrayDesktop.Run(() =>
+        {
+            Assert.AreEqual(fill, Text(editor).Fill);
+            Assert.AreEqual(Outline.Of(outline), Text(editor).Outline);
+            Assert.AreEqual(mark, editor.Session!.Layers.Layers.OfType<DrawMarkLayer>().Single().Color);
+        });
+    }
+
+    private static void PasteHex(TextBox hex, PresetDrags clipboard, string words)
+    {
+        clipboard.ReadClipboard = () => Task.FromResult(Words(words));
+        ShownWindow.Tap(hex, Key.V, KeyModifiers.Control);
+    }
+
+    private static void ApplyHex(TextBox hex, PresetDrags clipboard, Rgba color)
+    {
+        hex.SelectAll();
+        PasteHex(hex, clipboard, ColorChoices.Hex(color));
+        ShownWindow.Tap(hex, Key.Enter);
+    }
+
     private static Outcome<ClipboardReading> Words(string words) => Outcome<ClipboardReading>.Of(new ClipboardReading([], null, null, false, words));
 
-    private static async Task OpenLabel(ShownWindow shown, ShownEditor editor, StashItem item)
+    private static async Task OpenTextFill(ShownWindow shown, ShownEditor editor, StashItem item, string preset = "Label")
     {
         await TrayDesktop.Get(() => shown.Editing.Open(item, EditOrigin.Grid));
         TrayDesktop.Run(() =>
         {
             shown.Window.UpdateLayout();
-            editor.Choose("Label");
+            editor.Choose(preset);
             editor.Click(0.5, 0.25);
             editor.Choose("More colors");
             Assert.IsTrue(editor.Session!.Typing, "opening the picker leaves the layer text open");

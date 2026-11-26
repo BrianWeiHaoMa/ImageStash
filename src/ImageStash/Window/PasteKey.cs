@@ -10,8 +10,8 @@ public sealed class PasteKey(ClipboardPaste paste, Editing editing)
 {
     /// <param name="caretIn">The layer's open text the caret is in, or null: the caret is anywhere else.</param>
     /// <param name="intoField">The search box's or a tag field's taker of the words, else null (<see cref="ClipboardPaste.Paste"/>).</param>
-    /// <param name="intoHex">The focused picker opening's text input, else null.</param>
-    public Task Press(IOpenLayerText? caretIn, Action<string>? intoField, Action<string>? intoHex = null)
+    /// <param name="intoHex">The focused picker opening's text input, else null. Returns false after that opening ends.</param>
+    public Task Press(IOpenLayerText? caretIn, Action<string>? intoField, Func<string, bool>? intoHex = null)
     {
         if (intoHex is not null)
         {
@@ -28,11 +28,17 @@ public sealed class PasteKey(ClipboardPaste paste, Editing editing)
         var opening = session?.TypingOpening;
         return paste.PasteText(words =>
         {
-            if (opening is not null && ReferenceEquals(editing.Session, session) && session!.TypingOpening == opening
-                && LayerTextPaste.Insert(caretIn.Text, caretIn.SelectionStart, caretIn.SelectionEnd, words, session.TypesUppercase) is var (text, caret))
+            if (opening is null || !ReferenceEquals(editing.Session, session) || session!.TypingOpening != opening)
             {
-                caretIn.Put(text, caret);
+                return false;
             }
+
+            if (LayerTextPaste.Insert(caretIn.Text, caretIn.SelectionStart, caretIn.SelectionEnd, words, session.TypesUppercase) is { } inserted)
+            {
+                caretIn.Put(inserted.Text, inserted.Caret);
+            }
+
+            return true;
         });
     }
 }

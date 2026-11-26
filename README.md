@@ -45,7 +45,7 @@ Start Menu or its `ImageStash.Windows.exe`, opens the stash window, as a click o
 | Two letters, then `Enter` | The first match is pasted into the app you came from. Nothing is sent. |
 | `Ctrl+PrtScn` | Drag a rectangle: the screenshot is in the stash and on the clipboard. |
 | `Ctrl+Shift+PrtScn` | Drag a rectangle, press Record, then Stop: the clip is a GIF in the stash and on the clipboard. |
-| `Ctrl+E` | Edit the selected picture with Text, Crop, Trim, Hide and Draw. While you type a caption, `Ctrl+V` pastes copied words into it. |
+| `Ctrl+E` | Edit the selected picture with Text, Crop, Trim, Hide and Draw. Use `Ctrl+V` to paste words into a caption or a color code into the picker's Hex field. Press Enter in Hex to apply the color. |
 | `Ctrl+T` | Tag the selected pictures: type a word and press Enter. In a picture's preview, it goes to the preview's tag box. |
 | `Space`, then the arrows | Preview the selected picture, then step to the previous or next one in the grid; the preview's ‹ and › do the same. |
 | `Left` / `Right` | Move to the previous or next picture from the grid or from an empty search box. |

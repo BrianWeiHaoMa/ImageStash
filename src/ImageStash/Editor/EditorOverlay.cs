@@ -124,7 +124,7 @@ public sealed class EditorOverlay : Border
     public IOpenLayerText? OpenTextAt(object? focused) => field.Holds(focused) ? field : null;
 
     /// <summary>The text input for the focused hex box, valid until its picker opening ends.</summary>
-    internal Action<string>? HexPasteAt(object? focused)
+    internal Func<string, bool>? HexPasteAt(object? focused)
     {
         if (pane.Shown is not ColorPicker picker || picker.HexPasteAt(focused) is not { } intoHex)
         {
@@ -134,10 +134,13 @@ public sealed class EditorOverlay : Border
         var opening = pane.Opening;
         return words =>
         {
-            if (ReferenceEquals(pane.Opening, opening))
+            if (!ReferenceEquals(pane.Opening, opening))
             {
-                intoHex(words);
+                return false;
             }
+
+            intoHex(words);
+            return true;
         };
     }
 

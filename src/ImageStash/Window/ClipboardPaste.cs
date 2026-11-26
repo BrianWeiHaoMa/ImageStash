@@ -79,9 +79,9 @@ public sealed class ClipboardPaste(Listing listing, Notices notices, Import impo
     /// <c>Ctrl+V</c> inside an editor text field (G13): one read whatever the stash is doing,
     /// since nothing is added; its words go to <paramref name="intoText"/> when it holds words and neither files nor a
     /// picture, a web address alone among them (nothing is fetched, N2), and otherwise the notice says it holds no text to
-    /// paste; a read that fails is named (G35).
+    /// paste. A read that fails or a field that closed before taking the words gets a notice (G35).
     /// </summary>
-    public async Task PasteText(Action<string> intoText)
+    public async Task PasteText(Func<string, bool> intoText)
     {
         using var acting = UserAct.Begin(Action);
         var read = await ReadOnce();
@@ -91,7 +91,10 @@ public sealed class ClipboardPaste(Listing listing, Notices notices, Import impo
         }
         else if (WordsAlone(read.Value!) is { } words)
         {
-            intoText(words);
+            if (!intoText(words))
+            {
+                notices.Raise(new Failure(Action, "the editor field", "it closed before the paste could complete"));
+            }
         }
         else
         {

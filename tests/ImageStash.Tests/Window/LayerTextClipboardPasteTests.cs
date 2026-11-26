@@ -174,7 +174,7 @@ public sealed class LayerTextClipboardPasteTests
     }
 
     [TestMethod]
-    public async Task ALateAnswerGoesNowhereOnceTheTextClosedOrClosedAndOpenedAgainOrAnotherLayerOrTheEditorWent()
+    public async Task ALateAnswerNamesTheDroppedPasteOnceTheTextClosedOrClosedAndOpenedAgainOrAnotherLayerOrTheEditorWent()
     {
         var ways = new (string Way, Action<ListedStash, EditorSession> Meanwhile)[]
         {
@@ -199,7 +199,10 @@ public sealed class LayerTextClipboardPasteTests
 
             Assert.AreEqual(0, field.Puts, $"{way}: the words go nowhere");
             Assert.AreEqual("so", ((TextLayer)session.Layers.Layers[0]).Text, $"{way}: the text as it was");
-            Assert.IsFalse(listed.Notices.Shown.Any(notice => notice.Text.StartsWith("Paste")), $"{way}: nothing said of the paste");
+            var notice = listed.Notices.Shown.Single(notice => notice.Act?.Action == ClipboardPaste.Action);
+            Assert.AreEqual("Paste failed: the editor field, it closed before the paste could complete",
+                notice.Text, $"{way}: the dropped paste is named without its words (G35)");
+            Assert.IsTrue(notice.NamesAProblem, $"{way}: the failure stays past its time (G16)");
             Assert.HasCount(1, await listed.Stash.All(), $"{way}: nothing added");
         }
     }

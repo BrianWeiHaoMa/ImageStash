@@ -1,6 +1,8 @@
 using Avalonia.Input;
 using Avalonia.Threading;
 using ImageStash.Layers;
+using ImageStash.Seams;
+using ImageStash.Store;
 using ImageStash.Windows.Tests.Support;
 using SkiaSharp;
 using static ImageStash.Windows.Tests.Support.ShownWindow;
@@ -82,6 +84,45 @@ public sealed class LayerTextPasteTests
             Assert.AreEqual("KEEP", ((TextLayer)editor.Session!.Layers.Layers.Single()).Text);
             Assert.IsEmpty(shown.Notices.Shown);
         }, DispatcherPriority.Background);
+    }
+
+    [TestMethod]
+    public async Task ADelayedPasteAfterCtrlEnterLeavesTheReopenedMemeAloneAndNamesTheDrop()
+    {
+        var read = new TaskCompletionSource<Outcome<ClipboardReading>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var clipboard = new PresetDrags { ReadClipboard = () => read.Task };
+        using var shown = Open(drags: clipboard);
+        using var editor = new ShownEditor(shown);
+        await OpenMeme(shown, editor);
+
+        TrayDesktop.Run(() =>
+        {
+            var field = editor.Field!;
+            Type(field, "keep");
+            shown.Window.UpdateLayout();
+            Tap(field, Key.V, KeyModifiers.Control);
+            Assert.AreEqual(1, clipboard.Reads);
+            Assert.AreEqual("KEEP", field.Text, "the read has not answered yet");
+            Tap(field, Key.Enter, KeyModifiers.Control);
+            Assert.IsNull(editor.Field);
+
+            var box = ((TextLayer)editor.Session!.SelectedLayer!).Box;
+            editor.DoubleClick(editor.OnCanvas(box.X + box.Width / 2d, box.Y + box.Height / 2d));
+            Assert.IsNotNull(editor.Field);
+            Assert.AreSame(editor.Field, shown.Focused);
+            editor.Field.SelectAll();
+        });
+
+        read.SetResult(Outcome<ClipboardReading>.Of(new ClipboardReading([], null, null, false, "dropped words")));
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            Assert.AreEqual("KEEP", editor.Field!.Text);
+            Assert.AreEqual("KEEP", ((TextLayer)editor.Session!.SelectedLayer!).Text);
+            var notice = shown.Notices.Shown.Single();
+            Assert.AreEqual("Paste failed: the editor field, it closed before the paste could complete", notice.Text);
+            Assert.IsTrue(notice.NamesAProblem);
+        }, DispatcherPriority.Background);
+        Assert.HasCount(1, (await shown.Listing.Store!.All()).Value!);
     }
 
     private static async Task OpenMeme(ShownWindow shown, ShownEditor editor)
