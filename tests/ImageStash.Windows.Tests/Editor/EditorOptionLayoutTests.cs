@@ -46,7 +46,7 @@ public sealed class EditorOptionLayoutTests
             Assert.AreEqual(initial, Geometry(shown, editor, pointer), "adding a Meme");
             ShownWindow.Type(editor.Field!, "hello");
             ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
-            ShownWindow.Press(editor.Canvas, Key.Escape);
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
             Assert.IsNull(editor.Session.Selected);
             Assert.AreEqual(initial, Geometry(shown, editor, pointer), "deselecting the Meme");
             var text = (TextLayer)editor.Session.Layers.Layers.Single();
@@ -83,6 +83,31 @@ public sealed class EditorOptionLayoutTests
             editor.Choose("Arrow");
             Assert.Contains("Drag an end to re-aim, the arrow to move, or elsewhere to draw.", editor.Texts());
             Assert.AreEqual(initial, Geometry(shown, editor, pointer), "the selected arrow");
+            AssertOptionsFit(shown, editor);
+
+            // Hide's hints, unselected and selected, name the style that leaves nothing, and fit whole (G23, S13).
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
+            editor.Choose("Hide");
+            Assert.Contains("Black box leaves nothing", editor.Session.Tool.Hint);
+            Assert.AreEqual(initial, Geometry(shown, editor, pointer), "Hide's hint");
+            AssertOptionsFit(shown, editor);
+            editor.Drag((0.3, 0.55), (0.6, 0.7));
+            Assert.IsTrue(editor.Session.SelectedLayer is HideLayer);
+            Assert.Contains("Black box leaves nothing", editor.Session.Tool.Hint);
+            Assert.AreEqual(initial, Geometry(shown, editor, pointer), "the selected hide's hint");
+            AssertOptionsFit(shown, editor);
+
+            // The asking words on the changed edit fit the line, and neither they nor their going moves the picture (G20, S13).
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
+            Assert.AreEqual(EditorSession.AskingWords, editor.Session.Asking);
+            Assert.Contains(EditorSession.AskingWords, editor.Texts());
+            Assert.AreEqual(initial, Geometry(shown, editor, pointer), "the asking words");
+            AssertOptionsFit(shown, editor);
+            ShownWindow.Tap(editor.Canvas, Key.Left);
+            Assert.IsNull(editor.Session.Asking, "another key ends the asking");
+            Assert.Contains(editor.Session.Tool.Hint, editor.Texts());
+            Assert.AreEqual(initial, Geometry(shown, editor, pointer), "the asking words gone");
             AssertOptionsFit(shown, editor);
         });
     }
@@ -184,7 +209,7 @@ public sealed class EditorOptionLayoutTests
             Assert.IsGreaterThan(narrow.Canvas.Width, docked.Width, "resizing made room");
             var box = editor.Box;
             Assert.IsGreaterThan(narrow.Fitted.Width, box.Width, "the picture scales up on resize");
-            ShownWindow.Press(editor.Canvas, Key.Escape);
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
             shown.Window.UpdateLayout();
             Assert.IsGreaterThan(docked.Width, editor.Canvas.Bounds.Width, "closing the dock gave the canvas its width");
             Assert.IsGreaterThan(box.Width, editor.Box.Width, "the picture scales up into the wider canvas");
@@ -384,7 +409,8 @@ public sealed class EditorOptionLayoutTests
 
     private static void AssertOptionsFit(ShownWindow shown, ShownEditor editor)
     {
-        var hint = editor.Overlay.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Text == editor.Session!.Tool.Hint);
+        // The asking words stand in the tool's place while they show (G20, G21).
+        var hint = editor.Overlay.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Text == (editor.Session!.Asking ?? editor.Session.Tool.Hint));
         TextOptionRowTests.AssertInside(shown, hint, "gesture hint");
         Assert.IsFalse(hint.TextLayout.TextLines.Any(line => line.HasCollapsed), hint.Text);
         Assert.IsLessThanOrEqualTo(hint.Bounds.Width + 0.5, hint.TextLayout.Width, hint.Text);

@@ -245,16 +245,18 @@ public sealed class EditingTests
     }
 
     [TestMethod]
-    public async Task CancelWithNothingChangedStillPutsUpTheNoticeAndUndoOnAnItemGoneSinceIsRefusedByName()
+    public async Task CancelOfAChangedEditPutsUpTheNoticeAndUndoOnAnItemGoneSinceIsRefusedByName()
     {
         using var listed = await ListedStash.Open();
         var cat = await listed.Stash.ImportFixture("cat", "still.png");
         await listed.Listing.Refresh();
         await listed.Editing.Open(cat, EditOrigin.Grid);
+        listed.Editing.Session!.Tool = listed.Editing.Session.Hide();
+        listed.Editing.Session.DragThrough((1, 1), (4, 3));
 
         listed.Editing.Cancel();
         var notice = listed.Notices.Shown.Single();
-        Assert.AreEqual("Discarded the edit of “cat”.", notice.Text, "G20 makes no exception for an unchanged list");
+        Assert.AreEqual("Discarded the edit of “cat”.", notice.Text, "G20: the notice \"when the edit's layers differ from the ones the item's finished picture was rendered from\"");
 
         await listed.Stash.Store!.Remove([cat.Id]);
         await listed.Notices.Undo(notice);
@@ -271,12 +273,19 @@ public sealed class EditingTests
         await listed.Listing.Refresh();
         await listed.Editing.Open(cat, EditOrigin.Grid);
         var first = listed.Editing.Session!;
+        first.Tool = first.Hide();
+        first.DragThrough((1, 1), (4, 3));
 
         await listed.Editing.Open(dog, EditOrigin.Grid);
 
         Assert.IsFalse(first.IsOpen, "one edit at a time (Approach)");
         Assert.AreEqual(dog.Id, listed.Editing.Session!.Item.Id);
         Assert.AreEqual("Discarded the edit of “cat”.", listed.Notices.Shown.Single().Text, "left as Cancel would, notice and Undo included");
+
+        await listed.Editing.Open(cat, EditOrigin.Grid);
+
+        Assert.AreEqual(cat.Id, listed.Editing.Session!.Item.Id);
+        Assert.HasCount(1, listed.Notices.Shown, "the untouched edit of dog left as Cancel would, without a notice (G20)");
     }
 
     [TestMethod]

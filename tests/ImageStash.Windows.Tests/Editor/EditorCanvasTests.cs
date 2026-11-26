@@ -71,14 +71,14 @@ public sealed class EditorCanvasTests
         // Nothing selected, no handle; Black box chosen, a second drag covers wholly.
         TrayDesktop.Run(() =>
         {
-            ShownWindow.Press(editor.Canvas, Key.Escape);
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
             editor.Choose("Hide");
             editor.Choose("Black box");
             editor.Drag((2 / 64d, 2 / 48d), (10 / 64d, 10 / 48d));
             Assert.AreEqual(new HideLayer(new PixelRect(2, 2, 8, 8), HideKind.Black, null), editor.Session!.Layers.Layers[1]);
             Assert.AreEqual(HideKind.Blur, ((HideLayer)editor.Session.Layers.Layers[0]).Kind, "the blur not selected when Black box was chosen stays a blur");
         });
-        TrayDesktop.Run(() => ShownWindow.Press(editor.Canvas, Key.Escape));
+        TrayDesktop.Run(() => ShownWindow.Tap(editor.Canvas, Key.Escape));
         var deselected = await RenderedWindow.Of(shown);
         CollectionAssert.AreEquivalent(new[] { 0xFF000000u }, deselected.Colors(picture.X + 2 * scale, picture.Y + 2 * scale, 8 * scale, 8 * scale).ToList(), "one colour inside: black (G23)");
         Assert.DoesNotContain(handle, deselected.Colors(TrayDesktop.Get(() => editor.InRendering(editor.Box.Inflate(ShownEditor.BeyondHandle)))), "no handle with nothing selected");
@@ -119,7 +119,7 @@ public sealed class EditorCanvasTests
             Assert.AreEqual(new Rect(editor.Box.X, editor.Box.Y, 32 / scaling, 24 / scaling), editor.Box, "the 32 × 24 output shown at its own size: one of its pixels to one of the display's");
             editor.Drag((0.25, 0.25), (0.75, 0.75));
             Assert.AreEqual(new PixelRect(16, 12, 32, 24), ((HideLayer)editor.Session!.Layers.Layers.OfType<HideLayer>().Single()).Rect, "on the original's grid, not the output's (G23)");
-            ShownWindow.Press(editor.Canvas, Key.Escape);
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
         });
         var rendered = await RenderedWindow.Of(shown);
         var picture = TrayDesktop.Get(editor.PictureInRendering);
@@ -155,11 +155,11 @@ public sealed class EditorCanvasTests
             editor.Choose("Thick");
             editor.Drag((0.25, 0.25), (0.75, 0.75));
             Assert.AreEqual(new DrawMarkLayer(MarkKind.Box, [], new PixelRect(16, 12, 32, 24), blue, Thickness.Thick, null), editor.Session!.Layers.Layers.Single());
-            ShownWindow.Press(editor.Canvas, Key.Escape);
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
             editor.Choose("Pen");
             editor.Drag((0.1, 0.9), (0.9, 0.9));
             Assert.IsTrue(editor.Session.Layers.Layers[1] is DrawMarkLayer { Kind: MarkKind.Pen, Points.Count: > 1 }, "a stroke, a layer of its own");
-            ShownWindow.Press(editor.Canvas, Key.Escape);
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
         });
         var drawn = await RenderedWindow.Of(shown);
         var picture = TrayDesktop.Get(editor.PictureInRendering);
@@ -194,7 +194,7 @@ public sealed class EditorCanvasTests
             editor.Choose("Hide");
             editor.Choose("Black box");
             editor.Drag((0.25, 0.25), (0.75, 0.75));
-            ShownWindow.Press(editor.Canvas, Key.Escape);
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
         });
         var picture = TrayDesktop.Get(editor.PictureInRendering);
         var inside = Inside(picture, picture.Width / 64, 18, 14, 28, 20);
@@ -263,7 +263,7 @@ public sealed class EditorCanvasTests
                 editor.Choose("Hide");
                 editor.Choose("Black box");
                 editor.Drag((0.25, 0.25), (0.75, 0.75));
-                ShownWindow.Press(editor.Canvas, Key.Escape);
+                ShownWindow.Tap(editor.Canvas, Key.Escape);
                 // Its own renderer draws at 96 DPI, so canvas units are its pixels: sampled through the canvas's mapping, at
                 // the first of its pixels wholly inside a checker square (a square spans fewer pixels than four at a scale above 1),
                 // and in the far corner at the pixel holding a square's centre, the square beside the one holding the pixel
@@ -294,7 +294,7 @@ public sealed class EditorCanvasTests
             editor.Choose("Hide");
             editor.Choose("Black box");
             editor.Drag((0.25, 0.25), (0.75, 0.75));
-            ShownWindow.Press(editor.Canvas, Key.Escape);
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
             editor.Canvas.DrawOperation()!.Dispose();
         });
         var rendered = await RenderedWindow.Of(shown);
@@ -316,7 +316,7 @@ public sealed class EditorCanvasTests
             editor.Click(0.5, 0.25);
             ShownWindow.Type(editor.Field!, "hi");
             ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
-            ShownWindow.Press(editor.Canvas, Key.Escape);
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
             editor.DoubleClick(editor.OnCanvas(100, Text(editor).Box.Y + 5));
             Assert.IsTrue(editor.Session!.Typing && editor.Field?.Text == "HI", "a double-click on a text edits it (G21)");
             ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
@@ -503,7 +503,15 @@ public sealed class EditorCanvasTests
     /// <summary>Esc, or Ctrl with S, pressed on the canvas; waits for the editor to close and the window to return to the grid.</summary>
     private static async Task Keys(ShownWindow shown, ShownEditor editor, Key key)
     {
-        TrayDesktop.Run(() => ShownWindow.Press(editor.Canvas, key, key == Key.S ? KeyModifiers.Control : KeyModifiers.None));
+        TrayDesktop.Run(() =>
+        {
+            ShownWindow.Tap(editor.Canvas, key, key == Key.S ? KeyModifiers.Control : KeyModifiers.None);
+            // A changed edit asks at the first Esc, and the next while it asks leaves (G20).
+            if (key == Key.Escape && shown.Editing.IsOpen)
+            {
+                ShownWindow.Tap(editor.Canvas, key);
+            }
+        });
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => !shown.Editing.IsOpen && shown.Grid.IsFocused));
     }
 

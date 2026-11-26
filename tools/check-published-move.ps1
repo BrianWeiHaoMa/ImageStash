@@ -13,7 +13,8 @@ carries every file of the root and originals\, byte for byte, and the store with
 switches settings.json to the new folder with neither Move field left, removes the old folder, and says so on the row
 and in the stash window only once the old folder is gone; the clipboard's clip names its new place, and the stash
 window lists and copies from there. A Delete's notice is waited for and its Undo, clicked meanwhile, brings the item
-back before the Move carries it; an open edit is waited for, and its Cancel's notice after it; each Move carries the
+back before the Move carries it; an open edit is waited for, and once a hide changed it, its first Esc asks, its
+second leaves it with its notice, and that notice is waited for after it; each Move carries the
 whole stash as it was. Quit and a new start then open the stash at the folder the settings name, nothing made at the
 old places (G30, G32, G35, R9, G16, G18, G20, G26, E2, State Move). A kill during a Move, at a moment no script on the desktop can time, is not checked here;
 this phase says so and does not try one. Exits with the number of checks that failed.
@@ -573,9 +574,23 @@ try {
     Check (((MoveLine) -eq $waiting) -and ((Settings).stashFolder -eq $from)) 'two seconds on it still waits, the settings naming the old folder'
     $root = Summon
     Need ((Elements $root 'Crop' $button).Count -eq 1) 'the open shortcut brought the stash window forward with the edit as it was left (G2, G20)'
+    # G20: only an edit whose layers differ from the item's puts up the notice, and Esc asks once before it discards one,
+    # so a hide is drawn across the middle of the canvas, which the fitted picture always covers.
+    ClickOn (One (Elements $root 'Hide' $button) "the editor's Hide tool")
+    $rect = [PasteDesk]::WindowRect((StashWindow))
+    $middleX = [int](($rect[0] + $rect[2]) / 2)
+    $middleY = [int](($rect[1] + $rect[3]) / 2) - 40
+    $null = [CaptureDesk]::Drag($middleX - 60, $middleY - 30, $middleX + 60, $middleY + 30)
+    Start-Sleep -Milliseconds 300
+    # The first Esc deselects the new hide, the second asks.
+    $null = [PasteDesk]::Press([uint16[]]@(0x1B))
+    Start-Sleep -Milliseconds 200
+    $null = [PasteDesk]::Press([uint16[]]@(0x1B))
+    $asking = 'Press Esc again to discard your changes'
+    Check (WaitFor { ((Elements $root 'Crop' $button).Count -eq 1) -and ((WindowWords $root $asking).Count -ge 1) } 2000) "on the changed edit an Esc with nothing selected kept it, the row reading '$asking' (G20)"
     $null = [PasteDesk]::Press([uint16[]]@(0x1B))
     $discarded = "Discarded the edit of $([char]0x201C)$(Of $edited 'name')$([char]0x201D)."
-    Check (WaitFor { ((Elements $root 'Crop' $button).Count -eq 0) -and ((WindowWords $root $discarded).Count -ge 1) } 3000) "Esc cancelled the edit, a notice reading '$discarded' (G20)"
+    Check (WaitFor { ((Elements $root 'Crop' $button).Count -eq 0) -and ((WindowWords $root $discarded).Count -ge 1) } 3000) "Esc pressed again cancelled the edit, a notice reading '$discarded' (G20)"
     [PasteDesk]::MovePointer(200, 150)
     Check (WaitFor { (MoveLine) -eq "Waiting for the Undo of a notice before moving your stash$ellipsis" } 3000) "the Move then waits for that notice's Undo (State Move, G20): '$(MoveLine)'"
     $watched = WatchMove $from $to 600

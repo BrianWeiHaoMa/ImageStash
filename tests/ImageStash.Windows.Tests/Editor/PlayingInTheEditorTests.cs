@@ -114,7 +114,7 @@ public sealed class PlayingInTheEditorTests
         {
             Assert.IsFalse(editor.Session!.Playing, "Space in the hex plays nothing");
             Assert.AreEqual(before, editor.Session.FrameIndex, "and the arrows in it step nothing");
-            ShownWindow.Press(Hex(editor)!, Key.Escape);
+            ShownWindow.Tap(Hex(editor)!, Key.Escape);
         });
 
         TrayDesktop.Run(() =>

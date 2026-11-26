@@ -98,7 +98,7 @@ public sealed partial class ColorPickerTests
         TrayDesktop.Run(() =>
         {
             var hex = (TextBox)Named(Picker(editor)!, "Hex")!;
-            ShownWindow.Press(hex, Key.Escape);
+            ShownWindow.Tap(hex, Key.Escape);
             Assert.IsNull(Picker(editor), "the picker closed");
             Assert.IsTrue(editor.Session!.IsOpen, "and the edit stays open");
             ShownWindow.Press(editor.Canvas, Key.Delete);

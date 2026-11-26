@@ -60,6 +60,7 @@ public sealed partial class EditorSession : IDisposable
         Colors = colors;
         // The frames first: whether the original is animated decides whether Trim is listed (G20).
         StartFrames(original, time, ui);
+        StartLeaving(time, ui);
         Tools = EditorTools.For(this);
         tool = Tools[0];
         estimate = new SizeEstimate(this, estimator, gate, heldFileRetry);

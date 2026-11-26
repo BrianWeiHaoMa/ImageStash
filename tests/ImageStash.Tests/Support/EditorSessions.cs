@@ -140,7 +140,7 @@ internal sealed class StillInTheEditor : IDisposable
 
     public EditorSession Session { get; }
 
-    public static async Task<StillInTheEditor> Open(LayerList? startOn = null, byte[]? png = null, SizeEstimator? estimator = null)
+    public static async Task<StillInTheEditor> Open(LayerList? startOn = null, byte[]? png = null, SizeEstimator? estimator = null, TimeProvider? time = null)
     {
         var stash = new TestStash();
         await stash.OpenCleanly();
@@ -149,7 +149,7 @@ internal sealed class StillInTheEditor : IDisposable
         var committed = await stash.Store!.CommitImport(TestStash.Candidate(staged, "still", bytes, TestStash.StillPng with { Width = Size.Width, Height = Size.Height }));
         Assert.IsTrue(committed.Succeeded, committed.Failure?.ToString());
         var still = committed.Value!.Item;
-        return new StillInTheEditor(stash, still, await EditorSessions.Open(stash, still, startOn: startOn, estimator: estimator));
+        return new StillInTheEditor(stash, still, await EditorSessions.Open(stash, still, startOn: startOn, estimator: estimator, time: time));
     }
 
     /// <summary>An opaque 64 × 48 PNG whose every pixel differs from every other, for checks of which pixels a render keeps.</summary>

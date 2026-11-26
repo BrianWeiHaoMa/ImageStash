@@ -186,6 +186,7 @@ public sealed partial class EditorSession
         textField = null;
         estimate.Dispose();
         EndFrames();
+        EndLeaving();
         undo.Clear();
         redo.Clear();
     }

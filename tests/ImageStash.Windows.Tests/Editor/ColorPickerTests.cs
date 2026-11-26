@@ -39,7 +39,7 @@ public sealed partial class ColorPickerTests
             editor.Choose("Hide");
             editor.Choose("Black box");
             editor.Drag((0.25, 0.25), (0.75, 0.75));
-            ShownWindow.Press(editor.Canvas, Key.Escape);
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
             editor.Choose("Draw");
         });
         await OpenThePicker(shown, editor);
@@ -88,7 +88,7 @@ public sealed partial class ColorPickerTests
             ShownWindow.Tap(hex, Key.Enter);
             Assert.AreEqual(new Rgba(255, 122, 26, 255), Text(editor).Fill, "a hex colours the text");
             Assert.AreEqual(Color.FromRgb(255, 122, 26), MoreSwatchFill(editor), "shown inside More");
-            ShownWindow.Press(hex, Key.Escape);
+            ShownWindow.Tap(hex, Key.Escape);
             Assert.IsNull(Picker(editor));
         });
 
@@ -243,7 +243,7 @@ public sealed partial class ColorPickerTests
             }
 
             Assert.HasCount(ColorChoices.RecentCount, editor.Session!.Colors.Recent);
-            ShownWindow.Press(hex, Key.Escape);
+            ShownWindow.Tap(hex, Key.Escape);
         });
 
         foreach (var (tool, opener) in new[] { ("Text", "Outline color"), ("Text", "More colors"), ("Draw", "More colors") })
@@ -293,7 +293,7 @@ public sealed partial class ColorPickerTests
                     }
                 }
 
-                ShownWindow.Press(editor.Canvas, Key.Escape);
+                ShownWindow.Tap(editor.Canvas, Key.Escape);
                 Assert.IsNull(Picker(editor));
             });
         }

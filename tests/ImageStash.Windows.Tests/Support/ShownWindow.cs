@@ -420,8 +420,10 @@ public sealed class ShownWindow : IDisposable
     /// </summary>
     public static void Tap(Control target, Key key, KeyModifiers modifiers = KeyModifiers.None)
     {
+        var top = TopLevel.GetTopLevel(target);
         Press(target, key, modifiers);
-        Release(target, key);
+        // A press that took its target away (Esc closing the picker its hex box is in) is let go where focus went, as Windows does.
+        Release(target.IsAttachedToVisualTree() || top?.FocusManager?.GetFocusedElement() is not Control focused ? target : focused, key);
     }
 
     /// <summary>Types <paramref name="text"/> into <paramref name="target"/> one character at a time, as the platform raises text input.</summary>

@@ -227,7 +227,7 @@ public sealed partial class EditorOverlayTests
             ShownWindow.Press(editor.Canvas, Key.Y, KeyModifiers.Control);
             Assert.AreEqual(drawn, editor.Session.Layers, "Ctrl+Y puts it back");
             Assert.AreEqual(0, editor.Session.Selected);
-            ShownWindow.Press(editor.Canvas, Key.Escape);
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
             Assert.IsNull(editor.Session.Selected, "Esc with a layer selected deselects it");
             Assert.IsTrue(shown.Editing.IsOpen, "and leaves the editor open");
 
@@ -275,7 +275,7 @@ public sealed partial class EditorOverlayTests
             editor.Drag((0.25, 0.25), (0.75, 0.75));
             editor.ClickMore();
             var entry = editor.OpenMenu!.Items.OfType<MenuItem>().First();
-            ShownWindow.Press(entry, Key.Escape);
+            ShownWindow.Tap(entry, Key.Escape);
             Assert.IsTrue(shown.Editing.IsOpen, "Esc in the menu is the menu's, never the edit's Cancel");
             editor.ClickMore();
             ShownWindow.Press(editor.OpenMenu!.Items.OfType<MenuItem>().First(), Key.Z, KeyModifiers.Control);
@@ -318,8 +318,14 @@ public sealed partial class EditorOverlayTests
             editor.Choose("Hide");
             editor.Choose("Black box");
             editor.Drag((0.25, 0.25), (0.75, 0.75));
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
+            Assert.IsNull(editor.Session!.Selected, "the first Esc deselects");
             ShownWindow.Press(editor.Canvas, Key.Escape);
             ShownWindow.Press(editor.Canvas, Key.Escape);
+            ShownWindow.Release(editor.Canvas, Key.Escape);
+            Assert.IsTrue(shown.Editing.IsOpen, "G20: on a changed edit the next Esc asks, and a held Esc's repeat is no second press");
+            Assert.Contains(EditorSession.AskingWords, editor.Texts(), "the option row says so in place of what the mouse does");
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
         });
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => !shown.Editing.IsOpen));
 
@@ -346,7 +352,8 @@ public sealed partial class EditorOverlayTests
         await Open(shown, checker);
         TrayDesktop.Run(() => editor.Choose("Back"));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => !shown.Editing.IsOpen));
-        Assert.AreEqual(2, TrayDesktop.Get(() => shown.Notices.Shown.Count(each => each.Text == "Discarded the edit of “checker”.")), "and so does the back arrow, whether or not anything changed");
+        // G20: the notice only "when the edit's layers differ from the ones the item's finished picture was rendered from".
+        Assert.AreEqual(1, TrayDesktop.Get(() => shown.Notices.Shown.Count(each => each.Text == "Discarded the edit of “checker”.")), "the back arrow leaves an untouched edit without a notice of its own");
     }
 
     [TestMethod]
@@ -381,7 +388,7 @@ public sealed partial class EditorOverlayTests
             Assert.IsLessThanOrEqualTo(LeftOf(editing), RightOf(name), "the name ends before editing");
             Assert.IsLessThanOrEqualTo(LeftOf(compare), RightOf(editing), "editing ends before Compare");
             Assert.IsLessThanOrEqualTo(editor.Overlay.Bounds.Width, RightOf(more), "⋯ inside the window at its minimum width (G20)");
-            ShownWindow.Press(editor.Canvas, Key.Escape);
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
         });
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => !shown.Editing.IsOpen));
 
@@ -496,7 +503,14 @@ public sealed partial class EditorOverlayTests
     /// <summary>Esc with nothing selected, which leaves the edit as Cancel does, and waits for the editor to close.</summary>
     internal static async Task Cancelled(ShownWindow shown)
     {
-        TrayDesktop.Run(() => ShownWindow.Press((Control)shown.Focused!, Key.Escape));
+        TrayDesktop.Run(() =>
+        {
+            // Esc deselects first, a changed edit then asks, and the next Esc while it asks leaves (G20).
+            for (var press = 0; press < 3 && shown.Editing.IsOpen; press++)
+            {
+                ShownWindow.Tap((Control)shown.Focused!, Key.Escape);
+            }
+        });
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => !shown.Editing.IsOpen));
     }
 

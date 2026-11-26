@@ -35,8 +35,9 @@ public sealed record EditReturn(EditOrigin Origin, StashItem? Item);
 /// with the new item, a preview beneath moving to it (G26); from a menu it saves the item's layers as the store records
 /// them as a new item and opens the editor on that. Revert to original from a menu acts at once, with a notice whose
 /// Undo saves the removed layers again (G26). Cancel,
-/// the back arrow, Esc with nothing selected and Discard changes leave the item as it was and put up a notice whose
-/// Undo opens the discarded edit again (G20). The item leaving the stash, read again by its identity whenever the
+/// the back arrow, Esc with nothing selected and Discard changes leave the item as it was and, when the edit differs
+/// from the layers its finished picture was rendered from, put up a notice whose Undo opens the discarded edit again
+/// (G20). The item leaving the stash, read again by its identity whenever the
 /// listing changes, ends the edit without a notice (G16). Nothing here touches a file: the save is the session's.
 /// </summary>
 public sealed class Editing
@@ -305,9 +306,9 @@ public sealed class Editing
     public Task<Outcome> SaveAsNewItem() => Ending(asNewItem: true);
 
     /// <summary>
-    /// Cancel (G20): the item left as it was, the window back where Edit was started, and a notice whose Undo opens the
-    /// discarded edit again; false, changing nothing, while a Save runs. Raised for every Cancel, whether or not the
-    /// list changed.
+    /// Cancel (G20): the item left as it was, the window back where Edit was started, and, when the edit differed from
+    /// the layers its item's finished picture was rendered from, a notice whose Undo opens the discarded edit again;
+    /// false, changing nothing, while a Save runs. Every way of leaving as Cancel does comes here.
     /// </summary>
     public bool Cancel()
     {
@@ -321,10 +322,16 @@ public sealed class Editing
             return false;
         }
 
+        // Taken once the session has closed its field and put back its drag, as it does on the way out.
+        var differed = session.Differs;
         var (item, origin) = (session.Item, Origin);
         Close(session);
         ReturnTo(origin, item);
-        notices.Raise($"Discarded the edit of “{Name(item)}”.", "Undo", () => Opening(item, origin, discarded));
+        if (differed)
+        {
+            notices.Raise($"Discarded the edit of “{Name(item)}”.", "Undo", () => Opening(item, origin, discarded));
+        }
+
         return true;
     }
 
@@ -565,7 +572,8 @@ public sealed class Editing
 
     /// <summary>
     /// The edit's item read again by its identity, as the listing changes: gone from the stash, it ends the edit without a
-    /// notice (G16); one merely out of the scope or the query stays. A Save running decides the edit's end itself.
+    /// notice (G16); one merely out of the scope or the query stays, and what an Edit of it opens on is read again, which
+    /// leaving compares the edit with (G20). A Save running decides the edit's end itself.
     /// </summary>
     private async Task ReadAgain()
     {
@@ -585,6 +593,11 @@ public sealed class Editing
         {
             Close(session);
             Returned?.Invoke(new EditReturn(EditOrigin.Grid, null));
+        }
+        else if (found.Succeeded)
+        {
+            // A menu's change of the item while it is open (a Revert's Undo) moves the layers its picture was rendered from.
+            await session.Reread();
         }
     }
 

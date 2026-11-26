@@ -41,7 +41,7 @@ public sealed class TextSavedTests
         await TurnedMeme(shown, editor, item);
         TrayDesktop.Run(() =>
         {
-            ShownWindow.Press(editor.Canvas, Key.Escape);
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
             Assert.IsTrue(editor.Session!.Selected is null && !editor.Session.Compare, "deselected, Compare not held: no outline or handle over the picture");
             var scaling = shown.Window.RenderScaling;
             Assert.AreEqual(new Size(160 / scaling, 120 / scaling), editor.Box.Size, "the picture shown 1 : 1, at its output size: one of its pixels to one of the display's");
@@ -243,7 +243,7 @@ public sealed class TextSavedTests
             hex.SelectAll();
             ShownWindow.Type(hex, ColorChoices.Hex(Blue));
             ShownWindow.Tap(hex, Key.Enter);
-            ShownWindow.Press(hex, Key.Escape);
+            ShownWindow.Tap(hex, Key.Escape);
             Assert.IsNull(Named(editor, "Hex"), "the picker closed, the layer still selected");
 
             var (handle, centre) = (EditorCanvasTests.RotateHandle(editor), EditorCanvasTests.Centre(editor));
@@ -288,7 +288,7 @@ public sealed class TextSavedTests
         var preview = await RenderedWindow.Of(shown);
         Assert.AreEqual(new Size(file.Width, file.Height), preview.Picture.Size, "shown at its own size, never enlarged (G19)");
         Assert.IsEmpty(Differences(preview, preview.Picture, file), "the preview shows the finished picture's pixels");
-        TrayDesktop.Run(() => ShownWindow.Press((Control)shown.Focused!, Key.Escape));
+        TrayDesktop.Run(() => ShownWindow.Tap((Control)shown.Focused!, Key.Escape));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => !shown.Preview.IsOpen));
     }
 

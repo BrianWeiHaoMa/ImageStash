@@ -302,6 +302,12 @@ public sealed class MovingTests
         await listed.Listing.ShowScope(Scope.All);
         var chosen = Chose(listed);
         Assert.IsTrue((await listed.Editing.Open(cat, EditOrigin.Grid)).Succeeded);
+        // G20 puts up the notice only "when the edit's layers differ from the ones the item's finished picture was rendered from".
+        listed.Turns.Act(() =>
+        {
+            listed.Editing.Session!.Tool = listed.Editing.Session.Hide();
+            listed.Editing.Session.DragThrough((1, 1), (4, 3));
+        });
 
         var moving = listed.Moving.MoveTo(null!);
         await Handing.Eventually(() => listed.Moving.Busy == "Waiting for the edit before moving your stash…");
@@ -447,7 +453,7 @@ public sealed class MovingTests
         Assert.IsFalse(moving.IsCompleted);
 
         Assert.IsTrue(listed.Turns.Act(listed.Editing.Cancel));
-        listed.Turns.Act(() => listed.Notices.Close(listed.Notices.Shown.Single()));
+        Assert.IsFalse(listed.Notices.Shown.Any(), "an edit left untouched leaves no notice to wait for (G20)");
         Assert.IsTrue((await moving.WaitAsync(TimeSpan.FromSeconds(20))).Succeeded);
     }
 
@@ -542,6 +548,12 @@ public sealed class MovingTests
         Assert.IsTrue((await listed.OpenWith.Begin(null!, cat, _ => { })).Succeeded);
         var copy = listed.Dialogs.OpenedWith.Single();
         Assert.IsTrue((await listed.Editing.Open(cat, EditOrigin.Grid)).Succeeded);
+        // A changed edit, so its Cancel leaves a notice the Move waits for (G20) while the rewrite lands.
+        listed.Turns.Act(() =>
+        {
+            listed.Editing.Session!.Tool = listed.Editing.Session.Hide();
+            listed.Editing.Session.DragThrough((1, 1), (4, 3));
+        });
         Chose(listed);
 
         var moving = listed.Moving.MoveTo(null!);

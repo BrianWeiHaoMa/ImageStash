@@ -59,6 +59,7 @@ public sealed class EditorOverlay : Border
     private readonly TextBlock busyText;
     private readonly Button save;
     private EditorSession? session;
+    private readonly EditorEscape escape = new();
     private (EditorTool? Tool, int? Index, Layer? Layer, int Count, int HistoryRevision) refreshedFor;
     private IInputElement? focusLeft;
     private bool focusByKeys;
@@ -170,6 +171,12 @@ public sealed class EditorOverlay : Border
 
         var fresh = !ReferenceEquals(session, next);
         session = next;
+        if (fresh)
+        {
+            // The Esc that left the last edit is let go where this view cannot see it.
+            escape.Released();
+        }
+
         pane.Hide();
         canvas.Show(next);
         filmstrip.Show(next);
@@ -244,11 +251,17 @@ public sealed class EditorOverlay : Border
     private void WireInput()
     {
         AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
+        // A press of the pointer is another input: it ends the row's asking (G20).
+        AddHandler(PointerPressedEvent, (_, _) => session?.EndAsking(), RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(KeyUpEvent, (_, e) =>
         {
             if (e.Key == Key.C)
             {
                 SetCompare(false);
+            }
+            else if (e.Key == Key.Escape)
+            {
+                escape.Released();
             }
             else if (e.Key == Key.Space && spaceTaken)
             {
@@ -273,12 +286,17 @@ public sealed class EditorOverlay : Border
                 open.EndTyping();
             }
         }, RoutingStrategies.Bubble);
-        // A C let go in another app is never seen here: Compare ends when the window loses the foreground.
+        // A C or an Esc let go in another app is never seen here: Compare ends, and Esc counts as let go, when the window
+        // loses the foreground.
         AttachedToVisualTree += (_, _) =>
         {
             if (TopLevel.GetTopLevel(this) is WindowBase window)
             {
-                window.Deactivated += (_, _) => SetCompare(false);
+                window.Deactivated += (_, _) =>
+                {
+                    SetCompare(false);
+                    escape.Released();
+                };
             }
         };
         // A press anywhere else closes what the pane shows, as a flyout's light dismiss does, and does nothing more.
@@ -400,6 +418,13 @@ public sealed class EditorOverlay : Border
     {
         var menu = new ContextMenu { Placement = placement };
         menu.AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
+        menu.AddHandler(KeyUpEvent, (_, e) =>
+        {
+            if (e.Key == Key.Escape)
+            {
+                escape.Released();
+            }
+        }, RoutingStrategies.Tunnel, handledEventsToo: true);
         // A field still open as the menu closes (the font menu opened before a letter was typed) takes the focus back from
         // the button the menu returns it to, once the menu has.
         menu.Closed += (_, _) => Dispatcher.UIThread.Post(() => TypingGoesOn());
@@ -507,7 +532,8 @@ public sealed class EditorOverlay : Border
             options.Row = OptionRows.For(shown.Tool, shown, canvas, pane, Menu, fonts);
         }
 
-        options.Hint = shown.Tool.Hint;
+        // G20, G21: the asking words stand in for what the mouse does while they show.
+        options.Hint = shown.Asking ?? shown.Tool.Hint;
         // A button can disable itself on its last step. Keep the editor's keys and Tab loop on the canvas.
         if (layerActions.Show(shown) && shown.IsOpen)
         {
@@ -560,16 +586,34 @@ public sealed class EditorOverlay : Border
         // A menu or the picker open over the editor keeps every key but Ctrl+Z, Ctrl+Y and Ctrl+S, as a text field does.
         var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
         var inField = sender is ContextMenu || focused is TextBox || focused is not Visual inside || !this.IsVisualAncestorOf(inside);
-        if (e.Key == Key.Escape && e.KeyModifiers == KeyModifiers.None && (canvas.Picking || pane.IsOpen))
+        if (e.Key == Key.Escape && e.KeyModifiers == KeyModifiers.None)
         {
-            // Esc closes the picker, its hex included, or ends the colour being picked, before it reaches the layers; a field
-            // still open keeps its layer, and the focus.
-            canvas.StopPicking();
-            ClosePane(returnFocus: true);
+            switch (escape.Pressed(open, canvas.Picking || pane.IsOpen, inField, sender is ContextMenu))
+            {
+                case EscapeAct.None:
+                    return;
+                case EscapeAct.ClosePicker:
+                    // Esc closes the picker, its hex included, or ends the colour being picked, before it reaches the layers; a
+                    // field still open keeps its layer, and the focus.
+                    canvas.StopPicking();
+                    ClosePane(returnFocus: true);
+                    e.Handled = true;
+                    return;
+                case EscapeAct.LeftText:
+                    canvas.Focus();
+                    break;
+                case EscapeAct.Leave:
+                    CancelRequested?.Invoke();
+                    break;
+            }
+
             e.Handled = true;
+            (sender as ContextMenu)?.Close();
             return;
         }
 
+        // Any other key ends the row's asking: a later Esc asks again first (G20).
+        open.EndAsking();
         var action = EditorKeys.Route(e.Key, e.KeyModifiers, inField, open.Selected is not null, e.KeySymbol);
         switch (action)
         {
@@ -585,16 +629,10 @@ public sealed class EditorOverlay : Border
             case EditorKeyAction.DeleteSelected:
                 open.DeleteSelected();
                 break;
-            case EditorKeyAction.Deselect:
-                open.Deselect();
-                break;
-            case EditorKeyAction.Cancel:
-                CancelRequested?.Invoke();
-                break;
             case EditorKeyAction.Compare:
                 open.Compare = true;
                 break;
-            // Esc in a menu opened while a field stays open (the font menu before a letter is typed) is the menu's, never the field's.
+            // Ctrl+Enter in a menu opened while a field stays open (the font menu before a letter is typed) is the menu's, never the field's.
             case EditorKeyAction.LeaveText when open.Typing && !(sender is ContextMenu):
                 open.EndTyping();
                 canvas.Focus();

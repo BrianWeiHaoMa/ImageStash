@@ -88,15 +88,17 @@ public sealed class TextFieldTests
         {
             editor.DoubleClick(editor.OnCanvas(100, ((TextLayer)editor.Session!.Layers.Layers.Single()).Box.Y + 5));
             Assert.AreEqual("HELLO\n", editor.Field?.Text, "a double-click reopens the field on its text (G21)");
-            ShownWindow.Press(editor.Field!, Key.Escape);
+            ShownWindow.Tap(editor.Field!, Key.Escape);
             Assert.IsNull(editor.Field, "Esc leaves the field");
             Assert.AreEqual(0, editor.Session.Selected, "and keeps the layer selected");
-            ShownWindow.Press(editor.Canvas, Key.Escape);
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
             Assert.IsNull(editor.Session.Selected, "Esc then deselects");
-            ShownWindow.Press(editor.Canvas, Key.Escape);
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
+            Assert.IsTrue(shown.Editing.IsOpen, "the edit holds the text, so Esc asks first (G20)");
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
         });
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => !shown.Editing.IsOpen));
-        Assert.IsTrue(TrayDesktop.Get(() => shown.Notices.Shown.Any(notice => notice.Text == "Discarded the edit of “grey”.")), "and Esc then leaves as Cancel does (G20)");
+        Assert.IsTrue(TrayDesktop.Get(() => shown.Notices.Shown.Any(notice => notice.Text == "Discarded the edit of “grey”.")), "and Esc pressed again then leaves as Cancel does (G20)");
     }
 
     [TestMethod]
@@ -277,7 +279,7 @@ public sealed class TextFieldTests
             Clicked(editor.Button("Font"));
             Assert.IsTrue(editor.Session.Typing, "the font button pressed leaves the field open");
             Assert.IsNotNull(editor.OpenMenu, "and opens the font menu");
-            ShownWindow.Press(editor.OpenMenu.Items.OfType<MenuItem>().First(), Key.Escape);
+            ShownWindow.Tap(editor.OpenMenu.Items.OfType<MenuItem>().First(), Key.Escape);
             editor.OpenMenu?.Close();
             Assert.IsTrue(editor.Session.Typing && editor.Session.Layers.Layers.Count == 1, "Esc in the menu leaves the menu, never the field: its layer stays");
 
@@ -303,7 +305,7 @@ public sealed class TextFieldTests
             Assert.IsTrue(editor.Overlay.GetVisualDescendants().Contains(list) && list.IsEffectivelyVisible && entry.IsChecked == true, "the list stays open, the family checked");
             Assert.AreSame(editor.Field, shown.Focused);
 
-            ShownWindow.Press(editor.Field!, Key.Escape);
+            ShownWindow.Tap(editor.Field!, Key.Escape);
             Assert.IsFalse(editor.Overlay.GetVisualDescendants().Contains(list), "Esc closes the list");
             Assert.IsTrue(editor.Session.Typing && editor.Session.Layers.Layers.Count == 1, "and leaves the field and its layer");
             Assert.AreSame(editor.Field, shown.Focused);
@@ -311,7 +313,7 @@ public sealed class TextFieldTests
             ShownWindow.Type(editor.Field!, "go");
             var typed = (TextLayer)editor.Session.Layers.Layers.Single();
             Assert.AreEqual(("go", TextPreset.Label, family, ColorChoices.Red), (typed.Text, typed.Preset, typed.Font, typed.Fill), "what is typed lands in the layer as chosen");
-            ShownWindow.Press(editor.Field!, Key.Escape);
+            ShownWindow.Tap(editor.Field!, Key.Escape);
             Assert.IsFalse(editor.Session.Typing);
             editor.Session.Undo();
             Assert.IsEmpty(editor.Session.Layers.Layers, "the add, the choices and the letters are one step (G25)");

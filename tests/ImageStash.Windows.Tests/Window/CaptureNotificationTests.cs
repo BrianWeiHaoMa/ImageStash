@@ -509,7 +509,8 @@ public sealed class CaptureNotificationTests
             Assert.IsInstanceOfType<TextTool>(shown.Editing.Session!.Tool, "Edit opens on Text");
             // G8: “it is none when that window was ImageStash itself”.
             Assert.IsNull(shown.Window.PasteTarget.Current, "the pinned stash was in front before the second card's Edit click (G8)");
-            CollectionAssert.AreEqual(new[] { "Discarded the edit of “stash clip”." }, shown.Notices.Shown.Select(notice => notice.Text).ToList());
+            // G20: a notice only "when the edit's layers differ from the ones the item's finished picture was rendered from".
+            Assert.IsEmpty(shown.Notices.Shown, "the clip's untouched edit left without a notice");
         });
         Assert.IsEmpty(desk.Cards(), "that card gone too");
 

@@ -63,7 +63,7 @@ public sealed class TextOptionRowTests
             editor.Click(0.5, 0.1);
             Assert.IsTrue(editor.Session.SelectedLayer is TextLayer && Checked(editor.Button("Text")), "a click on the Meme selects it with Text current");
             AssertSelectionControls(editor, enabled: true);
-            ShownWindow.Press(editor.Canvas, Key.Escape);
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
             AssertSelectionControls(editor, enabled: false);
             Assert.Contains("Click the picture to add text", editor.Texts());
         });
@@ -133,7 +133,7 @@ public sealed class TextOptionRowTests
             }
 
             var (last, face) = (AutomationProperties.GetName(entries[^1])!, entries[^1].FontFamily.Name);
-            ShownWindow.Press(editor.Canvas, Key.Escape);
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
             Assert.IsFalse(editor.Overlay.GetVisualDescendants().Contains(list), "Esc closes it");
             CollectionAssert.AreEqual(F8.Append(last).Append("—").Append("All fonts…").ToList(), editor.ClickMenuButton("Font"), "a family from All fonts… listed after the ten");
             var items = editor.OpenMenu!.Items.OfType<MenuItem>().ToList();
@@ -261,7 +261,7 @@ public sealed class TextOptionRowTests
                 shown.Window.UpdateLayout();
                 var picker = editor.Overlay.GetVisualDescendants().OfType<Control>().Single(control => control.IsEffectivelyVisible && AutomationProperties.GetName(control) == "Color picker");
                 AssertInside(shown, (Control)picker.GetVisualParent()!, $"the colour picker from {opener} at the minimum (G21)");
-                ShownWindow.Press(editor.Canvas, Key.Escape);
+                ShownWindow.Tap(editor.Canvas, Key.Escape);
             });
         }
 

@@ -17,9 +17,10 @@ public sealed class HideTool : EditorTool
 
     public override string Name => "Hide";
 
+    // G23 promises nothing of a blur, so the words say only which style leaves nothing; the original keeps all of it.
     public override string Hint => Session.SelectedLayer is HideLayer
-        ? "Drag the box to move, a corner to resize, or elsewhere to hide."
-        : "Drag over what to hide";
+        ? "Drag to move or resize, elsewhere to hide. Black box leaves nothing."
+        : "Drag over what to hide. Black box leaves nothing in the finished picture.";
 
     /// <summary>The style a new hide gets while no hide is selected.</summary>
     public HideKind Kind { get; private set; } = HideKind.Blur;

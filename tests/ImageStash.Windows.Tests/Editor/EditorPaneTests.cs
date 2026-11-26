@@ -188,7 +188,7 @@ public sealed class EditorPaneTests
             editor.Release(square, new Point(square.Bounds.Width * 0.9, square.Bounds.Height * 0.1));
         });
         var (fill, hex) = TrayDesktop.Get(() => (Text(editor).Fill, Hex(editor).Text));
-        TrayDesktop.Run(() => ShownWindow.Press(editor.Canvas, Key.Escape));
+        TrayDesktop.Run(() => ShownWindow.Tap(editor.Canvas, Key.Escape));
         await OpenFrom(shown, editor, "More colors");
 
         TrayDesktop.Run(() =>
@@ -263,7 +263,7 @@ public sealed class EditorPaneTests
                 Assert.AreNotEqual(White, Text(editor).Fill, "the drag shows its colour");
                 if (ending == "Esc")
                 {
-                    ShownWindow.Press(Hex(editor), Key.Escape);
+                    ShownWindow.Tap(Hex(editor), Key.Escape);
                 }
                 else
                 {

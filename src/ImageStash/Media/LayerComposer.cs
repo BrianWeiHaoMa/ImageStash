@@ -30,6 +30,10 @@ public static class LayerComposer
     // The blur's standard deviation.
     private const float BlurSigma = 6f;
 
+    // SkiaSharp 3.119.4's raster blur plateaued at sigma 532 (~267 ms on 4K).
+    // Cap box-driven growth at 40 (~123 ms on 4K) while keeping the picture-scaled minimum.
+    private const float MaxBoxBlurSigma = 40f;
+
     private static readonly SKColorSpace Srgb = SKColorSpace.CreateSrgb();
 
     // The composed picture is premultiplied, so scaling it filters on premultiplied pixels and a transparent pixel's
@@ -223,7 +227,7 @@ public static class LayerComposer
                 var drawn = layer switch
                 {
                     HideLayer { Kind: HideKind.Black } hide when Admits(hide.Range, frameIndex) => Black(area, picture, hide.Rect),
-                    HideLayer hide when Admits(hide.Range, frameIndex) => Blur(area, picture, hide.Rect, BlurSigma * scale),
+                    HideLayer hide when Admits(hide.Range, frameIndex) => Blur(area, picture, hide.Rect, scale),
                     DrawMarkLayer mark when Admits(mark.Range, frameIndex) => Mark(drawing, mark, scale),
                     TextLayer text when Admits(text.Range, frameIndex) => TextLettering.DrawText(drawing, text, replaced),
                     CaptionBarLayer bar => captions is not null && TextLettering.DrawCaption(captions, bar, picture.Width, ref bandBottom, replaced),
@@ -331,13 +335,15 @@ public static class LayerComposer
     /// sampled only inside it, so a blur over a black box stays black, and clamped at its edges, so an opaque picture
     /// stays opaque (G23).
     /// </summary>
-    private static bool Blur(SKPixmap area, PixelRect picture, PixelRect rect, float sigma)
+    private static bool Blur(SKPixmap area, PixelRect picture, PixelRect rect, float scale)
     {
         if (OnPicture(rect, picture) is not { } covered)
         {
             return true;
         }
 
+        // The original rectangle's shorter side sets the scale of details the box covers even when a crop cuts it.
+        var sigma = Math.Max(BlurSigma * scale, Math.Min(MaxBoxBlurSigma, Math.Min(rect.Width, rect.Height)));
         using var region = area.ExtractSubset(covered);
         using var drawn = region is null ? null : SKImage.FromPixelCopy(region);
         using var blurred = region is null ? null : Allocate(region.Info);

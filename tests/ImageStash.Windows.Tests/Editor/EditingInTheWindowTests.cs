@@ -44,7 +44,7 @@ public sealed class EditingInTheWindowTests
             editor.Choose("Hide");
             editor.Choose("Black box");
             editor.Drag((0.5 / 8, 0.5 / 6), (5.5 / 8, 5.5 / 6));
-            ShownWindow.Press(editor.Canvas, Key.Escape);
+            ShownWindow.Tap(editor.Canvas, Key.Escape);
             editor.Choose("Draw");
             editor.Choose("Box");
             editor.Drag((7.5 / 8, 0.5 / 6), (2.5 / 8, 5.5 / 6));
@@ -159,6 +159,9 @@ public sealed class EditingInTheWindowTests
         {
             ShownWindow.Press(editor.Canvas, Key.Z, KeyModifiers.Control);
             Assert.AreEqual(saved, editor.Session!.Layers, "Ctrl+Z brings the layers back");
+            // Reverted again, so the edit differs from the saved layers and Discard changes has something to discard (G20).
+            ShownWindow.Press(editor.Canvas, Key.Y, KeyModifiers.Control);
+            Assert.IsTrue(editor.Session!.Layers.IsEmpty);
             editor.ClickMore();
             editor.ClickMenuEntry("Discard changes");
         });
@@ -292,6 +295,12 @@ public sealed class EditingInTheWindowTests
         var items = await shown.OpenStash(shown.Picture("first.png"), shown.Picture("second.png"));
         var (first, second) = (items.Single(each => each.Name == "first"), items.Single(each => each.Name == "second"));
         await EditorOverlayTests.Open(shown, first);
+        // Changed, so leaving it puts up the notice (G20).
+        TrayDesktop.Run(() =>
+        {
+            editor.Choose("Hide");
+            editor.Drag((0.25, 0.25), (0.75, 0.75));
+        });
         await EditorOverlayTests.Cancelled(shown);
         var notice = TrayDesktop.Get(() => shown.Notices.Shown.Single(each => each.Text == "Discarded the edit of “first”."));
         TrayDesktop.Run(() => shown.OpenPreview(second));
@@ -334,6 +343,11 @@ public sealed class EditingInTheWindowTests
         var (first, second) = (items.Single(each => each.Name == "first"), items.Single(each => each.Name == "second"));
         await EditorOverlayTests.Open(shown, first);
         var earlier = TrayDesktop.Get(() => shown.Editing.Session!);
+        TrayDesktop.Run(() =>
+        {
+            editor.Choose("Hide");
+            editor.Drag((0.25, 0.25), (0.75, 0.75));
+        });
 
         await TrayDesktop.Get(() => shown.Editing.Open(second, EditOrigin.Grid));
 
