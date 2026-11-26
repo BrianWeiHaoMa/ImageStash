@@ -207,8 +207,8 @@ public sealed record WindowSize(double Width, double Height)
     /// line naming a missing font, Text's option row wrapped onto three lines, an animated item's filmstrip, the tool row
     /// and the footer with a Save's busy line, with about 100 left for the picture and room for the outline colour
     /// picker's 357 (G20, G21). Measured on an animated item in that state: the picture 106 tall, 79 while the Save runs.
-    /// Its width is the flyout's own at its default size, the 460 above less its one-pixel border, so the default flyout
-    /// is the narrowest window, never widened. Measure it again when an editor row grows.
+    /// Its width is the default flyout's client from when the flyout had a one-pixel border; the flyout has no frame now,
+    /// so the default flyout is two units wider than the narrowest window. Measure it again when an editor row grows.
     /// </summary>
     public static readonly WindowSize Minimum = new(458, 508);
 

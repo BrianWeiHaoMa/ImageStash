@@ -99,7 +99,7 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
         search = WindowLayout.SearchBox();
         pin = new ToggleButton { Content = IconGlyph.Of("", 16), Width = 36, Height = 36, Padding = default, Focusable = false };
         pin.Classes.Add(LookStyles.IconButton);
-        chrome = new WindowChrome(this, settings, pin);
+        chrome = new WindowChrome(this, settings, pin, quietWindows);
         seams.BorderDrag.StopAtMinimum(this);
         head = WindowLayout.Head(search, WindowLayout.SettingsButton(() => SettingsRequested?.Invoke()), AddMenu.Button(settings, act => unavailable(act), paste, ImportFiles, () => ScreenshotRequested?.Invoke(), () => RecordRequested?.Invoke()), pin);
 
@@ -141,7 +141,7 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
         // Above the preview too, so a failure is still named and a drop still taken while it is open (G35, G11); the drop
         // card above the notices, so an earlier batch's notices never hide what the next drop will add.
         var overBody = new Panel { Children = { status.NoticeArea, tagField, dropTarget.Card } };
-        Content = WindowLayout.Rows(head, scopes, body, status.Footer, preview, editor, overBody);
+        Content = WindowLayout.Rows(head, scopes, body, status.Footer, preview, editor, overBody, chrome.Edge);
         preview.Changed += Cover;
         preview.Changed += previewSteps.Observe;
         // The preview's ‹ and ›: the arrows' step for the pointer, once what a field holds typed is committed (G19).

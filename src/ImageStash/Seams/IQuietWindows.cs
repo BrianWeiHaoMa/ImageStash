@@ -35,10 +35,11 @@ public interface IQuietWindows
     Outcome<IDisposable> TakeActivation(Avalonia.Controls.Window window);
 
     /// <summary>
-    /// Asks that <paramref name="window"/>, an undecorated window of ImageStash's own, have its corners rounded as the
-    /// platform rounds its own windows, the radius the platform's (the recording's bar and the notifications). Only a
-    /// preference: a platform or a version that rounds nothing leaves the window square, and that is no failure. Called
-    /// on the UI thread before the window is first shown.
+    /// Asks that <paramref name="window"/>, a window of ImageStash's own, have its corners rounded as the platform rounds
+    /// its own windows, the radius the platform's: the recording's bar and the notifications, undecorated, and the stash
+    /// window, undecorated as the flyout and given the platform's title bar when pinned, the rounding holding through
+    /// every such change of its frame. Only a preference: a platform or a version that rounds nothing leaves the window
+    /// square, and that is no failure. Called on the UI thread once, before the window is first shown.
     /// </summary>
     void RoundCorners(Avalonia.Controls.Window window);
 

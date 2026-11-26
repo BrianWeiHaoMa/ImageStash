@@ -98,9 +98,10 @@ public static class WindowLayout
 
     /// <summary>
     /// The rows: the head, the chips, the body and the footer, with the preview over all but the footer, the editor over
-    /// all four with a footer of its own, and <paramref name="overBody"/> over the body, above both.
+    /// all four with a footer of its own, <paramref name="overBody"/> over the body, above both, and the flyout's
+    /// <paramref name="edge"/> over everything, so nothing is drawn over it.
     /// </summary>
-    public static Grid Rows(Control head, Control scopes, Control body, Control foot, Control preview, Control editor, Control overBody)
+    public static Grid Rows(Control head, Control scopes, Control body, Control foot, Control preview, Control editor, Control overBody, Control edge)
     {
         var layout = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto") };
         Grid.SetRow(scopes, 1);
@@ -116,6 +117,8 @@ public static class WindowLayout
         layout.Children.Add(editor);
         Grid.SetRow(overBody, 2);
         layout.Children.Add(overBody);
+        Grid.SetRowSpan(edge, 4);
+        layout.Children.Add(edge);
         return layout;
     }
 }

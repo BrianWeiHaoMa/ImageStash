@@ -10,38 +10,44 @@ using ImageStash.Store;
 namespace ImageStash.Window;
 
 /// <summary>
-/// The stash window's frame in its two states and where it is placed (G1, G2): the flyout, with no title bar, above
-/// other windows and without a taskbar button; the pinned window, with a title bar, resizing and a taskbar button, at
-/// the size and position the user last gave it, remembered apart from the flyout's size; in either state never smaller
-/// than the window's minimum, at which the editor fits whole (G20, G21). Only a resize or move the user makes is
-/// remembered: the chrome's own placements are marked while they run. It shows, hides and places the window
-/// and never activates it or moves its focus, which stay the window's own (G8).
+/// The stash window's frame in its two states and where it is placed (G1, G2): the flyout, with no frame of its own but
+/// the edge it draws (<see cref="FlyoutEdge"/>), above other windows and without a taskbar button; the pinned window,
+/// with a title bar and a taskbar button, at the position the user last gave it. Each is resized by dragging its
+/// border, and each size is remembered apart from the other's: the flyout's for every later flyout, the pinned window's
+/// for every later pin. In either state never smaller than the window's minimum, at which the editor fits whole (G20,
+/// G21). Only a resize or move the user makes is remembered: the chrome's own placements are marked while they run. It
+/// shows, hides and places the window and never activates it or moves its focus, which stay the window's own (G8).
 /// </summary>
 public sealed class WindowChrome
 {
     private readonly Avalonia.Controls.Window window;
     private readonly SettingsKeeper settings;
     private readonly ToggleButton pin;
+    private readonly FlyoutEdge edge;
     private bool pinned;
     private bool placing;
 
-    public WindowChrome(Avalonia.Controls.Window window, SettingsKeeper settings, ToggleButton pin)
+    public WindowChrome(Avalonia.Controls.Window window, SettingsKeeper settings, ToggleButton pin, IQuietWindows quietWindows)
     {
         this.window = window;
         this.settings = settings;
         this.pin = pin;
+        edge = new FlyoutEdge(window.BeginResizeDrag);
+        // Rounded as Windows 11 rounds its windows, in either state, the flyout's edge following the same corner (F10).
+        quietWindows.RoundCorners(window);
         // In force from the start, so every way the window is sized stops at it: a placement, a drag of the border, a
         // size set directly (G20, G21); lowered only while the window is on a display too small for it (G1).
         window.MinWidth = WindowSize.Minimum.Width;
         window.MinHeight = WindowSize.Minimum.Height;
         window.Resized += (_, e) =>
         {
-            // A drag of the border, a snap or any other resize the user makes; never one of the window's own placements.
-            if (pinned && !placing && e.Reason is (WindowResizeReason.User or WindowResizeReason.Unspecified) && window.WindowState == WindowState.Normal)
+            // A drag of the border, a snap or any other resize the user makes; never one of the window's own placements,
+            // which narrow it beside a caret, hold it to a small display, raise it to the minimum or change its frame.
+            if (!placing && e.Reason is (WindowResizeReason.User or WindowResizeReason.Unspecified) && window.WindowState == WindowState.Normal)
             {
                 // The whole window, frame included, as Place puts it back.
                 var outer = window.FrameSize ?? e.ClientSize;
-                settings.Change(s => s with { PinnedSize = new WindowSize(outer.Width, outer.Height) });
+                settings.Change(s => Remembered(s, pinned, new WindowSize(outer.Width, outer.Height)));
             }
         };
         window.PositionChanged += (_, e) =>
@@ -62,6 +68,16 @@ public sealed class WindowChrome
             }
         };
     }
+
+    /// <summary>The flyout's edge and the grips its border is dragged by, laid over the whole window.</summary>
+    public Control Edge => edge.Layer;
+
+    /// <summary>
+    /// <paramref name="settings"/> with <paramref name="size"/>, the whole window in device-independent units, kept as the
+    /// size of the state it was given in, the other state's left as it was (G2: remembered separately).
+    /// </summary>
+    public static Settings Remembered(Settings settings, bool pinned, WindowSize size) =>
+        pinned ? settings with { PinnedSize = size } : settings with { FlyoutSize = size };
 
     /// <summary>Whether the window is pinned: it stays on losing focus, on Esc and after a paste (G2).</summary>
     public bool Pinned => pinned;
@@ -96,8 +112,11 @@ public sealed class WindowChrome
         // Changing the frame resizes and moves the window at once; that is not the user placing the pinned window.
         placing = true;
         pinned = pinnedNow;
-        window.WindowDecorations = pinned ? WindowDecorations.Full : WindowDecorations.BorderOnly;
-        window.CanResize = pinned;
+        // The flyout has no frame: a resizing one would add borders Windows does not draw, so the window it reports would
+        // not be the flyout a person sees, and a band along its top. Its edge and grips are its own, over its content.
+        window.WindowDecorations = pinned ? WindowDecorations.Full : WindowDecorations.None;
+        window.CanResize = true;
+        edge.Shown = !pinned;
         window.CanMinimize = pinned;
         window.CanMaximize = pinned;
         window.ShowInTaskbar = pinned;

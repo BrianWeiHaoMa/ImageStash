@@ -38,6 +38,8 @@ public sealed class Paper : Take
         into[LookKeys.Words] = Solid(words);
         into[LookKeys.FaintWords] = Solid(faint);
         into[LookKeys.Divider] = Solid(hairline);
+        // Windows 11's own stroke round a flyout: a grey that reads on the white beside the window and on its dark ground.
+        into[LookKeys.WindowEdge] = Solid(dark ? Rgb(0x505158) : Rgb(0xBDBEC4));
 
         into[LookKeys.Card] = Solid(card);
         into[LookKeys.CardBorder] = Solid(dark ? Rgb(0x36373D) : Rgb(0xE4E5E9));
@@ -108,6 +110,7 @@ public sealed class Paper : Take
         into[LookKeys.SurroundRadius] = Radius(8);
         into[LookKeys.SmallRadius] = Radius(4);
         into[LookKeys.PillRadius] = Radius(16);
+        into[LookKeys.WindowRadius] = Radius(8);
         into[LookKeys.FluentControlRadius] = Radius(5);
         into[LookKeys.FluentOverlayRadius] = Radius(8);
 

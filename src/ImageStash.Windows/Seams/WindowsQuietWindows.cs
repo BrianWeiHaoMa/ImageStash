@@ -199,7 +199,9 @@ public sealed class WindowsQuietWindows(WindowsTray tray) : IQuietWindows
 
     /// <summary>
     /// Windows 11's own rounding, asked for through Avalonia's corner preference, which it applies as the window's
-    /// DWMWA_WINDOW_CORNER_PREFERENCE; a build of Windows that does not round leaves the window square.
+    /// DWMWA_WINDOW_CORNER_PREFERENCE; a build of Windows that does not round leaves the window square. Avalonia 12.1.4
+    /// sets that attribute only here and never again when the window's decorations change, and the attribute stays on
+    /// the window, so the stash window keeps it from flyout to pinned and back.
     /// </summary>
     public void RoundCorners(Avalonia.Controls.Window window) => Win32Properties.SetWindowCornerPreference(window, Win32Properties.WindowCornerPreference.Round);
 

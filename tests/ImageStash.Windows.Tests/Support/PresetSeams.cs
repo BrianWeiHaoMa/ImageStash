@@ -278,10 +278,10 @@ public sealed class NoTrayIcon : IQuietWindows
         return Outcome<IDisposable>.Of(new MemoryStream());
     }
 
-    /// <summary>Its windows keep their square corners: what this stand-in stands in for is the tray icon alone.</summary>
-    public void RoundCorners(Avalonia.Controls.Window window)
-    {
-    }
+    /// <summary>The windows asked to be rounded, in order: they keep their square corners, since what this stand-in stands in for is the tray icon alone.</summary>
+    public List<Avalonia.Controls.Window> Rounded { get; } = [];
+
+    public void RoundCorners(Avalonia.Controls.Window window) => Rounded.Add(window);
 
     public PixelRect? TrayIconRectangle() => null;
 

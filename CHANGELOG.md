@@ -6,6 +6,7 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 
 ### Added
 
+- Drag any edge or corner of the stash window's flyout to resize it, down to the size at which the editor still fits. Every later flyout opens at that size, from the shortcut, the tray or a notification and after Unpin, kept apart from the pinned window's own size and place. Where the display, or the room beside the caret, is too small for it, the flyout opens smaller that time only.
 - Trimming a clip shows what you keep: while you drag a Trim handle, or an end of a layer's time bar, the clip pauses on the frame that end is on and stays there when you let go. Play then loops only the kept frames, and the frames cut away can still be shown by clicking the filmstrip or with Left and Right. With Trim chosen, `[` keeps the clip from the frame showing and `]` up to it, each one Undo step.
 - Crop by dragging across the part to keep: with Crop chosen, a drag on a picture with no crop, or outside the crop's frame, draws a new frame over what it covers. Each side of the frame has a handle in its middle that moves that side alone, so a crop can be narrowed or widened from one edge. A drag inside the frame still moves it, its corners still resize it, and each drag is one Undo step.
 - A drawn arrow or box can be adjusted instead of drawn again: select it with Draw, then drag either end of the arrow to re-aim it, or a corner of the box to resize it, the other end or the opposite corner staying put. Dragging the mark elsewhere still moves it, and each adjustment is one Undo step.
@@ -44,6 +45,7 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 
 ### Changed
 
+- The flyout now has an edge all the way round, a thin grey line with rounded corners like Windows 11's own windows, so it no longer blends into a white chat behind it, in the light and the dark look. The pinned window keeps the system's frame.
 - Leaving the editor without changing anything no longer puts up a "Discarded the edit" notice, whether you press Cancel, the back arrow, Discard changes or Esc. After a change, Cancel and the back arrow still leave at once with the notice and its Undo, while Esc first says "Press Esc again to discard your changes" in the hint line for two seconds, and only a second Esc in that time leaves. Inside the editor, holding Esc down counts as one press.
 - A blur now grows stronger with the size of its box, so it softens words on a small screenshot as much as on a large one, and no blur is weaker than before. A blur saved by an earlier version takes the new strength the next time its picture is saved. Hide's hint says Black box is the style that leaves nothing in the finished picture.
 - A new Meme, Label or Caption bar comes in the font, fill and outline you last chose in this edit for one of its kind, so the bottom line of a meme matches the top without choosing them again. Each kind keeps its own: a Caption bar still starts with black letters on its white bar after a white Meme. Each edit starts again from Impact for a Meme and Segoe UI for the others.

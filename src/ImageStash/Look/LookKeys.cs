@@ -43,6 +43,9 @@ public static class LookKeys
     /// <summary>A hairline between parts: the footer's top edge, the chip row's separator.</summary>
     public const string Divider = Prefix + "Divider";
 
+    /// <summary>The flyout's edge all the way round, seen over a white app beside it and over a dark one.</summary>
+    public const string WindowEdge = Prefix + "WindowEdge";
+
     // Cards: the notices, the notifications' cards, the lists, the tag field's suggestions, the drop card, the editor's
     // popovers and the Settings page's groups.
 
@@ -168,6 +171,9 @@ public static class LookKeys
     /// <summary>A capsule: the recording bar's buttons, the capture overlay's hint, the preview's play.</summary>
     public const string PillRadius = Prefix + "PillRadius";
 
+    /// <summary>The flyout's edge at its corners: the radius Windows 11 rounds its windows by, so the line follows the window's own corner.</summary>
+    public const string WindowRadius = Prefix + "WindowRadius";
+
     // Fluent's own keys a take restyles, which every Fluent control of the kind reads.
 
     /// <summary>A window's ground, the stash window's included.</summary>
@@ -210,6 +216,7 @@ public static class LookKeys
         (Words, LookKind.Brush),
         (FaintWords, LookKind.Brush),
         (Divider, LookKind.Brush),
+        (WindowEdge, LookKind.Brush),
         (Card, LookKind.Brush),
         (CardBorder, LookKind.Brush),
         (CardShadow, LookKind.Shadow),
@@ -266,6 +273,7 @@ public static class LookKeys
         (SurroundRadius, LookKind.Radius),
         (SmallRadius, LookKind.Radius),
         (PillRadius, LookKind.Radius),
+        (WindowRadius, LookKind.Radius),
         (FluentWindowGround, LookKind.Brush),
         (FluentControlRadius, LookKind.Radius),
         (FluentOverlayRadius, LookKind.Radius),

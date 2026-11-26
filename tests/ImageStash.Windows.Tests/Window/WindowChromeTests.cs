@@ -14,7 +14,7 @@ namespace ImageStash.Windows.Tests.Window;
 
 /// <summary>
 /// The stash window's two frames through the real window (G2, G1, G8): the pin button turns the flyout into the pinned
-/// window, with a title bar, resizing and a taskbar button, wholly at the pinned window's remembered place and size, and
+/// window, with a title bar and a taskbar button, wholly at the pinned window's remembered place and size, and
 /// back into a flyout where the window is, at the flyout's size; a resize and a move of the pinned window that are not
 /// the window's own placements are remembered, while the flyout's showings change neither; a drag below the window's
 /// minimum stops there and a size remembered below it shows at it, wholly on screen, the stored size kept; a pin and an
@@ -66,9 +66,9 @@ public sealed class WindowChromeTests
         {
             var window = shown.Window;
             var expected = Summon.Unpinned(pinnedAt, Summon.DisplaysOf(window.Screens), WindowSize.FlyoutDefault);
-            Assert.AreEqual(WindowDecorations.BorderOnly, window.WindowDecorations, "no title bar");
+            Assert.AreEqual(WindowDecorations.None, window.WindowDecorations, "no title bar, and no frame but the edge it draws");
             Assert.IsFalse(window.ShowInTaskbar, "no taskbar button");
-            Assert.IsFalse(window.CanResize);
+            Assert.IsTrue(window.CanResize, "G2: \"The flyout and the pinned window are each resized by dragging the border\"");
             Assert.IsTrue(window.Topmost, "above other windows, as the flyout");
             Assert.AreEqual("Keep open", ToolTip.GetTip(Pin(shown)));
             Assert.AreEqual(expected.Position, window.Position, "a flyout where the pinned window was");
@@ -378,7 +378,7 @@ public sealed class WindowChromeTests
             Assert.IsFalse(shown.Window.IsVisible, "hidden, not closed (G3)");
             Assert.IsFalse(shown.Window.ShowInTaskbar, "unpinned (G2)");
             Assert.IsTrue(shown.Window.Topmost);
-            Assert.AreEqual(WindowDecorations.BorderOnly, shown.Window.WindowDecorations);
+            Assert.AreEqual(WindowDecorations.None, shown.Window.WindowDecorations);
             Assert.AreEqual("Keep open", ToolTip.GetTip(Pin(shown)));
         });
     }
