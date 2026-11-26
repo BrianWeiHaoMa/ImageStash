@@ -1,9 +1,6 @@
 using Avalonia;
-using Avalonia.Automation;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Threading;
-using ImageStash.Look;
 using ImageStash.Seams;
 using ImageStash.Store;
 
@@ -12,22 +9,23 @@ namespace ImageStash.Window;
 /// <summary>
 /// The stash window's frame in its two states and where it is placed (G1, G2): the flyout, with no frame of its own but
 /// the edge it draws (<see cref="FlyoutEdge"/>), above other windows and without a taskbar button; the pinned window,
-/// with a title bar and a taskbar button, at the position the user last gave it. Each is resized by dragging its
-/// border, and each size is remembered apart from the other's: the flyout's for every later flyout, the pinned window's
-/// for every later pin. In either state never smaller than the window's minimum, at which the editor fits whole (G20,
-/// G21). Only a resize or move the user makes is remembered: the chrome's own placements are marked while they run. It
+/// with a title bar and a taskbar button, at the position the user last gave it, or the first pin gave it where the flyout
+/// stood. Each is resized by dragging its border, and each size is remembered apart from the other's: the flyout's for
+/// every later flyout, the pinned window's for every later pin. In either state never smaller than the window's minimum,
+/// at which the editor fits whole (G20, G21). Only a resize or move the user makes is remembered, and the first pin's
+/// place: the chrome's own placements are marked while they run. It
 /// shows, hides and places the window and never activates it or moves its focus, which stay the window's own (G8).
 /// </summary>
 public sealed class WindowChrome
 {
     private readonly Avalonia.Controls.Window window;
     private readonly SettingsKeeper settings;
-    private readonly ToggleButton pin;
+    private readonly WindowPin pin;
     private readonly FlyoutEdge edge;
     private bool pinned;
     private bool placing;
 
-    public WindowChrome(Avalonia.Controls.Window window, SettingsKeeper settings, ToggleButton pin, IQuietWindows quietWindows)
+    public WindowChrome(Avalonia.Controls.Window window, SettingsKeeper settings, WindowPin pin, IQuietWindows quietWindows)
     {
         this.window = window;
         this.settings = settings;
@@ -82,11 +80,21 @@ public sealed class WindowChrome
     /// <summary>Whether the window is pinned: it stays on losing focus, on Esc and after a paste (G2).</summary>
     public bool Pinned => pinned;
 
-    /// <summary>The pin button: the pinned frame, at the pinned window's remembered place and size.</summary>
+    /// <summary>
+    /// The pin button: the pinned frame, at the pinned window's remembered place and size; the first time, with no place
+    /// remembered, where the flyout stands, and that place is the pinned window's from then on (G2).
+    /// </summary>
     public void Pin()
     {
+        // Read before the frame changes: the flyout has no frame, so the window Windows reports is the flyout seen.
+        var flyout = new PixelRect(window.Position, PixelSize.FromSize(window.FrameSize ?? window.ClientSize, window.RenderScaling));
+        var place = Summon.Pinned(settings.Current.PinnedPosition, Displays(), PinnedSize(), flyout);
         Apply(pinnedNow: true);
-        PlaceSettled(PinnedPlace());
+        PlaceSettled(place);
+        if (settings.Current.PinnedPosition is null)
+        {
+            settings.Change(s => s with { PinnedPosition = new WindowPosition(place.X, place.Y) });
+        }
     }
 
     /// <summary>The pin button again: the window stays showing, as a flyout where it is, at the flyout's size; its activation is the caller's.</summary>
@@ -102,9 +110,13 @@ public sealed class WindowChrome
         ShowAt(Summon.Unpinned(at, Displays(), settings.Current.FlyoutSize.UsableOr(WindowSize.FlyoutDefault)));
     }
 
-    /// <summary>Where the pinned window shows afresh: where the user last left it, at its remembered size, else centred on the primary display (G2).</summary>
-    public PixelRect PinnedPlace() =>
-        Summon.Pinned(settings.Current.PinnedPosition, Displays(), settings.Current.PinnedSize.UsableOr(WindowSize.PinnedDefault));
+    /// <summary>
+    /// Where the pinned window shows with no flyout showing, as at the first run: where the user last left it, at its
+    /// remembered size, else centred on the primary display (G2).
+    /// </summary>
+    public PixelRect PinnedPlace() => Summon.Pinned(settings.Current.PinnedPosition, Displays(), PinnedSize());
+
+    private WindowSize PinnedSize() => settings.Current.PinnedSize.UsableOr(WindowSize.PinnedDefault);
 
     /// <summary>The pinned window's frame, or the flyout's, with the pin button showing which (G2).</summary>
     public void Apply(bool pinnedNow)
@@ -122,10 +134,7 @@ public sealed class WindowChrome
         window.ShowInTaskbar = pinned;
         // Above other windows like the system's own tray flyouts, so it shows even when Windows refuses it the foreground.
         window.Topmost = !pinned;
-        pin.IsChecked = pinned;
-        pin.Content = IconGlyph.Of(pinned ? "" : "", 16);
-        ToolTipRule.Set(pin, pinned ? "Unpin" : "Keep open");
-        AutomationProperties.SetName(pin, pinned ? "Unpin" : "Keep open");
+        pin.Show(pinned);
         placing = false;
     }
 

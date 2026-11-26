@@ -46,19 +46,18 @@ public static class WindowLayout
     }
 
     /// <summary>The head: the search box, the Settings button, the <c>+</c> menu of ways in and the pin button.</summary>
-    public static Grid Head(TextBox search, Button settings, Button add, ToggleButton pin)
+    public static Grid Head(TextBox search, Button settings, Button add, Decorator pinSlot)
     {
         var head = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto"), Margin = new Thickness(10, 10, 10, 6) };
         Grid.SetColumn(settings, 1);
         Grid.SetColumn(add, 2);
-        Grid.SetColumn(pin, 3);
+        Grid.SetColumn(pinSlot, 3);
         settings.Margin = new Thickness(6, 0, 0, 0);
         add.Margin = new Thickness(6, 0, 0, 0);
-        pin.Margin = new Thickness(6, 0, 0, 0);
         head.Children.Add(search);
         head.Children.Add(settings);
         head.Children.Add(add);
-        head.Children.Add(pin);
+        head.Children.Add(pinSlot);
         return head;
     }
 

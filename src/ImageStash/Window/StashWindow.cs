@@ -55,7 +55,8 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
     private readonly EditorOverlay editor;
     private readonly Thumbnails<Bitmap> thumbnails;
     private readonly TextBox search;
-    private readonly ToggleButton pin;
+    private readonly WindowPin pin = new();
+    private readonly Decorator headPinSlot = new();
     private readonly Grid head;
     private readonly WindowChrome chrome;
     private readonly ChipRow scopes;
@@ -97,11 +98,10 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
         FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI");
 
         search = WindowLayout.SearchBox();
-        pin = new ToggleButton { Content = IconGlyph.Of("", 16), Width = 36, Height = 36, Padding = default, Focusable = false };
-        pin.Classes.Add(LookStyles.IconButton);
+        pin.MoveTo(headPinSlot);
         chrome = new WindowChrome(this, settings, pin, quietWindows);
         seams.BorderDrag.StopAtMinimum(this);
-        head = WindowLayout.Head(search, WindowLayout.SettingsButton(() => SettingsRequested?.Invoke()), AddMenu.Button(settings, act => unavailable(act), paste, ImportFiles, () => ScreenshotRequested?.Invoke(), () => RecordRequested?.Invoke()), pin);
+        head = WindowLayout.Head(search, WindowLayout.SettingsButton(() => SettingsRequested?.Invoke()), AddMenu.Button(settings, act => unavailable(act), paste, ImportFiles, () => ScreenshotRequested?.Invoke(), () => RecordRequested?.Invoke()), headPinSlot);
 
         scopes = new ChipRow(listing, organising, () => ownDrag, heldKeys, paste)
         { Margin = new Thickness(10, 4, 10, 8) };
@@ -334,6 +334,8 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
     private void Cover()
     {
         head.IsVisible = scopes.IsVisible = !preview.IsOpen && !editing.IsOpen;
+        // One pin, in the head in sight, so it stays in reach while the preview or the editor is open (G2).
+        pin.MoveTo(editing.IsOpen ? editor.PinSlot : preview.IsOpen ? preview.PinSlot : headPinSlot);
         // Keep the notice viewport clear of the editor's footer buttons above its paste line.
         status.NoticeArea.Margin = editing.IsOpen ? WindowLayout.NoticeMargin(EditorOverlay.PasteProgressHeight) : WindowLayout.NoticeMargin();
         if (!scopes.IsVisible)
@@ -477,7 +479,7 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
     /// <summary>The pin button: pins the flyout, or unpins the pinned window (G2).</summary>
     private void WirePin()
     {
-        pin.Click += (_, _) =>
+        pin.Button.Click += (_, _) =>
         {
             if (chrome.Pinned)
             {

@@ -107,16 +107,17 @@ public static class Summon
     }
 
     /// <summary>
-    /// The pinned window shown afresh: where the user last left it, or centred on the primary display when it has not
-    /// been placed; a place whose title strip lies on no display's working area, as when the display it was left on is
-    /// gone, is brought wholly onto the nearest one (G1, G2). A place the user left across a display's edge with its title
-    /// bar reachable is kept.
+    /// The pinned window shown afresh: where the user last left it; when it has not been placed, pinned from the
+    /// <paramref name="flyout"/> standing there, where that flyout stands, else (the first run, with no flyout showing)
+    /// centred on the primary display; a place whose title strip lies on no display's working area, as when the display
+    /// it was left on is gone, is brought wholly onto the nearest one (G1, G2). A place the user left across a display's
+    /// edge with its title bar reachable is kept.
     /// </summary>
-    public static PixelRect Pinned(WindowPosition? position, IReadOnlyList<Display> displays, WindowSize size)
+    public static PixelRect Pinned(WindowPosition? position, IReadOnlyList<Display> displays, WindowSize size, PixelRect? flyout = null)
     {
         if (position is null)
         {
-            return Centred(Primary(displays), size);
+            return flyout is { } standing ? InPlaceOf(standing, displays, size) : Centred(Primary(displays), size);
         }
 
         var at = new PixelPoint(position.X, position.Y);
@@ -128,6 +129,18 @@ public static class Summon
         var scaling = Area(holding.Bounds.Intersect(placed)) > 0 ? holding.Scaling : display.Scaling;
         var strip = new PixelRect(at.X, at.Y, width, Math.Min(height, (int)Math.Ceiling(TitleStrip * scaling)));
         return displays.Any(d => d.WorkingArea.Intersects(strip)) ? placed : Inside(display.WorkingArea, placed);
+    }
+
+    /// <summary>
+    /// The first pin's place: at <paramref name="size"/>, the pinned window's and never the flyout's, sized by the
+    /// flyout's display, its top-left at the flyout's, as an unpin puts the flyout's top-left back at the window's, and
+    /// moved the least distance that puts it wholly inside that display's working area (G1, G2, E1).
+    /// </summary>
+    private static PixelRect InPlaceOf(PixelRect flyout, IReadOnlyList<Display> displays, WindowSize size)
+    {
+        var display = DisplayAt(flyout.Center, displays);
+        var (width, height) = SizeOn(display, size);
+        return Inside(display.WorkingArea, new PixelRect(flyout.X, flyout.Y, width, height));
     }
 
     /// <summary>Unpinned by its button: a flyout where the window is, at the flyout size, wholly on its display.</summary>
@@ -163,7 +176,9 @@ public static class Summon
 
     /// <summary>The display whose bounds hold <paramref name="point"/>, else the nearest.</summary>
     public static Display DisplayAt(PixelPoint point, IReadOnlyList<Display> displays) =>
-        displays.FirstOrDefault(d => d.Bounds.Contains(point)) ?? displays.MinBy(d => Distance(d.Bounds, point))!;
+        // Exclusive: a display's right and bottom edges are the next display's first column and row, which Contains counts
+        // as this display's too, so a place on a display's left edge would be sized by its neighbour's scaling (E1).
+        displays.FirstOrDefault(d => d.Bounds.ContainsExclusive(point)) ?? displays.MinBy(d => Distance(d.Bounds, point))!;
 
     /// <summary>
     /// Losing focus to another app, the open shortcut and Enter's paste hide the flyout, unless a dialog it opened is up,

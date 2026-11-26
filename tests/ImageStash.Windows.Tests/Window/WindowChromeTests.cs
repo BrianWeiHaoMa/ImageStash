@@ -1,10 +1,8 @@
 using System.Runtime.InteropServices;
 using Avalonia;
-using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Threading;
-using Avalonia.VisualTree;
 using ImageStash.Seams;
 using ImageStash.Store;
 using ImageStash.Window;
@@ -14,7 +12,8 @@ namespace ImageStash.Windows.Tests.Window;
 
 /// <summary>
 /// The stash window's two frames through the real window (G2, G1, G8): the pin button turns the flyout into the pinned
-/// window, with a title bar and a taskbar button, wholly at the pinned window's remembered place and size, and
+/// window, with a title bar and a taskbar button, wholly at the pinned window's remembered place and size (the first
+/// time where the flyout stood), and
 /// back into a flyout where the window is, at the flyout's size; a resize and a move of the pinned window that are not
 /// the window's own placements are remembered, while the flyout's showings change neither; a drag below the window's
 /// minimum stops there and a size remembered below it shows at it, wholly on screen, the stored size kept; a pin and an
@@ -37,6 +36,7 @@ public sealed class WindowChromeTests
             shown.Window.SummonFromShortcut(default, new SummonAnchor(null));
         });
         await Task.Delay(300);
+        var flyout = TrayDesktop.Get(() => new PixelRect(shown.Window.Position, PixelSize.FromSize(shown.Window.FrameSize!.Value, shown.Window.RenderScaling)));
 
         TrayDesktop.Run(() => shown.Click(Pin(shown)));
         await Task.Delay(300);
@@ -44,17 +44,19 @@ public sealed class WindowChromeTests
         var pinnedAt = TrayDesktop.Get(() =>
         {
             var window = shown.Window;
-            var expected = Summon.Pinned(null, Summon.DisplaysOf(window.Screens), WindowSize.PinnedDefault);
+            // G2 remembers the pinned position apart from the flyout's place and the sheet pins the first pin in place: with
+            // no place remembered, the pinned window comes where the flyout stood, no longer centred on the primary display.
+            var expected = Summon.Pinned(null, Summon.DisplaysOf(window.Screens), WindowSize.PinnedDefault, flyout);
             Assert.AreEqual(WindowDecorations.Full, window.WindowDecorations, "a title bar (G2)");
             Assert.IsTrue(window.ShowInTaskbar, "a taskbar button");
             Assert.IsTrue(window.CanResize, "resizing");
             Assert.IsFalse(window.Topmost, "a normal window");
             Assert.AreEqual("Unpin", ToolTip.GetTip(Pin(shown)));
-            Assert.AreEqual(expected.Position, window.Position, "centred on the primary display, never placed by the user");
+            Assert.AreEqual(expected.Position, window.Position, "where the flyout stood, no place being remembered");
             AssertFrame(expected.Size, window, "the pinned default size, its title bar included");
             Assert.IsTrue(window.IsVisible, "still showing");
             Assert.IsTrue(shown.Search.IsFocused, "the search box keeps focus");
-            Assert.IsNull(shown.Settings.Current.PinnedPosition, "the pin's own placement is not the user's move");
+            Assert.AreEqual(new WindowPosition(expected.X, expected.Y), shown.Settings.Current.PinnedPosition, "the first pin's place is the pinned window's from then on (G2)");
             Assert.AreEqual(WindowSize.PinnedDefault, shown.Settings.Current.PinnedSize, "nor the user's resize");
             return window.Position;
         });
@@ -75,7 +77,7 @@ public sealed class WindowChromeTests
             AssertFrame(expected.Size, window, "the flyout's size");
             Assert.IsTrue(window.IsVisible, "still showing");
             Assert.IsTrue(shown.Search.IsFocused, "with the search box focused");
-            Assert.IsNull(shown.Settings.Current.PinnedPosition, "the unpin's placements are not the user's");
+            Assert.AreEqual(new WindowPosition(pinnedAt.X, pinnedAt.Y), shown.Settings.Current.PinnedPosition, "the unpin's placements are not the user's");
             Assert.AreEqual(WindowSize.PinnedDefault, shown.Settings.Current.PinnedSize);
         });
     }
@@ -483,9 +485,8 @@ public sealed class WindowChromeTests
 
     private const uint NoSizeNoZOrderNoActivate = 0x0001 | NoZOrderNoActivate;
 
-    /// <summary>The pin button, by the words it is named with in either state.</summary>
-    private static ToggleButton Pin(ShownWindow shown) =>
-        shown.Window.GetVisualDescendants().OfType<ToggleButton>().Single(button => AutomationProperties.GetName(button) is "Keep open" or "Unpin");
+    /// <summary>The pin button, the one control in sight named with the words of either state.</summary>
+    private static ToggleButton Pin(ShownWindow shown) => ShownPin.Of(shown);
 
     /// <summary>The whole window, frame included, is <paramref name="expected"/> in physical pixels, within one.</summary>
     private static void AssertFrame(PixelSize expected, Avalonia.Controls.Window window, string because)

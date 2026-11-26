@@ -123,6 +123,9 @@ public sealed class EditorOverlay : Border
     /// <summary>Cancel, the back arrow, Esc with nothing selected and Discard changes: the window leaves the item as it was (G20).</summary>
     public event Action? CancelRequested;
 
+    /// <summary>The head's right end, where the window puts its pin while the editor is in sight (G2).</summary>
+    public Decorator PinSlot { get; } = new();
+
     /// <summary>The session shown, or null while the editor is closed.</summary>
     public EditorSession? Session => session;
 
@@ -201,7 +204,7 @@ public sealed class EditorOverlay : Border
         Refresh();
     }
 
-    /// <summary>The head: Back, the item's name with "editing", history, Compare held, and the ⋯ menu (G20).</summary>
+    /// <summary>The head: Back, the item's name with "editing", history, Compare held, the ⋯ menu and the window's pin (G20, G2).</summary>
     private Grid Head()
     {
         var back = EditorButtons.Icon("\ue72b", "Back", "Back (Esc)");
@@ -217,13 +220,14 @@ public sealed class EditorOverlay : Border
         compare.AddHandler(PointerReleasedEvent, (_, _) => SetCompare(false), RoutingStrategies.Tunnel, handledEventsToo: true);
         compare.AddHandler(PointerCaptureLostEvent, (_, _) => SetCompare(false), RoutingStrategies.Bubble, handledEventsToo: true);
         more.Click += (_, _) => ShowMenu();
-        var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto,Auto"), Margin = new Thickness(10, 10, 10, 8) };
+        var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto,Auto,Auto"), Margin = new Thickness(10, 10, 10, 8) };
         Grid.SetColumn(title, 1);
         Grid.SetColumn(layerActions.History, 2);
         Grid.SetColumn(compare, 3);
         Grid.SetColumn(more, 4);
+        Grid.SetColumn(PinSlot, 5);
         more.Margin = new Thickness(6, 0, 0, 0);
-        head.Children.AddRange([back, title, layerActions.History, compare, more]);
+        head.Children.AddRange([back, title, layerActions.History, compare, more, PinSlot]);
         return head;
     }
 

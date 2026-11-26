@@ -134,14 +134,16 @@ public sealed class Preview : Border
             }
         };
         star = new PreviewStar(() => _ = ToggleFavorite());
-        var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"), Margin = new Thickness(10, 10, 10, 8) };
+        var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto,Auto"), Margin = new Thickness(10, 10, 10, 8) };
         Grid.SetColumn(name, 1);
         Grid.SetColumn(star.Button, 2);
         Grid.SetColumn(more, 3);
+        Grid.SetColumn(PinSlot, 4);
         head.Children.Add(back);
         head.Children.Add(name);
         head.Children.Add(star.Button);
         head.Children.Add(more);
+        head.Children.Add(PinSlot);
 
         picture = new PreviewPicture(failure => notices.Raise(failure)) { Margin = new Thickness(10, 0) };
         StepButtons = new PreviewStepButtons { Margin = new Thickness(10, 0) };
@@ -223,6 +225,9 @@ public sealed class Preview : Border
 
     /// <summary>Its ‹ and ›, over the picture, which the window has step the preview (G19).</summary>
     public PreviewStepButtons StepButtons { get; }
+
+    /// <summary>The head's right end, where the window puts its pin while the preview is in sight (G2).</summary>
+    public Decorator PinSlot { get; } = new();
 
     /// <summary>Raised when the preview opens or closes and after each read of its item is applied.</summary>
     public event Action? Changed;

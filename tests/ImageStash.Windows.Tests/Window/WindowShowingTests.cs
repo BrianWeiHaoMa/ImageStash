@@ -1,4 +1,3 @@
-using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.VisualTree;
@@ -70,8 +69,7 @@ public sealed class WindowShowingTests
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => !CardSays(shown, notice.Text)));
     }
 
-    private static ToggleButton Pin(ShownWindow shown) =>
-        shown.Window.GetVisualDescendants().OfType<ToggleButton>().Single(button => AutomationProperties.GetName(button) is "Keep open" or "Unpin");
+    private static ToggleButton Pin(ShownWindow shown) => ShownPin.Of(shown);
 
     /// <summary>Whether a notice card in the stash window reads <paramref name="text"/>.</summary>
     private static bool CardSays(ShownWindow shown, string text) =>

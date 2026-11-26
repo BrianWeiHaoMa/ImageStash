@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using Avalonia;
-using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Media;
@@ -315,9 +314,8 @@ public sealed class FlyoutFrameTests
 
     private static Border Line(ShownWindow shown) => Edge(shown).Children.OfType<Border>().First(border => !border.IsHitTestVisible);
 
-    /// <summary>The pin button, by the words it is named with in either state.</summary>
-    private static ToggleButton Pin(ShownWindow shown) =>
-        shown.Window.GetVisualDescendants().OfType<ToggleButton>().Single(button => AutomationProperties.GetName(button) is "Keep open" or "Unpin");
+    /// <summary>The pin button, the one control in sight named with the words of either state.</summary>
+    private static ToggleButton Pin(ShownWindow shown) => ShownPin.Of(shown);
 
     /// <summary>The window as DWM draws it, without any border Windows keeps unseen (DWMWA_EXTENDED_FRAME_BOUNDS).</summary>
     private static PixelRect Seen(Avalonia.Controls.Window window)
