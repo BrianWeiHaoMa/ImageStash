@@ -98,6 +98,8 @@ public sealed class CaptureCardLookTests
                     Assert.IsGreaterThanOrEqualTo(3, Take.Contrast(Faded(Solid(line.Foreground), line.Opacity, ground), ground), $"{kind}'s line reads on the card in the {theme} look (F10)");
                     desk.Notifications.Close(desk.Notifications.Shown.Single());
                 });
+                // Each card fades over the look's exit before its window closes.
+                await desk.FinishNoticeExit(card);
                 await ShownWindow.Eventually(() => TrayDesktop.Get(() => desk.Notification.Shown is null));
             }
         }

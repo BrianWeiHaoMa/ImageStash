@@ -23,8 +23,8 @@ public sealed class WindowStatus
     private readonly WaysInActs waysIn;
     private GlobalShortcuts? shortcuts;
     private readonly ContentControl stashState;
-    private readonly StackPanel noticeStack;
-    private readonly Dictionary<Notice, Control> noticeCards = [];
+    private readonly NoticeStack noticeStack;
+    private bool showing;
     private readonly WindowFooter footer;
     private readonly PausedShortcutsLine pausedShortcuts;
     private string? shownState;
@@ -32,9 +32,10 @@ public sealed class WindowStatus
     /// <summary>
     /// For the window listing <paramref name="listing"/> in <paramref name="scroller"/>, which <paramref name="covered"/>
     /// says the preview or the editor covers, whose search <paramref name="clearSearch"/> clears, and whose empty stash's
-    /// rows run <paramref name="waysIn"/>.
+    /// rows run <paramref name="waysIn"/>; its notices move only while it shows and <paramref name="animationEffectsShown"/> (F10).
     /// </summary>
-    public WindowStatus(Listing listing, Notices notices, SettingsKeeper settings, FooterHints footerHints, ScrollViewer scroller, Func<bool> covered, Action clearSearch, WaysInActs waysIn)
+    public WindowStatus(Listing listing, Notices notices, SettingsKeeper settings, FooterHints footerHints, ScrollViewer scroller, Func<bool> covered, Action clearSearch, WaysInActs waysIn,
+        Func<bool> animationEffectsShown)
     {
         this.listing = listing;
         this.notices = notices;
@@ -45,8 +46,8 @@ public sealed class WindowStatus
         this.clearSearch = clearSearch;
         this.waysIn = waysIn;
         stashState = new ContentControl { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(20) };
-        noticeStack = new StackPanel { Spacing = 6 };
-        NoticeArea = WindowLayout.NoticeArea(noticeStack);
+        noticeStack = new NoticeStack(notices, notice => NoticeCard.For(notice, notices), () => showing && animationEffectsShown(), holdsTogether: false);
+        NoticeArea = WindowLayout.NoticeArea(noticeStack.View);
         pausedShortcuts = new PausedShortcutsLine(() => shortcuts?.ResumePaused(), focusable: false);
         footer = new WindowFooter(pausedShortcuts);
     }
@@ -62,6 +63,9 @@ public sealed class WindowStatus
 
     /// <summary>The footer's pieces, as drawn.</summary>
     internal WindowFooter FooterParts => footer;
+
+    /// <summary>The window's notices as cards, with their motion.</summary>
+    internal NoticeStack NoticeCards => noticeStack;
 
     /// <summary>
     /// From now on the empty stash marks a shortcut <paramref name="shortcuts"/> judge unavailable (G2, G33); its owner
@@ -114,25 +118,22 @@ public sealed class WindowStatus
 
     public void ShowNotices()
     {
-        foreach (var gone in noticeCards.Keys.Except(notices.Shown).ToList())
-        {
-            noticeStack.Children.Remove(noticeCards[gone]);
-            noticeCards.Remove(gone);
-        }
-
-        var raised = false;
-        foreach (var notice in notices.Shown.Where(n => !noticeCards.ContainsKey(n)))
-        {
-            var card = NoticeCard.For(notice, notices);
-            noticeCards[notice] = card;
-            noticeStack.Children.Add(card);
-            raised = true;
-        }
-
+        var raised = notices.Shown.Any(notice => noticeStack.CardOf(notice) is null);
+        noticeStack.Show();
         if (raised)
         {
             // The newest notice, at the bottom of the stack, is the one in view.
             Dispatcher.UIThread.Post(NoticeArea.ScrollToEnd, DispatcherPriority.Background);
         }
+    }
+
+    /// <summary>
+    /// The window began or stopped showing, as <see cref="WindowShowing"/> judges it: a motion under way ends at once, so
+    /// at the next show every notice is whole in the first frame and a card that left meanwhile is simply gone (G1).
+    /// </summary>
+    public void NoticesShowing(bool shows)
+    {
+        showing = shows;
+        noticeStack.Finish();
     }
 }

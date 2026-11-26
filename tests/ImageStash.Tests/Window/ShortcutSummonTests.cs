@@ -167,6 +167,8 @@ public sealed class ShortcutSummonTests
 
         public bool PrimaryButtonHeld() => throw new NotSupportedException("A summon never waits on the pointer's button (G1).");
 
+        public bool AnimationEffectsShown() => throw new NotSupportedException("A summon plays no motion (G1).");
+
         public PixelRect? Front { get; set; }
 
         public PixelRect? FrontWindowRectangle()

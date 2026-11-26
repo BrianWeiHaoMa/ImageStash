@@ -12,9 +12,9 @@ namespace ImageStash.Window;
 /// A notice as a card, in the stash window's stack and in a notification above the tray alike (G16): its words, under
 /// its heading in semi-bold when it has one (an import's counts, G12), its button beside the Undo when it has one (an
 /// import's Show, G12), its Undo while the notice offers it, naming the key that runs it in the stash window (G7), and a
-/// close button, none of them taking focus; the pointer over it holds its time, six seconds above
-/// the tray and as long as its words need in the window (Notice.cs), where a notice naming a problem stays past its time
-/// with its words and its close button, its Undo button gone with the Undo's end.
+/// close button, none of them taking focus; its stack (<see cref="NoticeStack"/>) holds its time under the pointer, six
+/// seconds above the tray and as long as its words need in the window (Notice.cs), where a notice naming a problem stays
+/// past its time with its words and its close button, its Undo button gone with the Undo's end.
 /// </summary>
 public static class NoticeCard
 {
@@ -53,24 +53,24 @@ public static class NoticeCard
             }
 
             row.Children.Add(undo);
-            // The window keeps a card while its notice shows, past the Undo's end too: the button follows the offer.
+            // The window keeps a card while its notice shows, past the Undo's end too: the button follows the offer. A card
+            // fading out as its notice leaves keeps it as it was, so the card does not change shape as it goes.
             void Follow()
             {
-                undo.IsVisible = notices.OffersUndo(notice);
                 if (!notices.Shown.Contains(notice))
                 {
                     notices.Changed -= Follow;
+                    return;
                 }
+
+                undo.IsVisible = notices.OffersUndo(notice);
             }
 
             notices.Changed += Follow;
         }
 
         row.Children.Add(CloseButton(() => notices.Close(notice)));
-        var card = CardLook.Dress(new Border { Child = row, Padding = new Thickness(14, 6, 6, 6) });
-        card.PointerEntered += (_, _) => notices.Hover(notice, over: true);
-        card.PointerExited += (_, _) => notices.Hover(notice, over: false);
-        return card;
+        return CardLook.Dress(new Border { Child = row, Padding = new Thickness(14, 6, 6, 6) });
     }
 
     /// <summary>

@@ -101,6 +101,8 @@ public sealed class SettingsWindowLookTests
             {
                 window.Close();
                 notifications.Close(notifications.Shown.Single());
+                // End the cleanup fade, which can be held by the stopped notice clock.
+                notification.Stack.Finish();
                 Application.Current!.RequestedThemeVariant = requested;
             });
             TrayDesktop.UseProductTheme();

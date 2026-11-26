@@ -190,7 +190,7 @@ public sealed class WindowFooterTests
     /// <summary>The footer as the window wires it: drawn again when the listing, the target or the copy's confirmation changes.</summary>
     private static WindowStatus Footer(ListedStash listed, Func<bool> covered)
     {
-        var status = new WindowStatus(listed.Listing, listed.Notices, listed.Settings, listed.FooterHints, new ScrollViewer(), covered, () => { }, listed.WaysIn);
+        var status = new WindowStatus(listed.Listing, listed.Notices, listed.Settings, listed.FooterHints, new ScrollViewer(), covered, () => { }, listed.WaysIn, () => true);
         listed.Listing.Changed += () => OnControlThread(status.ShowListing);
         listed.PasteTarget.Changed += () => OnControlThread(status.ShowHints);
         listed.FooterHints.Changed += () => OnControlThread(status.ShowHints);

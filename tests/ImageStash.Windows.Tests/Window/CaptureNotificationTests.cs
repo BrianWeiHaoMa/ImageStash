@@ -368,6 +368,8 @@ public sealed class CaptureNotificationTests
             Assert.AreEqual(chat, flyout.PasteTarget.Current, "the chat was in front before the Edit click (G8)");
             Assert.IsTrue(desk.Shown.Focused is Visual focused && focused.GetSelfAndVisualAncestors().Contains(editor.Overlay), "keyboard focus in the editor");
         });
+        // Edit dismisses the notice, then its card fades over the look's exit.
+        await desk.FinishNoticeExit(card);
         Assert.IsEmpty(desk.Cards(), "the card gone at its Edit, so it lies over nothing (G16)");
         var chatBefore = desk.Chat.Messages().Count;
         TestHotKeys.Tap('K');
@@ -428,6 +430,8 @@ public sealed class CaptureNotificationTests
         TestMouse.Click(Centre(TrayDesktop.Get(() => EditButton(olderCard))));
         await Eventually(() => TrayDesktop.Get(() => desk.Shown.Editing.Session?.Item.Id == older.Id) && FrontWindow.GetForegroundWindow() == handle);
         Thread.Sleep(500);
+        // The older card fades over the look's exit and gives up its room once the pointer leaves.
+        await desk.FinishNoticeExit(olderCard);
         CollectionAssert.AreEqual(new[] { newerCard }, desk.Cards(), "the older card gone at its Edit, the newer staying (G16)");
         TrayDesktop.Run(() => Assert.IsTrue(Outer(flyout).Intersects(Outer(desk.Notification.Shown!)), $"both above the tray: the flyout at {Outer(flyout)}, the card's window at {Outer(desk.Notification.Shown!)}"));
         Assert.AreEqual(desk.NotificationHandle, FrontWindow.Under(Centre(TrayDesktop.Get(() => UndoButton(newerCard)))), "the newer card's Undo above the flyout the older's Edit opened (G16)");
@@ -446,6 +450,8 @@ public sealed class CaptureNotificationTests
         TestMouse.Click(Centre(TrayDesktop.Get(() => UndoButton(newerCard))));
         await Eventually(() => desk.Items().All(listed => listed.Id != newer.Id));
         Thread.Sleep(300);
+        // Undo dismisses the notice, then its card fades over the look's exit.
+        await desk.FinishNoticeExit(newerCard);
         Assert.IsEmpty(desk.Cards(), "the newer card gone with its Undo");
         Assert.IsTrue(desk.Items().Any(listed => listed.Id == older.Id), "the older item stays");
         TrayDesktop.Run(() =>
@@ -499,6 +505,8 @@ public sealed class CaptureNotificationTests
             // G8: “that click sets the paste target as the notification gains focus, to the window that had focus just before the notification”.
             Assert.AreEqual(chat, shown.Window.PasteTarget.Current, "the chat was in front before the Trim click (G8)");
         });
+        // The clip's card fades over the look's exit and gives up its room once the pointer leaves.
+        await desk.FinishNoticeExit(clipCard);
         CollectionAssert.AreEqual(new[] { stillCard }, desk.Cards(), "the clip's card gone at its Trim, the other staying (G16)");
 
         // The other card's Edit while the clip's edit is open: that edit left as Cancel would, the still opened (G20).
@@ -512,6 +520,8 @@ public sealed class CaptureNotificationTests
             // G20: a notice only "when the edit's layers differ from the ones the item's finished picture was rendered from".
             Assert.IsEmpty(shown.Notices.Shown, "the clip's untouched edit left without a notice");
         });
+        // The still's card also fades over the look's exit.
+        await desk.FinishNoticeExit(stillCard);
         Assert.IsEmpty(desk.Cards(), "that card gone too");
 
         // A card's Undo while its item's edit, opened from the window and changed, is open: the editor closes without
@@ -528,6 +538,8 @@ public sealed class CaptureNotificationTests
         TestMouse.Click(Centre(TrayDesktop.Get(() => UndoButton(undoneCard))));
         await Eventually(() => TrayDesktop.Get(() => !shown.Editing.IsOpen) && desk.Items().All(item => item.Id != undone.Id));
         Thread.Sleep(300);
+        // Undo dismisses the notice, then its card fades over the look's exit.
+        await desk.FinishNoticeExit(undoneCard);
         Assert.IsEmpty(desk.Cards(), "the card gone with its Undo");
         TrayDesktop.Run(() =>
         {

@@ -47,6 +47,9 @@ public sealed class ShortcutNotificationTests
                 {
                     told.Tell(problem);
                 }
+
+                // Finish the cards' entrances on the stopped clock before clicking their buttons.
+                NoticeMotion.Advance(notifications, notification.Stack, NoticeMotion.Entrance);
             });
         }
 
@@ -79,7 +82,12 @@ public sealed class ShortcutNotificationTests
         finally
         {
             TrayDesktop.Run(() => page?.Close());
-            TrayDesktop.Run(() => notifications.Shown.ToList().ForEach(notifications.Close));
+            TrayDesktop.Run(() =>
+            {
+                notifications.Shown.ToList().ForEach(notifications.Close);
+                // Closing the notices starts their fades over the look's exit.
+                NoticeMotion.Advance(notifications, notification.Stack, NoticeMotion.Exit);
+            });
         }
     }
 

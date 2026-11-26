@@ -136,7 +136,8 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
         footerHints = new FooterHints(listing, pasteTarget, handoff, notices.Clock);
         // The empty stash's rows run the acts its keys, the + menu and the tray menu run (G2, G12 to G15).
         var waysIn = new WaysInActs(() => _ = paste.Paste(), () => ScreenshotRequested?.Invoke(), () => RecordRequested?.Invoke(), () => StashClipboardImageRequested?.Invoke(), ImportFiles);
-        status = new WindowStatus(listing, notices, settings, footerHints, scroller, () => preview.IsOpen || editing.IsOpen, () => search.Text = "", waysIn);
+        status = new WindowStatus(listing, notices, settings, footerHints, scroller, () => preview.IsOpen || editing.IsOpen, () => search.Text = "", waysIn,
+            quietWindows.AnimationEffectsShown);
         var body = new Panel { Children = { scroller, status.StateView } };
         // Above the preview too, so a failure is still named and a drop still taken while it is open (G35, G11); the drop
         // card above the notices, so an earlier batch's notices never hide what the next drop will add.
@@ -184,6 +185,9 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
 
     /// <summary>The paste target the footer and the item menu name and Enter pastes into (G8).</summary>
     public PasteTargetHolder PasteTarget => pasteTarget;
+
+    /// <summary>The window's notices as cards, whose motion the desktop checks step.</summary>
+    internal NoticeStack NoticeCards => status.NoticeCards;
 
     /// <summary>The window out of the way while a capture is in progress and back as it was afterwards (G3).</summary>
     public CaptureHiding CaptureHiding { get; }
@@ -356,7 +360,7 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
         listing.LetGoWhenWithdrawn(() => Task.WhenAll(grid.LetGo(), preview.LetGo()));
         notices.Changed += status.ShowNotices;
         // The notices' clock runs only while the window shows, a hide of any kind or a minimise stopping it (G16).
-        new WindowShowing(notices).Follow(this);
+        new WindowShowing(notices, status.NoticesShowing).Follow(this);
         import.Changed += ShowBusy;
         handoff.Changed += ShowBusy;
         editing.Changed += ShowBusy;

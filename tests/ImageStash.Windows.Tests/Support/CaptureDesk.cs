@@ -144,6 +144,8 @@ public sealed class CaptureDesk : IDisposable
         TrayDesktop.Run(() => Notifications.Raise(said));
         TextBlock? words = null;
         await ShownWindow.Eventually(() => (words = TrayDesktop.Get(() => Notification.Shown?.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(text => text.Text == said))) is not null);
+        // The card now fades in over the look's entrance on our stopped clock.
+        TrayDesktop.Run(() => NoticeMotion.Advance(Notifications, Notification.Stack, NoticeMotion.Entrance));
         // Placed again once shown, at the next idle (Notification.Show).
         Thread.Sleep(500);
         return words!;
@@ -158,10 +160,14 @@ public sealed class CaptureDesk : IDisposable
         CaptureCard? card = null;
         await ShownWindow.Eventually(() => (card = TrayDesktop.Get(() => Notification.Shown?.GetVisualDescendants().OfType<CaptureCard>()
             .LastOrDefault(shown => name is null || shown.Field.Shown == name))) is not null);
+        // The card now fades in over the look's entrance on our stopped clock.
+        TrayDesktop.Run(() => NoticeMotion.Advance(Notifications, Notification.Stack, NoticeMotion.Entrance));
         // Placed again once shown, at the next idle (Notification.Show).
         Thread.Sleep(500);
         return card!;
     }
+
+    public Task FinishNoticeExit(Control card) => NoticeMotion.FinishExit(Notifications, Notification.Stack, card);
 
     /// <summary>Starts the act on the UI thread, as each way in runs it; the task ends when the act has.</summary>
     public Task Take() => TrayDesktop.Get(Screenshot.Take);
@@ -345,6 +351,9 @@ public sealed class CaptureDesk : IDisposable
             {
                 Notifications.Close(notice);
             }
+
+            // Closing the notices starts their fades. End them so no notification covers the next check.
+            Notification.Stack.Finish();
         });
         Chat.Dispose();
         Shown.Dispose();
@@ -445,6 +454,8 @@ public sealed class RefusedActivation : IQuietWindows
     public PixelPoint? PointerPosition() => null;
 
     public bool PrimaryButtonHeld() => false;
+
+    public bool AnimationEffectsShown() => true;
 
     public PixelRect? FrontWindowRectangle() => null;
 }

@@ -72,6 +72,8 @@ public sealed class CaptureCardTests
         desk.ChatKeepsTheKeystrokes("after the card appeared");
 
         TestMouse.Click(Centre(TrayDesktop.Get(() => CloseButton(card))));
+        // The card fades over the look's exit before its window closes.
+        await desk.FinishNoticeExit(card);
         await Eventually(() => TrayDesktop.Get(() => desk.Notification.Shown is null));
         desk.ChatKeepsTheKeystrokes("after a click on ×");
         Assert.HasCount(1, desk.Items(), "× only closes the card");
@@ -174,6 +176,8 @@ public sealed class CaptureCardTests
             var clicked = await desk.Raise(shown);
             var on = what == "its picture" ? Centre(TrayDesktop.Get(() => clicked.GetVisualDescendants().OfType<Image>().Single())) : Blank(clicked);
             await ClickShowsTheItem(desk, shown, on);
+            // The clicked card remains in the visual tree while it fades over the look's exit.
+            await desk.FinishNoticeExit(clicked);
             Thread.Sleep(500);
 
             Assert.AreEqual(TrayDesktop.Get(() => window.TryGetPlatformHandle()!.Handle), FrontWindow.GetForegroundWindow(), $"after a click on {what} the stash window stays in front, not the notification (G16)");
@@ -206,6 +210,8 @@ public sealed class CaptureCardTests
         TestMouse.Click(Centre(TrayDesktop.Get(() => EditButton(card))));
         var handle = TrayDesktop.Get(() => window.TryGetPlatformHandle()!.Handle);
         await Eventually(() => TrayDesktop.Get(() => desk.Shown.Editing.Session?.Item.Id == shown.Id) && FrontWindow.GetForegroundWindow() == handle);
+        // Edit dismisses the notice, then its card fades over the look's exit.
+        await desk.FinishNoticeExit(card);
         Thread.Sleep(500);
         Assert.AreEqual(handle, FrontWindow.GetForegroundWindow(), "the stash window in front with the editor, not the notification (G16)");
         Assert.IsEmpty(desk.Cards(), "after Edit the card goes too (G16)");
@@ -247,11 +253,15 @@ public sealed class CaptureCardTests
         });
         Assert.HasCount(1, changed.Layers, "a change not saved");
         TrayDesktop.Run(() => Assert.IsEmpty(desk.Notifications.Shown, "the first click's card went (G16)"));
+        // The first card fades over the look's exit before the next is raised.
+        await desk.FinishNoticeExit(card);
         card = await desk.Raise(asked);
         desk.Chat.ClickTitleBar();
         TestMouse.Click(Blank(card));
         await Eventually(() => FrontWindow.GetForegroundWindow() == handle);
         Thread.Sleep(300);
+        // A dismissed card fades over the look's exit even though its item was not shown.
+        await desk.FinishNoticeExit(card);
         Assert.IsEmpty(desk.Cards(), "the card goes, though the window does not show its item (G16)");
         TrayDesktop.Run(() =>
         {
@@ -351,16 +361,18 @@ public sealed class CaptureCardTests
         TestMouse.MoveTo(TestMouse.Away);
         Thread.Sleep(300);
 
-        desk.Clock.Advance(TimeSpan.FromSeconds(7));
+        TrayDesktop.Run(() => desk.Clock.Advance(TimeSpan.FromSeconds(7)));
         Thread.Sleep(600);
         TrayDesktop.Run(() => Assert.HasCount(1, desk.Notifications.Shown, "held past its six seconds while its field has focus (G16)"));
 
         TestHotKeys.Tap(Esc);
         await Eventually(() => FrontWindow.GetForegroundWindow() == desk.Chat.Window);
-        desk.Clock.Advance(TimeSpan.FromSeconds(5.5));
+        TrayDesktop.Run(() => desk.Clock.Advance(TimeSpan.FromSeconds(5.5)));
         Thread.Sleep(600);
         TrayDesktop.Run(() => Assert.HasCount(1, desk.Notifications.Shown, "its clock stopped while the field had focus"));
-        desk.Clock.Advance(TimeSpan.FromSeconds(1));
+        TrayDesktop.Run(() => desk.Clock.Advance(TimeSpan.FromSeconds(1)));
+        // The sweep dismisses the notice, then the card fades over the look's exit.
+        await desk.FinishNoticeExit(card);
         await Eventually(() => TrayDesktop.Get(() => desk.Notification.Shown is null));
     }
 
@@ -374,6 +386,8 @@ public sealed class CaptureCardTests
         await Eventually(() => TrayDesktop.Get(() => card.Field.IsEditing && NameBox(card).IsFocused));
 
         TestMouse.Click(Centre(TrayDesktop.Get(() => UndoButton(card))));
+        // Undo dismisses the notice, then its card fades over the look's exit.
+        await desk.FinishNoticeExit(card);
         await Eventually(() => TrayDesktop.Get(() => desk.Notification.Shown is null));
         await Eventually(() => desk.Items().Count == 1);
 
@@ -405,6 +419,8 @@ public sealed class CaptureCardTests
 
         // The card's usual Undo: a click that takes no activation (G16) still reaches the button.
         TestMouse.Click(Centre(TrayDesktop.Get(() => UndoButton(card))));
+        // Undo dismisses the notice, then its card fades over the look's exit.
+        await desk.FinishNoticeExit(card);
         await Eventually(() => TrayDesktop.Get(() => desk.Notification.Shown is null));
         await Eventually(() => desk.Items().Count == 1);
 
@@ -506,6 +522,8 @@ public sealed class CaptureCardTests
         TestMouse.Click(Centre(TrayDesktop.Get(() => EditButton(card))));
         await Eventually(() => TrayDesktop.Get(() => desk.Shown.Notices.Shown.Any(notice => notice.Text == refusal)));
 
+        // The dismissed card fades over the look's exit even when Edit is refused.
+        await desk.FinishNoticeExit(card);
         Assert.IsEmpty(desk.Cards(), "the card goes at the click, the Edit refused (G16)");
         TrayDesktop.Run(() =>
         {
@@ -556,9 +574,9 @@ public sealed class CaptureCardTests
     {
         using var desk = await CaptureDesk.Open(["stash beside.png"]);
         await desk.Raise(desk.Items().Single());
-        TrayDesktop.Run(() => desk.Notifications.Raise("Copied · press Ctrl+V"));
+        // RaisePlain finishes the entrance so the click lands on the visible plain card.
+        await desk.RaisePlain();
         await Eventually(() => TrayDesktop.Get(() => ((StackPanel)((ScrollViewer)desk.Notification.Shown!.Content!).Content!).Children.Count == 2));
-        Thread.Sleep(500);
 
         TrayDesktop.Run(() => Assert.AreEqual("Copied · press Ctrl+V", desk.Notification.Shown!.Title));
         var copiedWords = TrayDesktop.Get(() => desk.Notification.Shown!.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Text == "Copied · press Ctrl+V"));

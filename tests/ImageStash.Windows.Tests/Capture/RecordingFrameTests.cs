@@ -545,6 +545,8 @@ public sealed class RecordingFrameTests
 
         public bool PrimaryButtonHeld() => real.PrimaryButtonHeld();
 
+        public bool AnimationEffectsShown() => real.AnimationEffectsShown();
+
         public PixelRect? FrontWindowRectangle() => real.FrontWindowRectangle();
     }
 

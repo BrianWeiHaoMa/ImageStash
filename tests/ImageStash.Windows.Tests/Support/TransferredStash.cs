@@ -89,6 +89,9 @@ public static class TransferredStash
         {
             shown.Notices.Close(notice);
         }
+
+        // Setup closes the notices and ends their fades so the old rooms cannot cover the next control.
+        NoticeMotion.StashStack(shown.Window).Finish();
     });
 
     /// <summary>

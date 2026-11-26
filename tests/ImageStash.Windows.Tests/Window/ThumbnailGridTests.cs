@@ -265,13 +265,8 @@ public sealed partial class ThumbnailGridTests
             shown.Picture("one.png", 8, 8, (_, _) => First),
             shown.Picture("two.png", 8, 8, (_, _) => new SKColor(0x0A, 0xB4, 0x3C)),
             shown.Picture("three.png", 8, 8, (_, _) => new SKColor(0x1E, 0x3C, 0xDC)));
-        TrayDesktop.Run(() =>
-        {
-            foreach (var notice in shown.Notices.Shown.ToList())
-            {
-                shown.Notices.Close(notice);
-            }
-        });
+        // Clear the rooms left by cards fading out over the look's exit before clicking.
+        TransferredStash.CloseNotices(shown);
         var (menus, dragged) = (0, 0);
         TrayDesktop.Run(() =>
         {
@@ -374,13 +369,8 @@ public sealed partial class ThumbnailGridTests
         shown.AddPictures(299, _ => "pile");
         await Dispatcher.UIThread.InvokeAsync(() => shown.Listing.Refresh());
         await TrayDesktop.Get(() => shown.Listing.Settle());
-        TrayDesktop.Run(() =>
-        {
-            foreach (var notice in shown.Notices.Shown.ToList())
-            {
-                shown.Notices.Close(notice);
-            }
-        });
+        // Clear the rooms left by cards fading out over the look's exit before driving the grid.
+        TransferredStash.CloseNotices(shown);
         return shown;
     }
 

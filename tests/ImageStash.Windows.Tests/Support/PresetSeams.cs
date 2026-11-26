@@ -226,7 +226,7 @@ public sealed class PresetTarget : ITarget
 /// unactivated Windows draws its watermark over every window in the bottom-right corner, and into every grab. The icon
 /// stays below the display's centre line, or the notification would stand below it instead (<see cref="DisplayPlaces.TrayIcon"/>).
 /// </summary>
-public sealed class TrayIconMidScreen(WindowsQuietWindows real) : IQuietWindows
+public sealed class TrayIconMidScreen(WindowsQuietWindows real, bool? animationEffectsShown = null) : IQuietWindows
 {
     /// <summary>Where the icon is said to be, in physical pixels, on the primary display as the Screen seam reports it now.</summary>
     public static PixelRect Icon => DisplayPlaces.TrayIcon(DisplayPlaces.Primary());
@@ -244,6 +244,8 @@ public sealed class TrayIconMidScreen(WindowsQuietWindows real) : IQuietWindows
     public PixelPoint? PointerPosition() => real.PointerPosition();
 
     public bool PrimaryButtonHeld() => real.PrimaryButtonHeld();
+
+    public bool AnimationEffectsShown() => animationEffectsShown ?? real.AnimationEffectsShown();
 
     public PixelRect? FrontWindowRectangle() => real.FrontWindowRectangle();
 }
@@ -288,6 +290,8 @@ public sealed class NoTrayIcon : IQuietWindows
     public PixelPoint? PointerPosition() => null;
 
     public bool PrimaryButtonHeld() => buttonHeld;
+
+    public bool AnimationEffectsShown() => true;
 
     public PixelRect? FrontWindowRectangle() => null;
 }

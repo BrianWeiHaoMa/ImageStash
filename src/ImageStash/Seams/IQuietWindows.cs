@@ -60,6 +60,13 @@ public interface IQuietWindows
     bool PrimaryButtonHeld();
 
     /// <summary>
+    /// Whether the system shows animation effects now, as the person last set it: false while they have turned them off,
+    /// so a notice or a notification arrives and leaves without motion (F10). True when the platform cannot say. Read
+    /// afresh at every call, since the setting can change while ImageStash runs. Called on the UI thread.
+    /// </summary>
+    bool AnimationEffectsShown();
+
+    /// <summary>
     /// The rectangle of the window in front on the desktop in physical pixels, from any thread, whose display the
     /// shortcut's flyout is centred on when neither a caret nor the pointer can be found (G1); null when no window is in
     /// front or the platform cannot say.

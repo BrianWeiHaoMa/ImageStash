@@ -36,6 +36,7 @@ public sealed class WindowsQuietWindows(WindowsTray tray) : IQuietWindows
     private const int VkLButton = 0x01;
     private const int VkRButton = 0x02;
     private const int SmSwapButton = 23;
+    private const uint SpiGetClientAreaAnimation = 0x1042;
 
     private readonly ConditionalWeakTable<Avalonia.Controls.Window, object> keptInactive = [];
 
@@ -264,6 +265,9 @@ public sealed class WindowsQuietWindows(WindowsTray tray) : IQuietWindows
     // right one is the primary. It answers zero, so not held, while UIPI keeps it from an elevated app in front.
     public bool PrimaryButtonHeld() => (GetAsyncKeyState(GetSystemMetrics(SmSwapButton) != 0 ? VkRButton : VkLButton) & 0x8000) != 0;
 
+    // Settings' "Animation effects" (Accessibility, Visual effects) is SPI_GETCLIENTAREAANIMATION; a failed read says nothing.
+    public bool AnimationEffectsShown() => !SystemParametersInfoW(SpiGetClientAreaAnimation, 0, out var shown, 0) || shown != 0;
+
     public PixelRect? FrontWindowRectangle() =>
         GetForegroundWindow() is var window && window != 0 && GetWindowRect(window, out var bounds) && bounds.Right > bounds.Left && bounds.Bottom > bounds.Top
             ? new PixelRect(bounds.Left, bounds.Top, bounds.Right - bounds.Left, bounds.Bottom - bounds.Top)
@@ -323,6 +327,10 @@ public sealed class WindowsQuietWindows(WindowsTray tray) : IQuietWindows
 
     [DllImport("user32.dll", ExactSpelling = true)]
     private static extern short GetAsyncKeyState(int key);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SystemParametersInfoW(uint action, uint parameter, out int value, uint winIni);
 
     [DllImport("user32.dll", ExactSpelling = true)]
     private static extern int GetSystemMetrics(int index);

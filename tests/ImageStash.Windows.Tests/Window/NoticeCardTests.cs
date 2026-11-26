@@ -26,11 +26,17 @@ public sealed class NoticeCardTests
     {
         using var desk = await CaptureDesk.Open(["stash beside.png"]);
         var card = await desk.Raise(desk.Items().Single());
-        TrayDesktop.Run(() => desk.Notifications.Raise("Copied · press Ctrl+V"));
+        TrayDesktop.Run(() =>
+        {
+            desk.Notifications.Raise("Copied · press Ctrl+V");
+            // Finish the entrance before reading rendered pixels.
+            NoticeMotion.Advance(desk.Notifications, desk.Notification.Stack, NoticeMotion.Entrance);
+        });
         await Eventually(() => TrayDesktop.Get(() => Cards(desk).Count == 2));
         Thread.Sleep(500);
         var window = TrayDesktop.Get(() => desk.Notification.Shown!);
-        var (captureClose, plainClose) = TrayDesktop.Get(() => (CloseButton(card), CloseButton(Cards(desk)[1])));
+        var plain = TrayDesktop.Get(() => Cards(desk)[1]);
+        var (captureClose, plainClose) = TrayDesktop.Get(() => (CloseButton(card), CloseButton(plain)));
 
         await TheXStandsOutUnderBothThemes(window, captureClose, "the capture card");
         await TheXStandsOutUnderBothThemes(window, plainClose, "the plain notification");
@@ -40,6 +46,8 @@ public sealed class NoticeCardTests
         TrayDesktop.Run(() => Assert.AreEqual("Copied · press Ctrl+V", desk.Notifications.Shown.Single().Text, "the capture card's × closes it alone"));
         desk.ChatKeepsTheKeystrokes("after a click on the capture card's ×");
         TestMouse.Click(TestMouse.Centre(plainClose));
+        // The last card closes the window after the fade over the look's exit.
+        await desk.FinishNoticeExit(plain);
         await Eventually(() => TrayDesktop.Get(() => desk.Notification.Shown is null));
         desk.ChatKeepsTheKeystrokes("after a click on the plain notification's ×");
         Assert.HasCount(1, desk.Items(), "× only closes the cards");
@@ -51,6 +59,8 @@ public sealed class NoticeCardTests
         using var shown = ShownWindow.Open();
         await shown.OpenStash(shown.Picture("noticed.png"));
         var (added, other) = TrayDesktop.Get(() => (shown.Notices.Shown.Single(), shown.Notices.Raise("A second notice")));
+        // Finish the entrance before reading rendered pixels.
+        TrayDesktop.Run(() => NoticeMotion.Advance(shown, NoticeMotion.Entrance));
         await Eventually(() => TrayDesktop.Get(() => NoticeCards(shown).Count == 2));
         var close = TrayDesktop.Get(() => CloseButton(NoticeCards(shown).Single(card => Texts(card).Contains(added.Text))));
 
@@ -62,8 +72,9 @@ public sealed class NoticeCardTests
         TrayDesktop.Run(() => Assert.AreSame(other, shown.Notices.Shown.Single(), "the × closes its own notice alone"));
     }
 
+    // The stack holds a room Border for each card so the room can fade over the look's exit.
     private static List<Control> Cards(CaptureDesk desk) =>
-        ((StackPanel)((ScrollViewer)desk.Notification.Shown!.Content!).Content!).Children.ToList();
+        desk.Notification.Stack.View.Children.Cast<Border>().Select(room => room.Child!).ToList();
 
     /// <summary>The cards of the notices showing in the stash window.</summary>
     private static List<Border> NoticeCards(ShownWindow shown) =>

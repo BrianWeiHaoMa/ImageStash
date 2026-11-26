@@ -44,6 +44,9 @@ public sealed class Paper : Take
         into[LookKeys.Card] = Solid(card);
         into[LookKeys.CardBorder] = Solid(dark ? Rgb(0x36373D) : Rgb(0xE4E5E9));
         into[LookKeys.CardShadow] = BoxShadows.Parse(dark ? "0 8 24 0 #66000000" : "0 1 2 0 #0F101828, 0 8 24 0 #1F101828");
+        // About a sixth of a second in and a little faster out: short enough never to read as the window moving.
+        into[LookKeys.CardEntrance] = TimeSpan.FromMilliseconds(167);
+        into[LookKeys.CardExit] = TimeSpan.FromMilliseconds(117);
 
         into[LookKeys.ScopeChipGround] = Solid(card);
         into[LookKeys.ScopeChipBorder] = Solid(edge);

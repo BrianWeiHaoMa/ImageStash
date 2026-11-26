@@ -672,7 +672,8 @@ public sealed class PasteTargetTests
         TrayDesktop.Run(() => shown.OpenPreview(item));
         // The import's notice, which the check's stopped clock never lets go, closed by its × as a person would: it shows
         // above the preview, over the row.
-        TrayDesktop.Run(() => shown.Notices.Shown.ToList().ForEach(shown.Notices.Close));
+        // The room would still take the hit while its card fades out over the look's exit.
+        TransferredStash.CloseNotices(shown);
 
         // The hit test reads the rendered scene, so it waits until the window has rendered the row.
         await Eventually(() => TrayDesktop.Get(() => Clickable(shown, shown.CopyButton) && Clickable(shown, shown.HandoffButton)));

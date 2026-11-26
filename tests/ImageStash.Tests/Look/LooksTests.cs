@@ -259,6 +259,7 @@ public sealed class LooksTests
         LookKind.Radius => value is CornerRadius,
         LookKind.Thickness => value is Thickness,
         LookKind.Shadow => value is BoxShadows,
+        LookKind.Duration => value is TimeSpan,
         _ => false,
     };
 

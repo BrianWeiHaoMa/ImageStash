@@ -215,6 +215,9 @@ public sealed class StashClipboardImageTests
                 {
                     shown.Notifications.Close(notice);
                 }
+
+                // End the cleanup fades so the notification cannot cover the next check.
+                notification.Stack.Finish();
             });
         }
     }

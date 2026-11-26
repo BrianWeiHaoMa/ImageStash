@@ -24,7 +24,8 @@ namespace ImageStash.Window;
 /// going to another window, or the card leaving, gives the activation back to the window that had it, unless the user
 /// has put another one in front. Edit or Trim asks for the editor on the item, a click elsewhere for the stash window on
 /// it, and the card goes, whatever the ask comes to, so it never lies over the window the click brought forward; other
-/// cards stay. A refusal is named above the tray. The item is read again by identity after every change to the stash,
+/// cards stay. From the instant its notice leaves, though the card still fades out, none of its clicks does anything and
+/// its edit ends (G16). A refusal is named above the tray. The item is read again by identity after every change to the stash,
 /// so a rename made in the window shows here too, and a picture changed since, with its size (G6).
 /// </summary>
 public sealed class CaptureCard : Border
@@ -117,8 +118,7 @@ public sealed class CaptureCard : Border
         CardLook.Dress(this);
         // Bubbling: the name's tunnelled press and the buttons' own have already handled theirs.
         AddHandler(PointerPressedEvent, ElsewherePressed);
-        PointerEntered += (_, _) => notices.Hover(notice, over: true);
-        PointerExited += (_, _) => notices.Hover(notice, over: false);
+        notices.Changed += NoticesChanged;
         AttachedToVisualTree += (_, _) =>
         {
             shownIn = TopLevel.GetTopLevel(this) as Avalonia.Controls.Window;
@@ -133,7 +133,7 @@ public sealed class CaptureCard : Border
         };
         DetachedFromVisualTree += (_, _) =>
         {
-            left = true;
+            Leave();
             if (shownIn is not null)
             {
                 shownIn.Deactivated -= FocusWentElsewhere;
@@ -142,8 +142,6 @@ public sealed class CaptureCard : Border
             shownIn = null;
             listing.Changed -= StashChanged;
             words.Changed -= ShowLine;
-            Field.StopEditing();
-            EditEnded();
         };
         _ = ShowPictureAndSize();
     }
@@ -182,7 +180,7 @@ public sealed class CaptureCard : Border
         // Handled, so the name's own click never edits without the activation, and the text box's caret placement for
         // this press cannot undo the selection.
         e.Handled = true;
-        if (renamingNow || shownIn is null)
+        if (renamingNow || shownIn is null || left)
         {
             return;
         }
@@ -221,6 +219,11 @@ public sealed class CaptureCard : Border
     /// </summary>
     private void AskInFront(Action<StashItem, bool> ask)
     {
+        if (left)
+        {
+            return;
+        }
+
         var taken = shownIn is null ? null : quietWindows.TakeActivation(shownIn);
         using (taken is { Succeeded: true } ? taken.Value : null)
         {
@@ -230,6 +233,24 @@ public sealed class CaptureCard : Border
         // Only now: were it the last card, the notifications' window closing before the stash window was in front would
         // hand the foreground to the app beneath, which would then become the paste target, or the flyout would hide (G8, G2).
         notices.Close(notice);
+    }
+
+    /// <summary>Its notice has left, by its time, its ×, its Undo or a click that opened the window: the card leaves at once, though it still fades out.</summary>
+    private void NoticesChanged()
+    {
+        if (!notices.Shown.Contains(notice))
+        {
+            Leave();
+        }
+    }
+
+    /// <summary>The card leaves: nothing it shows acts from now on, and an edit in its field ends with nothing committed.</summary>
+    private void Leave()
+    {
+        notices.Changed -= NoticesChanged;
+        left = true;
+        Field.StopEditing();
+        EditEnded();
     }
 
     /// <summary>Focus went to another window: the edit ends as Esc would, with nothing committed.</summary>

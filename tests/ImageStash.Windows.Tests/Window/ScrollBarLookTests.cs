@@ -268,13 +268,8 @@ public sealed class ScrollBarLookTests
         shown.AddPictures(59, _ => "pile");
         await Dispatcher.UIThread.InvokeAsync(() => shown.Listing.Refresh());
         await TrayDesktop.Get(() => shown.Listing.Settle());
-        TrayDesktop.Run(() =>
-        {
-            foreach (var notice in shown.Notices.Shown.ToList())
-            {
-                shown.Notices.Close(notice);
-            }
-        });
+        // Clear the rooms left by cards fading out over the look's exit before testing the grid.
+        TransferredStash.CloseNotices(shown);
         var scroller = TrayDesktop.Get(() => Scroller(shown));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => scroller.Extent.Height > scroller.Viewport.Height * 2));
         return shown;

@@ -37,7 +37,7 @@ public sealed class EmptyStashShown
         WindowStatus? status = null;
         ControlThread.Run(() =>
         {
-            status = new WindowStatus(listed.Listing, listed.Notices, listed.Settings, listed.FooterHints, new ScrollViewer(), () => false, () => { }, acts ?? listed.WaysIn);
+            status = new WindowStatus(listed.Listing, listed.Notices, listed.Settings, listed.FooterHints, new ScrollViewer(), () => false, () => { }, acts ?? listed.WaysIn, () => true);
             status.FollowShortcuts(listed.Shortcuts);
         });
         listed.Shortcuts.Changed += () =>

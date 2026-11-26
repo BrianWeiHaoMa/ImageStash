@@ -14,6 +14,9 @@ public enum LookKind
 
     /// <summary>A card's <c>BoxShadows</c>; its geometry and colour are the take's.</summary>
     Shadow,
+
+    /// <summary>A <c>TimeSpan</c>: how long a motion of the look lasts.</summary>
+    Duration,
 }
 
 /// <summary>
@@ -52,6 +55,15 @@ public static class LookKeys
     public const string Card = Prefix + "Card";
     public const string CardBorder = Prefix + "CardBorder";
     public const string CardShadow = Prefix + "CardShadow";
+
+    // The one motion of the look: a notice in the stash window and a notification's card fade in as they arrive and out as
+    // they leave, both places reading the same two durations (F10).
+
+    /// <summary>How long a card takes to fade in as it arrives.</summary>
+    public const string CardEntrance = Prefix + "CardEntrance";
+
+    /// <summary>How long a card takes to fade out as it leaves, the room it gives up in the stash window closing over the same time.</summary>
+    public const string CardExit = Prefix + "CardExit";
 
     // The chips: the scopes (Recent, Favorites, All), the tags, and either while lit.
 
@@ -220,6 +232,8 @@ public static class LookKeys
         (Card, LookKind.Brush),
         (CardBorder, LookKind.Brush),
         (CardShadow, LookKind.Shadow),
+        (CardEntrance, LookKind.Duration),
+        (CardExit, LookKind.Duration),
         (ScopeChipGround, LookKind.Brush),
         (ScopeChipBorder, LookKind.Brush),
         (ScopeChipWords, LookKind.Brush),

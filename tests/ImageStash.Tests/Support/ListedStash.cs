@@ -656,6 +656,8 @@ public sealed class NoWindowShown : IQuietWindows
 
     public bool PrimaryButtonHeld() => false;
 
+    public bool AnimationEffectsShown() => true;
+
     public Avalonia.PixelRect? FrontWindowRectangle() => null;
 }
 

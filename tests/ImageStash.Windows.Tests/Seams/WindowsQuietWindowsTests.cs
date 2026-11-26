@@ -46,6 +46,16 @@ public sealed class WindowsQuietWindowsTests
     });
 
     [TestMethod]
+    public void AnimationEffectsMatchTheWindowsClientAreaAnimationSetting()
+    {
+        const uint spiGetClientAreaAnimation = 0x1042;
+        using var tray = new WindowsTray();
+        Assert.IsTrue(SystemParametersInfoW(spiGetClientAreaAnimation, 0, out var shown, 0), "Windows read its animation setting");
+
+        Assert.AreEqual(shown != 0, new WindowsQuietWindows(tray).AnimationEffectsShown(), "the seam reads the Windows animation effects setting (F10)");
+    }
+
+    [TestMethod]
     public void ThePrimaryButtonReadsHeldFromItsPressUntilItsReleaseAndTheOtherButtonNever()
     {
         using var pointer = TestMouse.PutBackAfterwards();
@@ -418,4 +428,8 @@ public sealed class WindowsQuietWindowsTests
 
     [DllImport("user32.dll", ExactSpelling = true)]
     private static extern nint GetAncestor(nint window, uint flags);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SystemParametersInfoW(uint action, uint parameter, out int value, uint flags);
 }

@@ -79,8 +79,18 @@ public sealed class OpenWithTests
             await Eventually(() => TrayDesktop.Get(() => notification.Shown?.Title == words));
             await TileShows(shown, item.Id, Rewritten);
 
-            var undo = TrayDesktop.Get(() => notification.Shown!.GetVisualDescendants().OfType<Button>().Single(button => button.Content as string == "Undo"));
-            TestMouse.Click(TestMouse.Centre(undo));
+            var (card, undo) = TrayDesktop.Get(() =>
+            {
+                var card = notification.Stack.CardOf(shown.Notifications.Shown.Single(notice => notice.Text == words))!;
+                // The card has to finish its entrance before a real click can reach Undo.
+                NoticeMotion.Advance(shown.Notifications, notification.Stack, NoticeMotion.Entrance);
+                return (card, notification.Shown!.GetVisualDescendants().OfType<Button>().Single(button => button.Content as string == "Undo"));
+            });
+            var at = TestMouse.Centre(undo);
+            await Eventually(() => TrayDesktop.Get(() => NoticeMotion.Hits(notification.Shown!, at, undo)));
+            TestMouse.Click(at);
+            // Undo dismisses the notice, then its card fades over the look's exit.
+            await NoticeMotion.FinishExit(shown.Notifications, notification.Stack, card);
             await Eventually(() => TrayDesktop.Get(() => notification.Shown is null));
             await TileShows(shown, item.Id, Before);
             var root = shown.Listing.Store!.Folder.Root;

@@ -40,6 +40,8 @@ public sealed class NotificationOpenedTargetTests
         await Eventually(() => shown.Window.PasteTarget.Current == chat);
 
         Click(TrayDesktop.Get(() => card.PointToScreen(new Point(5, card.Bounds.Height / 2))));
+        // The card fades over the look's exit before it leaves the visual tree.
+        await desk.FinishNoticeExit(card);
         await Eventually(() => FrontWindow.GetForegroundWindow() == stash && desk.Cards().Count == 0
             && TrayDesktop.Get(() => shown.Window.IsActive && shown.Listing.Selection.SequenceEqual([item.Id])));
 
@@ -66,6 +68,8 @@ public sealed class NotificationOpenedTargetTests
         using (HeldThread.Suspended(targets.HookThread))
         {
             Click(edit);
+            // The card fades over the look's exit while the focus report is still held.
+            await desk.FinishNoticeExit(card);
             await Eventually(() => FrontWindow.GetForegroundWindow() == stash && desk.Cards().Count == 0
                 && TrayDesktop.Get(() => shown.Window.IsActive && shown.Editing.Session?.Item.Id == item.Id));
             // G8: “while ImageStash has not yet heard from Windows which window had focus just before it, it is none until it hears, and then that window”.

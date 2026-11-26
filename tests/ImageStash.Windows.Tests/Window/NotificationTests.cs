@@ -37,17 +37,21 @@ public sealed class NotificationTests
     public void UseProductTheme() => TrayDesktop.UseProductTheme();
 
     [TestMethod]
-    public void ItAppearsAboveTheTrayWithoutTakingTheForegroundAndAClickLeavesTheAppInFrontWithTheKeystrokes()
+    public async Task ItAppearsAboveTheTrayWithoutTakingTheForegroundAndAClickLeavesTheAppInFrontWithTheKeystrokes()
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var tray = new WindowsTray();
         using var chat = TargetApp.Start("ImageStash check chat", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
-        var clock = new MovableClock();
+        var clock = new StoppedClock();
         var notifications = new Notices(clock);
         var notification = TrayDesktop.Get(() => new Notification(notifications, new WindowsQuietWindows(tray), new WindowsScreen(), _ => { }));
         chat.ClickTitleBar();
 
-        TrayDesktop.Run(() => notifications.Raise(Copied));
+        TrayDesktop.Run(() =>
+        {
+            notifications.Raise(Copied);
+            NoticeMotion.Advance(notifications, notification.Stack, NoticeMotion.Entrance);
+        });
         Thread.Sleep(500);
 
         var (handle, active, inTaskbar, topmost, title, outer, area) = TrayDesktop.Get(() =>
@@ -83,9 +87,14 @@ public sealed class NotificationTests
         CollectionAssert.Contains(chat.Messages().Skip(typedBefore).ToList(), "WM_KEYDOWN:0x41", "with the keystrokes");
         TestMouse.MoveTo(TestMouse.Away);
         Thread.Sleep(300);
-        clock.Now += TimeSpan.FromSeconds(7);
-        Thread.Sleep(600);
-        TrayDesktop.Run(() => Assert.IsNull(notification.Shown, "gone after its six seconds"));
+        TrayDesktop.Run(() => clock.Advance(TimeSpan.FromSeconds(7)));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => notifications.Shown.Count == 0));
+        TrayDesktop.Run(() =>
+        {
+            // The expired notice keeps its window until the card fades out over the look's exit.
+            NoticeMotion.Advance(notifications, notification.Stack, NoticeMotion.Exit);
+            Assert.IsNull(notification.Shown, "gone after its six seconds and the exit");
+        });
         Assert.IsFalse(IsWindow(handle), "its window closed");
     }
 
@@ -95,7 +104,7 @@ public sealed class NotificationTests
         using var pointer = TestMouse.PutBackAfterwards();
         using var tray = new WindowsTray();
         using var own = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
-        var notifications = new Notices(new MovableClock());
+        var notifications = new Notices(new StoppedClock());
         var notification = TrayDesktop.Get(() => new Notification(notifications, new WindowsQuietWindows(tray), new WindowsScreen(), _ => { }));
         own.ClickToFront();
         var deactivations = 0;
@@ -104,7 +113,11 @@ public sealed class NotificationTests
         // Twice: the window closes with its last notice, and the next notice's new window is as quiet as the first.
         for (var round = 1; round <= 2; round++)
         {
-            TrayDesktop.Run(() => notifications.Raise(Copied));
+            TrayDesktop.Run(() =>
+            {
+                notifications.Raise(Copied);
+                NoticeMotion.Advance(notifications, notification.Stack, NoticeMotion.Entrance);
+            });
             Thread.Sleep(500);
             var (shown, outer) = TrayDesktop.Get(() => (notification.Shown!, new PixelRect(notification.Shown!.Position, PixelSize.FromSize(notification.Shown.ClientSize, notification.Shown.RenderScaling))));
             Assert.IsTrue(first is null || !ReferenceEquals(first, shown), "a new window for the next notice");
@@ -115,9 +128,12 @@ public sealed class NotificationTests
             Assert.AreEqual(0, elsewhere, $"round {round}: the stash window would keep the focus throughout, so its hide rule has nothing to judge (G2)");
             TrayDesktop.Run(() => Assert.AreEqual(0, deactivations, $"round {round}: never deactivated, so it reads no paste target again (G8)"));
             TrayDesktop.Run(() => Assert.IsTrue(own.Window.IsActive && !shown.IsActive, $"round {round}: the notification took no activation (G16)"));
-            TrayDesktop.Run(() => notifications.Close(notifications.Shown.Single()));
-            Thread.Sleep(300);
-            TrayDesktop.Run(() => Assert.IsNull(notification.Shown, "closed with its last notice"));
+            TrayDesktop.Run(() =>
+            {
+                // The last card fades over the look's exit before its window closes.
+                CloseAndStep(notifications, notification, notifications.Shown.Single());
+                Assert.IsNull(notification.Shown, "closed with its last notice");
+            });
         }
     }
 
@@ -130,12 +146,16 @@ public sealed class NotificationTests
             TrayDesktop.Run(() => tray.Show([], "ImageStash Windows check", () => { }));
             // Explorer registers the icon while the UI thread keeps pumping.
             await Task.Delay(1000);
-            var notifications = new Notices(new MovableClock());
+            var notifications = new Notices(new StoppedClock());
             var notification = TrayDesktop.Get(() => new Notification(notifications, new WindowsQuietWindows(tray), new WindowsScreen(), _ => { }));
             var icon = TrayDesktop.Get(() => new WindowsQuietWindows(tray).TrayIconRectangle());
             Assert.IsNotNull(icon, "the check's tray icon has a place");
 
-            TrayDesktop.Run(() => notifications.Raise(Copied));
+            TrayDesktop.Run(() =>
+            {
+                notifications.Raise(Copied);
+                NoticeMotion.Advance(notifications, notification.Stack, NoticeMotion.Entrance);
+            });
             await Task.Delay(500);
 
             var (outer, area) = TrayDesktop.Get(() => (new PixelRect(notification.Shown!.Position, PixelSize.FromSize(notification.Shown.ClientSize, notification.Shown.RenderScaling)),
@@ -143,7 +163,8 @@ public sealed class NotificationTests
             Assert.IsLessThanOrEqualTo(icon.Value.Y, outer.Bottom, $"{outer} is above the icon {icon}");
             Assert.IsTrue(outer.X <= icon.Value.Center.X && icon.Value.Center.X <= outer.Right || outer.Right == area.Right, $"{outer} is over the icon {icon}, or at the display's edge");
             Assert.IsTrue(area.Contains(outer));
-            TrayDesktop.Run(() => notifications.Close(notifications.Shown.Single()));
+            // The card fades out over the look's exit before cleanup closes the window.
+            TrayDesktop.Run(() => CloseAndStep(notifications, notification, notifications.Shown.Single()));
         }
         finally
         {
@@ -152,28 +173,42 @@ public sealed class NotificationTests
     }
 
     [TestMethod]
-    public void EachOfTwoStaysSixSecondsFromItsOwnRaisingAndTheWindowClosesWithTheLast()
+    public async Task EachOfTwoStaysSixSecondsFromItsOwnRaisingAndTheWindowClosesWithTheLast()
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var tray = new WindowsTray();
-        var clock = new MovableClock();
+        var clock = new StoppedClock();
         var notifications = new Notices(clock);
         var notification = TrayDesktop.Get(() => new Notification(notifications, new WindowsQuietWindows(tray), new WindowsScreen(), _ => { }));
         TestMouse.MoveTo(TestMouse.Away);
 
         TrayDesktop.Run(() => notifications.Raise(Copied));
-        clock.Now += TimeSpan.FromSeconds(0.8);
-        TrayDesktop.Run(() => notifications.Raise(Copied));
-        Thread.Sleep(400);
+        TrayDesktop.Run(() =>
+        {
+            clock.Advance(TimeSpan.FromSeconds(0.8));
+            notifications.Raise(Copied);
+            NoticeMotion.Advance(notifications, notification.Stack, NoticeMotion.Entrance);
+        });
         var cardsAtFirst = Cards(notification);
-        clock.Now += TimeSpan.FromSeconds(5.1);
+        TrayDesktop.Run(() => clock.Advance(TimeSpan.FromSeconds(5.1) - NoticeMotion.Entrance));
         Thread.Sleep(600);
         var cardsBeforeSix = Cards(notification);
-        clock.Now += TimeSpan.FromSeconds(0.2);
-        Thread.Sleep(600);
+        Assert.AreEqual(2, TrayDesktop.Get(() => notifications.Shown.Count), "both notice clocks still run at 5.9 seconds");
+        TrayDesktop.Run(() => clock.Advance(TimeSpan.FromSeconds(0.2)));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => notifications.Shown.Count == 1));
+        TrayDesktop.Run(() =>
+        {
+            // The first card remains in the visual stack while it fades over the look's exit.
+            NoticeMotion.Advance(notifications, notification.Stack, NoticeMotion.Exit);
+        });
         var cardsAfterTheFirstsSix = Cards(notification);
-        clock.Now += TimeSpan.FromSeconds(0.8);
-        Thread.Sleep(600);
+        TrayDesktop.Run(() => clock.Advance(TimeSpan.FromSeconds(0.8) - NoticeMotion.Exit));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => notifications.Shown.Count == 0));
+        TrayDesktop.Run(() =>
+        {
+            // The last card fades out over the look's exit before the window closes.
+            NoticeMotion.Advance(notifications, notification.Stack, NoticeMotion.Exit);
+        });
 
         Assert.AreEqual(2, cardsAtFirst, "both show, each with its words");
         Assert.AreEqual(2, cardsBeforeSix, "5.9 seconds after the first, both still show");
@@ -182,26 +217,36 @@ public sealed class NotificationTests
     }
 
     [TestMethod]
-    public void WhileThePointerIsOverItItStays()
+    public async Task WhileThePointerIsOverItItStays()
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var tray = new WindowsTray();
-        var clock = new MovableClock();
+        var clock = new StoppedClock();
         var notifications = new Notices(clock);
         var notification = TrayDesktop.Get(() => new Notification(notifications, new WindowsQuietWindows(tray), new WindowsScreen(), _ => { }));
-        TrayDesktop.Run(() => notifications.Raise(Copied));
+        TestMouse.MoveTo(TestMouse.Away);
+        TrayDesktop.Run(() =>
+        {
+            notifications.Raise(Copied);
+            NoticeMotion.Advance(notifications, notification.Stack, NoticeMotion.Entrance);
+        });
         Thread.Sleep(400);
         var outer = TrayDesktop.Get(() => new PixelRect(notification.Shown!.Position, PixelSize.FromSize(notification.Shown.ClientSize, notification.Shown.RenderScaling)));
 
         TestMouse.MoveTo(outer.Center);
         Thread.Sleep(300);
-        clock.Now += TimeSpan.FromSeconds(10);
+        TrayDesktop.Run(() => clock.Advance(TimeSpan.FromSeconds(10)));
         Thread.Sleep(600);
-        var stillThere = TrayDesktop.Get(() => notification.Shown is not null);
+        var stillThere = TrayDesktop.Get(() => notifications.Shown.Count == 1 && notification.Shown is not null);
         TestMouse.MoveTo(TestMouse.Away);
         Thread.Sleep(300);
-        clock.Now += TimeSpan.FromSeconds(6.5);
-        Thread.Sleep(600);
+        TrayDesktop.Run(() => clock.Advance(TimeSpan.FromSeconds(6.5)));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => notifications.Shown.Count == 0));
+        TrayDesktop.Run(() =>
+        {
+            // The notice's time can end before its card finishes fading over the look's exit.
+            NoticeMotion.Advance(notifications, notification.Stack, NoticeMotion.Exit);
+        });
 
         Assert.IsTrue(stillThere, "longer while hovered (G16)");
         TrayDesktop.Run(() => Assert.IsNull(notification.Shown, "and gone once its remaining time has run after the pointer left"));
@@ -212,7 +257,7 @@ public sealed class NotificationTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var tray = new WindowsTray();
-        var notifications = new Notices(new MovableClock());
+        var notifications = new Notices(new StoppedClock());
         var notification = TrayDesktop.Get(() => new Notification(notifications, new WindowsQuietWindows(tray), new WindowsScreen(), _ => { }));
         TestMouse.MoveTo(TestMouse.Away);
 
@@ -222,6 +267,8 @@ public sealed class NotificationTests
             TrayDesktop.Run(() => notifications.Raise(Copied));
         }
 
+        // Finish the entrances before reading the newest card's place in the window.
+        TrayDesktop.Run(() => NoticeMotion.Advance(notifications, notification.Stack, NoticeMotion.Entrance));
         Thread.Sleep(600);
         var (top, bottom, height) = TrayDesktop.Get(() =>
         {
@@ -232,6 +279,16 @@ public sealed class NotificationTests
         });
 
         Assert.IsTrue(top >= 0 && bottom <= height, $"the newest notification shows inside its window: {top:0}–{bottom:0} of {height:0} (G16)");
+        TrayDesktop.Run(() =>
+        {
+            foreach (var notice in notifications.Shown.ToArray())
+            {
+                notifications.Close(notice);
+            }
+
+            // Closed cards keep their rooms until the look's exit finishes.
+            NoticeMotion.Advance(notifications, notification.Stack, NoticeMotion.Exit);
+        });
     }
 
     [TestMethod]
@@ -239,7 +296,7 @@ public sealed class NotificationTests
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var tray = new WindowsTray();
-        var notifications = new Notices(new MovableClock());
+        var notifications = new Notices(new StoppedClock());
         var notification = TrayDesktop.Get(() => new Notification(notifications, new WindowsQuietWindows(tray), new WindowsScreen(), _ => { }));
         TestMouse.MoveTo(TestMouse.Away);
         TrayDesktop.Run(() => notifications.Raise("Words long enough to wrap, so this notification stands far wider than the other one beside the tray"));
@@ -255,15 +312,17 @@ public sealed class NotificationTests
             return (window.Screens.Primary!.WorkingArea, window.RenderScaling, CaptureDesk.Outer(window));
         });
 
-        TrayDesktop.Run(() => notifications.Close(notifications.Shown[0]));
-        Thread.Sleep(600);
+        // The wider card keeps its room while it fades out over the look's exit.
+        TrayDesktop.Run(() => CloseAndStep(notifications, notification, notifications.Shown[0]));
+        await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
 
         var (places, outer, close) = TrayDesktop.Get(() =>
         {
+            notification.Shown!.UpdateLayout();
             var button = CaptureDesk.CloseButton(notification.Shown!);
             return (taken.ToList(), CaptureDesk.Outer(notification.Shown!), new PixelRect(button.PointToScreen(default), button.PointToScreen(new Point(button.Bounds.Width, button.Bounds.Height))));
         });
-        TrayDesktop.Run(() => notifications.Close(notifications.Shown.Single()));
+        TrayDesktop.Run(() => CloseAndStep(notifications, notification, notifications.Shown.Single()));
         Assert.IsLessThan(wide.Width * 3 / 4, outer.Width, $"the window at {outer} narrowed from {wide} as the wider left");
         foreach (var (place, at) in places)
         {
@@ -279,7 +338,7 @@ public sealed class NotificationTests
     public async Task EachNewWindowOfItAsksWindowsForItsOwnRoundedCorners()
     {
         using var tray = new WindowsTray();
-        var notifications = new Notices(new MovableClock());
+        var notifications = new Notices(new StoppedClock());
         var notification = TrayDesktop.Get(() => new Notification(notifications, new TrayIconMidScreen(new WindowsQuietWindows(tray)), new WindowsScreen(), _ => { }));
         var handles = new List<nint>();
         for (var shown = 0; shown < 2; shown++)
@@ -289,8 +348,8 @@ public sealed class NotificationTests
             var handle = TrayDesktop.Get(() => notification.Shown!.TryGetPlatformHandle()!.Handle);
             handles.Add(handle);
             Assert.AreEqual(CornerPreference.Round, CornerPreference.Of(handle), "rounded as Windows 11 rounds its own windows (F13)");
-            TrayDesktop.Run(() => notifications.Close(notifications.Shown.Single()));
-            await Task.Delay(300);
+            // The card fades out over the look's exit before the next notice can get a new window.
+            TrayDesktop.Run(() => CloseAndStep(notifications, notification, notifications.Shown.Single()));
         }
 
         Assert.AreNotEqual(handles[0], handles[1], "the second notice shows a new window, rounded too");
@@ -303,13 +362,14 @@ public sealed class NotificationTests
         using var tray = new WindowsTray();
         var screen = new WindowsScreen();
         var named = new List<Failure>();
-        var notifications = new Notices(new MovableClock());
+        var notifications = new Notices(new StoppedClock());
         var notification = TrayDesktop.Get(() => new Notification(notifications, new TrayIconMidScreen(new WindowsQuietWindows(tray)), screen, named.Add));
         TestMouse.MoveTo(TestMouse.Away);
         TrayDesktop.Run(() => notifications.Raise(Copied));
         await Task.Delay(500);
         var where = TrayDesktop.Get(() => Outer(notification.Shown!));
-        TrayDesktop.Run(() => notifications.Close(notifications.Shown.Single()));
+        // Finish the first card's exit over the look's duration before testing a fresh window.
+        TrayDesktop.Run(() => CloseAndStep(notifications, notification, notifications.Shown.Single()));
         using var pattern = PatternWindow.Show(where);
         await pattern.OnScreen(screen);
 
@@ -324,13 +384,18 @@ public sealed class NotificationTests
         for (var since = Stopwatch.StartNew(); since.ElapsedMilliseconds < 800;)
         {
             grabs.Add(screen.Grab(where, withPointer: false));
+            // Include the entrance and the fully visible card in the grabs without running the notice's time out.
+            if (grabs.Count <= 2)
+            {
+                TrayDesktop.Run(() => NoticeMotion.Advance(notifications, notification.Stack, NoticeMotion.Entrance / 2));
+            }
         }
 
         Assert.IsTrue(IsWindowVisible(TrayDesktop.Get(() => shown.TryGetPlatformHandle()!.Handle)), "the notification shows over the pattern");
         Assert.IsTrue(grabs.All(grab => grab.Succeeded));
         Assert.IsEmpty(grabs.SelectMany(grab => pattern.Differences(grab.Value!, where)).ToList(), $"none of {grabs.Count} grabs from its showing on holds any of it (S4)");
         Assert.IsEmpty(named, "the platform marked it");
-        TrayDesktop.Run(() => notifications.Close(notifications.Shown.Single()));
+        TrayDesktop.Run(() => CloseAndStep(notifications, notification, notifications.Shown.Single()));
     }
 
     [TestMethod]
@@ -340,18 +405,23 @@ public sealed class NotificationTests
         using var tray = new WindowsTray();
         var screen = new RecordedMarks(null);
         var named = new List<Failure>();
-        var notifications = new Notices(new MovableClock());
+        var notifications = new Notices(new StoppedClock());
         var notification = TrayDesktop.Get(() => new Notification(notifications, new WindowsQuietWindows(tray), screen, named.Add));
         var undone = 0;
         TestMouse.MoveTo(TestMouse.Away);
         // Twice: the window closes with its last notice, and the next notice's new window is asked to be marked too.
         for (var round = 1; round <= 2; round++)
         {
-            TrayDesktop.Run(() => notifications.Raise(Copied, "Undo", () =>
+            var notice = TrayDesktop.Get(() =>
             {
-                undone++;
-                return Task.FromResult(Outcome.Done);
-            }));
+                var raised = notifications.Raise(Copied, "Undo", () =>
+                {
+                    undone++;
+                    return Task.FromResult(Outcome.Done);
+                });
+                NoticeMotion.Advance(notifications, notification.Stack, NoticeMotion.Entrance);
+                return raised;
+            });
             await Task.Delay(500);
             var (shown, handle, undo) = TrayDesktop.Get(() => (notification.Shown!, notification.Shown!.TryGetPlatformHandle()!.Handle,
                 notification.Shown!.GetVisualDescendants().OfType<Button>().Single(button => button.Content as string == "Undo")));
@@ -363,7 +433,10 @@ public sealed class NotificationTests
             Assert.IsFalse(screen.Asked[^1].Showing, "asked before its first showing");
             Assert.HasCount(round, named, "each refusal named");
             Assert.AreEqual(("Hide a window from captures", Copied, RecordedMarks.Refusal), (named[^1].Action, named[^1].Subject, named[^1].Reason));
+            // Undo dismisses the notice first; its card fades out over the look's exit.
+            var card = TrayDesktop.Get(() => notification.Stack.CardOf(notice)!);
             TestMouse.Click(TestMouse.Centre(undo));
+            await NoticeMotion.FinishExit(notifications, notification.Stack, card);
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => undone == round && notification.Shown is null));
         }
 
@@ -377,7 +450,7 @@ public sealed class NotificationTests
         using var tray = new WindowsTray();
         var screen = new RecordedMarks(new WindowsScreen());
         var named = new List<Failure>();
-        var notifications = new Notices(new MovableClock());
+        var notifications = new Notices(new StoppedClock());
         var notification = TrayDesktop.Get(() => new Notification(notifications, new TrayIconMidScreen(new WindowsQuietWindows(tray)), screen, named.Add));
         // Under the notification and wherever its tooltip shows.
         using var pattern = PatternWindow.Show(DisplayPlaces.UnderNotification(DisplayPlaces.Primary()));
@@ -392,6 +465,7 @@ public sealed class NotificationTests
             ToolTip.SetTip(card, tip);
             return card;
         }));
+        TrayDesktop.Run(() => NoticeMotion.Advance(notifications, notification.Stack, NoticeMotion.Entrance));
         await Task.Delay(500);
 
         TestMouse.MoveTo(TestMouse.Centre(card!));
@@ -413,7 +487,8 @@ public sealed class NotificationTests
         Assert.IsFalse(asked[0].Showing, "before its first showing");
         Assert.IsEmpty(named, "the platform marked both");
         TestMouse.MoveTo(TestMouse.Away);
-        TrayDesktop.Run(() => notifications.Close(notifications.Shown.Single()));
+        // Closing the card leaves its window up over the look's exit.
+        TrayDesktop.Run(() => CloseAndStep(notifications, notification, notifications.Shown.Single()));
     }
 
     private static PixelRect Outer(Avalonia.Controls.Window window) =>
@@ -422,12 +497,10 @@ public sealed class NotificationTests
     private static int Cards(Notification notification) => TrayDesktop.Get(() =>
         notification.Shown?.GetVisualDescendants().OfType<TextBlock>().Count(text => text.Text == Copied) ?? 0);
 
-    /// <summary>A clock a check moves by hand, so a notice's six seconds pass when the check says.</summary>
-    private sealed class MovableClock : TimeProvider
+    private static void CloseAndStep(Notices notices, Notification notification, Notice notice)
     {
-        public DateTimeOffset Now { get; set; } = DateTimeOffset.UtcNow;
-
-        public override DateTimeOffset GetUtcNow() => Now;
+        notices.Close(notice);
+        NoticeMotion.Advance(notices, notification.Stack, NoticeMotion.Exit);
     }
 
     /// <summary>

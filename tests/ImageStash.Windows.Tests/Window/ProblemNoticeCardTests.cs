@@ -28,6 +28,8 @@ public sealed class ProblemNoticeCardTests
         TrayDesktop.Run(() =>
         {
             shown.Notices.Close(shown.Notices.Shown.Single());
+            // Finish the setup card's fade over the look's exit before raising the failure.
+            NoticeMotion.Advance(shown, NoticeMotion.Exit);
             shown.Notices.Raise(new Failure("Paste", "the clipboard", "it holds no picture or file"));
         });
         await Eventually(() => TrayDesktop.Get(() => NoticeCards(shown).Count == 1));
@@ -44,7 +46,12 @@ public sealed class ProblemNoticeCardTests
             return CloseButton(NoticeCards(shown).Single());
         });
         using var pointer = TestMouse.PutBackAfterwards();
-        TestMouse.Click(TestMouse.Centre(close));
+        var at = TestMouse.Centre(close);
+        await Eventually(() => TrayDesktop.Get(() => NoticeMotion.Hits(shown.Window, at, close)));
+        var card = TrayDesktop.Get(() => NoticeCards(shown).Single());
+        TestMouse.Click(at);
+        // The failure's card stays in the window while it fades over the look's exit.
+        await NoticeMotion.FinishExit(shown.Notices, NoticeMotion.StashStack(shown.Window), card);
         await Eventually(() => TrayDesktop.Get(() => shown.Notices.Shown.Count == 0 && NoticeCards(shown).Count == 0));
     }
 

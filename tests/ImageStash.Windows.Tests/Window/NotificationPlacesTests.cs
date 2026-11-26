@@ -26,7 +26,7 @@ public sealed class NotificationPlacesTests
     public void UseProductTheme() => TrayDesktop.UseProductTheme();
 
     [TestMethod]
-    public void APasteThatCouldNotBeMadeStandsOnTheOtherDisplayWhileACapturesStaysAboveTheTrayAndNeitherTakesTheForeground()
+    public async Task APasteThatCouldNotBeMadeStandsOnTheOtherDisplayWhileACapturesStaysAboveTheTrayAndNeitherTakesTheForeground()
     {
         using var pointer = TestMouse.PutBackAfterwards();
         using var tray = new WindowsTray();
@@ -78,10 +78,12 @@ public sealed class NotificationPlacesTests
         TrayDesktop.Run(() => Assert.IsTrue(notifications.OffersUndo(notifications.Shown.Single()), "with its Undo"));
 
         TrayDesktop.Run(() => standing!.Close(standing.Shown.Single()));
-        Thread.Sleep(300);
+        // This check uses real time. The other window closes after its card fades over the look's exit.
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => elsewhere!.Shown is null));
         TrayDesktop.Run(() => Assert.IsNull(elsewhere!.Shown, "its × closes the other display's window"));
         Assert.AreEqual(tray1.Outer, Read(aboveTray).Outer, "and the capture's stays where it was");
         TrayDesktop.Run(() => notifications.Close(notifications.Shown.Single()));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => aboveTray.Shown is null));
     }
 
     private static (nint Handle, bool Active, bool InTaskbar, uint Extended, PixelRect Outer) Read(Notification notification) => TrayDesktop.Get(() =>
