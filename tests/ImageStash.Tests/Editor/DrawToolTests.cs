@@ -9,11 +9,12 @@ namespace ImageStash.Tests.Editor;
 /// <summary>
 /// Draw (G23; G21's recent colors; What crosses every boundary): Pen, Marker, Arrow and Box, each its own layer in whole
 /// pixels with the chosen color and thickness; a click selects the mark under it and on empty picture changes nothing; a
-/// drag starting on the selected mark moves it, from its handles too; a drag starting inside a box or on an unselected
-/// mark draws a new one; Del removes the selected mark; an option chosen with a mark selected changes it and the next.
+/// drag starting on the selected mark moves it, but from its handles reshapes it (<c>DrawToolTests.Handles.cs</c>); a
+/// drag starting inside a box or on an unselected mark draws a new one; Del removes the selected mark; an option chosen
+/// with a mark selected changes it and the next.
 /// </summary>
 [TestClass]
-public sealed class DrawToolTests
+public sealed partial class DrawToolTests
 {
     private static readonly Rgba Blue = ColorChoices.Swatches[4];
 
@@ -109,8 +110,9 @@ public sealed class DrawToolTests
         session.DragThrough((1, 3), (3, 4));
         Assert.AreEqual(new PixelRect(3, 2, 5, 4), ((DrawMarkLayer)session.Layers.Layers.Single()).Rect, "moved, kept on the picture");
 
-        session.DragThrough((8, 6), (9, 7));
-        Assert.AreEqual(new PixelRect(3, 2, 5, 4), ((DrawMarkLayer)session.Layers.Layers.Single()).Rect, "a corner moves a box; it does not resize it");
+        session.DragThrough((8, 6), (6, 5));
+        Assert.AreEqual(new PixelRect(3, 2, 3, 3), ((DrawMarkLayer)session.Layers.Layers.Single()).Rect, "a corner resizes a box, the opposite corner kept (G23)");
+        session.Undo();
 
         session.HitTolerance = 0.25f;
         session.DragThrough((5.5f, 4), (6.5f, 5));
@@ -136,7 +138,7 @@ public sealed class DrawToolTests
     }
 
     [TestMethod]
-    public async Task ADragFromTheSelectedArrowsEndMovesTheWholeArrow()
+    public async Task ADragFromTheSelectedArrowsEndMovesThatEndAlone()
     {
         using var editing = await CatInTheEditor.Open();
         var session = editing.Session;
@@ -146,7 +148,7 @@ public sealed class DrawToolTests
 
         session.DragThrough((5.5f, 3.5f), (6.5f, 4.5f));
 
-        CollectionAssert.AreEqual(new PixelPoint[] { new(3, 3), new(6, 4) }, ((DrawMarkLayer)session.Layers.Layers.Single()).Points.ToArray());
+        CollectionAssert.AreEqual(new PixelPoint[] { new(2, 2), new(6, 4) }, ((DrawMarkLayer)session.Layers.Layers.Single()).Points.ToArray(), "G23: the end alone");
     }
 
     [TestMethod]

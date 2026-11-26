@@ -71,7 +71,18 @@ public sealed class EditorOptionLayoutTests
             editor.Drag((0.2, 0.5), (0.8, 0.8));
             Assert.IsTrue(editor.Session.SelectedLayer is DrawMarkLayer { Kind: MarkKind.Box, Thickness: ImageStash.Layers.Thickness.Thick });
             Assert.AreEqual(initial, Geometry(shown, editor, pointer), "selecting the drawn mark");
-            Assert.Contains("Drag the selected mark to move it, or drag elsewhere to draw.", editor.Texts());
+            Assert.Contains("Drag a corner to resize, the box to move, or elsewhere to draw.", editor.Texts());
+            AssertOptionsFit(shown, editor);
+
+            // A selected mark's handles reshape it (G23), and neither its hint nor a reshape moves the picture (S13).
+            var box = ((DrawMarkLayer)editor.Session.SelectedLayer!).Rect!.Value;
+            editor.Drag(editor.Canvas.Mapping()!.ToCanvas(box.X + box.Width, box.Y + box.Height), editor.Canvas.Mapping()!.ToCanvas(box.X + box.Width / 2f, box.Y + box.Height / 2f));
+            var resized = ((DrawMarkLayer)editor.Session.SelectedLayer!).Rect!.Value;
+            Assert.IsTrue(resized.X == box.X && resized.Y == box.Y && resized.Width < box.Width && resized.Height < box.Height, $"its corner resized {box} to {resized}, the opposite corner kept");
+            Assert.AreEqual(initial, Geometry(shown, editor, pointer), "resizing the box");
+            editor.Choose("Arrow");
+            Assert.Contains("Drag an end to re-aim, the arrow to move, or elsewhere to draw.", editor.Texts());
+            Assert.AreEqual(initial, Geometry(shown, editor, pointer), "the selected arrow");
             AssertOptionsFit(shown, editor);
         });
     }

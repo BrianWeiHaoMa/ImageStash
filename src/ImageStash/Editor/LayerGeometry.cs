@@ -21,11 +21,12 @@ public enum Handle
 /// boundary): a point is fractional, pixel (x, y) covering x to x + 1 and y to y + 1, while every layer made or changed
 /// here carries whole pixels inside the original and a rectangle at least 1 × 1, so the model never refuses it. A hide
 /// is under a press anywhere over its rectangle, and a mark only where Media inks it (G23: the mark under the click),
-/// so a drag starting in the open space beside or inside a mark draws a new one. A hide is moved or resized by its
-/// corners; a mark is only moved, its handles showing the selection (G23). A text layer is under a press anywhere over
-/// its box turned with it, is moved, resized by its corners and turned by its round handle; a caption bar is under a
-/// press over its band, which Media places, and only resized by its band's corners (G21). The view outlines a selected
-/// layer by <see cref="Bounds"/>, turned by <see cref="Rotation"/>, and draws <see cref="Handles"/>, already turned.
+/// so a drag starting in the open space beside or inside a mark draws a new one. A hide and a box are moved or resized
+/// by their corners, an arrow moved or re-aimed by either end, a pen or marker stroke only moved (G23). A text layer is
+/// under a press anywhere over its box turned with it, is moved, resized by its corners and turned by its round handle;
+/// a caption bar is under a press over its band, which Media places, and only resized by its band's corners (G21). The
+/// view outlines a selected layer by <see cref="Bounds"/>, turned by <see cref="Rotation"/>, and draws
+/// <see cref="Handles"/>, already turned.
 /// </summary>
 public static class LayerGeometry
 {
@@ -72,8 +73,11 @@ public static class LayerGeometry
         _ => false,
     };
 
-    /// <summary>Whether a drag from one of the selected layer's corners resizes it: a hide's, a text layer's and a caption bar's do; a mark is only moved (G21, G23).</summary>
-    public static bool Resizes(Layer layer) => layer is HideLayer or TextLayer or CaptionBarLayer;
+    /// <summary>
+    /// Whether a drag from one of the selected layer's handles reshapes it (<see cref="Resized"/>): a hide's, a box's, a
+    /// text layer's and a caption bar's corners and an arrow's ends do; a pen or marker stroke has none and is only moved (G21, G23).
+    /// </summary>
+    public static bool Resizes(Layer layer) => layer is HideLayer or TextLayer or CaptionBarLayer or DrawMarkLayer { Kind: MarkKind.Box or MarkKind.Arrow };
 
     /// <summary>The index of the topmost selectable layer a press at <paramref name="point"/> is on, the latest in the list first; null when none.</summary>
     public static int? TopmostAt(LayerList layers, PointF point, float tolerance, PixelSize original)
@@ -92,8 +96,7 @@ public static class LayerGeometry
     /// <summary>
     /// The handles of the layer at <paramref name="index"/> where they lie: a hide's or a box's four corners, an arrow's
     /// two ends; a text layer's four corners and its round handle above the top's centre, all turned with it about its
-    /// box's centre; a caption bar's band's four corners; a stroke has none. A hide's, a text layer's and a caption bar's
-    /// corners resize it (<see cref="Resizes"/>); a mark's show it is selected. Given the <paramref name="room"/> where the
+    /// box's centre; a caption bar's band's four corners; a stroke has none. Each reshapes its layer (<see cref="Resizes"/>). Given the <paramref name="room"/> where the
     /// view can show and press a handle, a text's round handle that would lie beyond it, and its corners when none lies in
     /// it, are pulled back along their lines from the box's centre to the room's edge, so a text grown large at the
     /// picture's edge, or turned, can still be turned and resized (G21).
@@ -166,8 +169,8 @@ public static class LayerGeometry
 
     /// <summary>
     /// The layer at <paramref name="index"/> with the corner <paramref name="handle"/> names dragged by whole pixels, the
-    /// opposite one kept. A hide's corner dragged past the far one turns the rectangle round rather than giving it a size
-    /// below 1 × 1 or a place outside the original. A text layer's and a caption bar's font size scales by how far the
+    /// opposite one kept. A hide's or a box's corner dragged past the far one turns the rectangle round rather than giving
+    /// it a size below 1 × 1 or a place outside the original. An arrow's end moves alone (<see cref="Aimed"/>). A text layer's and a caption bar's font size scales by how far the
     /// corner goes along the diagonal from the opposite corner (G21: the corner is the one way to a bigger text), never
     /// below 1: a Meme's box width scales with it, a text layer's box then follows its letters (<see cref="Measured"/>) with
     /// the opposite corner where it was, and a caption's band keeps the picture's width and grows with its lines. Any
@@ -176,10 +179,36 @@ public static class LayerGeometry
     public static Layer Resized(LayerList layers, int index, Handle handle, int dx, int dy, PixelSize original) => (layers.Layers[index], handle) switch
     {
         (HideLayer hide, < Handle.Start) => hide with { Rect = Stretched(hide.Rect, handle, dx, dy, original) },
+        (DrawMarkLayer { Kind: MarkKind.Box } box, < Handle.Start) => box with { Rect = Stretched(box.Rect!.Value, handle, dx, dy, original) },
+        (DrawMarkLayer { Kind: MarkKind.Arrow } arrow, Handle.Start or Handle.End) => arrow with { Points = Aimed(arrow.Points, handle == Handle.End ? 1 : 0, dx, dy, original) },
         (TextLayer text, < Handle.Start) => Scaled(text, handle, dx, dy, original),
         (CaptionBarLayer bar, < Handle.Start) when Band(layers, index, original) is { } band => bar with { FontSize = ScaledSize(bar.FontSize, Factor(band, handle, dx, dy, 0)) },
         var (layer, _) => layer,
     };
+
+    /// <summary>
+    /// An arrow's <paramref name="points"/> with the one at <paramref name="end"/> moved by whole pixels as far as it stays
+    /// on the original and the other kept, so the head stays on the end it was drawn to (G23). An end that would land on
+    /// the other stops one pixel short, on the side it came from, so the arrow keeps a direction and two handles a press
+    /// can tell apart (<see cref="HandleAt"/>).
+    /// </summary>
+    private static PixelPoint[] Aimed(IReadOnlyList<PixelPoint> points, int end, int dx, int dy, PixelSize original)
+    {
+        var (from, kept) = (points[end], points[1 - end]);
+        var to = new PixelPoint((int)Math.Clamp((long)from.X + dx, 0, original.Width - 1), (int)Math.Clamp((long)from.Y + dy, 0, original.Height - 1));
+        if (to == kept)
+        {
+            long acrossX = (long)from.X - kept.X, acrossY = (long)from.Y - kept.Y;
+            var (x, y) = Math.Abs(acrossX) >= Math.Abs(acrossY) ? (acrossX < 0 ? -1 : 1, 0) : (0, acrossY < 0 ? -1 : 1);
+            // The side it came from, else the other where the original ends there, else across; a 1 × 1 original has no other pixel.
+            PixelPoint[] beside = [new(kept.X + x, kept.Y + y), new(kept.X - x, kept.Y - y), new(kept.X + y, kept.Y + x), new(kept.X - y, kept.Y - x)];
+            to = beside.FirstOrDefault(p => p.X >= 0 && p.X < original.Width && p.Y >= 0 && p.Y < original.Height, kept);
+        }
+
+        PixelPoint[] aimed = [.. points];
+        aimed[end] = to;
+        return aimed;
+    }
 
     /// <summary>
     /// <paramref name="mark"/> as a mark of <paramref name="kind"/> over the same pixels: a pen and a marker share their

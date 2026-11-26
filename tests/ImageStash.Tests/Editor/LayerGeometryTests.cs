@@ -115,8 +115,12 @@ public sealed class LayerGeometryTests
         Assert.AreEqual(Handle.Start, LayerGeometry.HandleAt(List(arrow), 0, new PointF(0.2f, 0.3f), 0.5f, Cat));
         Assert.IsEmpty(LayerGeometry.Handles(List(Pen(Thickness.Thin, new(1, 2), new(5, 2))), 0, Cat), "a stroke shows its outline");
         Assert.IsTrue(LayerGeometry.Resizes(hide));
-        Assert.IsFalse(LayerGeometry.Resizes(arrow), "a mark is only moved (G23); its handles show the selection");
-        Assert.AreEqual(arrow, LayerGeometry.Resized(List(arrow), 0, Handle.End, 2, 2, Cat));
+        Assert.IsTrue(LayerGeometry.Resizes(arrow), "an arrow's ends re-aim it (G23)");
+        Assert.IsTrue(LayerGeometry.Resizes(Box(1, 1, 3, 3)), "a box's corners resize it (G23)");
+        Assert.IsFalse(LayerGeometry.Resizes(Pen(Thickness.Thin, new(1, 2), new(5, 2))), "a stroke is only moved");
+        Assert.AreEqual(arrow with { Points = [new(0, 0), new(7, 5)] }, LayerGeometry.Resized(List(arrow), 0, Handle.End, 2, 2, Cat), "kept on the 8 × 6 original");
+        Assert.AreEqual(arrow with { Points = [new(2, 1), new(7, 5)] }, LayerGeometry.Resized(List(arrow), 0, Handle.Start, 2, 1, Cat));
+        Assert.AreEqual(arrow, LayerGeometry.Resized(List(arrow), 0, Handle.TopLeft, 2, 2, Cat), "an arrow has no corner");
     }
 
     [TestMethod]

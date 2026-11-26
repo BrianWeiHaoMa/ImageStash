@@ -5,7 +5,8 @@ namespace ImageStash.Editor;
 
 /// <summary>
 /// Draw (G23): Pen, Marker (Media's translucent wide stroke), Arrow (a line with its head where the drag ends) and Box (an
-/// outlined rectangle), in a swatch color or any picked color, at three thicknesses; each mark its own layer. A new mark
+/// outlined rectangle), in a swatch color or any picked color, at three thicknesses; each mark its own layer, a selected
+/// arrow re-aimed by either end and a selected box resized by a corner (<see cref="LayerGeometry.Resized"/>). A new mark
 /// starts as a medium red pen, and takes the kind, color and thickness the option row shows as its
 /// drag begins: a selected mark's (G20).
 /// </summary>
@@ -18,9 +19,13 @@ public sealed class DrawTool : EditorTool
 
     public override string Name => "Draw";
 
-    public override string Hint => Selected is null
-        ? "Drag to draw a mark; click a mark to select it"
-        : "Drag the selected mark to move it, or drag elsewhere to draw.";
+    public override string Hint => Selected switch
+    {
+        null => "Drag to draw a mark; click a mark to select it",
+        { Kind: MarkKind.Arrow } => "Drag an end to re-aim, the arrow to move, or elsewhere to draw.",
+        { Kind: MarkKind.Box } => "Drag a corner to resize, the box to move, or elsewhere to draw.",
+        _ => "Drag the selected mark to move it, or drag elsewhere to draw.",
+    };
 
     /// <summary>The kind of mark a drag draws next while no mark is selected.</summary>
     public MarkKind Mark { get; private set; } = MarkKind.Pen;

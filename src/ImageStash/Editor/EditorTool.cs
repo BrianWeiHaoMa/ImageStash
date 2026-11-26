@@ -8,8 +8,8 @@ namespace ImageStash.Editor;
 /// layers it owns, and its pointer handling over the session in the original's pixels, by G21's and G23's rules. A click
 /// (a press released within the drag threshold) selects the topmost layer under it and makes that layer's own tool
 /// current; on empty picture it is the current tool's (<see cref="Clicked"/>: Hide and Draw do nothing and leave the
-/// selection as it is). A drag that starts on the selected layer moves it, started on a corner of a selected layer that
-/// resizes (<see cref="LayerGeometry.Resizes"/>) resizes it, and started on a text layer's round handle turns it; any
+/// selection as it is). A drag that starts on the selected layer moves it, started on a handle of a selected layer that
+/// reshapes (<see cref="LayerGeometry.Resizes"/>: a corner, an arrow's end) reshapes it, and started on a text layer's round handle turns it; any
 /// other drag, one starting on an unselected layer included, draws a new layer of this tool's kind, selected once
 /// released, or nothing for a tool that draws nothing by dragging. While a drag runs the session shows its result; its
 /// release is one step Undo reverses (G25). An option changed while a layer of this tool is selected changes that layer
