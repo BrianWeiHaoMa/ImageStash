@@ -90,10 +90,12 @@ public static class WindowLayout
         Content = noticeStack,
         VerticalAlignment = VerticalAlignment.Bottom,
         HorizontalAlignment = HorizontalAlignment.Center,
-        Margin = new Thickness(12, 0, 12, 12),
+        Margin = NoticeMargin(),
         HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
     };
+
+    internal static Thickness NoticeMargin(double bottom = 12) => new(12, 0, 12, bottom);
 
     /// <summary>
     /// The footer: the paste hints on the left; the busy state, while something runs, and the count on the right, the

@@ -35,6 +35,7 @@ public sealed class EditorOverlay : Border
     public const string RevertToOriginal = "Revert to original";
     public const string DiscardChanges = "Discard changes";
     public const string OutputSize = "Output size";
+    internal const double PasteProgressHeight = 20;
 
     private static readonly IReadOnlyList<(Shrink Shrink, string Words)> Shrinks = [(Shrink.Full, "Full size"), (Shrink.ThreeQuarter, "Three-quarter size"), (Shrink.Half, "Half size")];
 
@@ -42,6 +43,7 @@ public sealed class EditorOverlay : Border
     private readonly Filmstrip filmstrip;
     private readonly TextField field;
     private readonly FontFallbackNote note = new();
+    private readonly TextBlock pasteProgress = new() { IsVisible = false, VerticalAlignment = VerticalAlignment.Center };
     private readonly IFonts fonts;
     private readonly EditorPane pane = new();
     private readonly TextBlock name;
@@ -100,7 +102,10 @@ public sealed class EditorOverlay : Border
         Grid.SetRow(options, 5);
         Grid.SetRow(foot, 6);
         layout.Children.AddRange([head, note, picture, filmstrip, tools, options, foot]);
-        Child = new Panel { Children = { layout, pane } };
+        // Below the floating picker and notices. Reserve its height so a clipboard answer cannot move the canvas mid-gesture.
+        var pasteLine = new Border { Height = PasteProgressHeight, Padding = new Thickness(12, 0), Child = pasteProgress };
+        DockPanel.SetDock(pasteLine, Dock.Bottom);
+        Child = new DockPanel { Children = { pasteLine, new Panel { Children = { layout, pane } } } };
         // Tab goes round the editor's own controls and never reaches what it covers (G7).
         KeyboardNavigation.SetTabNavigation(this, KeyboardNavigationMode.Cycle);
         this.Bind(BackgroundProperty, this.GetResourceObservable(LookKeys.Surface));
@@ -147,6 +152,13 @@ public sealed class EditorOverlay : Border
     public EditorCanvas Canvas => canvas;
 
     public Filmstrip Filmstrip => filmstrip;
+
+    /// <summary>Shows the window's paste progress while the editor covers the window footer.</summary>
+    internal void ShowPasteProgress(string? action)
+    {
+        pasteProgress.Text = action;
+        pasteProgress.IsVisible = action is not null;
+    }
 
     /// <summary>Shows <paramref name="next"/> with focus on the canvas when it is a new one; null closes the overlay.</summary>
     public void Show(EditorSession? next)
@@ -217,7 +229,7 @@ public sealed class EditorOverlay : Border
         ToolTipRule.Set(size, "The saved picture's size; Shrink it here");
         save.Click += (_, _) => SaveRequested?.Invoke();
         var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right, Children = { size, save } };
-        var foot = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), RowDefinitions = new RowDefinitions("Auto,Auto"), Margin = new Thickness(12, 10, 12, 12) };
+        var foot = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), RowDefinitions = new RowDefinitions("Auto,Auto"), Margin = new Thickness(12, 10, 12, 0) };
         // On a line of its own: words as long as an item's name, beside the size and Save, would push them past the
         // window's edge at its minimum width (G20, G35).
         Grid.SetColumnSpan(busy, 2);

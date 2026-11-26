@@ -334,6 +334,8 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
     private void Cover()
     {
         head.IsVisible = scopes.IsVisible = !preview.IsOpen && !editing.IsOpen;
+        // Keep the notice viewport clear of the editor's footer buttons above its paste line.
+        status.NoticeArea.Margin = editing.IsOpen ? WindowLayout.NoticeMargin(EditorOverlay.PasteProgressHeight) : WindowLayout.NoticeMargin();
         if (!scopes.IsVisible)
         {
             scopes.Picker.Close();
@@ -358,7 +360,11 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
         editing.Changed += ShowBusy;
         deletion.Changed += ShowBusy;
         renaming.Changed += ShowBusy;
-        paste.Changed += ShowBusy;
+        paste.Changed += () =>
+        {
+            ShowBusy();
+            editor.ShowPasteProgress(paste.Busy);
+        };
         moving.Changed += ShowBusy;
         pasteTarget.Changed += status.ShowHints;
         footerHints.Changed += status.ShowHints;
