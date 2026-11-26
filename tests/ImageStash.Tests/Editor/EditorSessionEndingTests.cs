@@ -68,7 +68,7 @@ public sealed class EditorSessionEndingTests
         var refused = await session.Save();
 
         Assert.AreEqual(EditEnding.Refused, refused.Ending);
-        Assert.AreEqual($"Save the picture failed: cat, {EditedItems.RefusedReason}", refused.Failure!.Sentence);
+        Assert.AreEqual($"Couldn't save the picture (cat): {EditedItems.RefusedReason}.", refused.Failure!.Sentence);
         Assert.IsTrue(session.IsOpen);
         Assert.IsEmpty(endings);
         Assert.AreEqual(live, (session.Layers, session.Selected));

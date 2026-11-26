@@ -294,7 +294,7 @@ public sealed class ItemMenuTests
 
         var saved = await menu.ItemMenu.SaveACopy(null!, menu.Items[0], menu.DialogUp);
 
-        Assert.AreEqual("Save a copy failed: the file picker, the dialog could not open", saved.Failure?.Sentence);
+        Assert.AreEqual("Couldn't save a copy: the file picker did not open (the dialog could not open).", saved.Failure?.Sentence);
         Assert.AreEqual(saved.Failure!.Sentence, menu.Notices.Shown.Single().Text);
         Assert.IsFalse(menu.Up);
     }
@@ -453,7 +453,7 @@ public sealed class ItemMenuTests
             saved = await menu.ItemMenu.SaveACopy(null!, item, menu.DialogUp);
         }
 
-        Assert.AreEqual("Save a copy failed: held.jpg, another program is holding it open", saved.Failure?.Sentence, "a held file is retried, then named (G35)");
+        Assert.AreEqual("Couldn't save a copy: held.jpg is held open by another program. Try again in a moment.", saved.Failure?.Sentence, "a held file is retried, then named (G35)");
         Assert.AreEqual(saved.Failure!.Sentence, menu.Notices.Shown.Single().Text);
         CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, File.ReadAllBytes(held));
         Assert.IsFalse(menu.Up);
@@ -462,7 +462,7 @@ public sealed class ItemMenuTests
         menu.Dialogs.SaveAnswer = () => Task.FromResult<string?>(missingFolder);
         var refused = await menu.ItemMenu.SaveACopy(null!, item, menu.DialogUp);
 
-        Assert.AreEqual("Save a copy failed: photo.jpg, its folder does not exist", refused.Failure?.Sentence);
+        Assert.AreEqual("Couldn't save a copy: photo.jpg's folder does not exist.", refused.Failure?.Sentence);
     }
 
     [TestMethod]
@@ -497,7 +497,7 @@ public sealed class ItemMenuTests
 
         Assert.IsTrue(revealed.Succeeded);
         CollectionAssert.AreEqual(new[] { item.FilePath, item.FilePath }, menu.Dialogs.Revealed);
-        Assert.AreEqual("Reveal in File Explorer failed: photo.jpg, The system cannot find the file specified.", menu.Notices.Shown.Single().Text);
+        Assert.AreEqual("Couldn't reveal in File Explorer (photo.jpg): The system cannot find the file specified.", menu.Notices.Shown.Single().Text);
         Assert.AreEqual(menu.Notices.Shown.Single().Text, failed.Failure?.Sentence);
         Assert.IsEmpty(menu.Uses(), "Reveal is not a use (G10)");
     }

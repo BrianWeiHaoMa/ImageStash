@@ -521,7 +521,7 @@ Write-Host '     step the thumbnails through five sizes, the two largest new, th
 Write-Host '     the pinned window, each Thumbnail size chosen there changes the grid at once, and each size Ctrl+wheel reaches shows in that list (G6, G32);'
 Write-Host ' 10. over 5,000 pictures, typing in the search answers as the keys are pressed (E4): set IMAGESTASH_FIVE_THOUSAND_STASH to an empty'
 Write-Host '     folder, run the focused check FiveThousandPictures, and point settings.json''s stashFolder at that folder;'
-Write-Host ' 11. with a stash folder that cannot be created, the icon''s tooltip reads "Open the stash failed: ..." and Quit still works;'
+Write-Host ' 11. with a stash folder that cannot be created, the icon''s tooltip reads "Couldn''t open the stash ..." and Quit still works;'
 Write-Host " 12. from a real click on the tray the footer reads ""Enter $([char]0xB7) Copy""; with the transparent PNG selected, Enter: a paste into an Explorer folder makes a copy of"
 Write-Host '     its file, and Paint and Word paste the picture, record whether its transparency shows. The window stays. Choose Recent to see the'
 Write-Host '     picture first. A double-click and the item menu''s Copy do the same. The animated GIF, the animated WebP and three selected items paste'

@@ -200,7 +200,7 @@ public sealed class LayerTextClipboardPasteTests
             Assert.AreEqual(0, field.Puts, $"{way}: the words go nowhere");
             Assert.AreEqual("so", ((TextLayer)session.Layers.Layers[0]).Text, $"{way}: the text as it was");
             var notice = listed.Notices.Shown.Single(notice => notice.Act?.Action == ClipboardPaste.Action);
-            Assert.AreEqual("Paste failed: the editor field, it closed before the paste could complete",
+            Assert.AreEqual("Couldn't paste: the editor field closed before the paste could complete.",
                 notice.Text, $"{way}: the dropped paste is named without its words (G35)");
             Assert.IsTrue(notice.NamesAProblem, $"{way}: the failure stays past its time (G16)");
             Assert.HasCount(1, await listed.Stash.All(), $"{way}: nothing added");
@@ -245,7 +245,7 @@ public sealed class LayerTextClipboardPasteTests
 
         await PressCtrlV(listed);
 
-        Assert.AreEqual("Paste failed: the clipboard, another program is holding the clipboard open", listed.Notices.Shown.Single().Text, "G35, E3");
+        Assert.AreEqual("Couldn't paste (the clipboard): another program is holding the clipboard open.", listed.Notices.Shown.Single().Text, "G35, E3");
         Assert.AreEqual("so", LayerText(session));
     }
 

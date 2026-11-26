@@ -147,7 +147,7 @@ public sealed class StashClipboardImageTests
         }
 
         Assert.IsGreaterThanOrEqualTo(1900, clock.ElapsedMilliseconds, "retried for HeldClipboard.Retry before it was named");
-        TrayDesktop.Run(() => Assert.AreEqual("Stash clipboard image failed: the clipboard, another program is holding the clipboard open", shown.Notifications.Shown[^1].Text));
+        TrayDesktop.Run(() => Assert.AreEqual("Couldn't stash clipboard image (the clipboard): another program is holding the clipboard open.", shown.Notifications.Shown[^1].Text));
         Assert.HasCount(1, TrayDesktop.Get(() => shown.Listing.Store!.All()).GetAwaiter().GetResult().Value!, "nothing added");
     }
 

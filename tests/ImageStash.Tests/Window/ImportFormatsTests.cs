@@ -152,8 +152,8 @@ public sealed class ImportFormatsTests
 
         var results = await importing.Import.Drop(new DropContents([breaking, refusing], false, false, []));
 
-        Assert.AreEqual(new Failure("Copy into the stash", "image", FailingStream.Reason), results[0].Failure, "broken after its first bytes were looked at");
-        Assert.AreEqual(new Failure("Copy into the stash", "other", FailingStream.Reason), results[1].Failure, "refused as it opened");
+        Assert.AreEqual(new Failure("Copy into the stash", "image", $"Windows could not read or write it ({FailingStream.Reason})"), results[0].Failure, "broken after its first bytes were looked at");
+        Assert.AreEqual(new Failure("Copy into the stash", "other", $"Windows could not read or write it ({FailingStream.Reason})"), results[1].Failure, "refused as it opened");
         Assert.IsTrue(results.All(file => file.Result == ImportResultKind.Failed));
         Assert.IsEmpty(await importing.Stash.All());
         Assert.IsEmpty(importing.Stash.WorkFiles());
@@ -170,8 +170,8 @@ public sealed class ImportFormatsTests
 
         CollectionAssert.AreEqual(new[] { ImportResultKind.Failed, ImportResultKind.Failed, ImportResultKind.Added }, results.Select(file => file.Result).ToList(),
             "each named, the file after them added (G35, G12)");
-        Assert.AreEqual(new Failure("Copy into the stash", "image", FailingClose.Reason), results[0].Failure);
-        Assert.AreEqual(new Failure("Copy into the stash", "download", FailingClose.Reason), results[1].Failure);
+        Assert.AreEqual(new Failure("Copy into the stash", "image", $"Windows could not read or write it ({FailingClose.Reason})"), results[0].Failure);
+        Assert.AreEqual(new Failure("Copy into the stash", "download", $"Windows could not read or write it ({FailingClose.Reason})"), results[1].Failure);
         Assert.AreEqual("still", (await importing.Stash.All()).Single().Name);
         Assert.IsEmpty(importing.Stash.WorkFiles(), "the failed copy discarded (R2)");
     }

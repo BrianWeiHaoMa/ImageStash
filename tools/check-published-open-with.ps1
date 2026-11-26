@@ -481,7 +481,7 @@ try {
     # G35: bytes that decode as nothing written over the same copy are named, and nothing of the item changes.
     $facts = Facts $plain
     Rewrite $copy ([Text.Encoding]::ASCII.GetBytes(('not a picture ' * 64)))
-    $unreadable = "Take back an Open with$ellipsis edit failed: $(Split-Path $copy -Leaf), it is unreadable"
+    $unreadable = "Couldn't take back an Open with$ellipsis edit: $(Split-Path $copy -Leaf) is unreadable."
     $refusal = Notification $unreadable
     Check (((Facts $plain) -eq $facts) -and ((Sha $before) -eq $beforeSha)) "the undecodable rewrite is named with the copy's file and changes nothing: the row and $before as they were (G35, G27)"
     ClickOn (One (Elements ([Windows.Automation.AutomationElement]::FromHandle($refusal)) 'Close' $button) "the refusal's close button")

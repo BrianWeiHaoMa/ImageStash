@@ -172,7 +172,7 @@ public sealed class RecordClipEndTests
             recording.StepRecording(70);
             await acting.WaitAsync(TimeSpan.FromSeconds(10));
 
-            Assert.AreEqual($"Record a clip failed: {Clip}, {HeldFileRetry.HeldReason}", recording.Notifications.Shown.Single().Text, "named as the action on the clip (G35)");
+            Assert.AreEqual($"Couldn't record a clip: {Clip} is held open by another program. Try again in a moment.", recording.Notifications.Shown.Single().Text, "named as the action on the clip (G35)");
             Assert.IsEmpty(await recording.Stash.All(), "no item of a clip written part way");
             Assert.AreEqual(0, recording.Clipboard.Begun, "nothing copied");
         }
@@ -208,7 +208,7 @@ public sealed class RecordClipEndTests
             await acting.WaitAsync(TimeSpan.FromSeconds(10));
 
             Assert.AreEqual(beforeStop + image, holder.Length, "the last image written whole, its trailer refused");
-            Assert.AreEqual($"Record a clip failed: {Clip}, {HeldFileRetry.HeldReason}", recording.Notifications.Shown.Single().Text, "named as the action on the clip (G35)");
+            Assert.AreEqual($"Couldn't record a clip: {Clip} is held open by another program. Try again in a moment.", recording.Notifications.Shown.Single().Text, "named as the action on the clip (G35)");
             Assert.IsEmpty(await recording.Stash.All(), "no item of a clip without its end");
             Assert.AreEqual(0, recording.Clipboard.Begun, "nothing copied");
         }

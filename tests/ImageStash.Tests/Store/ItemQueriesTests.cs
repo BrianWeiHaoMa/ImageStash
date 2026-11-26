@@ -285,7 +285,7 @@ public sealed class ItemQueriesTests
         var edit = await store.ForEdit(damaged.Id);
 
         Assert.IsFalse(edit.Succeeded);
-        Assert.StartsWith("Read the item's layers failed: damaged, ", edit.Failure!.Sentence);
+        Assert.StartsWith("Couldn't read the item's layers: damaged's ", edit.Failure!.Sentence);
         // Listed as it was, its list read as text only: one that is not the empty list's makes it an edited item.
         TestStash.AssertSameItem(damaged with { Edited = true }, (await store.Item(damaged.Id)).Value);
         Assert.AreEqual(damaged.Id, (await stash.All()).Single().Id);
@@ -294,7 +294,7 @@ public sealed class ItemQueriesTests
         stash.SqlWhileOpen("UPDATE items SET layers = '[]', previous_layers = 'not a list' WHERE id = $id", ("$id", damaged.Id));
         Assert.IsTrue((await store.ForEdit(damaged.Id)).Succeeded);
         stash.SqlWhileOpen("UPDATE items SET layer_revision = 1 WHERE id = $id", ("$id", damaged.Id));
-        Assert.StartsWith("Read the item's layers failed: damaged, ", (await store.ForEdit(damaged.Id)).Failure!.Sentence);
+        Assert.StartsWith("Couldn't read the item's layers: damaged's ", (await store.ForEdit(damaged.Id)).Failure!.Sentence);
     }
 
     [TestMethod]
@@ -362,7 +362,7 @@ public sealed class ItemQueriesTests
         }
 
         Assert.AreSame(newer, confirmed[0].Value, "nothing has committed since it was read");
-        Assert.AreEqual($"Copy failed: a, the stash could not be read ({StashFolder.StoreFileName}: {HeldFileRetry.HeldReason})", confirmed[1].Failure?.Sentence);
+        Assert.AreEqual($"Couldn't copy (a): the stash could not be read ({StashFolder.StoreFileName}: {HeldFileRetry.HeldReason}). {Failure.TryAgain}", confirmed[1].Failure?.Sentence);
         Assert.IsLessThan(oneRead.TotalMilliseconds * 1.6, confirming.TotalMilliseconds, $"one read {oneRead.TotalMilliseconds:F0} ms, the confirmation {confirming.TotalMilliseconds:F0} ms");
     }
 
@@ -513,7 +513,7 @@ public sealed class ItemQueriesTests
         var confirmed = (await store.Confirm([older, newer], "Copy")).Items;
 
         stash.SqlWhileOpen("ALTER TABLE items_elsewhere RENAME TO items");
-        Assert.StartsWith("Copy failed: a, the stash could not be read (stash.db: ", confirmed[0].Failure?.Sentence);
+        Assert.StartsWith("Couldn't copy (a): the stash could not be read (stash.db: ", confirmed[0].Failure?.Sentence);
         Assert.DoesNotContain(HeldFileRetry.HeldReason, confirmed[0].Failure!.Sentence, "not a held store: the store's own reason");
         Assert.AreSame(newer, confirmed[1].Value);
     }

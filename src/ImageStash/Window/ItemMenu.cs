@@ -294,7 +294,7 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
         catch (Exception e)
         {
             // The platform's dialog failing is a failure to name, not a crash (G35).
-            return Named(new Failure(SaveACopyAction, "the file picker", e.Message));
+            return Named(new Failure(SaveACopyAction, "the file picker", Failure.PlatformSaid("it did not open", e.Message)));
         }
         finally
         {

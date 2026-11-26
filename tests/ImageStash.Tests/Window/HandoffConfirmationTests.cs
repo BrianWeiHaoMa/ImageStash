@@ -223,7 +223,7 @@ public sealed class HandoffConfirmationTests
         Assert.IsLessThan(3000, four.TotalMilliseconds, times);
         Assert.IsTrue(pastedOne.Succeeded && pastedFour.Succeeded, "nothing committed since they were read, so both go (G10)");
         Assert.HasCount(4, handing.Clipboard.Written[1].Content.FilePaths);
-        Assert.HasCount(2, handing.Notices.Shown.Where(notice => notice.Text.StartsWith("Record a use failed: ")).ToList());
+        Assert.HasCount(2, handing.Notices.Shown.Where(notice => notice.Text.StartsWith("Couldn't record a use: ")).ToList());
         Assert.IsNotEmpty(handing.LoadFailures);
         Assert.IsTrue(handing.LoadFailures.All(failure => failure.Reason.Contains(HeldFileRetry.HeldReason)), "the listing names the held store (G35): " + string.Join("; ", handing.LoadFailures));
     }

@@ -10,7 +10,7 @@ namespace ImageStash.Store;
 /// </summary>
 internal static class OpenWithBegin
 {
-    public const string Action = "Open with…";
+    public const string Action = "Open with another app";
 
     /// <summary>
     /// The copy's path: with no session recorded, a new one; with one, the copy classified first, so a rewrite awaiting

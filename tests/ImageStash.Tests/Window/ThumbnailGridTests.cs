@@ -404,7 +404,7 @@ public sealed class ThumbnailGridTests
             await listed.Press(Key.D, KeyModifiers.Control, KeyPlace.Grid);
         }
 
-        StringAssert.StartsWith(listed.Notices.Shown.Single().Text, "Add to Favorites failed", "the failure is named (G35)");
+        StringAssert.StartsWith(listed.Notices.Shown.Single().Text, "Couldn't add to Favorites", "the failure is named (G35)");
         Assert.IsEmpty(Starred(listed), "as the refusal is named, the tile shows no star: the flag was never written");
         await listed.Listing.Refresh();
         Assert.IsEmpty(Starred(listed), "nor once the store can be read again");

@@ -234,7 +234,7 @@ public sealed class TagManagementTests
             await listed.WaitForOrganising(() => Click(remove));
 
             var notice = listed.Notices.Shown.Single();
-            StringAssert.Contains(notice.Text, "Remove tag from all items");
+            StringAssert.Contains(notice.Text, "Couldn't remove tag from all items");
             StringAssert.Contains(notice.Text, "#shared");
             StringAssert.Contains(notice.Text, "write refused");
             Assert.IsFalse(listed.Notices.OffersUndo(notice));

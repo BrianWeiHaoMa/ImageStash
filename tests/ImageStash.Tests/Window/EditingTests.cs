@@ -53,7 +53,7 @@ public sealed class EditingTests
         var refused = await listed.Editing.Open(cat, EditOrigin.Grid);
 
         Assert.IsFalse(refused.Succeeded);
-        Assert.StartsWith("Read the item's layers failed: cat, ", refused.Failure!.Sentence);
+        Assert.StartsWith("Couldn't read the item's layers: cat's ", refused.Failure!.Sentence);
         Assert.AreEqual(refused.Failure.Sentence, listed.Notices.Shown.Single().Text, "named in the window (G35)");
         Assert.IsFalse(listed.Editing.IsOpen);
         Assert.AreEqual(cat.Id, listed.Listing.Items.Single().Id, "the item still listed");

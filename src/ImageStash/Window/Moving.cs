@@ -164,7 +164,7 @@ public sealed class Moving
         catch (Exception e)
         {
             // The platform's dialog failing is a failure to name, not a crash (G35).
-            return Named(new Failure(StashMove.Action, "the folder picker", e.Message));
+            return Named(new Failure(StashMove.Action, "the folder picker", Failure.PlatformSaid("it did not open", e.Message)));
         }
         finally
         {
@@ -272,7 +272,7 @@ public sealed class Moving
         }
         catch (Exception e)
         {
-            opening = new StoreOpening(null, [new Failure("Open the stash", MoveFolders.Subject(folder), e.Message)]);
+            opening = new StoreOpening(null, [new Failure("Open the stash", MoveFolders.Subject(folder), Failure.PlatformSaid("it could not be opened", e.Message))]);
         }
 
         answered();

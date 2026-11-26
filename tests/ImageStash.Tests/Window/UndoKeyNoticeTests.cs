@@ -68,7 +68,7 @@ public sealed class UndoKeyNoticeTests
         await Undo(listed, KeyPlace.Grid);
 
         CollectionAssert.AreEqual(new[] { kept.Id }, (await listed.Stash.All()).Select(item => item.Id).ToList(), "a third press does nothing");
-        Assert.AreEqual("Copy failed: “kept”, the clipboard is held", listed.Notices.Shown.Single().Text);
+        Assert.AreEqual("Couldn't copy (“kept”): the clipboard is held.", listed.Notices.Shown.Single().Text);
     }
 
     [TestMethod]

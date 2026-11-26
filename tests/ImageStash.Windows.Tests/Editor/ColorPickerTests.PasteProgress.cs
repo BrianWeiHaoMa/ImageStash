@@ -79,7 +79,7 @@ public sealed partial class ColorPickerTests
             else
             {
                 var label = shown.Window.GetVisualDescendants().OfType<TextBlock>()
-                    .Single(text => text.IsEffectivelyVisible && text.Text == $"Paste failed: the clipboard, {HeldClipboard.Reason}");
+                    .Single(text => text.IsEffectivelyVisible && text.Text == $"Couldn't paste (the clipboard): {HeldClipboard.Reason}.");
                 TextOptionRowTests.AssertInside(shown, label, "clipboard paste refusal");
             }
         }, DispatcherPriority.Background);
@@ -89,7 +89,7 @@ public sealed partial class ColorPickerTests
     public async Task AFullNoticeStackLeavesEditorPasteProgressVisible()
     {
         const string progress = "Pasting from the clipboard…";
-        const string failure = "Import failed: \"a picture with a long name.png\" is a video. Use a PNG, JPEG, WebP, or GIF picture.";
+        const string failure = "Couldn't import: \"a picture with a long name.png\" is a video. Use a PNG, JPEG, WebP, or GIF picture.";
         var read = new TaskCompletionSource<Outcome<ClipboardReading>>();
         using var shown = ShownWindow.Open(drags: new PresetDrags { ReadClipboard = () => read.Task });
         using var editor = new ShownEditor(shown);

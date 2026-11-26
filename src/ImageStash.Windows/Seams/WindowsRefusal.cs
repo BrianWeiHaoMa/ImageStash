@@ -7,5 +7,5 @@ internal static class WindowsRefusal
 {
     /// <summary>A Win32 error code in words; 0, when Windows set none, said so.</summary>
     public static string ReasonFor(int error) =>
-        error == 0 ? "Windows refused it without saying why" : new Win32Exception(error).Message;
+        error == 0 ? "Windows refused it without saying why" : Failure.PlatformSaid("Windows refused it", new Win32Exception(error).Message);
 }

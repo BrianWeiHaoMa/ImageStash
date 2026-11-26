@@ -85,7 +85,7 @@ public sealed class HandoffDragOutTests
         var dragged = await handing.Handoff.DragOut(handing.Items, handing.Drag, now => dragging = now, () => ended++);
 
         Assert.AreEqual(failure, dragged.Failure);
-        Assert.AreEqual("Drag out failed: photo.jpg, the file could not be handed over", handing.Notices.Shown.Single().Text, "named (G35)");
+        Assert.AreEqual("Couldn't drag out (photo.jpg): the file could not be handed over.", handing.Notices.Shown.Single().Text, "named (G35)");
         Assert.IsFalse(dragging);
         Assert.AreEqual(1, ended);
         Assert.IsEmpty(handing.Stash.Store!.Recent().Result.Value!);
@@ -108,7 +108,7 @@ public sealed class HandoffDragOutTests
         }
 
         Assert.IsTrue(dragged.Succeeded, "the drop landed, so the drag-out is done (G10)");
-        Assert.StartsWith("Record a use failed: ", handing.Notices.Shown.Single().Text);
+        Assert.StartsWith("Couldn't record a use: ", handing.Notices.Shown.Single().Text);
         Assert.IsEmpty(handing.Uses());
     }
 

@@ -295,8 +295,8 @@ public sealed class SettingsWindowTests
                 Assert.AreEqual(minimum, window.ClientSize, "the page at its smallest (L2)");
                 var viewer = (ScrollViewer)window.Content!;
                 Assert.AreEqual(new Rect(minimum), new Rect(viewer.TranslatePoint(default, window)!.Value, viewer.Bounds.Size), "the scroller fills the page");
-                StringAssert.StartsWith(Top(window), "Read settings failed: settings.json, ");
-                Assert.AreEqual("Stop starting with Windows failed: Run entry ImageStash, Windows refused the change", WarningUnder(window, SettingsPage.StartWithWindowsTitle));
+                StringAssert.StartsWith(Top(window), "Couldn't read settings (settings.json): ");
+                Assert.AreEqual("Couldn't stop starting with Windows (Run entry ImageStash): Windows refused the change.", WarningUnder(window, SettingsPage.StartWithWindowsTitle));
                 Assert.AreEqual("Ctrl+V is the paste key ImageStash presses, so it can't be a shortcut.", refusedShortcut);
                 Assert.AreEqual(refusedShortcut, WarningUnder(window, SettingsPage.StashClipboardImageTitle), "every kind of warning the page draws, showing at once");
             });
@@ -308,8 +308,8 @@ public sealed class SettingsWindowTests
                 CollectionAssert.IsSubsetOf(Titles, parts.Select(AutomationProperties.GetName).ToList(), "every row's control shows");
                 var words = parts.OfType<TextBlock>().Select(text => text.Text).ToList();
                 CollectionAssert.IsSubsetOf(window.Page.Rows.Select(row => row.Group).Distinct().ToList(), words, "every group's heading shows");
-                CollectionAssert.IsSubsetOf(new[] { refusedShortcut, "Stop starting with Windows failed: Run entry ImageStash, Windows refused the change", heldWrite.Sentence }, words, "every warning shows");
-                Assert.IsTrue(words.Any(each => each!.StartsWith("Read settings failed: settings.json, ", StringComparison.Ordinal)), "the read failure shows");
+                CollectionAssert.IsSubsetOf(new[] { refusedShortcut, "Couldn't stop starting with Windows (Run entry ImageStash): Windows refused the change.", heldWrite.Sentence }, words, "every warning shows");
+                Assert.IsTrue(words.Any(each => each!.StartsWith("Couldn't read settings (settings.json): ", StringComparison.Ordinal)), "the read failure shows");
             });
             foreach (var part in parts)
             {
@@ -350,7 +350,7 @@ public sealed class SettingsWindowTests
 
                 settings.Run.Refusal = new Failure("Stop starting with Windows", "Run entry ImageStash", "Windows refused the change");
                 Control(window, SettingsPage.StartWithWindowsTitle).SetValue(ToggleSwitch.IsCheckedProperty, false);
-                Assert.AreEqual("Stop starting with Windows failed: Run entry ImageStash, Windows refused the change", WarningUnder(window, SettingsPage.StartWithWindowsTitle), "drawn under its row (G35)");
+                Assert.AreEqual("Couldn't stop starting with Windows (Run entry ImageStash): Windows refused the change.", WarningUnder(window, SettingsPage.StartWithWindowsTitle), "drawn under its row (G35)");
                 Assert.IsFalse(((ToggleSwitch)Control(window, SettingsPage.StartWithWindowsTitle)).IsChecked, "the choice shown as recorded");
                 settings.Run.Refusal = null;
                 Control(window, SettingsPage.StartWithWindowsTitle).SetValue(ToggleSwitch.IsCheckedProperty, true);
@@ -404,8 +404,8 @@ public sealed class SettingsWindowTests
 
             var top = TrayDesktop.Get(() => Top(window));
 
-            StringAssert.StartsWith(top, "Read settings failed: settings.json, ", "the read failure first on the page (G35)");
-            StringAssert.EndsWith(top, SettingsPage.NotKept, "with what that means for its changes");
+            StringAssert.StartsWith(top, "Couldn't read settings (settings.json): ", "the read failure first on the page (G35)");
+            StringAssert.EndsWith(top, $"in use. {SettingsPage.NotKept}", "with what that means for its changes");
         }
         finally
         {

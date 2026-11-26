@@ -167,7 +167,7 @@ public sealed class ImportTagsTests
         Assert.IsEmpty(await TagsOf(importing, old));
         var notice = importing.Notices.Shown.Single();
         Assert.AreEqual("Nothing was added · 1 already in your stash", notice.Heading);
-        StringAssert.StartsWith(notice.Text, "still.png was already in your stash as “old”. still.png: Add a tag failed: stash.db, ");
+        StringAssert.StartsWith(notice.Text, "still.png was already in your stash as “old”. still.png: Couldn't add a tag: stash.db ");
         Assert.DoesNotContain("This import gave it", notice.Text, "no tag the store refused is claimed (R9)");
         Assert.IsTrue(notice.NamesAProblem, "the failure is named (G35)");
         Assert.IsNull(notice.UndoLabel, "the batch changed nothing to take back");
@@ -250,7 +250,7 @@ public sealed class ImportTagsTests
         CollectionAssert.AreEqual(new[] { "Cat" }, (await TagsOf(importing, file.Item!)).ToList());
         var notice = importing.Notices.Shown.Single();
         Assert.AreEqual("Nothing was added · 1 failed", notice.Heading);
-        StringAssert.StartsWith(notice.Text, "still.png: Add to the stash failed: ");
+        StringAssert.StartsWith(notice.Text, "still.png: Couldn't add to the stash: ");
         StringAssert.Contains(notice.Text, "the write was refused");
         StringAssert.Contains(notice.Text, "This import gave the picture #Cat.");
         Assert.AreEqual("Undo", notice.UndoLabel);

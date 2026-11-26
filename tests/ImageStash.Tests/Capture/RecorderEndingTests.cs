@@ -288,14 +288,14 @@ public sealed class RecorderEndingTests
     public async Task AnEncoderFailureFromStopIsNamedAsRecordingTheClip()
     {
         var recording = new SteppedRecorder();
-        recording.Encoder.StopAnswer = new Failure("Write the clip as GIF", SteppedRecorder.Clip, "another program is holding it open");
+        recording.Encoder.StopAnswer = new Failure("Write the clip as GIF", SteppedRecorder.Clip, "it is held open by another program");
         recording.Start();
 
         recording.Step(70);
         recording.Recorder.Stop();
         var ended = await recording.Ended();
 
-        Assert.AreEqual(new Failure("Record a clip", SteppedRecorder.Clip, "another program is holding it open"), ended.Failure);
+        Assert.AreEqual(new Failure("Record a clip", SteppedRecorder.Clip, "it is held open by another program"), ended.Failure);
         Assert.IsTrue(recording.Encoder.Cancelled, "a refused Stop leaves the clip open, so it is closed");
     }
 

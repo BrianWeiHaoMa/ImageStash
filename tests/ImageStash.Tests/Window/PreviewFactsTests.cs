@@ -174,7 +174,7 @@ public sealed class PreviewFactsTests
         Assert.AreEqual(EditedItems.BlackBoxAndBox, edited.Value, "the list its render, still the picture on disk, was made from and Edit opens on, though the Revert's empty list is committed (State: A live failure)");
         Assert.AreEqual(LayerList.Empty, unedited.Value);
         stash.SqlWhileOpen("UPDATE items SET layers = '{' WHERE id = $id", ("$id", cat.Id));
-        Assert.StartsWith("Read the item's layers failed: cat, ", (await PreviewFacts.EditedLayers(stash.Store!, listed[cat.Id])).Failure!.Sentence, "a list the store cannot read is named (G35)");
+        Assert.StartsWith("Couldn't read the item's layers: cat's ", (await PreviewFacts.EditedLayers(stash.Store!, listed[cat.Id])).Failure!.Sentence, "a list the store cannot read is named (G35)");
     }
 
     private static StashItem Item(MediaFacts facts, DateTimeOffset addedAt) =>

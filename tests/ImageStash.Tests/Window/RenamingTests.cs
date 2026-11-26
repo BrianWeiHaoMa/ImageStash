@@ -86,7 +86,7 @@ public sealed class RenamingTests
             renamed = await listed.Renaming.Rename(cat, "dog");
         }
 
-        var named = $"{ItemRename.Action} failed: cat.png, {HeldFileRetry.HeldReason}";
+        var named = "Couldn't rename: cat.png is held open by another program. Try again in a moment.";
         Assert.AreEqual(named, renamed.Failure?.Sentence);
         CollectionAssert.AreEqual(new[] { named }, listed.Notices.Shown.Select(notice => notice.Text).ToList(), "named once, with the file and the reason (G35)");
         var shown = listed.Listing.Items.Single();
@@ -120,7 +120,7 @@ public sealed class RenamingTests
             back = await listed.Renaming.Rename(shown, "cat");
         }
 
-        Assert.AreEqual($"{ItemRename.Action} failed: dog.webp, {HeldFileRetry.HeldReason}", back.Failure?.Sentence);
+        Assert.AreEqual("Couldn't rename: dog.webp is held open by another program. Try again in a moment.", back.Failure?.Sentence);
         shown = listed.Listing.Items.Single();
         Assert.AreEqual(("cat", listed.Stash.Folder.InRoot("cat.png")), (shown.Name, shown.FilePath), "listed with its files where they are (State: A live failure)");
         Assert.AreEqual(listed.Stash.Folder.InOriginals("dog.webp"), (await EditedItems.ForEdit(listed.Stash.Store!, shown.Id)).OriginalPath);
@@ -247,7 +247,7 @@ public sealed class RenamingTests
             renamed = await listed.Renaming.Rename(cat, "dog");
         }
 
-        Assert.AreEqual($"{ItemRename.Action} failed: cat.png, {HeldFileRetry.HeldReason}", renamed.Failure?.Sentence);
+        Assert.AreEqual("Couldn't rename: cat.png is held open by another program. Try again in a moment.", renamed.Failure?.Sentence);
         Assert.AreEqual(("dog", cat.FilePath), (listed.Listing.Items.Single().Name, listed.Listing.Items.Single().FilePath), "the name committed, the file where it was");
         Assert.IsEmpty(listed.Clipboard.WrittenAgain, "no refresh from a state the next start still has to finish (State: A live failure)");
         Assert.IsTrue(File.Exists(listed.Clipboard.Written.Single().Content.FilePaths.Single()), "the clipboard's file is still where it was written");
@@ -284,7 +284,7 @@ public sealed class RenamingTests
 
         Assert.IsTrue(renamed.Succeeded, "the rename itself succeeded");
         Assert.AreEqual("dog", listed.Listing.Items.Single().Name);
-        CollectionAssert.AreEqual(new[] { $"{Handoff.RefreshAction} failed: dog, {RecordingClipboard.Held.Reason}" },
+        CollectionAssert.AreEqual(new[] { $"Couldn't update the clipboard (dog): {RecordingClipboard.Held.Reason}." },
             listed.Notices.Shown.Select(notice => notice.Text).ToList(), "named in the window's notices, which last whether or not it shows (G35, G16)");
     }
 

@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.LogicalTree;
+using ImageStash.Files;
 using ImageStash.Seams;
 using ImageStash.Store;
 using ImageStash.Tests.Support;
@@ -168,7 +169,7 @@ public sealed class ProblemNoticeTests
         using (UserAct.Begin(Deletion.Action))
         {
             listed.Notices.Raise("Deleted “cat”.", "Undo", () => Task.FromResult(Outcome.Done));
-            listed.Notices.Raise(new Failure("Move to the Recycle Bin", "dog.png", "another program is holding it open"));
+            listed.Notices.Raise(new Failure("Move to the Recycle Bin", "dog.png", HeldFileRetry.HeldReason));
             listed.Notices.Raise(new Failure("Copy", "owl.png", "it is locked"));
         }
 
@@ -261,7 +262,7 @@ public sealed class ProblemNoticeTests
         {
             deleted = listed.Notices.Raise("Deleted “cat”.", "Undo", () => Task.FromResult(Outcome.Done), () =>
             {
-                listed.Notices.Raise(new Failure("Finish the delete", "cat.png", "another program is holding it open"));
+                listed.Notices.Raise(new Failure("Finish the delete", "cat.png", HeldFileRetry.HeldReason));
                 return Task.CompletedTask;
             });
         }
@@ -306,7 +307,7 @@ public sealed class ProblemNoticeTests
         await listed.Notices.Undo(notice);
         Pass(listed, AMinute);
 
-        Assert.AreEqual("Undo the delete failed: cat.png, its held copy is gone", listed.Notices.Shown.Single().Text);
+        Assert.AreEqual("Couldn't undo the delete: cat.png's held copy is gone.", listed.Notices.Shown.Single().Text);
     }
 
     [TestMethod]

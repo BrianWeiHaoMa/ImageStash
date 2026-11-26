@@ -117,7 +117,7 @@ public sealed class PictureImportTests
 
         try
         {
-            Assert.AreEqual(new Failure("Copy into the stash", "broken.png", BreakingStream.Reason), staged.Failure, "the copy's own failure, as before");
+            Assert.AreEqual(new Failure("Copy into the stash", "broken.png", $"Windows could not read or write it ({BreakingStream.Reason})"), staged.Failure, "the copy's own failure, as before");
             Assert.AreEqual("Discard a copy", named.Single().Action, "the copy left behind is named too (G35)");
             Assert.AreEqual(stash.WorkFiles().Single(), named.Single().Subject);
         }

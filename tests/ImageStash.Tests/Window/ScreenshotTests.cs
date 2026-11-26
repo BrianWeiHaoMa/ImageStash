@@ -175,7 +175,7 @@ public sealed class ScreenshotTests
         CollectionAssert.AreEqual(
             new[]
             {
-                $"Copy failed: Screenshot 2026-10-16 17.30.00, {HeldClipboard.Reason}",
+                $"Couldn't copy (Screenshot 2026-10-16 17.30.00): {HeldClipboard.Reason}.",
                 "Screenshot stashed: “Screenshot 2026-10-16 17.30.00”.",
             },
             taking.Notifications.Shown.Select(notice => notice.Text).ToList(),
@@ -316,7 +316,7 @@ public sealed class ScreenshotTests
         }
 
         var notification = taking.Notifications.Shown.Single();
-        Assert.AreEqual($"Add to the stash failed: {StashFolder.StoreFileName}, {HeldFileRetry.HeldReason}", notification.Text, "retried, then named unchanged (G35)");
+        Assert.AreEqual($"Couldn't add to the stash: {StashFolder.StoreFileName} is held open by another program. Try again in a moment.", notification.Text, "retried, then named unchanged (G35)");
         Assert.IsNull(notification.UndoLabel, "no capture notification (R9)");
         Assert.AreEqual(0, taking.Clipboard.Begun, "nothing to copy");
         Assert.IsEmpty(await taking.Stash.All());
@@ -344,7 +344,7 @@ public sealed class ScreenshotTests
             await took;
 
             var notification = taking.Notifications.Shown.Single();
-            Assert.AreEqual($"Add to the stash failed: Screenshot 2026-10-16 17.30.00.png, {HeldFileRetry.HeldReason}", notification.Text, "the file step's failure, unchanged");
+            Assert.AreEqual("Couldn't add to the stash: Screenshot 2026-10-16 17.30.00.png is held open by another program. Try again in a moment.", notification.Text, "the file step's failure, unchanged");
             Assert.IsNull(notification.UndoLabel, "no capture notification before the file is in place (R9)");
             Assert.AreEqual(0, taking.Clipboard.Begun, "no copy of an item not in place");
             Assert.IsEmpty(await taking.Stash.All(), "committed, but no query returns it");
@@ -369,7 +369,7 @@ public sealed class ScreenshotTests
         await taking.Screenshot.Take();
 
         var notification = taking.Notifications.Shown.Single();
-        Assert.StartsWith("Add to the stash failed: ", notification.Text);
+        Assert.StartsWith("Couldn't add to the stash: ", notification.Text);
         Assert.IsNull(notification.UndoLabel, "no capture notification before the last step (R9)");
         Assert.AreEqual(0, taking.Clipboard.Begun);
         var item = (await taking.Stash.All()).Single();

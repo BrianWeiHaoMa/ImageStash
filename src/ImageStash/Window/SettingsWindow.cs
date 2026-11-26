@@ -274,7 +274,7 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
                 row.IsVisible = warning is not null;
             }
 
-            readFailureWords.Text = page.ReadFailure is { } failure ? $"{failure.Sentence}. {SettingsPage.NotKept}" : null;
+            readFailureWords.Text = page.ReadFailure is { } failure ? $"{failure.Sentence} {SettingsPage.NotKept}" : null;
             readFailure.IsVisible = page.ReadFailure is not null;
             writeFailureWords.Text = page.WriteFailure?.Sentence;
             writeFailure.IsVisible = page.WriteFailure is not null;

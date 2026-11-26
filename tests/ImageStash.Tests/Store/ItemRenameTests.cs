@@ -55,7 +55,7 @@ public sealed class ItemRenameTests
         {
             Assert.AreSame(dog, (await store.Confirm([dog], "Copy")).Items.Single().Value, "its file is under the name it carries");
             Assert.AreEqual(
-                $"Copy failed: cat, the stash could not be read ({StashFolder.StoreFileName}: {HeldFileRetry.HeldReason})",
+                $"Couldn't copy (cat): the stash could not be read ({StashFolder.StoreFileName}: {HeldFileRetry.HeldReason}). {Failure.TryAgain}",
                 (await store.Confirm([cat], "Copy")).Items.Single().Failure?.Sentence,
                 "as read before the rename, its old file name could be another item's by now");
         }

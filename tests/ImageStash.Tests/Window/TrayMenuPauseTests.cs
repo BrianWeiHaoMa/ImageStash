@@ -95,7 +95,7 @@ public sealed class TrayMenuPauseTests
     {
         var started = StartedShortcuts.Start(held: [Screenshot]);
         var unavailable = started.Tray.ToolTip!;
-        var fits = new Failure("Read", "a", "held");
+        var fits = new Failure("Cut", "a", "held");
         started.Menu.Name(fits);
         started.Shortcuts.TogglePause();
         Assert.AreEqual($"{PausedTip}\n{fits.Sentence}\n{unavailable}", started.Tray.ToolTip);
@@ -108,7 +108,7 @@ public sealed class TrayMenuPauseTests
         StringAssert.Contains(withoutPause, longFailure.Sentence, "the other whole failure also fits");
 
         full.Shortcuts.TogglePause();
-        Assert.AreEqual($"{PausedTip}\nSave failed: Settings\n{unavailable}", full.Tray.ToolTip,
+        Assert.AreEqual($"{PausedTip}\nCouldn't save: Settings\n{unavailable}", full.Tray.ToolTip,
             "the other failure shortens and the shortcut keeps its full reason");
     }
 
@@ -164,7 +164,7 @@ public sealed class TrayMenuPauseTests
         var paused = started.Tray.ToolTip!;
         StringAssert.StartsWith(paused, $"{PausedTip}\n");
         Assert.IsLessThanOrEqualTo(127, paused.Length);
-        StringAssert.Contains(paused, "Open the stash failed");
+        StringAssert.Contains(paused, "Couldn't open the stash");
         StringAssert.Contains(paused, "Unavailable: Win+Alt+V, Record a clip, Ctrl+PrtScn, Ctrl+Alt+Space");
     }
 
@@ -182,7 +182,7 @@ public sealed class TrayMenuPauseTests
         Assert.IsLessThanOrEqualTo(127, paused.Length);
         StringAssert.Contains(paused, "Ctrl+Alt+Q types @");
         StringAssert.Contains(paused, "Ctrl+Shift+PrtScn is used by another app");
-        StringAssert.Contains(paused, "Stop starting with Windows failed");
+        StringAssert.Contains(paused, "Couldn't stop starting with Windows");
     }
 
     [TestMethod]

@@ -317,7 +317,7 @@ public sealed class OrganisingTests
         await listed.Notices.Undo(undo);
 
         var failure = listed.Notices.Shown.Single();
-        StringAssert.StartsWith(failure.Text, "Undo adding a tag failed: stash.db, ");
+        StringAssert.StartsWith(failure.Text, "Couldn't undo adding a tag: stash.db ");
         StringAssert.Contains(failure.Text, "refused");
         Assert.IsFalse(listed.Notices.OffersUndo(failure));
         Assert.IsTrue((await listed.Stash.All()).All(item => item.Tags.SequenceEqual(["work"])));

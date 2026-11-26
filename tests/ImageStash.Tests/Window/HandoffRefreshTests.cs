@@ -67,7 +67,7 @@ public sealed class HandoffRefreshTests
 
         Assert.IsTrue(saved.Succeeded, "the Save stands");
         Assert.AreEqual(2, listed.Listing.Items.Single().RenderedRevision);
-        Assert.AreEqual("Update the clipboard failed: cat, another program is holding the clipboard open", listed.Notices.Shown.Single().Text, "G35");
+        Assert.AreEqual("Couldn't update the clipboard (cat): another program is holding the clipboard open.", listed.Notices.Shown.Single().Text, "G35");
     }
 
     [TestMethod]
@@ -122,7 +122,7 @@ public sealed class HandoffRefreshTests
         Assert.IsFalse(refreshed.Succeeded);
         Assert.HasCount(1, listed.Clipboard.WrittenAgain, "only the Save's own refresh: no item the stash could not confirm is dropped from the clipboard");
         Assert.AreEqual(
-            $"Update the clipboard failed: cat, the stash could not be read ({StashFolder.StoreFileName}: {HeldFileRetry.HeldReason})",
+            $"Couldn't update the clipboard (cat): the stash could not be read ({StashFolder.StoreFileName}: {HeldFileRetry.HeldReason}). {Failure.TryAgain}",
             listed.Notices.Shown.Single().Text,
             "G35: the refresh is the action that failed, so the clipboard is known to hold the picture as it was");
     }

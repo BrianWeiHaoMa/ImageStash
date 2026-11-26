@@ -328,7 +328,7 @@ public sealed class ClipboardPasteTests
         pasting.Clipboard.Reading = Picture(MediaFixtures.Bytes("transparent.png"), null);
         await pasting.Paste.Paste();
 
-        Assert.AreEqual("Paste failed: the clipboard, another program is holding the clipboard open", held.Text);
+        Assert.AreEqual("Couldn't paste (the clipboard): another program is holding the clipboard open.", held.Text);
         Assert.DoesNotContain(held, pasting.Notices.Shown, "the paste that worked took its place (G16)");
         Assert.HasCount(1, await pasting.Stash.All(), "only the second paste added");
     }

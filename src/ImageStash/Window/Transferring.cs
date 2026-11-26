@@ -129,7 +129,7 @@ public sealed class Transferring
         catch (Exception e)
         {
             // The platform's dialog failing is a failure to name, not a crash (G35).
-            return Named(new Failure(StashExport.Action, "the save picker", e.Message));
+            return Named(new Failure(StashExport.Action, "the save picker", Failure.PlatformSaid("it did not open", e.Message)));
         }
         finally
         {
@@ -206,7 +206,7 @@ public sealed class Transferring
             }
             catch (Exception e)
             {
-                return Named(new Failure(StashImport.Action, "the file picker", e.Message));
+                return Named(new Failure(StashImport.Action, "the file picker", Failure.PlatformSaid("it did not open", e.Message)));
             }
 
             if (chosen is null)

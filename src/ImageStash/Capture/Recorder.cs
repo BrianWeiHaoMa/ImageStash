@@ -498,5 +498,5 @@ public sealed class Recorder(IScreen screen, ClipOpener openClip, TimeProvider c
         anchor is { } first ? Math.Min(clock.GetElapsedTime(first).Ticks / TimeSpan.TicksPerMillisecond, capMs) : 0;
 
     /// <summary>A defect that reached a thread's edge, named as this action's failure rather than ending the process (G35).</summary>
-    private Failure Unexpected(Exception e) => new(Action, name, e is OutOfMemoryException ? NoMemory : e.Message);
+    private Failure Unexpected(Exception e) => new(Action, name, e is OutOfMemoryException ? NoMemory : Failure.PlatformSaid("an unexpected error stopped it", e.Message));
 }

@@ -135,7 +135,7 @@ public sealed class WindowsDialogsAndExplorerTests
         // A name Windows does not allow, which the shell refuses at once; a file that is only missing still gets the dialog (observed).
         var opened = await TrayDesktop.Get(() => new WindowsDialogsAndExplorer().OpenWith(owner.Window, @"C:\nowhere\mis|sing.png")).WaitAsync(TimeSpan.FromSeconds(10));
 
-        Assert.AreEqual(("Open with…", "mis|sing.png"), (opened.Failure?.Action, opened.Failure?.Subject), opened.Failure?.Sentence ?? "answered done (G35)");
+        Assert.AreEqual(("Open with another app", "mis|sing.png"), (opened.Failure?.Action, opened.Failure?.Subject), opened.Failure?.Sentence ?? "answered done (G35)");
         Assert.IsFalse(string.IsNullOrWhiteSpace(opened.Failure!.Reason));
         Assert.AreEqual((nint)0, OpenWithDialog.Find(), "the shell refused it without a dialog (F4)");
         Assert.IsTrue(OpenWithDialog.TakesInput(owner.Handle), "and the window takes input");
@@ -238,7 +238,7 @@ public sealed class WindowsDialogsAndExplorerTests
     {
         var opened = TrayDesktop.Get(() => new WindowsDialogsAndExplorer().OpenFolder(@"C:\nowhere\stash"));
 
-        Assert.AreEqual(("Open folder", "stash"), (opened.Failure?.Action, opened.Failure?.Subject), opened.Failure?.Sentence);
+        Assert.AreEqual(("Open the folder", "stash"), (opened.Failure?.Action, opened.Failure?.Subject), opened.Failure?.Sentence);
         Assert.IsFalse(string.IsNullOrWhiteSpace(opened.Failure!.Reason));
     }
 
@@ -271,7 +271,7 @@ public sealed class WindowsDialogsAndExplorerTests
         {
             var opened = TrayDesktop.Get(() => new WindowsDialogsAndExplorer().OpenFolder(file));
 
-            Assert.AreEqual(new Failure("Open folder", Path.GetFileName(file), "it is not a folder"), opened.Failure, "refused before the shell could start a program on it");
+            Assert.AreEqual(new Failure("Open the folder", Path.GetFileName(file), "it is not a folder"), opened.Failure, "refused before the shell could start a program on it");
         }
         finally
         {

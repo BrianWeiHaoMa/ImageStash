@@ -119,7 +119,7 @@ public sealed class LayerTextPasteTests
             Assert.AreEqual("KEEP", editor.Field!.Text);
             Assert.AreEqual("KEEP", ((TextLayer)editor.Session!.SelectedLayer!).Text);
             var notice = shown.Notices.Shown.Single();
-            Assert.AreEqual("Paste failed: the editor field, it closed before the paste could complete", notice.Text);
+            Assert.AreEqual("Couldn't paste: the editor field closed before the paste could complete.", notice.Text);
             Assert.IsTrue(notice.NamesAProblem);
         }, DispatcherPriority.Background);
         Assert.HasCount(1, (await shown.Listing.Store!.All()).Value!);

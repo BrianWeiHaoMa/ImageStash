@@ -485,7 +485,7 @@ public sealed class ClipboardPasteTests
             var naming = PasteForNotice(shown, () => shown.Search);
             await Task.Delay(500);
             TrayDesktop.Run(() => Assert.IsTrue(shown.Window.GetVisualDescendants().OfType<TextBlock>().Any(text => text.IsEffectivelyVisible && text.Text == "Pasting from the clipboard…"), "the busy state names the paste while it waits (G35)"));
-            Assert.AreEqual($"Paste failed: the clipboard, {HeldClipboard.Reason}", await naming);
+            Assert.AreEqual($"Couldn't paste (the clipboard): {HeldClipboard.Reason}.", await naming);
             Assert.IsGreaterThanOrEqualTo(HeldClipboard.Retry.TotalMilliseconds - 100, clock.ElapsedMilliseconds, "retried for the whole retry before it was named (E3)");
             holder.Release();
         }

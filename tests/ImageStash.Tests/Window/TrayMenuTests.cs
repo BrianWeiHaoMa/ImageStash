@@ -1,5 +1,6 @@
 using Avalonia.Input;
 using ImageStash.Capture;
+using ImageStash.Files;
 using ImageStash.Seams;
 using ImageStash.Store;
 using ImageStash.Tests.Support;
@@ -239,7 +240,7 @@ public sealed class TrayMenuTests
             "exactly what it read before: the open shortcut's words never take room from a failure's why (G33)");
 
         started.Menu.Name(new Failure("Save settings", "settings.json", "refused"));
-        CollectionAssert.AreEqual(new[] { "Save settings failed: settings.json, refused", "Ctrl+PrtScn is used by another app, so Take a screenshot has no shortcut." },
+        CollectionAssert.AreEqual(new[] { "Couldn't save settings (settings.json): refused.", "Ctrl+PrtScn is used by another app, so Take a screenshot has no shortcut." },
             started.Tray.ToolTip!.Split('\n'));
     }
 
@@ -255,10 +256,10 @@ public sealed class TrayMenuTests
         var lines = tray.ToolTip!.Split('\n');
         Assert.HasCount(2, lines);
         Assert.IsLessThanOrEqualTo(tray.ToolTipLength, tray.ToolTip.Length);
-        StringAssert.Contains(lines[0], "Start with Windows");
+        StringAssert.Contains(lines[0], "start with Windows");
         StringAssert.Contains(lines[0], "Run entry ImageStash");
         StringAssert.Contains(lines[0], "refused");
-        StringAssert.Contains(lines[1], "Read settings");
+        StringAssert.Contains(lines[1], "read settings");
         StringAssert.Contains(lines[1], "settings.json");
         StringAssert.Contains(lines[1], "not valid settings");
     }
@@ -269,14 +270,14 @@ public sealed class TrayMenuTests
         var tray = new RecordingTray(toolTipLength: 127);
         var menu = new TrayMenu(tray, () => { }, () => { }, () => { }, () => { }, () => { }, () => { });
         menu.Show(Shortcuts());
-        menu.Name(new Failure("Read settings", "settings.json", "another program is holding it open"));
+        menu.Name(new Failure("Read settings", "settings.json", HeldFileRetry.HeldReason));
         menu.Name(new Failure("Stop starting with Windows", "Run entry ImageStash", "Windows refused the change"));
 
         Assert.IsLessThanOrEqualTo(127, tray.ToolTip!.Length);
         var lines = tray.ToolTip.Split('\n');
         Assert.HasCount(2, lines);
-        Assert.AreEqual("Stop starting with Windows failed: Run entry ImageStash, Windows refused the change", lines[0]);
-        Assert.AreEqual("Read settings failed: settings.json", lines[1]);
+        Assert.AreEqual("Couldn't stop starting with Windows (Run entry ImageStash): Windows refused the change.", lines[0]);
+        Assert.AreEqual("Couldn't read settings: settings.json", lines[1]);
     }
 
     [TestMethod]
@@ -288,11 +289,12 @@ public sealed class TrayMenuTests
         var actions = new[] { "Read settings", "Save settings", "Start with Windows", "Open the stash", "Move to the Recycle Bin" };
         foreach (var action in actions)
         {
-            menu.Name(new Failure(action, "a-rather-long-file-name-for-a-reaction.gif", "another program is holding it open"));
+            menu.Name(new Failure(action, "a-rather-long-file-name-for-a-reaction.gif", HeldFileRetry.HeldReason));
         }
 
         Assert.IsLessThanOrEqualTo(127, tray.ToolTip!.Length);
-        CollectionAssert.AreEqual(Enumerable.Reverse(actions).Select(a => $"{a} failed").ToArray(), tray.ToolTip.Split('\n'));
+        CollectionAssert.AreEqual(new[] { "Couldn't move to the Recycle Bin, open the stash, start with Windows, save settings or read settings" }, tray.ToolTip.Split('\n'),
+            "a line each would not fit: their acts share one line, newest first (G35)");
     }
 
     [TestMethod]
@@ -302,14 +304,14 @@ public sealed class TrayMenuTests
     {
         var tray = new RecordingTray(toolTipLength: 127);
         var menu = new TrayMenu(tray, () => { }, () => { }, () => { }, () => { }, () => { }, () => { });
-        menu.Name(new Failure("Read settings", "settings.json", "another program is holding it open"));
+        menu.Name(new Failure("Read settings", "settings.json", HeldFileRetry.HeldReason));
         menu.Show(Shortcuts());
         menu.NameUnavailableShortcut(new ShortcutProblem(ShortcutAct.Open, "Ctrl+Alt+Space", ShortcutReason.Of(new ShortcutRefusal(reason))));
         menu.Name(new Failure("Open the stash", @"C:\Users\someone\Pictures\Reaction stash", "a file is where the stash folder should be"));
 
         var lines = tray.ToolTip!.Split('\n');
         Assert.IsLessThanOrEqualTo(127, tray.ToolTip.Length);
-        CollectionAssert.AreEqual(new[] { "Open the stash failed", line, "Read settings failed" }, lines,
+        CollectionAssert.AreEqual(new[] { "Couldn't open the stash", line, "Couldn't read settings" }, lines,
             "which shortcut is unavailable and why stays whole (G33); the others keep their action (G35)");
     }
 
@@ -323,10 +325,10 @@ public sealed class TrayMenuTests
         menu.NameUnavailableShortcut(Held(ShortcutAct.Open, "Ctrl+Alt+Space"));
         menu.Name(new Failure("Open the stash", @"C:\Users\someone\Pictures\Reaction stash", "a file is where the stash folder should be"));
 
-        var withTheReason = string.Join("\n", "Open the stash failed", "Ctrl+Alt+Space is used by another app, so Open ImageStash has no shortcut.", "Stop starting with Windows failed");
+        var withTheReason = string.Join("\n", "Couldn't open the stash", "Ctrl+Alt+Space is used by another app, so Open ImageStash has no shortcut.", "Couldn't stop starting with Windows");
         Assert.IsGreaterThan(127, withTheReason.Length, "the reason does not fit beside the others' actions");
         Assert.IsLessThanOrEqualTo(127, tray.ToolTip!.Length);
-        CollectionAssert.AreEqual(new[] { "Open the stash failed", "Open ImageStash: Ctrl+Alt+Space is unavailable", "Stop starting with Windows failed" }, tray.ToolTip.Split('\n'),
+        CollectionAssert.AreEqual(new[] { "Couldn't open the stash", "Open ImageStash: Ctrl+Alt+Space is unavailable", "Couldn't stop starting with Windows" }, tray.ToolTip.Split('\n'),
             "the why gives way only when the tooltip cannot hold it beside every other failure named there, the shortcut still named by act and combination (G33); every failure keeps its action (G35)");
     }
 
@@ -351,21 +353,21 @@ public sealed class TrayMenuTests
     {
         var tray = new RecordingTray(toolTipLength: 127);
         var menu = new TrayMenu(tray, () => { }, () => { }, () => { }, () => { }, () => { }, () => { });
-        menu.Name(new Failure("Read settings", "settings.json", "another program is holding it open"));
+        menu.Name(new Failure("Read settings", "settings.json", HeldFileRetry.HeldReason));
         menu.Show(Shortcuts());
         menu.NameUnavailableShortcut(Held(ShortcutAct.Open, "Ctrl+Alt+Space"));
         menu.NameUnavailableShortcut(new ShortcutProblem(ShortcutAct.StashClipboardImage, "Ctrl+Alt+V", ShortcutReason.Of(ShortcutRefusal.TypesACharacter(null))));
 
-        var olderWithoutWhy = string.Join("\n", "Ctrl+Alt+V types a character, so Stash clipboard image has no shortcut.", "Open ImageStash: Ctrl+Alt+Space is unavailable", "Read settings failed");
+        var olderWithoutWhy = string.Join("\n", "Ctrl+Alt+V types a character, so Stash clipboard image has no shortcut.", "Open ImageStash: Ctrl+Alt+Space is unavailable", "Couldn't read settings");
         Assert.IsGreaterThan(127, olderWithoutWhy.Length, "the newest's why does not fit beside the older cut only to act and combination");
         Assert.IsLessThanOrEqualTo(127, tray.ToolTip!.Length);
-        CollectionAssert.AreEqual(new[] { "Ctrl+Alt+V types a character, so Stash clipboard image has no shortcut.", "Open ImageStash unavailable", "Read settings failed" }, tray.ToolTip.Split('\n'),
+        CollectionAssert.AreEqual(new[] { "Ctrl+Alt+V types a character, so Stash clipboard image has no shortcut.", "Open ImageStash unavailable", "Couldn't read settings" }, tray.ToolTip.Split('\n'),
             "the other failure is cut to its action first, then the older shortcut to its shortest form, and the newest keeps its why (G33, G35)");
 
         menu.Name(new Failure("Open the stash", @"C:\Users\someone\Pictures\Reaction stash", "a file is where the stash folder should be"));
 
         Assert.IsLessThanOrEqualTo(127, tray.ToolTip!.Length);
-        CollectionAssert.AreEqual(new[] { "Open the stash failed", "Stash clipboard image: Ctrl+Alt+V is unavailable", "Open ImageStash unavailable", "Read settings failed" }, tray.ToolTip.Split('\n'),
+        CollectionAssert.AreEqual(new[] { "Couldn't open the stash", "Stash clipboard image: Ctrl+Alt+V is unavailable", "Open ImageStash unavailable", "Couldn't read settings" }, tray.ToolTip.Split('\n'),
             "every line still there, each shortcut line still saying which shortcut, the newest's why given way only when nothing else can (G33)");
     }
 
@@ -383,6 +385,23 @@ public sealed class TrayMenuTests
         Assert.IsLessThanOrEqualTo(127, tray.ToolTip!.Length);
         CollectionAssert.AreEqual(new[] { "Ctrl+Alt+V is unavailable", "Record a clip unavailable", "Take a screenshot: Ctrl+PrtScn is unavailable", "Open ImageStash unavailable" }, tray.ToolTip.Split('\n'),
             "each line by its combination or its act, whichever is shorter, so every shortcut is still named, the room left keeping one act beside its combination (G33)");
+    }
+
+    [TestMethod]
+    public void AFailureBesideFourUnavailableShortcutsStaysNamedTheShortcutsSharingOneLineWhenEachLineWouldNotFit()
+    {
+        var tray = new RecordingTray(toolTipLength: 127);
+        var menu = new TrayMenu(tray, () => { }, () => { }, () => { }, () => { }, () => { }, () => { });
+        menu.Name(new Failure("Finish an unfinished rename", "cat.png", HeldFileRetry.HeldReason));
+        menu.Show(Shortcuts());
+        menu.NameUnavailableShortcut(Held(ShortcutAct.Open, "Alt+F9"));
+        menu.NameUnavailableShortcut(Held(ShortcutAct.Screenshot, "Ctrl+F8"));
+        menu.NameUnavailableShortcut(Held(ShortcutAct.Record, "Alt+F10"));
+        menu.NameUnavailableShortcut(Held(ShortcutAct.StashClipboardImage, "Win+Alt+V"));
+
+        Assert.IsLessThanOrEqualTo(127, tray.ToolTip!.Length);
+        CollectionAssert.AreEqual(new[] { "Couldn't finish an unfinished rename", "Unavailable: Win+Alt+V, Alt+F10, Ctrl+F8, Alt+F9" }, tray.ToolTip.Split('\n'),
+            "a line each would leave the failure out: the shortcuts share one line, so the failure and every unavailable shortcut are still named (G33, G35)");
     }
 
     [TestMethod]
@@ -450,22 +469,41 @@ public sealed class TrayMenuTests
     }
 
     [TestMethod]
-    public void WhenEvenTheActionsDoNotFitTheOldestOtherFailuresLeaveSoEveryUnavailableShortcutIsStillNamed()
+    public void WhenEvenTheActionsDoNotFitTheyShareOneLineSoEveryUnavailableShortcutAndEveryActIsStillNamed()
     {
         var tray = new RecordingTray(toolTipLength: 127);
         var menu = new TrayMenu(tray, () => { }, () => { }, () => { }, () => { }, () => { }, () => { });
         menu.Show(Shortcuts());
         menu.NameUnavailableShortcut(Held(ShortcutAct.Open, "Ctrl+Alt+Space"));
         menu.NameUnavailableShortcut(Held(ShortcutAct.StashClipboardImage, "Ctrl+Alt+V"));
-        menu.Name(new Failure("Finish an unfinished save", "old meme.png", "another program is holding it open"));
-        menu.Name(new Failure("Finish an unfinished rename", "laughing cat.gif", "another program is holding it open"));
-        menu.Name(new Failure("Finish an unfinished rename", "sad dog.png", "another program is holding it open"));
+        menu.Name(new Failure("Finish an unfinished save", "old meme.png", HeldFileRetry.HeldReason));
+        menu.Name(new Failure("Finish an unfinished rename", "laughing cat.gif", HeldFileRetry.HeldReason));
+        menu.Name(new Failure("Finish an unfinished rename", "sad dog.png", HeldFileRetry.HeldReason));
 
-        var everyShortest = string.Join("\n", "Finish an unfinished rename failed", "Finish an unfinished rename failed", "Finish an unfinished save failed", "Ctrl+Alt+V is unavailable", "Open ImageStash unavailable");
+        var everyShortest = string.Join("\n", "Couldn't finish an unfinished rename", "Couldn't finish an unfinished rename", "Couldn't finish an unfinished save", "Ctrl+Alt+V is unavailable", "Open ImageStash unavailable");
         Assert.IsGreaterThan(127, everyShortest.Length, "the platform would cut the oldest line, the open shortcut's");
         Assert.IsLessThanOrEqualTo(127, tray.ToolTip!.Length);
-        CollectionAssert.AreEqual(new[] { "Finish an unfinished rename failed", "Finish an unfinished rename failed", "Ctrl+Alt+V is unavailable", "Open ImageStash unavailable" }, tray.ToolTip.Split('\n'),
-            "the oldest other failure leaves, and every unavailable shortcut is still named (G33)");
+        CollectionAssert.AreEqual(new[] { "Couldn't finish an unfinished rename or finish an unfinished save", "Ctrl+Alt+V is unavailable", "Open ImageStash unavailable" }, tray.ToolTip.Split('\n'),
+            "the failures' acts share one line, each once, and every unavailable shortcut is still named (G33, G35)");
+    }
+
+    [TestMethod]
+    public void WhenEvenTheSharedLineDoesNotFitTheOldestOtherFailuresLeaveSoEveryUnavailableShortcutIsStillNamed()
+    {
+        var tray = new RecordingTray(toolTipLength: 127);
+        var menu = new TrayMenu(tray, () => { }, () => { }, () => { }, () => { }, () => { }, () => { });
+        menu.Show(Shortcuts());
+        menu.NameUnavailableShortcut(Held(ShortcutAct.Open, "Ctrl+Alt+Space"));
+        menu.NameUnavailableShortcut(Held(ShortcutAct.StashClipboardImage, "Ctrl+Alt+V"));
+        menu.Name(new Failure("Undo an unfinished undo of an adoption", "old meme.png", HeldFileRetry.HeldReason));
+        menu.Name(new Failure("Finish an unfinished undo of an adoption", "laughing cat.gif", HeldFileRetry.HeldReason));
+        menu.Name(new Failure("Recycle the picture an Open with… edit replaced", "sad dog.png", HeldFileRetry.HeldReason));
+
+        var shared = string.Join("\n", "Couldn't recycle the picture an Open with… edit replaced, finish an unfinished undo of an adoption or undo an unfinished undo of an adoption", "Ctrl+Alt+V is unavailable", "Open ImageStash unavailable");
+        Assert.IsGreaterThan(127, shared.Length, "the platform would cut the oldest line, the open shortcut's");
+        Assert.IsLessThanOrEqualTo(127, tray.ToolTip!.Length);
+        CollectionAssert.AreEqual(new[] { "Couldn't recycle the picture an Open with… edit replaced", "Ctrl+Alt+V is unavailable", "Open ImageStash unavailable" }, tray.ToolTip.Split('\n'),
+            "the oldest other failures leave, and every unavailable shortcut is still named (G33)");
     }
 
     private static ShortcutProblem Held(ShortcutAct act, string combination) => new(act, combination, ShortcutReason.Of(ShortcutRefusal.HeldByAnotherProgram));

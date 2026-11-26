@@ -52,3 +52,9 @@ public interface IDialogsAndExplorer
 
 /// <summary>A picker's file type: its name as listed, and the name patterns it shows (<c>*.png</c>).</summary>
 public sealed record PickerFilter(string Name, IReadOnlyList<string> Patterns);
+
+/// <summary>What a failure says, before the platform's own words, when the dialog Open with… shows could not be shown (G35).</summary>
+public static class OpenWithDialog
+{
+    public const string NotShown = "Windows could not show the Open with dialog";
+}

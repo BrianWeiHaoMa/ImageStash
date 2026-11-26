@@ -137,7 +137,7 @@ public sealed class ImportTests
         await importing.Notices.Undo(notice);
 
         CollectionAssert.AreEquivalent(
-            new[] { "Move to the Recycle Bin failed: photo.jpg, the test Recycle Bin refuses it", "Move to the Recycle Bin failed: animated.gif, the test Recycle Bin refuses it" },
+            new[] { "Couldn't move to the Recycle Bin (photo.jpg): the test Recycle Bin refuses it.", "Couldn't move to the Recycle Bin (animated.gif): the test Recycle Bin refuses it." },
             importing.Notices.Shown.Select(shown => shown.Text).ToList(),
             "each refused file is named in a notice of its own (G35)");
         Assert.IsFalse(File.Exists(three[1].Item!.FilePath), "the file the Recycle Bin took is gone from the stash");
@@ -181,7 +181,7 @@ public sealed class ImportTests
         Assert.AreEqual(ImportResultKind.Failed, results[0].Result);
         Assert.AreEqual(new Failure("Copy into the stash", "held.png", HeldFileRetry.HeldReason), results[0].Failure, "a held file is not unreadable (G35)");
         Assert.AreEqual(ImportResultKind.Added, results[1].Result);
-        Assert.AreEqual(("Added 1 · 1 failed", $"Copy into the stash failed: held.png, {HeldFileRetry.HeldReason}. Added “photo”."), (importing.Notices.Shown.Single().Heading, importing.Notices.Shown.Single().Text));
+        Assert.AreEqual(("Added 1 · 1 failed", "Couldn't copy into the stash: held.png is held open by another program. Try again in a moment. Added “photo”."), (importing.Notices.Shown.Single().Heading, importing.Notices.Shown.Single().Text));
         Assert.IsEmpty(importing.Stash.WorkFiles());
     }
 
@@ -211,7 +211,7 @@ public sealed class ImportTests
         Assert.IsFalse(neverPlaced.PutInStash);
         Assert.AreEqual(new ImportedFile("again.png", ImportResultKind.AlreadyInStash, item, Failure: held), found);
         Assert.IsFalse(found.PutInStash, "a duplicate is not the batch's to undo");
-        Assert.AreEqual(("Nothing was added · 1 failed", $"Add to the stash failed: held.png, {HeldFileRetry.HeldReason}."), Import.NoticeWords([neverPlaced]));
+        Assert.AreEqual(("Nothing was added · 1 failed", "Couldn't add to the stash: held.png is held open by another program. Try again in a moment."), Import.NoticeWords([neverPlaced]));
     }
 
     [TestMethod]
@@ -229,7 +229,7 @@ public sealed class ImportTests
         Assert.IsNotNull(file.Failure);
         var notice = importing.Notices.Shown.Single();
         Assert.AreEqual("Nothing was added · 1 failed", notice.Heading);
-        Assert.StartsWith("still.png: Add to the stash failed: ", notice.Text, "named, though its failure names the store");
+        Assert.StartsWith("still.png: Couldn't add to the stash: ", notice.Text, "named, though its failure names the store");
         Assert.AreEqual(file.Item!.Id, (await importing.Stash.All()).Single().Id, "its picture is in place, so the stash shows it (State: A live failure)");
         Assert.AreEqual("Undo", notice.UndoLabel, "the batch put it in the stash, so Undo removes it (G12)");
 
@@ -287,7 +287,7 @@ public sealed class ImportTests
         var results = await importing.Import.Drop(new DropContents([picture], false, false, []));
 
         Assert.AreEqual(ImportResultKind.Failed, results.Single().Result);
-        Assert.AreEqual(new Failure("Copy into the stash", "broken.gif", FailingStream.Reason), results.Single().Failure);
+        Assert.AreEqual(new Failure("Copy into the stash", "broken.gif", $"Windows could not read or write it ({FailingStream.Reason})"), results.Single().Failure);
         Assert.IsEmpty(await importing.Stash.All());
         Assert.IsEmpty(importing.Stash.WorkFiles());
     }
@@ -444,7 +444,7 @@ public sealed class ImportTests
         Assert.IsEmpty(failed);
         Assert.HasCount(2, await importing.Stash.All());
         CollectionAssert.AreEqual(
-            new[] { ("Added 2 to your stash", "Added “still” and “animated”."), ((string?)null, "Import files failed: the file picker, the dialog broke") },
+            new[] { ("Added 2 to your stash", "Added “still” and “animated”."), ((string?)null, "Couldn't import files: the file picker did not open (the dialog broke).") },
             importing.Notices.Shown.Select(notice => (notice.Heading, notice.Text)).ToList(),
             "a cancelled picker changes nothing; a failed one is named");
     }
@@ -531,7 +531,7 @@ public sealed class ImportTests
         Assert.IsEmpty(unavailable);
         CollectionAssert.AreEqual(new[] { "Can't add to the stash (the link): links are not taken and nothing is downloaded; drag the picture itself in." }, linkSaid);
         CollectionAssert.AreEqual(new[] { "Can't add to the stash: what was dropped holds no file." }, nothingSaid);
-        CollectionAssert.AreEqual(new[] { "Add to the stash failed: what was dropped, its files could not be read from what was dragged" },
+        CollectionAssert.AreEqual(new[] { "Couldn't add to the stash (what was dropped): ImageStash could not read the files it carried." },
             importing.Notices.Shown.Select(notice => notice.Text).ToList());
         Assert.AreEqual("cat", importing.Listing.Query, "a refused drop is not an import");
         Assert.IsEmpty(importing.Stash.WorkFiles());

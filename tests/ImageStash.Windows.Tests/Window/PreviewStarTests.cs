@@ -80,7 +80,7 @@ public sealed class PreviewStarTests
         {
             TrayDesktop.Run(() => Tap(shown.PreviewPicture, Key.D, KeyModifiers.Control));
             // Held past the store's retry, the change is refused and named (G35).
-            await Eventually(() => TrayDesktop.Get(() => shown.Notices.Shown.Any(notice => notice.Text.StartsWith("Add to Favorites failed", StringComparison.Ordinal))), TimeSpan.FromSeconds(30));
+            await Eventually(() => TrayDesktop.Get(() => shown.Notices.Shown.Any(notice => notice.Text.StartsWith("Couldn't add to Favorites: ", StringComparison.Ordinal))), TimeSpan.FromSeconds(30));
             TrayDesktop.Run(() => AssertStar(StarButton(shown), favorite: false));
         }
 

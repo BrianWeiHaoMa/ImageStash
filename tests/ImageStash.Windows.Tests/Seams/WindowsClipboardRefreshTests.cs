@@ -89,7 +89,7 @@ public sealed class WindowsClipboardRefreshTests
         Assert.IsFalse((await fresh.Real.WriteAgain(7, new ClipboardContent([one], null, null, [7]), ShortRetry)).Value);
 
         Assert.IsTrue((await seam.Write(new ClipboardContent([one], null, null, [1]))).Succeeded);
-        Assert.AreEqual("Copy failed: the clipboard, gone.png no longer exists", (await seam.Write(new ClipboardContent([gone], null, null, [2]))).Failure?.Sentence);
+        Assert.AreEqual("Couldn't copy (the clipboard): gone.png no longer exists.", (await seam.Write(new ClipboardContent([gone], null, null, [2]))).Failure?.Sentence);
         CollectionAssert.AreEqual(new long[] { 1 }, seam.Real.LastWritten.ToList(), "the clipboard still holds the earlier write, unchanged since");
         Assert.IsTrue((await seam.Real.WriteAgain(1, new ClipboardContent([files.Path("two.png")], null, null, [1]), ShortRetry)).Value);
     }
@@ -109,13 +109,13 @@ public sealed class WindowsClipboardRefreshTests
             holder.Release();
         }
 
-        Assert.AreEqual($"Copy failed: the clipboard, {HeldClipboard.Reason}", held.Failure?.Sentence, "E3, G35");
+        Assert.AreEqual($"Couldn't copy (the clipboard): {HeldClipboard.Reason}.", held.Failure?.Sentence, "E3, G35");
         CollectionAssert.AreEqual(new[] { one }, TestClipboard.Read().Files.ToList());
 
         var gone = Path.Combine(Path.GetDirectoryName(one)!, "gone.png");
         var refused = await seam.Real.WriteAgain(1, new ClipboardContent([gone], null, null, [1]), ShortRetry);
 
-        Assert.AreEqual("Copy failed: the clipboard, gone.png no longer exists", refused.Failure?.Sentence, "refused as Write refuses it");
+        Assert.AreEqual("Couldn't copy (the clipboard): gone.png no longer exists.", refused.Failure?.Sentence, "refused as Write refuses it");
         CollectionAssert.AreEqual(new[] { one }, TestClipboard.Read().Files.ToList(), "nothing emptied: the check runs before the clipboard is replaced");
         Assert.IsTrue((await seam.Real.WriteAgain(1, new ClipboardContent([files.Path("three.png")], null, null, [1]), ShortRetry)).Value, "and the write it held stays remembered");
     }

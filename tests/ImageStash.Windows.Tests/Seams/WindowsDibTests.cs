@@ -433,7 +433,7 @@ public sealed class WindowsDibTests
     private static void AssertUnreadable(byte[] dib, string why)
     {
         var converted = WindowsDib.Convert(dib);
-        Assert.AreEqual($"Paste failed: the clipboard, its picture could not be read: {why}", converted.Failure?.Sentence);
+        Assert.AreEqual($"Couldn't paste: the clipboard's picture could not be read: {why}.", converted.Failure?.Sentence);
     }
 
     /// <summary>

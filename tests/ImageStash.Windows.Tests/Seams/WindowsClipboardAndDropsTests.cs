@@ -106,7 +106,7 @@ public sealed class WindowsClipboardAndDropsTests
             holder.Release();
         }
 
-        Assert.AreEqual("Copy failed: the clipboard, another program is holding the clipboard open", refused.Failure?.Sentence);
+        Assert.AreEqual("Couldn't copy (the clipboard): another program is holding the clipboard open.", refused.Failure?.Sentence);
         Assert.IsGreaterThanOrEqualTo(280, clock.ElapsedMilliseconds, "retried before it was named");
         Assert.IsLessThan(1500, clock.ElapsedMilliseconds, "named once the retry ended");
         var read = TestClipboard.Read();
@@ -160,7 +160,7 @@ public sealed class WindowsClipboardAndDropsTests
             refused = await writing;
         }
 
-        Assert.AreEqual("Copy failed: the clipboard, undone.gif no longer exists", refused.Failure?.Sentence);
+        Assert.AreEqual("Couldn't copy (the clipboard): undone.gif no longer exists.", refused.Failure?.Sentence);
         CollectionAssert.AreEqual(new[] { before }, TestClipboard.Read().Files.ToList(), "nothing of the refused write is on the clipboard");
     }
 
@@ -193,7 +193,7 @@ public sealed class WindowsClipboardAndDropsTests
             refused = await writing;
         }
 
-        Assert.AreEqual($"Copy failed: the clipboard, {name} was replaced by another file", refused.Failure?.Sentence);
+        Assert.AreEqual($"Couldn't copy (the clipboard): {name} was replaced by another file.", refused.Failure?.Sentence);
         CollectionAssert.AreEqual(new[] { before }, TestClipboard.Read().Files.ToList(), "nothing of the refused write is on the clipboard");
     }
 

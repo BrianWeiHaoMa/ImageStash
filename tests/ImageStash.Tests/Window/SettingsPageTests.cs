@@ -230,7 +230,7 @@ public sealed class SettingsPageTests
 
         Assert.AreEqual(refused, outcome.Failure);
         Assert.AreEqual(refused.Sentence, page.WarningOf(SettingsPage.StartWithWindowsTitle), "named on its row as the seam named it (G35)");
-        Assert.AreEqual("Stop starting with Windows failed: Run entry ImageStash, Windows refused the change", page.WarningOf(SettingsPage.StartWithWindowsTitle));
+        Assert.AreEqual("Couldn't stop starting with Windows (Run entry ImageStash): Windows refused the change.", page.WarningOf(SettingsPage.StartWithWindowsTitle));
         Assert.IsTrue(page.Rows.Where(row => row.Title != SettingsPage.StartWithWindowsTitle).All(row => page.WarningOf(row.Title) is null), "on that row alone");
         Assert.IsFalse(page.StartWithWindows, "the choice is the record whatever the entry answered (State: Settings)");
         await keeper.Flush();
@@ -275,7 +275,7 @@ public sealed class SettingsPageTests
         Assert.IsTrue(page.OpenFolder().Succeeded);
         keeper.Change(s => s with { StashFolder = @"D:\Reactions" });
         Assert.AreEqual(@"D:\Reactions", page.StashFolder, "read when asked, as a Move would leave it");
-        dialogs.OpenFolderAnswer = new Failure("Open folder", "Reactions", "The system cannot find the file specified.");
+        dialogs.OpenFolderAnswer = new Failure("Open the folder", "Reactions", "The system cannot find the file specified.");
         var refused = page.OpenFolder();
 
         CollectionAssert.AreEqual(new[] { DefaultStash, @"D:\Reactions" }, dialogs.OpenedFolders, "the default while Settings names none, then the folder it names (F6, G32)");
@@ -300,7 +300,7 @@ public sealed class SettingsPageTests
         var page = Page(keeper, load, applyTheme: applied.Add);
 
         Assert.AreEqual(load.Failure, page.ReadFailure, "the start's read failure named at the top (G35)");
-        StringAssert.StartsWith(page.ReadFailure!.Sentence, "Read settings failed: settings.json, ");
+        StringAssert.StartsWith(page.ReadFailure!.Sentence, "Couldn't read settings (settings.json): ");
         page.SetTheme(Theme.Dark);
         page.SetRecordPointer(false);
         await keeper.Flush();

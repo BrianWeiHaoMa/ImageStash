@@ -47,7 +47,7 @@ public sealed class CountedImportTests
             "animated.gif was already in your stash as “animated”. " +
             $"Skipped clip.mp4 (a video) and cat.url (a link): {Formats}. " +
             "broken.png is unreadable. " +
-            $"Copy into the stash failed: held.png, {HeldFileRetry.HeldReason}.",
+            "Couldn't copy into the stash: held.png is held open by another program. Try again in a moment.",
             notice.Text);
         Assert.IsFalse(Enumerable.Range(1, 35).Any(i => notice.Words.Contains($"p{i:00}")), "none of the added names");
         Assert.HasCount(36, await importing.Stash.All());
@@ -118,7 +118,7 @@ public sealed class CountedImportTests
         var (heading, details) = Import.NoticeWords([found]);
 
         Assert.AreEqual("Nothing was added · 1 already in your stash", heading);
-        Assert.AreEqual($"again.png was already in your stash as “again”. Add to the stash failed: again.png, {HeldFileRetry.HeldReason}.", details);
+        Assert.AreEqual("again.png was already in your stash as “again”. Couldn't add to the stash: again.png is held open by another program. Try again in a moment.", details);
         Assert.IsTrue(found.NamesAProblem, "its failure is a problem the notice names");
     }
 
@@ -137,8 +137,8 @@ public sealed class CountedImportTests
         Assert.HasCount(3, await importing.Stash.All(), "their pictures are in place, so the stash shows them (State: A live failure)");
         Assert.AreEqual("Undo", notice.UndoLabel, "the batch put them in the stash, so Undo removes them (G12)");
         Assert.AreEqual("Nothing was added · 2 failed", notice.Heading, "no success shown before the last step (R9)");
-        StringAssert.StartsWith(notice.Text, "still.png: Add to the stash failed: ");
-        StringAssert.Contains(notice.Text, ". photo.jpg: Add to the stash failed: ", "each named with its failure");
+        StringAssert.StartsWith(notice.Text, "still.png: Couldn't add to the stash: ");
+        StringAssert.Contains(notice.Text, ". photo.jpg: Couldn't add to the stash: ", "each named with its failure");
 
         await importing.Notices.Undo(notice);
 

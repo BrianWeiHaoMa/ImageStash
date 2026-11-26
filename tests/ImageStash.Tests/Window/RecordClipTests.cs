@@ -140,7 +140,7 @@ public sealed class RecordClipTests
         await ClipRecording.Record(recording);
 
         CollectionAssert.AreEqual(
-            new[] { $"Copy failed: {Clip}, {HeldClipboard.Reason}", $"Recording stashed: “{Clip}”. 0.3 s." },
+            new[] { $"Couldn't copy ({Clip}): {HeldClipboard.Reason}.", $"Recording stashed: “{Clip}”. 0.3 s." },
             recording.Notifications.Shown.Select(notice => notice.Text).ToList(),
             "the capture stands, and the notification claims nothing of the clipboard (G16, G35)");
         Assert.HasCount(1, await recording.Stash.All());
@@ -155,7 +155,7 @@ public sealed class RecordClipTests
 
         await recording.RecordClip.StartOrStop();
 
-        Assert.AreEqual("Record a clip failed: settings.json, the recording's maximum length is not a number of seconds above zero",
+        Assert.AreEqual("Couldn't record a clip (settings.json): the recording's maximum length is not a number of seconds above zero.",
             recording.Notifications.Shown.Single().Text, "the file that holds the cap named (G35, State)");
         Assert.AreEqual((0, 0), (recording.Screen.DisplayReads, recording.Screen.Grabs.Count), "nothing grabbed");
         Assert.IsEmpty(recording.WindowSteps, "nothing hidden");
@@ -234,7 +234,7 @@ public sealed class RecordClipTests
 
         await recording.RecordClip.StartOrStop();
 
-        Assert.AreEqual("Record a clip failed: the screen, Windows would not show the frame around the region", recording.Notifications.Shown.Single().Text, "no auto name exists before Record (G35)");
+        Assert.AreEqual("Couldn't record a clip (the screen): Windows would not show the frame around the region.", recording.Notifications.Shown.Single().Text, "no auto name exists before Record (G35)");
         Assert.IsEmpty(await recording.Stash.All());
         Assert.IsEmpty(recording.Stash.WorkFiles(), "nothing written");
         CollectionAssert.AreEqual(new[] { "hide", "restore Flyout" }, recording.WindowSteps, "the window back");
@@ -517,7 +517,7 @@ public sealed class RecordClipTests
         recording.StepRecording(140);
         await acting.WaitAsync(TimeSpan.FromSeconds(10));
 
-        Assert.AreEqual($"Record a clip failed: {Clip}, the disk is full", recording.Notifications.Shown.Single().Text, "named as the action on the clip (G35)");
+        Assert.AreEqual($"Couldn't record a clip ({Clip}): the disk is full.", recording.Notifications.Shown.Single().Text, "named as the action on the clip (G35)");
         Assert.IsEmpty(await recording.Stash.All());
         CollectionAssert.AreEqual(new[] { "hide", "restore Flyout" }, recording.WindowSteps);
     }
@@ -533,7 +533,7 @@ public sealed class RecordClipTests
         }
 
         var notification = recording.Notifications.Shown.Single();
-        Assert.AreEqual($"Add to the stash failed: {StashFolder.StoreFileName}, {HeldFileRetry.HeldReason}", notification.Text, "retried, then named unchanged (G35)");
+        Assert.AreEqual($"Couldn't add to the stash: {StashFolder.StoreFileName} is held open by another program. Try again in a moment.", notification.Text, "retried, then named unchanged (G35)");
         Assert.IsNull(notification.UndoLabel, "no capture notification (R9)");
         Assert.AreEqual(0, recording.Clipboard.Begun, "nothing to copy");
         Assert.IsEmpty(await recording.Stash.All());
@@ -561,7 +561,7 @@ public sealed class RecordClipTests
             await recorded;
 
             var notification = recording.Notifications.Shown.Single();
-            Assert.AreEqual($"Add to the stash failed: {Clip}.gif, {HeldFileRetry.HeldReason}", notification.Text, "the file step's failure, unchanged");
+            Assert.AreEqual($"Couldn't add to the stash: {Clip}.gif is held open by another program. Try again in a moment.", notification.Text, "the file step's failure, unchanged");
             Assert.IsNull(notification.UndoLabel, "no capture notification before the file is in place (R9)");
             Assert.AreEqual(0, recording.Clipboard.Begun, "no copy of an item not in place");
             Assert.IsEmpty(await recording.Stash.All(), "committed, but no query returns it");

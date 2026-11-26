@@ -192,7 +192,7 @@ public sealed class EditingFromMenusTests
         }
 
         Assert.IsFalse(reverted.Succeeded);
-        Assert.StartsWith("Revert to original failed: cat, ", reverted.Failure!.Sentence);
+        Assert.StartsWith("Couldn't revert to original: cat ", reverted.Failure!.Sentence);
         Assert.AreEqual(reverted.Failure.Sentence, listed.Notices.Shown.Single().Text, "named, and no notice says it was reverted (G35, R9)");
         Assert.IsNull(listed.Notices.Shown.Single().UndoLabel);
         var item = listed.Listing.Items.Single();

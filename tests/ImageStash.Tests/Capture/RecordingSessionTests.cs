@@ -165,7 +165,7 @@ public sealed class RecordingSessionTests
 
         var failed = await throwing.Session.Record(throwing.Store, ThirtySeconds, _ => throw new AssertFailedException("nothing to commit"));
 
-        Assert.AreEqual(new Failure("Record a clip", "the screen", "the window could not be made"), failed.Failure, "named, never thrown (G35)");
+        Assert.AreEqual(new Failure("Record a clip", "the screen", "the recording's window could not be made (the window could not be made)"), failed.Failure, "named, never thrown (G35)");
         CollectionAssert.AreEqual(new[] { "close" }, throwing.Frame.Calls.ToList(), "whatever was shown closed");
         Assert.IsEmpty(throwing.Changes);
         Assert.IsEmpty(throwing.Stash.WorkFiles());
@@ -204,7 +204,7 @@ public sealed class RecordingSessionTests
         throwing.Frame.PressRecord();
         var failed = await started.WaitAsync(TimeSpan.FromSeconds(10));
 
-        Assert.AreEqual(new Failure("Record a clip", "Recording 2026-10-20 17.30.00", "the window could not be made"), failed.Failure, "named, never thrown (G35)");
+        Assert.AreEqual(new Failure("Record a clip", "Recording 2026-10-20 17.30.00", "the recording's window could not be made (the window could not be made)"), failed.Failure, "named, never thrown (G35)");
         CollectionAssert.AreEqual(new[] { "show", "close" }, throwing.Frame.Calls.ToList(), "whatever was shown closed");
         Assert.IsEmpty(throwing.Stash.WorkFiles());
         Assert.IsFalse(throwing.Session.AnyInProgress, "the next recording can start");
@@ -299,7 +299,7 @@ public sealed class RecordingSessionTests
 
         Assert.IsTrue(cancelled.Succeeded && cancelled.Value is null, "the cancel stands");
         Assert.IsTrue(File.Exists(clip), "left for the next start's clearing of .work");
-        Assert.AreEqual(new Failure("Discard a copy", Path.GetFileName(clip), "another program is holding it open"), recording.Named.Single(), "the discard's failure named (G35)");
+        Assert.AreEqual(new Failure("Discard a copy", Path.GetFileName(clip), "it is held open by another program"), recording.Named.Single(), "the discard's failure named (G35)");
         CollectionAssert.AreEqual(new[] { "show", "record", "close" }, recording.Frame.Calls.ToList());
         await held;
     }

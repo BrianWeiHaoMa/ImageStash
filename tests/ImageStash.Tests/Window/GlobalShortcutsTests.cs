@@ -228,7 +228,7 @@ public sealed class GlobalShortcutsTests
         string[] texts = ["Ctrl+Alt+Shift+BrowserHome", "Ctrl+Alt+Shift+BrowserRefresh", "Ctrl+Alt+Shift+BrowserSearch", "Ctrl+Alt+Shift+BrowserFavorites"];
         var started = StartedShortcuts.Start(open: texts[0], screenshot: texts[1], record: texts[2], stash: texts[3], held: texts.Select(text => Shortcut.Parse(text).Value!).ToArray());
 
-        var byCombination = string.Join("\n", "Ctrl+Alt+Shift+BrowserFavorites is unavailable", "Register the record shortcut failed", "Register the screenshot shortcut failed", "Register the open shortcut failed");
+        var byCombination = string.Join("\n", "Ctrl+Alt+Shift+BrowserFavorites is unavailable", "Couldn't register the record shortcut", "Couldn't register the screenshot shortcut", "Couldn't register the open shortcut");
         Assert.IsGreaterThan(127, byCombination.Length, "the four by their shortest lines do not fit, and the platform would cut the oldest away");
         Assert.IsLessThanOrEqualTo(127, started.Tray.ToolTip!.Length);
         CollectionAssert.AreEqual(new[] { "Stash clipboard image unavailable", "Record a clip unavailable", "Take a screenshot unavailable", "Open ImageStash unavailable" }, started.Tray.ToolTip.Split('\n'),

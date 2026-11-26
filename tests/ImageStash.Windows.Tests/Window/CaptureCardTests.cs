@@ -465,7 +465,7 @@ public sealed class CaptureCardTests
 
         TrayDesktop.Run(() =>
         {
-            Assert.StartsWith("Rename failed: ", desk.Notifications.Shown[^1].Text, "the refusal named above the tray (G35)");
+            Assert.StartsWith("Couldn't rename: ", desk.Notifications.Shown[^1].Text, "the refusal named above the tray (G35)");
             Assert.AreEqual("stash waited", card.Field.Shown);
         });
         Assert.AreEqual("stash waited", desk.Items().Single().Name, "still listed as it was");
@@ -526,7 +526,7 @@ public sealed class CaptureCardTests
 
         TrayDesktop.Run(() =>
         {
-            Assert.AreEqual($"Rename failed: “stash refused”, {CaptureCard.NotActivated}", desk.Notifications.Shown[^1].Text, "named (G35)");
+            Assert.AreEqual($"Couldn't rename (“stash refused”): {CaptureCard.NotActivated}.", desk.Notifications.Shown[^1].Text, "named (G35)");
             Assert.IsFalse(card.Field.IsEditing, "nothing enters edit");
             Assert.AreEqual("stash refused", card.Field.Shown);
         });
@@ -675,7 +675,7 @@ public sealed class CaptureCardTests
             {
                 Assert.IsNull(card.Picture);
                 Assert.AreEqual(FileSize.Words(new FileInfo(locked.FilePath).Length), card.Size, "the size, which a program holding the file does not hide (G24)");
-                Assert.StartsWith($"Read the picture failed: {locked.FileName}, ", desk.Notifications.Shown[^1].Text, "named with the file and why (G35)");
+                Assert.StartsWith($"Couldn't read the picture: {locked.FileName} ", desk.Notifications.Shown[^1].Text, "named with the file and why (G35)");
             });
             TestMouse.Click(Centre(TrayDesktop.Get(() => NameButton(card))));
             await Eventually(() => TrayDesktop.Get(() => card.Field.IsEditing && NameBox(card).IsFocused));

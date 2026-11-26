@@ -70,7 +70,7 @@ public sealed class StashStore : IDisposable
         }
         catch (Exception e)
         {
-            opened = new Failure(StoreOpen.Action, folder, e.Message);
+            opened = new Failure(StoreOpen.Action, folder, Failure.PlatformSaid("it could not be opened", e.Message));
         }
 
         if (!opened.Succeeded)

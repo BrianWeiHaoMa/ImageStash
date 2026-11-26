@@ -372,7 +372,7 @@ public sealed class NameFieldTests
 
         TrayDesktop.Run(() =>
         {
-            Assert.AreEqual($"Rename failed: cat.png, {HeldFileRetry.HeldReason}", shown.Said(), "named once, by its file and the reason (G35)");
+            Assert.AreEqual("Couldn't rename: cat.png is held open by another program. Try again in a moment.", shown.Said(), "named once, by its file and the reason (G35)");
             Assert.IsTrue(shown.Preview.IsOpen);
             Assert.IsFalse(shown.Preview.EditingName, "the field closed, the window's keys free");
             Assert.AreEqual("dog", shown.NameField.Shown, "the store's answer: the name committed");
@@ -390,7 +390,7 @@ public sealed class NameFieldTests
 
         Assert.IsTrue(File.Exists(Path.Combine(root, "dog.png")), "once released, the same name again finishes the rename");
         Assert.IsFalse(File.Exists(cat.FilePath));
-        TrayDesktop.Run(() => Assert.AreEqual($"Rename failed: cat.png, {HeldFileRetry.HeldReason}", shown.Said(), "and says nothing more"));
+        TrayDesktop.Run(() => Assert.AreEqual("Couldn't rename: cat.png is held open by another program. Try again in a moment.", shown.Said(), "and says nothing more"));
     }
 
     [TestMethod]

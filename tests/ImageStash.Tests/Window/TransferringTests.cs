@@ -435,7 +435,7 @@ public sealed partial class TransferringTests
         var imported = await page.ConfirmImport();
 
         Assert.IsTrue(imported.Succeeded, imported.Failure?.Sentence);
-        Assert.IsTrue(listed.Notices.Shown.Any(notice => notice.Text.StartsWith(StashImport.Action)), "the refused step named (G35)");
+        Assert.IsTrue(listed.Notices.Shown.Any(notice => notice.Text.StartsWith("Couldn't import the stash")), "the refused step named (G35)");
         Assert.IsNull(listed.Settings.Current.ImportPending);
         Assert.AreEqual(StashState.Open, listed.Listing.State);
         await listed.Listing.ShowScope(Scope.All);
@@ -462,7 +462,7 @@ public sealed partial class TransferringTests
         var imported = await page.ConfirmImport();
 
         Assert.IsTrue(imported.Succeeded, imported.Failure?.Sentence);
-        Assert.IsTrue(listed.Notices.Shown.Any(notice => notice.Text.StartsWith(StashImport.FinishAction) && notice.Text.Contains(Path.GetFileName(orphan))),
+        Assert.IsTrue(listed.Notices.Shown.Any(notice => notice.Text.StartsWith("Couldn't finish importing the stash") && notice.Text.Contains(Path.GetFileName(orphan))),
             "the leftover's sweep named (G35): " + string.Join(" | ", listed.Notices.Shown.Select(notice => notice.Text)));
         Assert.AreEqual(StashState.Open, listed.Listing.State, "the import it finished opens, the leftover unrelated to it (G35)");
         await listed.Listing.ShowScope(Scope.All);

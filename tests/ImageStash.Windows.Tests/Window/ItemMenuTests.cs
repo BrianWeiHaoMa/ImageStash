@@ -78,7 +78,7 @@ public sealed class ItemMenuTests
             shown.ClickMenuEntry("Save a copy…");
         });
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Notices.Shown.Any(notice => notice.Text.Contains("menu copy.png"))));
-        TrayDesktop.Run(() => Assert.AreEqual("Save a copy failed: menu copy.png, it would be inside the stash folder, which holds only ImageStash's own files",
+        TrayDesktop.Run(() => Assert.AreEqual("Can't save a copy: menu copy.png would be inside the stash folder, which holds only ImageStash's own files.",
             shown.Notices.Shown.Single(notice => notice.Text.Contains("menu copy.png")).Text, "refused by the item menu's own rule (G9, G35)"));
         Assert.IsFalse(File.Exists(inside), "and nothing written there (G29)");
 

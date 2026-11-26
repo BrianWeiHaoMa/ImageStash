@@ -12,7 +12,7 @@ public static class HeldFileRetry
     /// <summary>How long a held file is retried (L2): long enough for a scanner or sync client to let go of a fresh file.</summary>
     public static readonly TimeSpan Duration = TimeSpan.FromSeconds(5);
 
-    public const string HeldReason = "another program is holding it open";
+    public const string HeldReason = "it is held open by another program";
 
     /// <summary>The reason a step on a file that is not there fails with.</summary>
     public const string MissingReason = "the file does not exist";
@@ -153,7 +153,7 @@ public static class HeldFileRetry
         SqliteCorrupt or SqliteNotADatabase => "it is damaged or is not an ImageStash store",
         SqliteCantOpen => "it cannot be opened",
         SqliteIoError => "Windows could not read or write it",
-        _ => e.Message,
+        _ => Failure.PlatformSaid("it could not be used", e.Message),
     };
 
     private const int SqliteBusy = 5;
@@ -182,7 +182,7 @@ public static class HeldFileRetry
         DirectoryNotFoundException => FolderMissingReason,
         UnauthorizedAccessException => "Windows refused access to it",
         IOException io when (io.HResult & 0xFFFF) is ErrorDiskFull or ErrorHandleDiskFull => "the disk is full",
-        _ => e.Message,
+        _ => Failure.PlatformSaid("Windows could not read or write it", e.Message),
     };
 
     private const int ErrorSharingViolation = 32;

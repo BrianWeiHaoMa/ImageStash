@@ -21,27 +21,70 @@ public sealed record Failure(string Action, string Subject, string Reason)
     public static Failure Refusal(string action, string subject, string reason) => new(action, subject, reason) { Refused = true };
 
     /// <summary>
-    /// The one sentence either kind is said in, the way the tooltip, the window's notices and Settings show it. A
-    /// refusal: "Can't paste: the clipboard holds no picture or file.", its subject standing for the reason's leading
-    /// "it" or "they" so the verb the reason chose agrees with it, else "Can't take a screenshot (the screen): your stash
-    /// is still opening."; one capital, one closing period. A failure: "{Action} failed: {Subject}, {Reason}".
+    /// The one sentence either kind is said in, the way the tooltip, the window's notices, notifications, an import's
+    /// notice, Settings and the stash's opening state show it: "Can't" for a refusal, "Couldn't" for a failure, then the
+    /// act, the subject and the reason, each once. The subject stands for the reason's leading "it" or "they", so the verb
+    /// the reason chose agrees with it ("Can't paste: the clipboard holds no picture or file.", "Couldn't rename: cat.png
+    /// is held open by another program."), or owns what its leading "its" names; a reason that is a clause of its own keeps
+    /// the subject beside the act ("Couldn't take a screenshot (the screen): there is not enough memory to hold it.").
+    /// One capital, one closing period. A failure for a held file ends by saying to try again (G35's retry has already
+    /// run), and no other gains a next step.
     /// </summary>
-    public string Sentence => Refused ? RefusalSentence() : $"{Action} failed: {Subject}, {Reason}";
-
-    private string RefusalSentence()
+    public string Sentence
     {
-        var act = Action.Length > 1 && char.IsUpper(Action[0]) && char.IsLower(Action[1])
-            ? char.ToLowerInvariant(Action[0]) + Action[1..]
-            : Action;
-        var reason = Reason.TrimEnd('.');
-        var said = Following("it ") is { } rest ? $"{act}: {Subject} {rest}"
-            : Following("they ") is { } several ? $"{act}: {Subject} {several}"
-            : Following("its ") is { } owned ? $"{act}: {Subject}'s {owned}"
-            : $"{act} ({Subject}): {reason}";
-        return $"Can't {said}.";
-
-        string? Following(string pronoun) => reason.StartsWith(pronoun, StringComparison.Ordinal) ? reason[pronoun.Length..] : null;
+        get
+        {
+            var reason = Reason.Trim().TrimEnd('.').TrimEnd();
+            var said = Subject.Length == 0 ? $"{Act}: {reason}"
+                : Following(reason, "it ") is { } rest ? $"{Act}: {Subject} {rest}"
+                : Following(reason, "they ") is { } several ? $"{Act}: {Subject} {several}"
+                : Following(reason, "its ") is { } owned ? $"{Act}: {Subject}'s {owned}"
+                : $"{Act} ({Subject}): {reason}";
+            var sentence = $"{Opening} {said}.";
+            // A held file named inside a composed reason ("its earlier rename cannot finish yet: …") counts too.
+            return !Refused && reason.Contains(Files.HeldFileRetry.HeldReason, StringComparison.Ordinal) ? $"{sentence} {TryAgain}" : sentence;
+        }
     }
+
+    /// <summary>What a held file's failure ends with: the file was retried for L2's time, so a moment later it is likely free.</summary>
+    public const string TryAgain = "Try again in a moment.";
+
+    /// <summary>
+    /// The tray tooltip's forms of this record, whole first, each shorter one still saying what failed or was refused
+    /// (G33): the sentence, then the act with its subject, then the act alone, <see cref="ToolTipFormCount"/> in all.
+    /// </summary>
+    public IReadOnlyList<string> ToolTipForms => [Sentence, Subject.Length == 0 ? $"{Opening} {Act}" : $"{Opening} {Act}: {Subject}", $"{Opening} {Act}"];
+
+    /// <summary>
+    /// A reason carrying the platform's own words (an exception's message, Windows' text for an error): a plain
+    /// <paramref name="lead"/> first, so the sentence says what went wrong before any of Windows' or .NET's words, which
+    /// follow in brackets without their closing period.
+    /// </summary>
+    public static string PlatformSaid(string lead, string platformWords) => $"{lead} ({platformWords.Trim().TrimEnd('.').TrimEnd()})";
+
+    public const int ToolTipFormCount = 3;
+
+    /// <summary>
+    /// Several records of one kind at their shortest, in one line when the tooltip cannot hold a line for each: one
+    /// opening, then each act once, newest first ("Couldn't open the stash, read settings or save settings").
+    /// </summary>
+    public static string ToolTipActs(IReadOnlyList<Failure> oneKindNewestFirst)
+    {
+        var acts = oneKindNewestFirst.Select(failure => failure.Act).Distinct().ToList();
+        var listed = acts.Count == 1 ? acts[0] : $"{string.Join(", ", acts[..^1])} or {acts[^1]}";
+        return $"{oneKindNewestFirst[0].Opening} {listed}";
+    }
+
+    private string Opening => Refused ? "Can't" : "Couldn't";
+
+    // The act loses its first capital only: a name the product writes with capitals inside it keeps them ("undo Revert
+    // to original", "add to Favorites").
+    private string Act => Action.Length > 1 && char.IsUpper(Action[0]) && char.IsLower(Action[1])
+        ? char.ToLowerInvariant(Action[0]) + Action[1..]
+        : Action;
+
+    private static string? Following(string reason, string pronoun) =>
+        reason.StartsWith(pronoun, StringComparison.Ordinal) ? reason[pronoun.Length..] : null;
 }
 
 /// <summary>

@@ -328,7 +328,7 @@ public sealed class TagRenameTests
             await listed.WaitForOrganising(() => Press(box, Key.Enter));
             var notice = listed.Notices.Shown.Single();
             // Words that are no tag are refused; a refused write failed (G35).
-            StringAssert.Contains(notice.Text, refuseWrite ? "Rename tag failed: #shared" : "Can't rename tag (#shared)");
+            StringAssert.Contains(notice.Text, refuseWrite ? "Couldn't rename tag: #shared" : "Can't rename tag (#shared)");
             StringAssert.Contains(notice.Text, refuseWrite ? "write refused" : "enter one tag word");
             Assert.IsFalse(listed.Notices.OffersUndo(notice));
             Assert.AreEqual(2, listed.Listing.Tags.Single(tag => tag.Tag == "shared").Items);

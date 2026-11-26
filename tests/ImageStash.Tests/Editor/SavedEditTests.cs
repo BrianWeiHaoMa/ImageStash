@@ -78,7 +78,7 @@ public sealed class SavedEditTests
 
         var saved = await SavedEdit.Save(store, cat, edit, EditedItems.Arrow, partial, TestStash.ShortRetry);
 
-        Assert.AreEqual("Save the picture failed: cat, the disk refused the write", saved.Failure?.Sentence);
+        Assert.AreEqual("Couldn't save the picture (cat): the disk refused the write.", saved.Failure?.Sentence);
         Assert.IsEmpty(stash.WorkFiles());
         TestStash.AssertSameItem(cat, await EditedItems.Listed(store, cat.Id));
     }

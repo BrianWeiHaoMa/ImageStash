@@ -209,14 +209,6 @@ public sealed class TrayMenu
         }
     }
 
-    // A failure's line, then its shorter forms, each saying what failed.
-    private static readonly Func<Failure, string>[] Lines =
-    [
-        f => f.Sentence,
-        f => $"{f.Action} failed: {f.Subject}",
-        f => $"{f.Action} failed",
-    ];
-
     private enum ShortcutTipForm { Whole, CompactWhy, ActAndCombination, Shortest }
 
     private static readonly ShortcutTipForm[] RunningForms = [ShortcutTipForm.Whole, ShortcutTipForm.ActAndCombination, ShortcutTipForm.Shortest];
@@ -252,16 +244,23 @@ public sealed class TrayMenu
         var kept = Enumerable.Range(0, named.Count).ToList();
         var shortened = new int[named.Count];
 
-        string Text(bool shortest = false)
+        // While running, the shortcut lines share a label only where otherwise another failure would leave or nothing fits.
+        string Text(bool shortest = false, bool groupShortcuts = false)
         {
             var lines = kept.Select(i => NamedLine(i, shortest ? null : shortened[i], shortcutForms)).ToArray();
             var text = string.Join('\n', lines.Select(line => line.Text));
-            return paused && text.Length > budget ? GroupShortestShortcutLines(lines, text) : text;
+            if (text.Length > budget)
+            {
+                lines = GroupShortestFailureLines(lines);
+                text = string.Join('\n', lines.Select(line => line.Text));
+            }
+
+            return (paused || groupShortcuts) && text.Length > budget ? GroupShortestShortcutLines(lines, text) : text;
         }
 
         // Past every shortening the platform would cut the text's end, an unavailable shortcut's line with it: the
         // oldest other failures leave instead, so the tooltip still says which shortcut is unavailable (G33).
-        for (var i = named.Count - 1; i >= 0 && Text(shortest: true).Length > budget; i--)
+        for (var i = named.Count - 1; i >= 0 && Text(shortest: true, groupShortcuts: true).Length > budget; i--)
         {
             if (named[i].Unavailable is null)
             {
@@ -270,7 +269,7 @@ public sealed class TrayMenu
         }
 
         var oldestFirst = Enumerable.Reverse(kept).ToList();
-        for (var step = 1; step < Lines.Length; step++)
+        for (var step = 1; step < Failure.ToolTipFormCount; step++)
         {
             foreach (var i in oldestFirst.Where(i => named[i].Unavailable is null).TakeWhile(_ => Text().Length > budget))
             {
@@ -313,15 +312,16 @@ public sealed class TrayMenu
             shortened[shortcutLines[j]] = best?[j] ?? shortcutForms.Length - 1;
         }
 
-        return Text();
+        return Text(groupShortcuts: best is null);
     }
 
-    private (string Text, ShortcutProblem? Shortest) NamedLine(int index, int? formIndex, ShortcutTipForm[] shortcutForms)
+    private (string Text, ShortcutProblem? Shortest, Failure? ShortestFailure) NamedLine(int index, int? formIndex, ShortcutTipForm[] shortcutForms)
     {
         var (failure, problem) = named[index];
         if (problem is null)
         {
-            return (Lines[formIndex ?? (Lines.Length - 1)](failure!), null);
+            var failureForm = formIndex ?? (Failure.ToolTipFormCount - 1);
+            return (failure!.ToolTipForms[failureForm], null, failureForm == Failure.ToolTipFormCount - 1 ? failure : null);
         }
 
         var form = shortcutForms[formIndex ?? (shortcutForms.Length - 1)];
@@ -333,7 +333,7 @@ public sealed class TrayMenu
                 ShortcutTipForm.CompactWhy => ShortcutWords.ToolTipLineWithCompactWhy(problem),
                 _ => ShortcutWords.ToolTipLineWithoutWhy(problem),
             };
-            return (text, null);
+            return (text, null, null);
         }
 
         var useCompactForms = shortcutForms.Contains(ShortcutTipForm.CompactWhy);
@@ -347,10 +347,37 @@ public sealed class TrayMenu
             shortest = withWhy.Length < shortest.Length ? withWhy : shortest;
         }
 
-        return (shortest, problem);
+        return (shortest, problem, null);
     }
 
-    private static string GroupShortestShortcutLines((string Text, ShortcutProblem? Shortest)[] lines, string text)
+    /// <summary>
+    /// Failures cut to their act, when even those lines do not fit: those of one kind share one line where the newest of
+    /// them stood (<see cref="Failure.ToolTipActs"/>), so each act is still named rather than the oldest leaving (G33, G35).
+    /// </summary>
+    private static (string Text, ShortcutProblem? Shortest, Failure? ShortestFailure)[] GroupShortestFailureLines(
+        (string Text, ShortcutProblem? Shortest, Failure? ShortestFailure)[] lines)
+    {
+        var grouped = lines.ToList();
+        foreach (var kind in lines.Where(line => line.ShortestFailure is not null).GroupBy(line => line.ShortestFailure!.Refused))
+        {
+            var members = kind.ToList();
+            if (members.Count < 2)
+            {
+                continue;
+            }
+
+            var at = grouped.IndexOf(members[0]);
+            grouped[at] = (Failure.ToolTipActs(members.Select(line => line.ShortestFailure!).ToList()), null, null);
+            foreach (var member in members.Skip(1))
+            {
+                grouped.Remove(member);
+            }
+        }
+
+        return [.. grouped];
+    }
+
+    private static string GroupShortestShortcutLines((string Text, ShortcutProblem? Shortest, Failure? ShortestFailure)[] lines, string text)
     {
         // A shared label frees room for all four shortcuts beside Pause, with room for other failures when their names are short.
         var shortest = lines.Where(line => line.Shortest is not null).ToArray();

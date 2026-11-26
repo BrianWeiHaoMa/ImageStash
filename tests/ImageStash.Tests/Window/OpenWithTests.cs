@@ -457,8 +457,8 @@ public sealed class OpenWithTests
         listed.Dialogs.OpenWithAnswer = () => throw new InvalidOperationException("no shell here");
         var thrown = await Chosen(listed, cat, up.Add);
 
-        Assert.AreEqual("Open with… failed: cat.png, the shell refused", failed.Failure?.Sentence);
-        Assert.AreEqual("Open with… failed: cat.png, no shell here", thrown.Failure?.Sentence, "an exception is a failure to name (G35)");
+        Assert.AreEqual("Couldn't open with another app (cat.png): the shell refused.", failed.Failure?.Sentence);
+        Assert.AreEqual("Couldn't open with another app (cat.png): Windows could not show the Open with dialog (no shell here).", thrown.Failure?.Sentence, "an exception is a failure to name (G35)");
         CollectionAssert.AreEqual(new[] { failed.Failure!.Sentence }, failedSaid, "named in the window");
         CollectionAssert.AreEqual(new[] { thrown.Failure!.Sentence }, listed.Notices.Shown.Select(notice => notice.Text).ToList(),
             "named in the window, in the place of the earlier Open with…'s failure (G16)");
@@ -711,7 +711,7 @@ public sealed class OpenWithTests
         await OpenedWith.DeleteFolderWhenFree(folder);
         await Handing.Eventually(() => Said(listed).Count == 1 && clock.NextDue == OpenWith.AskedEvery);
 
-        StringAssert.StartsWith(Said(listed).Single(), "Watch the Open with… copy failed: cat.png, ", "named once (G35)");
+        StringAssert.StartsWith(Said(listed).Single(), "Couldn't watch the Open with… copy: cat.png ", "named once (G35)");
         CollectionAssert.AreEqual(new[] { cat.Id }, listed.OpenWith.Watching.ToList(), "its session still recorded, so still watched");
         clock.Advance(OpenWith.AskedEvery);
         Assert.AreEqual(2 * OpenWith.AskedEvery, clock.NextDue, "nothing there at the second: asked again a second later");
@@ -742,7 +742,7 @@ public sealed class OpenWithTests
         var clock = restarted.OpenWithClock;
         await Handing.Eventually(() => Said(restarted).Count == 1 && clock.NextDue == OpenWith.AskedEvery);
 
-        StringAssert.StartsWith(Said(restarted).Single(), "Watch the Open with… copy failed: cat.png, ", "named once, nothing crashed (G35)");
+        StringAssert.StartsWith(Said(restarted).Single(), "Couldn't watch the Open with… copy: cat.png ", "named once, nothing crashed (G35)");
         CollectionAssert.AreEqual(new[] { cat.Id }, restarted.OpenWith.Watching.ToList());
 
         var rewrite = MediaFixtures.DistinctPng(34, 6, 6);

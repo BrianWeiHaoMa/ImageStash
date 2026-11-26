@@ -26,7 +26,7 @@ namespace ImageStash.Window;
 public sealed class OpenWith : IDisposable
 {
     /// <summary>What a failure of the dialog names.</summary>
-    public const string Action = "Open with…";
+    public const string Action = "Open with another app";
 
     private const string WatchAction = "Watch the Open with… copy";
 
@@ -146,7 +146,7 @@ public sealed class OpenWith : IDisposable
         catch (Exception e)
         {
             // The platform's dialog failing is a failure to name, not a crash (G35).
-            shown = new Failure(Action, Path.GetFileName(copy), e.Message);
+            shown = new Failure(Action, Path.GetFileName(copy), Failure.PlatformSaid(OpenWithDialog.NotShown, e.Message));
         }
         finally
         {
@@ -239,7 +239,7 @@ public sealed class OpenWith : IDisposable
             watcher = null;
             if (named)
             {
-                Name(session, new Failure(WatchAction, Path.GetFileName(session.CopyPath), e.Message));
+                Name(session, new Failure(WatchAction, Path.GetFileName(session.CopyPath), Failure.PlatformSaid("it cannot be watched for changes", e.Message)));
                 AskEverySecond(session);
             }
         }

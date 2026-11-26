@@ -86,8 +86,8 @@ public sealed class WindowsTargetTests
         using var elevated = new WindowsTarget(process => process == other.ProcessId ? 0x3000 : own);
         using var unreadable = new WindowsTarget(process => process == other.ProcessId ? null : own);
 
-        Assert.AreEqual($"Paste failed: {other.AppName}, {PasteTargetReasons.HigherRights}", elevated.Confirm(target).Failure?.Sentence, "an elevated app (E6, S6)");
-        Assert.AreEqual($"Paste failed: {other.AppName}, {PasteTargetReasons.RightsUnreadable}", unreadable.Confirm(target).Failure?.Sentence, "a level it cannot read counts as above (S6)");
+        Assert.AreEqual($"Couldn't paste: {other.AppName} runs with higher rights than ImageStash.", elevated.Confirm(target).Failure?.Sentence, "an elevated app (E6, S6)");
+        Assert.AreEqual($"Couldn't paste: {other.AppName}'s rights could not be read.", unreadable.Confirm(target).Failure?.Sentence, "a level it cannot read counts as above (S6)");
     }
 
     [TestMethod]
@@ -141,7 +141,7 @@ public sealed class WindowsTargetTests
             held = await seam.ActivateAndPaste(target, TimeSpan.FromMilliseconds(500));
         }
 
-        Assert.AreEqual($"Paste failed: {other.AppName}, {PasteTargetReasons.KeyHeld}", held.Failure?.Sentence);
+        Assert.AreEqual($"Couldn't paste ({other.AppName}): {PasteTargetReasons.KeyHeld}.", held.Failure?.Sentence);
         Assert.IsEmpty(SentKeys(other, before), "nothing was sent while Alt was held (R6)");
 
         bystander.ClickTitleBar();
@@ -181,8 +181,8 @@ public sealed class WindowsTargetTests
         var pasted = await seam.ActivateAndPaste(target, Short);
         var took = clock.ElapsedMilliseconds;
 
-        Assert.AreEqual($"Paste failed: {other.AppName}, the window is gone", confirmed.Failure?.Sentence);
-        Assert.AreEqual($"Paste failed: {other.AppName}, {PasteTargetReasons.NotBroughtToFront}", pasted.Failure?.Sentence);
+        Assert.AreEqual($"Couldn't paste ({other.AppName}): the window is gone.", confirmed.Failure?.Sentence);
+        Assert.AreEqual($"Couldn't paste: {other.AppName} could not be brought to the front.", pasted.Failure?.Sentence);
         Assert.IsGreaterThanOrEqualTo(300, took, "it waited the bound");
         Assert.IsLessThan(1300, took, "and no longer than the bound and a margin");
         Assert.IsEmpty(own.Keys(), "no keystroke went to the window in front (N3)");
@@ -441,7 +441,7 @@ public sealed class WindowsTargetTests
         Thread.Sleep(500);
 
         Assert.IsTrue(inTime, "the paste answered within the bound and a margin, not once the busy thread answered");
-        Assert.AreEqual($"Paste failed: {busy.AppName}, {PasteTargetReasons.NotBroughtToFront}", pasted.Failure?.Sentence);
+        Assert.AreEqual($"Couldn't paste: {busy.AppName} could not be brought to the front.", pasted.Failure?.Sentence);
         Assert.IsEmpty(SentKeys(busy, before), "no keystroke reached the target once its thread answered again (N3)");
 
         own.ClickToFront();

@@ -152,7 +152,7 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
         {
             // A link alone, or no file, is refused (N2); files that could not be read went wrong (G35).
             refused = contents.OnlyLink ? Failure.Refusal(Action, subject, "links are not taken and nothing is downloaded; drag the picture itself in")
-                : contents.FilesUnavailable ? new Failure(Action, subject, "its files could not be read from what was dragged")
+                : contents.FilesUnavailable ? new Failure(Action, subject, "ImageStash could not read the files it carried")
                 : Failure.Refusal(Action, subject, "it holds no file");
         }
 
@@ -190,7 +190,7 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
         catch (Exception e)
         {
             // The platform's dialog failing is a failure to name, not a crash (G35).
-            notices.Raise(new Failure("Import files", "the file picker", e.Message));
+            notices.Raise(new Failure("Import files", "the file picker", Failure.PlatformSaid("it did not open", e.Message)));
             return [];
         }
         finally
@@ -333,12 +333,12 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
 
     /// <summary>
     /// A file's failure as its sentence names it, after the file's own name when that sentence names something else, as
-    /// the store a refused write left behind ("still.png: Add to the stash failed: stash.db, …"): every file not added is
-    /// named (G12).
+    /// the store a refused write left behind ("still.png: Couldn't add to the stash: stash.db is …"): every file not
+    /// added is named (G12).
     /// </summary>
     private static string FailureWords(ImportedFile file)
     {
-        var sentence = file.Failure!.Sentence.TrimEnd('.') + ".";
+        var sentence = file.Failure!.Sentence;
         var named = file.Failure.Subject == file.Name ? sentence : $"{file.Name}: {sentence}";
         return named + (file.Result == ImportResultKind.Failed ? GivenTagWords(file, "the picture") : "");
     }

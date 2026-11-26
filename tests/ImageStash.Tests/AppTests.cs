@@ -192,7 +192,7 @@ public sealed class AppTests
         var store = StartOpening.NameOpening(opening, trayMenu);
 
         Assert.IsNull(store);
-        Assert.StartsWith($"Open the stash failed: {notAFolder}, ", tray.ToolTip);
+        Assert.StartsWith($"Couldn't open the stash ({notAFolder}): ", tray.ToolTip);
         Assert.AreEqual(TrayMenu.QuitHeader, tray.Entries[^1].Header);
     }
 

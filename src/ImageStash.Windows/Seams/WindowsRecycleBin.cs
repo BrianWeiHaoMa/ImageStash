@@ -217,7 +217,7 @@ public sealed class WindowsRecycleBin : IRecycleBin
             return "the file does not exist";
         }
 
-        return Marshal.GetExceptionForHR(hresult)?.Message ?? $"Windows reported error 0x{hresult:X8}";
+        return Marshal.GetExceptionForHR(hresult)?.Message is { } said ? Failure.PlatformSaid("Windows refused it", said) : $"Windows reported error 0x{hresult:X8}";
     }
 
     private static bool IsWin32(int hresult) => (hresult & 0xFFFF0000) == 0x80070000;

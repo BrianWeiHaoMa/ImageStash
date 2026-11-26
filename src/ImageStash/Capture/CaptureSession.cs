@@ -361,7 +361,7 @@ public sealed class CaptureSession(IScreen screen, IRegionSelection selection, I
         catch (Exception e)
         {
             // A window the platform will not make is this recording's failure, never one that ends ImageStash (G35).
-            return new Failure(Recorder.Action, subject, e is OutOfMemoryException ? NoMemory : e.Message);
+            return new Failure(Recorder.Action, subject, e is OutOfMemoryException ? NoMemory : Failure.PlatformSaid("the recording's window could not be made", e.Message));
         }
     }
 

@@ -131,7 +131,7 @@ public sealed class WindowsClipboardReadTests
 
         var read = await Read(ShortRetry);
 
-        Assert.AreEqual("Paste failed: the clipboard, its picture could not be read: it is too short to hold a bitmap header", read.Failure?.Sentence);
+        Assert.AreEqual("Couldn't paste: the clipboard's picture could not be read: it is too short to hold a bitmap header.", read.Failure?.Sentence);
     }
 
     [TestMethod]
@@ -175,7 +175,7 @@ public sealed class WindowsClipboardReadTests
             holder.Release();
         }
 
-        Assert.AreEqual("Paste failed: the clipboard, another program is holding the clipboard open", read.Failure?.Sentence);
+        Assert.AreEqual("Couldn't paste (the clipboard): another program is holding the clipboard open.", read.Failure?.Sentence);
         Assert.IsGreaterThanOrEqualTo(280, clock.ElapsedMilliseconds, "retried before it was named");
         Assert.IsLessThan(1500, clock.ElapsedMilliseconds, "named once the retry ended");
         Assert.IsTrue(Succeeded(await Read(ShortRetry)).OnlyLink, "once it lets go, the read works");
@@ -280,7 +280,7 @@ public sealed class WindowsClipboardReadTests
     {
         TestClipboard.Put((TestClipboard.CfDib, new byte[12]));
         Assert.AreEqual(
-            "Stash clipboard image failed: the clipboard, its picture could not be read: it is too short to hold a bitmap header",
+            "Couldn't stash clipboard image: the clipboard's picture could not be read: it is too short to hold a bitmap header.",
             (await ReadImage(ShortRetry)).Failure?.Sentence);
 
         TestClipboard.Put((TestClipboard.Png, [1, 2, 3]));
@@ -294,7 +294,7 @@ public sealed class WindowsClipboardReadTests
             holder.Release();
         }
 
-        Assert.AreEqual("Stash clipboard image failed: the clipboard, another program is holding the clipboard open", read.Failure?.Sentence);
+        Assert.AreEqual("Couldn't stash clipboard image (the clipboard): another program is holding the clipboard open.", read.Failure?.Sentence);
         Assert.IsGreaterThanOrEqualTo(280, clock.ElapsedMilliseconds, "retried before it was named");
         CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, SucceededImage(await ReadImage(ShortRetry))!.Png, "once it lets go, the read works");
     }

@@ -181,7 +181,7 @@ function PathShown {
 function MoveLine {
     try {
         @(Elements (PageElement) '' $text | ForEach-Object { $_.Current.Name } |
-            Where-Object { $_ -match "^(Waiting for |Moving your stash|Moved your stash|Move the stash failed|Can't move the stash|Finish moving the stash failed)" }) -join ' | '
+            Where-Object { $_ -match "^(Waiting for |Moving your stash|Moved your stash|Couldn't move the stash|Can't move the stash|Couldn't finish moving the stash)" }) -join ' | '
     }
     catch { "(unread: $($_.Exception.Message))" }
 }
@@ -313,7 +313,7 @@ function WatchMove([string] $from, [string] $to, [int] $seconds, [switch] $Summo
         $oldThere = Test-Path -LiteralPath $from
         if ($line -and ($line -notlike '(unread*') -and ($lines.Count -eq 0 -or $lines[$lines.Count - 1] -ne $line)) { $lines.Add($line) }
         if (($path -eq $to) -and $oldThere) { $result.NewShownEarly = $true }
-        if (($line -like 'Moved your stash to *') -or ($line -like 'Move the stash failed*') -or ($line -like 'Can''t move the stash*') -or ($line -like 'Finish moving the stash failed*')) {
+        if (($line -like 'Moved your stash to *') -or ($line -like 'Couldn''t move the stash*') -or ($line -like 'Can''t move the stash*') -or ($line -like 'Couldn''t finish moving the stash*')) {
             $result.End = $line
             $result.OldGoneAtEnd = -not $oldThere
             $result.PathAtEnd = PathShown

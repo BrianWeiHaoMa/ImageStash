@@ -46,10 +46,10 @@ public sealed class HandoffPasteTests
     }
 
     [TestMethod]
-    [DataRow(PasteTargetReasons.Gone)]
-    [DataRow(PasteTargetReasons.HigherRights)]
-    [DataRow(PasteTargetReasons.RightsUnreadable)]
-    public async Task ATargetThatCannotTakeThePasteGetsTheCopyTheHideAndThenTheNotification(string reason)
+    [DataRow(PasteTargetReasons.Gone, $"Couldn't paste (Relay): {PasteTargetReasons.Gone}.")]
+    [DataRow(PasteTargetReasons.HigherRights, "Couldn't paste: Relay runs with higher rights than ImageStash.")]
+    [DataRow(PasteTargetReasons.RightsUnreadable, "Couldn't paste: Relay's rights could not be read.")]
+    public async Task ATargetThatCannotTakeThePasteGetsTheCopyTheHideAndThenTheNotification(string reason, string expectedSentence)
     {
         using var handing = await Handing.Open("animated.gif");
         handing.Clipboard.AtWrite = () =>
@@ -66,7 +66,7 @@ public sealed class HandoffPasteTests
             return true;
         }));
 
-        Assert.AreEqual($"Paste failed: Relay, {reason}", pasted.Failure?.Sentence, "named in the outcome (G35)");
+        Assert.AreEqual(expectedSentence, pasted.Failure?.Sentence, "named in the outcome (G35)");
         CollectionAssert.AreEqual(new[] { "write", "confirm Relay", "uses 1", "hide with 0 notifications" }, handing.Steps,
             "the copy and the use first, then the hide, before the notification, so the app is in front for its Ctrl+V, and no activation or keystroke (G8, G2, N3)");
         Assert.AreEqual("Copied · press Ctrl+V", handing.Notifications.Shown.Single().Text, "G8's words");
@@ -83,7 +83,7 @@ public sealed class HandoffPasteTests
 
         var pasted = await handing.Paste(handing.Items, RecordingTarget.Relay);
 
-        Assert.AreEqual($"Paste failed: Relay, {PasteTargetReasons.NotBroughtToFront}", pasted.Failure?.Sentence);
+        Assert.AreEqual("Couldn't paste: Relay could not be brought to the front.", pasted.Failure?.Sentence);
         CollectionAssert.AreEqual(new[] { "confirm Relay", "hide", "activate and paste Relay", "pasted Relay" }, handing.Steps);
         Assert.AreEqual(Handoff.CopiedNotification, handing.Notifications.Shown.Single().Text);
         Assert.IsEmpty(handing.Notices.Shown);
@@ -99,7 +99,7 @@ public sealed class HandoffPasteTests
 
         var pasted = await handing.Paste(handing.Items, RecordingTarget.Relay);
 
-        Assert.AreEqual($"Copy failed: transparent, {HeldClipboard.Reason}", pasted.Failure?.Sentence);
+        Assert.AreEqual($"Couldn't copy (transparent): {HeldClipboard.Reason}.", pasted.Failure?.Sentence);
         Assert.AreEqual(pasted.Failure!.Sentence, handing.Notices.Shown.Single().Text, "named as a copy's failure is (G8, G35)");
         Assert.IsEmpty(handing.Steps, "no confirmation, no hide, no keystroke");
         Assert.IsEmpty(handing.Notifications.Shown);
@@ -413,7 +413,7 @@ public sealed class HandoffPasteTests
         clock.Advance(Handoff.PasteBound);
         var pasted = await pasting;
 
-        Assert.AreEqual($"Paste failed: Relay, {Handoff.EnterHeld}", pasted.Failure?.Sentence);
+        Assert.AreEqual($"Couldn't paste (Relay): {Handoff.EnterHeld}.", pasted.Failure?.Sentence);
         Assert.IsEmpty(handing.Steps, "no hide, no activation, no keystroke: the target receives nothing of the press (N3, R6)");
         Assert.IsEmpty(handing.Target.Pasted);
         Assert.AreEqual(Handoff.CopiedNotification, handing.Notifications.Shown.Single().Text, "it says where the picture is (G8)");

@@ -158,8 +158,8 @@ public sealed class HandoffTests
         handing.Clipboard.FailNext = RecordingClipboard.Held;
         var several = await handing.Copy(handing.Items);
 
-        Assert.AreEqual("Copy failed: transparent, another program is holding the clipboard open", one.Failure?.Sentence);
-        Assert.AreEqual("Copy failed: 3 items, another program is holding the clipboard open", several.Failure?.Sentence);
+        Assert.AreEqual("Couldn't copy (transparent): another program is holding the clipboard open.", one.Failure?.Sentence);
+        Assert.AreEqual("Couldn't copy (3 items): another program is holding the clipboard open.", several.Failure?.Sentence);
         CollectionAssert.AreEqual(new[] { one.Failure!.Sentence, several.Failure!.Sentence }, handing.Notices.Shown.Select(notice => notice.Text).ToList());
         Assert.IsEmpty(handing.Clipboard.Written);
         Assert.IsEmpty((await handing.Stash.Store!.Recent()).Value!, "a write that failed records nothing (G10)");
@@ -181,7 +181,7 @@ public sealed class HandoffTests
 
         var copied = await handing.Copy([unnamed]);
 
-        Assert.AreEqual($"Copy failed: {ItemFileNames.Unnamed}.png, {HeldClipboard.Reason}", copied.Failure?.Sentence);
+        Assert.AreEqual($"Couldn't copy ({ItemFileNames.Unnamed}.png): {HeldClipboard.Reason}.", copied.Failure?.Sentence);
     }
 
     [TestMethod]
@@ -196,7 +196,7 @@ public sealed class HandoffTests
 
         Assert.IsTrue(copied.Succeeded, "the write completed, so the copy is done (G10)");
         Assert.HasCount(1, handing.Clipboard.Written, "the clipboard keeps what was written");
-        Assert.StartsWith("Record a use failed: ", handing.Notices.Shown.Single().Text);
+        Assert.StartsWith("Couldn't record a use: ", handing.Notices.Shown.Single().Text);
         Assert.IsEmpty(handing.Uses());
     }
 
@@ -237,7 +237,7 @@ public sealed class HandoffTests
         var copied = await copying;
 
         Assert.IsTrue(copied.Succeeded, "the write completed, so the copy is done (G10)");
-        Assert.AreEqual("Record a use failed: animated, it is no longer in the stash", handing.Notices.Shown.Single().Text);
+        Assert.AreEqual("Couldn't record a use: animated is no longer in the stash.", handing.Notices.Shown.Single().Text);
         Assert.IsEmpty(handing.Uses());
     }
 
@@ -271,7 +271,7 @@ public sealed class HandoffTests
             await handing.Copy([survivor, gone]);
         }
 
-        Assert.AreEqual("Record a use failed: photo, it is no longer in the stash", handing.Notices.Shown.Single().Text);
+        Assert.AreEqual("Couldn't record a use: photo is no longer in the stash.", handing.Notices.Shown.Single().Text);
         CollectionAssert.AreEqual(new[] { older.Id, survivor.Id }, handing.Listing.Items.Select(item => item.Id).ToList(), "the newly used item joins the end");
         Assert.AreEqual(survivor.Id, (await handing.Stash.Store!.Recent()).Value![0].Id, "its use is already the latest in the stash");
     }
@@ -284,7 +284,7 @@ public sealed class HandoffTests
 
         var copied = await handing.Copy(handing.Items);
 
-        Assert.AreEqual("Read the picture failed: transparent, the file does not exist", copied.Failure?.Sentence);
+        Assert.AreEqual("Couldn't read the picture (transparent): the file does not exist.", copied.Failure?.Sentence);
         Assert.AreEqual(copied.Failure!.Sentence, handing.Notices.Shown.Single().Text);
         Assert.AreEqual(0, handing.Clipboard.Begun, "the clipboard is not touched");
         Assert.IsEmpty(handing.Uses());
@@ -398,7 +398,7 @@ public sealed class HandoffTests
 
         Assert.IsTrue(copied.Succeeded, "the copy stands (G10)");
         Assert.AreEqual("✓ Copied “animated”", footer.Confirmation, "so it is confirmed");
-        Assert.StartsWith("Record a use failed: ", handing.Notices.Shown.Single().Text, "and the use it could not record is named (G10, G35)");
+        Assert.StartsWith("Couldn't record a use: ", handing.Notices.Shown.Single().Text, "and the use it could not record is named (G10, G35)");
     }
 
     [TestMethod]

@@ -247,7 +247,7 @@ public sealed class StashClipboardImageTests
             new[]
             {
                 "Can't stash clipboard image: the clipboard holds no image.",
-                "Stash clipboard image failed: the clipboard, another program is holding the clipboard open",
+                "Couldn't stash clipboard image (the clipboard): another program is holding the clipboard open.",
             },
             stashing.Notifications.Shown.Select(notice => notice.Text).ToList());
         Assert.IsTrue(stashing.Notifications.Shown.All(notice => notice.UndoLabel is null));
@@ -307,7 +307,7 @@ public sealed class StashClipboardImageTests
         await stashing.StashClipboardImage.Stash();
 
         var notification = stashing.Notifications.Shown.Single();
-        Assert.StartsWith("Add to the stash failed: ", notification.Text, "the store's failure shown unchanged (G35)");
+        Assert.StartsWith("Couldn't add to the stash: ", notification.Text, "the store's failure shown unchanged (G35)");
         Assert.IsNull(notification.UndoLabel, "a plain failure, no capture notification (R9)");
         Assert.IsEmpty(await stashing.Stash.All());
         Assert.IsEmpty(stashing.Stash.WorkFiles(), "the staged copy discarded");
@@ -326,7 +326,7 @@ public sealed class StashClipboardImageTests
         }
 
         var notification = stashing.Notifications.Shown.Single();
-        Assert.AreEqual($"Add to the stash failed: {StashFolder.StoreFileName}, {HeldFileRetry.HeldReason}", notification.Text, "retried, then named with the store and why, unchanged (G35)");
+        Assert.AreEqual($"Couldn't add to the stash: {StashFolder.StoreFileName} is held open by another program. Try again in a moment.", notification.Text, "retried, then named with the store and why, unchanged (G35)");
         Assert.IsNull(notification.UndoLabel);
         Assert.IsEmpty(await stashing.Stash.All());
         Assert.IsEmpty(stashing.Stash.WorkFiles(), "the staged copy discarded");
@@ -353,7 +353,7 @@ public sealed class StashClipboardImageTests
             await stashed;
 
             var notification = stashing.Notifications.Shown.Single();
-            Assert.AreEqual($"Add to the stash failed: Screenshot 2026-10-16 17.30.00.png, {HeldFileRetry.HeldReason}", notification.Text, "the file step's failure, unchanged");
+            Assert.AreEqual("Couldn't add to the stash: Screenshot 2026-10-16 17.30.00.png is held open by another program. Try again in a moment.", notification.Text, "the file step's failure, unchanged");
             Assert.IsNull(notification.UndoLabel, "no capture notification before the file is in place (R9)");
             Assert.IsEmpty(await stashing.Stash.All(), "the row is committed but no query returns it");
             Assert.HasCount(1, stashing.Stash.WorkFiles(), "its copy is left for the next start, which the pending step names");
@@ -379,7 +379,7 @@ public sealed class StashClipboardImageTests
         await stashing.StashClipboardImage.Stash();
 
         var notification = stashing.Notifications.Shown.Single();
-        Assert.StartsWith("Add to the stash failed: ", notification.Text);
+        Assert.StartsWith("Couldn't add to the stash: ", notification.Text);
         Assert.IsNull(notification.UndoLabel, "no capture notification before the last step (R9)");
         var item = (await stashing.Stash.All()).Single();
         Assert.IsTrue(File.Exists(item.FilePath), "its picture is in place, so the stash lists it (State: A live failure)");
@@ -425,7 +425,7 @@ public sealed class StashClipboardImageTests
             await stashing.Notifications.Undo(stashing.Notifications.Shown.Single());
         }
 
-        Assert.AreEqual($"Move to the Recycle Bin failed: {item.FileName}, {HeldFileRetry.HeldReason}", stashing.Notifications.Shown.Single().Text, "the refusal named (G35)");
+        Assert.AreEqual($"Couldn't move to the Recycle Bin: {item.FileName} is held open by another program. Try again in a moment.", stashing.Notifications.Shown.Single().Text, "the refusal named (G35)");
         Assert.IsEmpty(await stashing.Stash.All(), "the row stays marked, which no query returns");
         Assert.IsTrue(File.Exists(item.FilePath));
         var askedLive = stashing.Stash.RecycleBin.Asked.Count(path => path == item.FilePath);

@@ -16,9 +16,9 @@ public sealed class WindowsDialogsAndExplorer : IDialogsAndExplorer
 {
     private const string RevealAction = "Reveal in File Explorer";
 
-    private const string OpenWithAction = "Open with…";
+    private const string OpenWithAction = "Open with another app";
 
-    private const string OpenFolderAction = "Open folder";
+    private const string OpenFolderAction = "Open the folder";
 
     /// <summary>SFGAO_FOLDER: the item is a folder.</summary>
     private const uint ShellFolder = 0x20000000;
@@ -185,7 +185,7 @@ public sealed class WindowsDialogsAndExplorer : IDialogsAndExplorer
             }
             catch (Exception e)
             {
-                closed.SetResult(new Failure(OpenWithAction, Path.GetFileName(path), e.Message));
+                closed.SetResult(new Failure(OpenWithAction, Path.GetFileName(path), Failure.PlatformSaid(OpenWithDialog.NotShown, e.Message)));
             }
         })
         {
@@ -250,7 +250,7 @@ public sealed class WindowsDialogsAndExplorer : IDialogsAndExplorer
                 Show = ShowNormal,
                 IdList = idList,
             };
-            return ShellExecuteExW(ref info) ? Outcome.Done : new Failure(OpenFolderAction, FolderName(full), new Win32Exception(Marshal.GetLastWin32Error()).Message);
+            return ShellExecuteExW(ref info) ? Outcome.Done : new Failure(OpenFolderAction, FolderName(full), WindowsRefusal.ReasonFor(Marshal.GetLastWin32Error()));
         }
         finally
         {
@@ -264,7 +264,7 @@ public sealed class WindowsDialogsAndExplorer : IDialogsAndExplorer
 
     /// <summary>A failed HRESULT in words; one that carries a Win32 error, by that error's words.</summary>
     private static string ReasonForResult(int result) =>
-        new Win32Exception((result & 0xFFFF0000) == 0x80070000 ? result & 0xFFFF : result).Message;
+        Failure.PlatformSaid("Windows refused it", new Win32Exception((result & 0xFFFF0000) == 0x80070000 ? result & 0xFFFF : result).Message);
 
     private const uint FileShareAll = 7;
     private const uint OpenExisting = 3;

@@ -197,7 +197,7 @@ public sealed partial class ColorPickerTests
         {
             Assert.AreEqual(ColorChoices.Hex(first.Color), reopened.Text, "the new opening keeps the restored mark's colour");
             Assert.AreSame(first, editor.Session!.SelectedLayer);
-            Assert.AreEqual("Paste failed: the editor field, it closed before the paste could complete", shown.Said());
+            Assert.AreEqual("Couldn't paste: the editor field closed before the paste could complete.", shown.Said());
             ShownWindow.Tap(reopened, Key.Enter);
             Assert.AreEqual(first.Color, ((DrawMarkLayer)editor.Session.SelectedLayer!).Color, "Enter after the read cannot apply the delayed colour");
         }, DispatcherPriority.Background);
@@ -255,7 +255,7 @@ public sealed partial class ColorPickerTests
             (Outcome<ClipboardReading>.Of(new ClipboardReading([], null, new MediaFrame(1, 1, 0, new byte[4]), false)), noText),
             (Words(""), noText),
             (Outcome<ClipboardReading>.Of(new ClipboardReading([], null, null, false)), noText),
-            (new Failure(ClipboardPaste.Action, "the clipboard", HeldClipboard.Reason), $"Paste failed: the clipboard, {HeldClipboard.Reason}"),
+            (new Failure(ClipboardPaste.Action, "the clipboard", HeldClipboard.Reason), $"Couldn't paste (the clipboard): {HeldClipboard.Reason}."),
         };
 
         await OpenTextFill(shown, editor, item, "Meme");
@@ -338,7 +338,7 @@ public sealed partial class ColorPickerTests
             Assert.AreEqual(draft, original.Text, "the original opening is gone");
             Assert.AreEqual(targetText, target.Text, "the new target does not take the paste");
             Assert.AreEqual("", editor.Field!.Text);
-            Assert.AreEqual("Paste failed: the editor field, it closed before the paste could complete", shown.Said(), "the dropped paste is named without its words (G35)");
+            Assert.AreEqual("Couldn't paste: the editor field closed before the paste could complete.", shown.Said(), "the dropped paste is named without its words (G35)");
         }, DispatcherPriority.Background);
         Assert.HasCount(1, (await shown.Listing.Store!.All()).Value!);
     }

@@ -81,7 +81,7 @@ public sealed class ClipboardStillTests
         var read = ClipboardStill.Read(Path.Combine(scratch.Path, "gone.png"), "gone", TestStash.ShortRetry);
 
         Assert.IsFalse(read.Succeeded);
-        Assert.AreEqual("Read the picture failed: gone, the file does not exist", read.Failure.Sentence);
+        Assert.AreEqual("Couldn't read the picture (gone): the file does not exist.", read.Failure.Sentence);
     }
 
     [TestMethod]

@@ -163,11 +163,11 @@ public sealed class NoticeTests
     {
         var notices = new Notices(clock);
         var notice = notices.Raise("2 added", "Undo", () =>
-            Task.FromResult<Outcome>(new Failure("Undo the import", "cat.gif", "another program is holding it open")));
+            Task.FromResult<Outcome>(new Failure("Undo the import", "cat.gif", "it is held open by another program")));
 
         await notices.Undo(notice);
 
-        Assert.AreEqual("Undo the import failed: cat.gif, another program is holding it open", notices.Shown.Single().Text);
+        Assert.AreEqual("Couldn't undo the import: cat.gif is held open by another program. Try again in a moment.", notices.Shown.Single().Text);
         Assert.IsNull(notices.Shown.Single().UndoLabel);
     }
 
@@ -276,9 +276,9 @@ public sealed class NoticeTests
     {
         var notices = new Notices(clock);
         var first = notices.Raise("first");
-        notices.Raise(new Failure("Save settings", "settings.json", "another program is holding it open"));
+        notices.Raise(new Failure("Save settings", "settings.json", "it is held open by another program"));
 
-        CollectionAssert.AreEqual(new[] { "first", "Save settings failed: settings.json, another program is holding it open" }, notices.Shown.Select(n => n.Text).ToList());
+        CollectionAssert.AreEqual(new[] { "first", "Couldn't save settings: settings.json is held open by another program. Try again in a moment." }, notices.Shown.Select(n => n.Text).ToList());
         notices.Close(first);
 
         Assert.HasCount(1, notices.Shown);

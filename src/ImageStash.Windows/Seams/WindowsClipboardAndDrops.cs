@@ -581,7 +581,7 @@ public sealed partial class WindowsClipboardAndDrops : IClipboardAndDrops
 
     /// <summary>A failed HRESULT in words; one that carries a Win32 error, by that error's words.</summary>
     private static string ReasonForResult(int result) =>
-        (result & 0xFFFF0000) == 0x80070000 ? WindowsRefusal.ReasonFor(result & 0xFFFF) : new Win32Exception(result).Message;
+        (result & 0xFFFF0000) == 0x80070000 ? WindowsRefusal.ReasonFor(result & 0xFFFF) : Failure.PlatformSaid("Windows refused it", new Win32Exception(result).Message);
 
     /// <summary>A browser's link drag carries its address as text: an absolute http or https address, and nothing else.</summary>
     private static bool IsLink(string? text) =>
