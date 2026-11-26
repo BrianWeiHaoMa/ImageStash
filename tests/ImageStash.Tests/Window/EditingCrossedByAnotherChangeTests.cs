@@ -341,7 +341,7 @@ public sealed class EditingCrossedByAnotherChangeTests
 
         var saved = await listed.Editing.Save();
 
-        Assert.AreEqual(new Failure(ItemSave.Action, "cat", EditorSession.OriginalReplaced), saved.Failure, "refused by name, never rendered over a picture the editor did not show (G21, G35)");
+        Assert.AreEqual(Failure.Refusal(ItemSave.Action, "cat", EditorSession.OriginalReplaced), saved.Failure, "refused by name, never rendered over a picture the editor did not show (G21, G35)");
         Assert.IsTrue(listed.Editing.IsOpen, "the edit stays open on its layers");
         Assert.AreEqual(EditedItems.Hash(still), OpenedWith.OriginalHash(listed.Stash, cat.Id));
         Assert.IsTrue((await EditedItems.ForEdit(listed.Stash.Store!, cat.Id)).Layers.IsEmpty, "nothing saved");

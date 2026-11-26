@@ -90,7 +90,7 @@ public sealed partial class EditorSession
             var replaced = read.Value is { } now && !now.OriginalSha256.AsSpan().SequenceEqual(shownOriginal);
             result = !read.Succeeded ? new EditResult(EditEnding.Refused, null, read.Failure, null)
                 : read.Value is not { } edit ? new EditResult(EditEnding.Gone, null, null, null)
-                : replaced ? new EditResult(EditEnding.Refused, null, new Failure(asNewItem ? ItemSaveAsNewItem.Action : ItemSave.Action, Subject, OriginalReplaced), null)
+                : replaced ? new EditResult(EditEnding.Refused, null, Failure.Refusal(asNewItem ? ItemSaveAsNewItem.Action : ItemSave.Action, Subject, OriginalReplaced), null)
                 : asNewItem ? await Continued(await SavedEdit.SaveAsNew(store, edit.Item, edit, layers, renderer, heldFileRetry), edit.Item)
                 : await Judged(await SavedEdit.Save(store, edit.Item, edit, layers, renderer, heldFileRetry), edit.Item);
             if (result.Ending == EditEnding.Refused)
