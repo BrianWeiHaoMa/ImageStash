@@ -312,6 +312,12 @@ public sealed class EditorOptionLayoutTests
             editor.Press(corner);
             editor.Move(wider);
             editor.Release(wider);
+            var (side, edge) = (inCrop.ToCanvas(360, 405), inCrop.ToCanvas(420, 405));
+            editor.Press(side);
+            editor.Move(edge);
+            editor.Release(edge);
+            Assert.AreEqual(new PixelRect(0, 0, 400, 810), editor.Session!.Layers.Crop!.Rect, "the right side alone, widened to the original's edge (G22)");
+            Assert.AreEqual(inCrop, editor.Canvas.Mapping(), "a side's drag leaves the picture where it was");
             editor.Choose("Text");
             shown.Window.UpdateLayout();
             var widened = editor.Canvas.Mapping()!;

@@ -52,10 +52,10 @@ public abstract class EditorTool
 
     /// <summary>
     /// For a tool that takes a press at <paramref name="point"/> for its own, the layers its drag shows for an offset in
-    /// whole pixels from the press, given the layers as they were at the press; null, the default, leaves the press to
-    /// the rules above.
+    /// whole pixels from the press and the pointer's place, given the layers as they were at the press; null, the
+    /// default, leaves the press to the rules above.
     /// </summary>
-    private protected virtual Func<int, int, LayerList>? Taken(PointF point) => null;
+    private protected virtual Func<int, int, PointF, LayerList>? Taken(PointF point) => null;
 
     internal void Press(PointF point)
     {
@@ -115,7 +115,7 @@ public abstract class EditorTool
                 Session.Show(Replaced(before, LayerGeometry.Turned(before.Layers.Layers[before.Selected!.Value], point, Session.ShiftHeld)), before.Selected);
                 break;
             case Grip.Own:
-                Session.Show(drag.Own!(dx, dy), before.Selected);
+                Session.Show(drag.Own!(dx, dy, point), before.Selected);
                 break;
             default:
                 // Thinned to the distinct pixels the pointer passed over, one after another.
@@ -372,7 +372,7 @@ public abstract class EditorTool
 
         public List<PixelPoint> Visited { get; } = [];
 
-        public Func<int, int, LayerList>? Own { get; init; }
+        public Func<int, int, PointF, LayerList>? Own { get; init; }
 
         public (FrameRange Range, RangeEnd End, Func<FrameRange, LayerList> Placed)? Ends { get; init; }
 

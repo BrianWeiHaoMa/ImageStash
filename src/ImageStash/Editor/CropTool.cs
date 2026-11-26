@@ -5,9 +5,11 @@ namespace ImageStash.Editor;
 
 /// <summary>
 /// Crop (G22): while it is current the canvas shows the whole original with the crop's rectangle framed, and every press
-/// is the tool's own. A drag from one of the frame's corners resizes the rectangle, the opposite corner kept; a drag
-/// that starts on it moves it over the picture, its size kept; each by whole pixels, inside the original and at least
-/// 1 × 1, and each one step Undo reverses (G25). 1:1 makes the rectangle square and keeps it square as its corners drag;
+/// is the tool's own. A drag from one of the frame's handles (<see cref="CropFrame.Handles"/>) moves that handle: a
+/// corner two sides, the opposite corner kept, a side's middle that side alone; a drag that starts inside a crop moves it
+/// over the picture, its size kept; any other drag, outside the crop or anywhere on a picture with none, draws a new
+/// frame over what it covers. Each is by whole pixels, inside the original and at least 1 × 1, and each one step Undo
+/// reverses (G25); a click changes nothing. 1:1 makes the rectangle square and keeps it square as it is dragged;
 /// Reset gives the whole picture back. The rectangle lies on the original's grid (What crosses every boundary), so the
 /// whole original is kept and a crop can be widened later, and one covering the whole original is no crop: the list then
 /// holds none. The crop is never a selected layer, so a click with any tool selects nothing of it and Del never removes it.
@@ -21,19 +23,22 @@ public sealed class CropTool : EditorTool
 
     public override string Name => "Crop";
 
-    public override string Hint => "Drag the corners, or the picture";
+    public override string Hint => "Drag across the part to keep, or drag the edges";
 
-    /// <summary>Whether 1:1 is on: the rectangle squared when it was turned on, and kept square as its corners drag.</summary>
+    /// <summary>Whether 1:1 is on: the rectangle squared when it was turned on, and kept square as it is dragged.</summary>
     public bool Square { get; private set; }
 
     /// <summary>The rectangle the canvas frames: the part of the original the crop keeps, or the whole original without one.</summary>
     public PixelRect Frame => LayerGeometry.Picture(Session.Layers, Session.OriginalSize);
 
+    /// <summary>The frame's handles where the canvas draws them and a press takes them.</summary>
+    public IReadOnlyList<(CropHandle Handle, PointF At)> Handles => CropFrame.Handles(Frame);
+
     private PixelRect Whole => new(0, 0, Session.OriginalSize.Width, Session.OriginalSize.Height);
 
     /// <summary>
     /// Turns 1:1 on or off. On, the rectangle becomes the square of its shorter side about its centre, as one step; off,
-    /// it stays as it is and its corners drag freely again.
+    /// it stays as it is and drags freely again.
     /// </summary>
     public void ChooseSquare(bool on)
     {
@@ -69,18 +74,21 @@ public sealed class CropTool : EditorTool
     public override bool Owns(Layer layer) => false;
 
     /// <summary>
-    /// Every press: on a corner of the frame its drag resizes the rectangle, on the frame its drag moves it, and
-    /// elsewhere its drag changes nothing.
+    /// Every press: on a handle of the frame its drag moves that handle, with or without a crop; inside a crop its drag
+    /// moves the crop; elsewhere its drag draws a new frame from the press to the pointer, in place of any crop, but
+    /// none while the pointer is back within the drag threshold of the press, where a let-go is no drag (G25).
     /// </summary>
-    private protected override Func<int, int, LayerList> Taken(PointF point)
+    private protected override Func<int, int, PointF, LayerList> Taken(PointF point)
     {
-        var (before, frame, original, tolerance) = (Session.Layers, Frame, Session.OriginalSize, Session.HitTolerance);
-        if (LayerGeometry.CornerAt(frame, point, tolerance) is { } corner)
+        var (before, frame, original, square, threshold) = (Session.Layers, Frame, Session.OriginalSize, Square, Session.DragThreshold);
+        if (CropFrame.HandleAt(frame, point, Session.HitTolerance) is { } handle)
         {
-            return (dx, dy) => Cropped(before, Resized(frame, corner, dx, dy, original));
+            return (dx, dy, _) => Cropped(before, CropFrame.Dragged(frame, handle, dx, dy, original, square));
         }
 
-        return LayerGeometry.Over(frame, point, tolerance) ? (dx, dy) => Cropped(before, LayerGeometry.Shifted(frame, dx, dy, original)) : (_, _) => before;
+        return before.Crop is not null && LayerGeometry.Over(frame, point, 0)
+            ? (dx, dy, _) => Cropped(before, LayerGeometry.Shifted(frame, dx, dy, original))
+            : (_, _, to) => MathF.Sqrt((to.X - point.X) * (to.X - point.X) + (to.Y - point.Y) * (to.Y - point.Y)) <= threshold ? before : Cropped(before, CropFrame.Drawn(point, to, original, square));
     }
 
     /// <summary>
@@ -96,23 +104,5 @@ public sealed class CropTool : EditorTool
         }
 
         return new LayerList(kept);
-    }
-
-    /// <summary>
-    /// The frame with <paramref name="corner"/> dragged by whole pixels as a hide's corner drags; with 1:1 on, then the
-    /// square of the shorter side the drag gave, from the corner the drag kept, so it stays inside what the drag covered.
-    /// </summary>
-    private PixelRect Resized(PixelRect frame, Handle corner, int dx, int dy, PixelSize original)
-    {
-        var stretched = LayerGeometry.Stretched(frame, corner, dx, dy, original);
-        if (!Square)
-        {
-            return stretched;
-        }
-
-        var keptX = corner is Handle.TopLeft or Handle.BottomLeft ? frame.X + frame.Width : frame.X;
-        var keptY = corner is Handle.TopLeft or Handle.TopRight ? frame.Y + frame.Height : frame.Y;
-        var side = Math.Min(stretched.Width, stretched.Height);
-        return new PixelRect(stretched.X == keptX ? keptX : keptX - side, stretched.Y == keptY ? keptY : keptY - side, side, side);
     }
 }

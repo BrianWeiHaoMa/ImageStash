@@ -9,14 +9,14 @@ namespace ImageStash.Tests.Editor;
 
 /// <summary>
 /// Crop (G20, G22, G24, G25; What crosses every boundary): second on the tool row of every item; the frame's corners
-/// resizing the rectangle and a drag on it moving it, on the original's grid, inside the picture and at least 1 × 1,
+/// resizing the rectangle and a drag inside it moving it (a drag elsewhere and a side: `CropToolTests.Drag.cs`), on the original's grid, inside the picture and at least 1 × 1,
 /// each one step; 1:1 squaring it and keeping it square; Reset giving the whole picture back; a rectangle covering the
 /// whole original never stored; the crop never selected, by a click under any tool, nor removed by Del; the footer's
 /// size, the saved file and a later widening following the crop; while Crop is current the whole original shown round
 /// the frame, the original alone while Compare is held; a Meme placed and grown on the cropped picture staying on it.
 /// </summary>
 [TestClass]
-public sealed class CropToolTests
+public sealed partial class CropToolTests
 {
     private static readonly PixelRect Whole = new(0, 0, StillInTheEditor.Size.Width, StillInTheEditor.Size.Height);
 
@@ -31,7 +31,7 @@ public sealed class CropToolTests
 
         CollectionAssert.AreEqual(new[] { "Text", "Crop", "Hide", "Draw" }, still.Session.Tools.Select(tool => tool.Name).ToArray());
         CollectionAssert.AreEqual(new[] { "Text", "Crop", "Trim", "Hide", "Draw" }, animated.Tools.Select(tool => tool.Name).ToArray());
-        Assert.AreEqual("Drag the corners, or the picture", still.Session.Crop().Hint, "what the mouse does (G20)");
+        Assert.AreEqual("Drag across the part to keep, or drag the edges", still.Session.Crop().Hint, "what the mouse does (G20)");
     }
 
     [TestMethod]
@@ -325,20 +325,6 @@ public sealed class CropToolTests
         session.Drawing(MarkKind.Arrow);
         session.DragThrough((0, 0), (63, 47));
         CollectionAssert.AreEqual(new[] { new PixelPoint(20, 10), new PixelPoint(39, 29) }, ((DrawMarkLayer)session.Layers.Layers[4]).Points.ToArray(), "an arrow's ends on the picture");
-    }
-
-    [TestMethod]
-    public async Task ADragOutsideTheRectangleChangesNothing()
-    {
-        var layers = List(new CropLayer(new PixelRect(20, 20, 10, 10)));
-        using var editing = await StillInTheEditor.Open(layers);
-        var session = editing.Session;
-        session.Tool = session.Crop();
-
-        session.DragThrough((5, 5), (10, 10), (15, 12));
-
-        Assert.AreEqual(layers, session.Layers);
-        Assert.IsFalse(session.CanUndo);
     }
 
     [TestMethod]

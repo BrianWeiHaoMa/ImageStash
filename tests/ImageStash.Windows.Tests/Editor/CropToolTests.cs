@@ -15,8 +15,9 @@ namespace ImageStash.Windows.Tests.Editor;
 
 /// <summary>
 /// Crop as the real renderer draws it (G20, G22, G24): while it is current the whole original shows where it
-/// showed, the outside of the rectangle dimmed and the inside as it was, with a handle at each corner; a drag from the
-/// top-left corner's handle crops on the original's grid and changes the size chip; Compare shows the original alone,
+/// showed, the outside of the rectangle dimmed and the inside as it was, with a handle at each corner and at the middle
+/// of each side; a drag from the top-left corner's handle crops on the original's grid and changes the size chip; a drag
+/// from outside the frame draws a new one over the pixels the pointer went across; Compare shows the original alone,
 /// without the frame; another tool shows the cropped picture; at the window's minimum, Crop's row, Cancel, the size and
 /// Save lie inside the window.
 /// </summary>
@@ -33,7 +34,7 @@ public sealed class CropToolTests
         TrayDesktop.Run(() =>
         {
             editor.Choose("Crop");
-            Assert.IsTrue(editor.Texts().Contains("Drag the corners, or the picture") && editor.Shows("1:1") && editor.Shows("Reset"), "Crop's row (G20)");
+            Assert.IsTrue(editor.Texts().Contains("Drag across the part to keep, or drag the edges") && editor.Shows("1:1") && editor.Shows("Reset"), "Crop's row (G20)");
         });
         var framed = await RenderedWindow.Of(shown);
         var picture = TrayDesktop.Get(editor.PictureInRendering);
@@ -57,6 +58,20 @@ public sealed class CropToolTests
         {
             CollectionAssert.AreEquivalent(new[] { 0xFFFFFFFFu }, cropping.Colors(TrayDesktop.Get(() => editor.InsideHandle(editor.OnCanvas(x, y)))).ToList(), $"a handle at the corner ({x}, {y}): its white");
         }
+
+        foreach (var (x, y) in new[] { (160, 48), (160, 192), (64, 120), (256, 120) })
+        {
+            CollectionAssert.AreEquivalent(new[] { 0xFFFFFFFFu }, cropping.Colors(TrayDesktop.Get(() => editor.InsideHandle(editor.OnCanvas(x, y)))).ToList(), $"a handle at the side's middle ({x}, {y}): its white");
+            var ring = EditorCanvas.HandleSize / 2 - 0.5;
+            Assert.Contains(handle, cropping.Colors(TrayDesktop.Get(() => editor.InRendering(new Rect(editor.OnCanvas(x, y).X - ring, editor.OnCanvas(x, y).Y - ring, 2 * ring, 2 * ring)))), $"ringed in the selection colour at ({x}, {y})");
+        }
+
+        TrayDesktop.Run(() =>
+        {
+            editor.Drag(editor.OnCanvas(8.5, 8.5), editor.OnCanvas(40.5, 32.5));
+            Assert.AreEqual(new CropLayer(new PixelRect(8, 8, 33, 25)), editor.Session!.Layers.Layers.Single(), "a drag outside the frame draws one where the pointer went (G22)");
+            editor.Session.Undo();
+        });
 
         TrayDesktop.Run(() => editor.PressButton("Compare"));
         var comparing = await RenderedWindow.Of(shown);
@@ -100,7 +115,7 @@ public sealed class CropToolTests
         {
             shown.Window.UpdateLayout();
             WindowMinimum.AssertAt(shown.Window.Bounds.Size, "the window at its minimum");
-            var hint = editor.Overlay.GetVisualDescendants().OfType<TextBlock>().Single(text => text.IsEffectivelyVisible && text.Text == "Drag the corners, or the picture");
+            var hint = editor.Overlay.GetVisualDescendants().OfType<TextBlock>().Single(text => text.IsEffectivelyVisible && text.Text == "Drag across the part to keep, or drag the edges");
             foreach (var control in new Control[] { hint, editor.Button("1:1"), editor.Button("Reset"), editor.Button("Cancel"), editor.Button(EditorOverlay.OutputSize), editor.Button("Save") })
             {
                 TextOptionRowTests.AssertInside(shown, control, $"{(control as TextBlock)?.Text ?? Avalonia.Automation.AutomationProperties.GetName(control)} at the minimum (G20)");

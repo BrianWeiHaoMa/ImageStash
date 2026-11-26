@@ -7,6 +7,7 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 ### Added
 
 - Trimming a clip shows what you keep: while you drag a Trim handle, or an end of a layer's time bar, the clip pauses on the frame that end is on and stays there when you let go. Play then loops only the kept frames, and the frames cut away can still be shown by clicking the filmstrip or with Left and Right. With Trim chosen, `[` keeps the clip from the frame showing and `]` up to it, each one Undo step.
+- Crop by dragging across the part to keep: with Crop chosen, a drag on a picture with no crop, or outside the crop's frame, draws a new frame over what it covers. Each side of the frame has a handle in its middle that moves that side alone, so a crop can be narrowed or widened from one edge. A drag inside the frame still moves it, its corners still resize it, and each drag is one Undo step.
 - Undo and Redo are available beside Compare in the editor. The trash button beside the tool options deletes the selected layer.
 - Right-click a live tag chip or an entry in Every tag and choose Rename tag… to correct its spelling or merge it into another tag. Type one word and press Enter, or press Esc to cancel.
 - Every tag shows how many pictures in your stash carry each tag. The counts appear in the chip row's list, the selection's tag field and the preview's tag field, even while a search is active.

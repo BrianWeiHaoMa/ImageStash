@@ -118,9 +118,9 @@ public static class LayerGeometry
     public static Handle? HandleAt(LayerList layers, int index, PointF point, float tolerance, PixelSize original, RectangleF? room = null) =>
         Nearest(Handles(layers, index, original, room), point, tolerance, Middle(layers, index, original, point));
 
-    /// <summary>The corner of <paramref name="rect"/> nearest <paramref name="point"/> within <paramref name="tolerance"/>, as <see cref="HandleAt"/> finds a hide's; or null.</summary>
-    internal static Handle? CornerAt(PixelRect rect, PointF point, float tolerance) =>
-        Nearest(Corners(rect), point, tolerance, Within(Of(rect), point) ? Centre(rect) : null);
+    /// <summary>Of <paramref name="handles"/> placed on <paramref name="rect"/>, the one <see cref="HandleAt"/>'s rule takes for <paramref name="point"/>; or null.</summary>
+    internal static T? HandleOn<T>(IReadOnlyList<(T Handle, PointF At)> handles, PixelRect rect, PointF point, float tolerance) where T : struct =>
+        Nearest(handles, point, tolerance, Within(Of(rect), point) ? Centre(rect) : null);
 
     /// <summary>Whether <paramref name="point"/> lies on <paramref name="rect"/> or within <paramref name="tolerance"/> of it, as a press on a hide does.</summary>
     internal static bool Over(PixelRect rect, PointF point, float tolerance) => Within(Grown(Of(rect), tolerance), point);
@@ -388,13 +388,13 @@ public static class LayerGeometry
     /// The handle nearest <paramref name="point"/> within <paramref name="tolerance"/>, of two as near the later listed, which
     /// the view draws over the other, and nearer than <paramref name="middle"/>, the centre of the box the point lies inside; or null.
     /// </summary>
-    private static Handle? Nearest(IReadOnlyList<(Handle Handle, PointF At)> handles, PointF point, float tolerance, PointF? middle) =>
+    private static T? Nearest<T>(IReadOnlyList<(T Handle, PointF At)> handles, PointF point, float tolerance, PointF? middle) where T : struct =>
         handles
             .Select((handle, order) => (handle.Handle, Order: order, Distance: Distance(handle.At, point)))
             .Where(handle => handle.Distance <= tolerance && (middle is not { } centre || handle.Distance < Distance(centre, point)))
             .OrderBy(handle => handle.Distance)
             .ThenByDescending(handle => handle.Order)
-            .Select(handle => (Handle?)handle.Handle)
+            .Select(handle => (T?)handle.Handle)
             .FirstOrDefault();
 
     /// <summary>

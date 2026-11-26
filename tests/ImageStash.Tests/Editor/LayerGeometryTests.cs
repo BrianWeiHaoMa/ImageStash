@@ -413,10 +413,11 @@ public sealed class LayerGeometryTests
     public void ACropFramesCornerIsTakenInsideItOnlyNearerThanItsMiddle()
     {
         var frame = new PixelRect(20, 20, 8, 8);
-        Assert.IsNull(LayerGeometry.CornerAt(frame, new PointF(24, 24), 8), "a small frame's middle is for moving it");
-        Assert.AreEqual(Handle.TopLeft, LayerGeometry.CornerAt(frame, new PointF(21, 21), 8));
-        Assert.AreEqual(Handle.BottomRight, LayerGeometry.CornerAt(frame, new PointF(29, 29), 8), "outside it, the whole reach");
-        Assert.AreEqual(Handle.BottomRight, LayerGeometry.CornerAt(new PixelRect(0, 0, 60, 40), new PointF(55, 35), 8), "a large frame's corners reach inside as before");
+        Assert.IsNull(CropFrame.HandleAt(frame, new PointF(24, 24), 8), "a small frame's middle is for moving it");
+        Assert.AreEqual(CropHandle.TopLeft, CropFrame.HandleAt(frame, new PointF(21, 21), 8));
+        Assert.AreEqual(CropHandle.BottomRight, CropFrame.HandleAt(frame, new PointF(29, 29), 8), "outside it, the whole reach");
+        Assert.AreEqual(CropHandle.BottomRight, CropFrame.HandleAt(new PixelRect(0, 0, 60, 40), new PointF(55, 35), 8), "a large frame's corners reach inside as before");
+        Assert.AreEqual(CropHandle.Top, CropFrame.HandleAt(frame, new PointF(24, 20.5f), 8), "a side's middle nearer than the frame's");
     }
 
     [TestMethod]

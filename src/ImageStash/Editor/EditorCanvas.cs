@@ -177,7 +177,7 @@ public sealed class EditorCanvas : Control
         var original = new LayerPixelSize(shown.Frame.Width, shown.Frame.Height);
         if (!shown.Compare && shown.Tool is CropTool crop)
         {
-            DrawCropFrame(context, mapping, crop.Frame, original);
+            DrawCropFrame(context, mapping, crop.Frame, crop.Handles, original);
         }
         else if (!shown.Compare && shown.Selected is { } selected)
         {
@@ -333,9 +333,10 @@ public sealed class EditorCanvas : Control
 
     /// <summary>
     /// Crop's frame over the whole original (G22): the original outside the rectangle dimmed, the rectangle
-    /// outlined, a square handle at each of its corners as a selected layer has, and its size in pixels in a pill at its foot.
+    /// outlined, a square handle as a selected layer has at each place a press takes one (its corners and the middle of
+    /// each side), and its size in pixels in a pill at its foot.
     /// </summary>
-    private void DrawCropFrame(DrawingContext context, CanvasMapping mapping, LayerPixelRect frame, LayerPixelSize original)
+    private void DrawCropFrame(DrawingContext context, CanvasMapping mapping, LayerPixelRect frame, IReadOnlyList<(CropHandle Handle, System.Drawing.PointF At)> handles, LayerPixelSize original)
     {
         var scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
         var picture = Snapped(mapping.ToCanvas(new System.Drawing.RectangleF(0, 0, original.Width, original.Height)), scaling);
@@ -355,17 +356,19 @@ public sealed class EditorCanvas : Control
         }
 
         context.DrawRectangle(null, FramePen, kept.Deflate(0.5 / scaling));
-        foreach (var corner in new[] { kept.TopLeft, kept.TopRight, kept.BottomLeft, kept.BottomRight })
-        {
-            var handle = new Rect(Snapped(corner.X - HandleSize / 2, scaling), Snapped(corner.Y - HandleSize / 2, scaling), HandleSize, HandleSize);
-            context.FillRectangle(HandleBrush, handle);
-            context.FillRectangle(Brushes.White, handle.Deflate(2));
-        }
-
+        // The size's pill goes under the handles: on a short frame it reaches the top side's.
         var words = new FormattedText($"{frame.Width} × {frame.Height}", CultureInfo.CurrentCulture, FlowDirection.LeftToRight, new Typeface(Font, FontStyle.Normal, FontWeight.SemiBold), 11, Brushes.White);
         var pill = new Rect(kept.Center.X - words.Width / 2 - 7, kept.Bottom - 6 - words.Height - 6, words.Width + 14, words.Height + 6);
         context.DrawRectangle(PillBackground, null, new RoundedRect(pill, look.Radius(LookKeys.SmallRadius)));
         context.DrawText(words, new Point(pill.X + 7, pill.Y + 3));
+
+        foreach (var (_, at) in handles)
+        {
+            var centre = mapping.ToCanvas(at.X, at.Y);
+            var handle = new Rect(Snapped(centre.X - HandleSize / 2, scaling), Snapped(centre.Y - HandleSize / 2, scaling), HandleSize, HandleSize);
+            context.FillRectangle(HandleBrush, handle);
+            context.FillRectangle(Brushes.White, handle.Deflate(2));
+        }
     }
 
     private static double Snapped(double units, double scaling) => Math.Round(units * scaling) / scaling;
