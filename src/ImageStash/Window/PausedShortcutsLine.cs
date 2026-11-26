@@ -50,28 +50,3 @@ internal sealed class PausedShortcutsLine : StackPanel
 
     internal Button Resume { get; }
 }
-
-/// <summary>The footer's paused line takes only the width left after the hints, busy state and count.</summary>
-internal sealed class FooterPauseSlot : Decorator
-{
-    internal FooterPauseSlot(Control line)
-    {
-        Child = line;
-        ClipToBounds = true;
-    }
-
-    protected override Size MeasureOverride(Size availableSize)
-    {
-        // Measure the label and button whole, so the button never looks available with its label or hit area cut off.
-        Child!.Measure(new Size(double.PositiveInfinity, availableSize.Height));
-        var desired = Child.DesiredSize;
-        return desired.Width <= availableSize.Width ? desired : default;
-    }
-
-    protected override Size ArrangeOverride(Size finalSize)
-    {
-        var fits = Child!.DesiredSize.Width <= finalSize.Width;
-        Child.Arrange(fits ? new Rect(finalSize) : default);
-        return finalSize;
-    }
-}

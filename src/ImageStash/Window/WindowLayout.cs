@@ -4,7 +4,6 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
-using Avalonia.Media;
 using ImageStash.Look;
 
 namespace ImageStash.Window;
@@ -12,8 +11,8 @@ namespace ImageStash.Window;
 /// <summary>
 /// The stash window's controls that only hold and arrange others (F4): the head with the search box, the Settings
 /// button, the <c>+</c> menu and the pin; the grid's scroller, which hands a press on the grid's margin to the grid, and the notices' scroller;
-/// the footer with the paste hints, the busy state and the count; and the rows that hold them, the preview over all but
-/// the footer and the editor over all of them.
+/// and the rows that hold them and the footer (<c>WindowFooter.cs</c>), the preview over all but the footer and the editor
+/// over all of them.
 /// </summary>
 public static class WindowLayout
 {
@@ -96,33 +95,6 @@ public static class WindowLayout
     };
 
     internal static Thickness NoticeMargin(double bottom = 12) => new(12, 0, 12, bottom);
-
-    /// <summary>
-    /// The footer: the paste hints on the left; the busy state, while something runs, and the count on the right, the
-    /// count in a column of its own; so a long hint or a long name in a copy's confirmation is cut short with an ellipsis
-    /// in what the busy state and the count leave, never drawn over them (G35). The paused line uses the space left over.
-    /// </summary>
-    internal static Border Footer(Control hints, StackPanel busy, TextBlock busyText, TextBlock count, FooterPauseSlot pausedShortcuts)
-    {
-        busy.Children.Add(new ProgressBar { IsIndeterminate = true, Width = 48, MinWidth = 48, VerticalAlignment = VerticalAlignment.Center });
-        busy.Children.Add(busyText);
-        // The busy state measured first, whole; the hints then within what is left, which their trimming needs.
-        var left = new DockPanel { LastChildFill = false, ClipToBounds = true, Children = { busy, hints, pausedShortcuts } };
-        DockPanel.SetDock(busy, Dock.Right);
-        DockPanel.SetDock(hints, Dock.Left);
-        DockPanel.SetDock(pausedShortcuts, Dock.Left);
-        Grid.SetColumn(count, 1);
-        count.Margin = new Thickness(12, 0, 0, 0);
-        var footer = new Border
-        {
-            Height = 36,
-            Padding = new Thickness(12, 0),
-            BorderThickness = new Thickness(0, 1, 0, 0),
-            Child = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = { left, count } },
-        };
-        footer.Bind(Border.BorderBrushProperty, footer.GetResourceObservable(LookKeys.Divider));
-        return footer;
-    }
 
     /// <summary>
     /// The rows: the head, the chips, the body and the footer, with the preview over all but the footer, the editor over

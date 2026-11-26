@@ -63,9 +63,7 @@ public sealed class EmptyStashShown
 
     private PausedShortcutsLine PauseLine()
     {
-        var footer = (Grid)Status.Footer.Child!;
-        var onLeft = footer.Children.OfType<DockPanel>().Single();
-        return (PausedShortcutsLine)onLeft.Children.OfType<FooterPauseSlot>().Single().Child!;
+        return Status.FooterParts.Row.Pieces.OfType<PausedShortcutsLine>().Single();
     }
 
     /// <summary>The listing shown again, as the window shows it after each change.</summary>

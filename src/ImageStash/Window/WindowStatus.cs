@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
-using Avalonia.Media;
 using Avalonia.Threading;
 using ImageStash.Store;
 
@@ -26,13 +25,9 @@ public sealed class WindowStatus
     private readonly ContentControl stashState;
     private readonly StackPanel noticeStack;
     private readonly Dictionary<Notice, Control> noticeCards = [];
-    private readonly TextBlock count;
-    private readonly DockPanel hints;
-    private readonly StackPanel busy;
-    private readonly TextBlock busyText;
+    private readonly WindowFooter footer;
     private readonly PausedShortcutsLine pausedShortcuts;
     private string? shownState;
-    private IReadOnlyList<string> shownHints = [];
 
     /// <summary>
     /// For the window listing <paramref name="listing"/> in <paramref name="scroller"/>, which <paramref name="covered"/>
@@ -52,15 +47,8 @@ public sealed class WindowStatus
         stashState = new ContentControl { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(20) };
         noticeStack = new StackPanel { Spacing = 6 };
         NoticeArea = WindowLayout.NoticeArea(noticeStack);
-        count = new TextBlock { FontSize = 11.5, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, Opacity = 0.7 };
-        // Enter pastes into the paste target, else copies (G8, In use); the hints show only while there is a selection,
-        // or a copy's confirmation stands in for them (G10).
-        hints = new DockPanel { LastChildFill = false, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 16, 0) };
-        // G35: the running import's, copy's, delete's or rename's busy state, naming it, until it has finished.
-        busyText = new TextBlock { FontSize = 11.5, VerticalAlignment = VerticalAlignment.Center };
-        busy = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, IsVisible = false };
         pausedShortcuts = new PausedShortcutsLine(() => shortcuts?.ResumePaused(), focusable: false);
-        Footer = WindowLayout.Footer(hints, busy, busyText, count, new FooterPauseSlot(pausedShortcuts));
+        footer = new WindowFooter(pausedShortcuts);
     }
 
     /// <summary>The empty stash's or the no-match state's view, shown in the grid's place.</summary>
@@ -70,7 +58,10 @@ public sealed class WindowStatus
     public ScrollViewer NoticeArea { get; }
 
     /// <summary>The footer: the hints, the busy state and the count.</summary>
-    public Border Footer { get; }
+    public Border Footer => footer.View;
+
+    /// <summary>The footer's pieces, as drawn.</summary>
+    internal WindowFooter FooterParts => footer;
 
     /// <summary>
     /// From now on the empty stash marks a shortcut <paramref name="shortcuts"/> judge unavailable (G2, G33); its owner
@@ -102,47 +93,24 @@ public sealed class WindowStatus
         stashState.IsVisible = state is not null;
         // An empty scope or no-match state covers an empty grid. Keeping it visible lets the keyboard stay there.
         scroller.IsVisible = state is null || (listing.State == StashState.Open && listing.Items.Count == 0);
-        count.Text = listing.State != StashState.Open ? "" : StashStateView.CountText(listing.Items.Count, listing.Selection.Count);
+        footer.Count.Text = listing.State != StashState.Open ? "" : StashStateView.CountText(listing.Items.Count, listing.Selection.Count);
         ShowHints();
     }
 
     /// <summary>The hints for the target and the selection as they are now, or a copy's confirmation in their place (G8, G10).</summary>
     public void ShowHints()
     {
-        hints.IsVisible = listing.State == StashState.Open && (listing.Selection.Count > 0 || footerHints.Confirmation is not null) && !covered();
-        var texts = footerHints.Texts;
-        if (texts.SequenceEqual(shownHints))
-        {
-            return;
-        }
-
-        shownHints = texts;
-        hints.Children.Clear();
-        var confirming = footerHints.Confirmation is not null;
-        for (var i = 0; i < texts.Count; i++)
-        {
-            // The confirmation at full strength, so it reads at a glance; the hints faint, as standing advice.
-            var text = new TextBlock
-            {
-                Text = texts[i],
-                FontSize = 11.5,
-                VerticalAlignment = VerticalAlignment.Center,
-                Opacity = confirming ? 1 : 0.7,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                Margin = new Thickness(0, 0, i < texts.Count - 1 ? 16 : 0, 0),
-            };
-            DockPanel.SetDock(text, Dock.Left);
-            hints.Children.Add(text);
-        }
+        // Enter pastes into the paste target, else copies (G8, In use); the hints show only while there is a selection,
+        // or a copy's confirmation stands in for them (G10), and never under the preview or the editor.
+        // One read of the confirmation, which expires by the clock, so its words and whether it shows agree.
+        var confirmed = footerHints.Confirmation;
+        IReadOnlyList<string> texts = confirmed is not null ? [confirmed] : footerHints.Texts;
+        var shown = listing.State == StashState.Open && (listing.Selection.Count > 0 || confirmed is not null) && !covered();
+        footer.ShowHints(texts, confirmed is not null, shown);
     }
 
     /// <summary>The busy states of what may be running, each naming its action while it runs (G35).</summary>
-    public void ShowBusy(IEnumerable<string?> busyStates)
-    {
-        var running = busyStates.OfType<string>().ToList();
-        busy.IsVisible = running.Count > 0;
-        busyText.Text = string.Join(" · ", running);
-    }
+    public void ShowBusy(IEnumerable<string?> busyStates) => footer.ShowBusy(busyStates.OfType<string>().ToList());
 
     public void ShowNotices()
     {

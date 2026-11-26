@@ -28,10 +28,18 @@ public static class ToolTipRule
     /// <paramref name="whole"/> as its tip only while they are cut short: shown whole, a tip would repeat them; cut short,
     /// it adds the tail they hide. Decided again whenever the words are laid out anew.
     /// </summary>
-    public static void ShowWhenTrimmed(Control control, TextBlock shown, string? whole)
+    public static void ShowWhenTrimmed(Control control, TextBlock shown, string? whole) => ShowWhenTrimmed(control, shown, () => whole);
+
+    /// <summary>
+    /// Gives <paramref name="control"/> the words <paramref name="shown"/> holds as its tip only while they are cut short,
+    /// whatever they are by then.
+    /// </summary>
+    public static void ShowWhenTrimmed(Control control, TextBlock shown) => ShowWhenTrimmed(control, shown, () => shown.Text);
+
+    private static void ShowWhenTrimmed(Control control, TextBlock shown, Func<string?> whole)
     {
-        void Decide() => ToolTip.SetTip(control, shown.Bounds.Width > 0 && !string.IsNullOrWhiteSpace(whole)
-            && shown.TextLayout.TextLines.Any(line => line.HasCollapsed) ? whole : null);
+        void Decide() => ToolTip.SetTip(control, shown.Bounds.Width > 0 && !string.IsNullOrWhiteSpace(whole())
+            && shown.TextLayout.TextLines.Any(line => line.HasCollapsed) ? whole() : null);
         shown.PropertyChanged += (_, e) =>
         {
             if (e.Property == Visual.BoundsProperty || e.Property == TextBlock.TextProperty)

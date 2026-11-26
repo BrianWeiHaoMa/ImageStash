@@ -375,9 +375,8 @@ public sealed class PasteTargetTests
     /// <summary>The footer's hints as drawn, or none while they are out of sight.</summary>
     private static List<string> Hints(WindowStatus footer)
     {
-        var left = (Panel)((Panel)footer.Footer.Child!).Children[0];
-        var hints = left.Children.OfType<DockPanel>().Single();
-        return hints.IsVisible ? hints.Children.Cast<TextBlock>().Select(text => text.Text!).ToList() : [];
+        var parts = footer.FooterParts;
+        return new[] { parts.EnterHint, parts.CopyHint }.Where(hint => hint.IsVisible).Select(hint => hint.Text).ToList();
     }
 
     /// <summary>A UI thread's context standing still: what is posted to it runs only when the check says.</summary>

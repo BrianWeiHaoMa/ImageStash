@@ -101,21 +101,24 @@ public sealed class PausedShortcutsTests
     public void FooterGivesExistingControlsFirstClaimAndShowsThePausedLineOnlyIfItFits() => ControlThread.Run(() =>
     {
         var hints = new Border { Width = 180, Height = 16 };
+        var copy = new Border { IsVisible = false };
         var busy = new StackPanel { Orientation = Orientation.Horizontal, Width = 130 };
-        var busyWords = new TextBlock { IsVisible = false };
         var count = new TextBlock { Width = 52, IsVisible = false };
-        var slot = new FooterPauseSlot(new Border { Width = 160, Height = 24 });
-        var footer = WindowLayout.Footer(hints, busy, busyWords, count, slot);
+        var paused = new Border { Width = 160, Height = 24 };
+        var footer = new FooterFit(hints, copy, paused, count, busy);
 
         var roomy = new Size(620, 36);
         footer.Measure(roomy);
         footer.Arrange(new Rect(roomy));
-        Assert.AreEqual(160d, slot.DesiredSize.Width);
+        Assert.AreEqual(160d, footer.Given.Paused);
+        Assert.AreEqual(160d, paused.Bounds.Width);
+        Assert.IsTrue(((Control)paused.Parent!).IsVisible);
         var narrow = new Size(460, 36);
         footer.Measure(narrow);
         footer.Arrange(new Rect(narrow));
-        Assert.AreEqual(0d, slot.DesiredSize.Width, "the paused line gives way");
-        Assert.AreEqual(180d, hints.Bounds.Width);
-        Assert.AreEqual(130d, busy.Bounds.Width);
+        Assert.AreEqual(0d, footer.Given.Paused, "the paused line gives way, whole");
+        Assert.IsFalse(((Control)paused.Parent!).IsVisible, "hidden, not drawn in no room");
+        Assert.AreEqual(180d, footer.Given.Lead);
+        Assert.AreEqual(130d, footer.Given.Busy);
     });
 }

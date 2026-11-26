@@ -83,8 +83,8 @@ public sealed class StashWindowTests
     {
         using var shown = ShownWindow.Open();
         var item = (await shown.OpenStash(shown.Picture("window check corner.png"))).Single();
-        TrayDesktop.Run(() => Assert.IsTrue(shown.Window.GetVisualDescendants().OfType<TextBlock>().Any(text => text.Text == "Enter · Copy" && text.IsEffectivelyVisible),
-            "with no paste target the footer reads Enter · Copy (G8)"));
+        // The hint is read by its whole name, its key drawn as a key cap apart from its words.
+        TrayDesktop.Run(() => Assert.Contains("Enter · Copy", shown.FooterHints(), "with no paste target the footer reads Enter · Copy (G8)"));
 
         TrayDesktop.Run(() => ShownWindow.Tap(shown.Search, Key.Enter));
         await Eventually(() => shown.Uses() == 1);

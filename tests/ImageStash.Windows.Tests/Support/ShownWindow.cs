@@ -550,12 +550,14 @@ public sealed class ShownWindow : IDisposable
     /// <summary>The window told it has come to the foreground (WM_ACTIVATE, WA_ACTIVE), as Windows tells it after a click on it.</summary>
     public void Activate() => SendMessage(Window.TryGetPlatformHandle()!.Handle, 0x0006, 1, 0);
 
-    /// <summary>The words of the footer's visible hints or copy confirmation, in order.</summary>
+    /// <summary>
+    /// The words of the footer's visible hints, whole as whatever reads names reads them ("Enter · Paste into Relay"), or
+    /// of its copy confirmation, in order.
+    /// </summary>
     public List<string> FooterHints() =>
-        Window.GetVisualDescendants().OfType<TextBlock>()
-            .Where(text => text.IsEffectivelyVisible && text.Text is { } words
-                && (words.StartsWith("Enter · ") || words.StartsWith("Ctrl+C · ") || words.StartsWith("✓ Copied ")))
-            .Select(text => text.Text!).ToList();
+        Window.GetVisualDescendants().OfType<Control>()
+            .Where(control => control.IsEffectivelyVisible && (control is FooterHint || control is TextBlock { Text: { } words } && words.StartsWith("✓ Copied ")))
+            .Select(control => control is FooterHint hint ? hint.Text : ((TextBlock)control).Text!).ToList();
 
     /// <summary>What the notices showing say, in order, joined, after the import's own notice that opened the stash.</summary>
     public string Said() => string.Join(" | ", Notices.Shown.Where(notice => !(notice.Heading ?? notice.Text).StartsWith("Added ")).Select(notice => notice.Text));

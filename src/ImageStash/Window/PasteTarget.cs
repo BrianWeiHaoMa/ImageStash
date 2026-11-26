@@ -41,9 +41,12 @@ public sealed class PasteTargetHolder
         return target is null ? $"Copy{counted}" : $"Paste{counted} into {target.AppName}";
     }
 
+    /// <summary>What stands between a hint's key and what the key does ("Enter · Copy").</summary>
+    public const string HintSeparator = " · ";
+
     /// <summary>The footer's hints with <paramref name="selected"/> items selected: Enter's handoff, and while there is a target, <c>Ctrl+C</c>'s copy beside it (G8, G9).</summary>
     public static IReadOnlyList<string> Hints(PasteTarget? target, int selected) =>
-        target is null ? [$"Enter · {HandoffName(target, selected)}"] : [$"Enter · {HandoffName(target, selected)}", "Ctrl+C · Copy"];
+        target is null ? [$"Enter{HintSeparator}{HandoffName(target, selected)}"] : [$"Enter{HintSeparator}{HandoffName(target, selected)}", $"Ctrl+C{HintSeparator}Copy"];
 
     /// <summary>The open shortcut was pressed with <paramref name="reading"/> in front: ImageStash's own leaves the target as it is.</summary>
     public void FromPress(ForegroundReading reading)

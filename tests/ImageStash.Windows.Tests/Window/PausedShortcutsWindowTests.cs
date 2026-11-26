@@ -53,6 +53,7 @@ public sealed class PausedShortcutsWindowTests
         });
 
         // With a wider paste hint and an import still accessing a held input, compare the primary words in both states.
+        // Ctrl+C's hint gives way, whole, before the busy words are cut to their opening, as FooterFit orders what yields.
         var path = shown.Picture("dog.png");
         Task<IReadOnlyList<ImportedFile>> adding;
         using (File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None))
@@ -67,8 +68,8 @@ public sealed class PausedShortcutsWindowTests
             {
                 var pausedWithBusy = FooterWords(shown);
                 Assert.IsTrue(pausedWithBusy.Any(entry => entry.Text.StartsWith("Adding")), "the footer is visibly busy before comparing");
-                Assert.IsTrue(pausedWithBusy.Any(entry => entry.Text.StartsWith("Enter · Paste into Example chat")));
-                Assert.IsTrue(pausedWithBusy.Any(entry => entry.Text == "Ctrl+C · Copy"));
+                Assert.IsTrue(pausedWithBusy.Any(entry => entry.Text == "Enter · Paste into Example chat"));
+                Assert.IsFalse(pausedWithBusy.Any(entry => entry.Text == "Ctrl+C · Copy"), "Ctrl+C's hint gave way, whole");
                 Assert.IsTrue(pausedWithBusy.Any(entry => entry.Text == "1 item"));
                 settings.Shortcuts.TogglePause();
                 CollectionAssert.AreEqual(pausedWithBusy, FooterWords(shown));
@@ -153,13 +154,14 @@ public sealed class PausedShortcutsWindowTests
     private static PixelRect OnScreen(Control control) =>
         new(control.PointToScreen(default), control.PointToScreen(new Point(control.Bounds.Width, control.Bounds.Height)));
 
+    /// <summary>The footer's pieces shown, but the paused line, by the words whatever reads names reads, with their places.</summary>
     private static List<(string Text, PixelRect Place)> FooterWords(ShownWindow shown)
     {
         shown.Window.UpdateLayout();
-        var left = (DockPanel)LineOf(shown.Window).GetVisualParent()!.GetVisualParent()!;
-        var footer = left.GetVisualParent()!;
-        return footer.GetVisualDescendants().OfType<TextBlock>()
-            .Where(block => block.IsEffectivelyVisible && block.Text is { Length: > 0 } && !block.GetVisualAncestors().OfType<PausedShortcutsLine>().Any())
-            .Select(block => (block.Text!, OnScreen(block))).ToList();
+        var row = (FooterFit)LineOf(shown.Window).GetVisualParent()!.GetVisualParent()!;
+        return row.Pieces.Where(piece => piece is not PausedShortcutsLine && ((Control)piece.Parent!).IsVisible)
+            .SelectMany(piece => piece.GetSelfAndVisualDescendants().OfType<Control>()
+                .Where(part => part.IsEffectivelyVisible && (part is FooterHint || part is TextBlock { Text.Length: > 0 } && !part.GetVisualAncestors().OfType<FooterHint>().Any())))
+            .Select(part => (part is FooterHint hint ? hint.Text : ((TextBlock)part).Text!, OnScreen(part))).ToList();
     }
 }
