@@ -19,6 +19,12 @@ public sealed partial class EditorSession
     /// <summary>Whether a field is open for typing into the selected text or caption-bar layer.</summary>
     public bool Typing => textField is not null;
 
+    internal bool CanUndoEdit => Accepts && (CanUndo || PendingTypingChange != TypingChange.None);
+
+    internal bool CanRedoEdit => Accepts && CanRedo && PendingTypingChange is TypingChange.None or TypingChange.DismissDraft;
+
+    private TypingChange PendingTypingChange => textField is { } open ? ChangeOnClosing(open) : TypingChange.None;
+
     /// <summary>
     /// Which opening of a field is open, null while none is: a field closed and opened again, on its layer or another, is
     /// another opening, so what was asked in one never lands in the next (a paste's late answer, G13).
@@ -149,20 +155,31 @@ public sealed partial class EditorSession
         // A colour still dragged on the picker for the field's layer is put back first: it ends with the field.
         tool.Abandon();
         textField = null;
-        if (Selected is { } index && Blank(Layers.Layers[index]))
+        switch (ChangeOnClosing(open))
         {
-            if (open.Added)
-            {
+            case TypingChange.DismissDraft:
                 Show(open.Before.Layers, open.Before.Selected);
                 return true;
-            }
-
-            Commit(open.Before, new LayerList(Layers.Layers.Where((_, i) => i != index)), null);
-            return false;
+            case TypingChange.RemoveBlank:
+                Commit(open.Before, new LayerList(Layers.Layers.Where((_, i) => i != Selected)), null);
+                break;
+            default:
+                Commit(open.Before, Layers, Selected);
+                break;
         }
 
-        Commit(open.Before, Layers, Selected);
         return false;
+    }
+
+    // A newly added blank layer can be undone by itself and never adds a step or clears redo.
+    private TypingChange ChangeOnClosing(Field open)
+    {
+        if (SelectedLayer is { } layer && Blank(layer))
+        {
+            return open.Added ? TypingChange.DismissDraft : TypingChange.RemoveBlank;
+        }
+
+        return Layers.Equals(open.Before.Layers) ? TypingChange.None : TypingChange.KeepLayers;
     }
 
     /// <summary>Whether a text or caption-bar layer holds nothing but white space, so it would draw no letter.</summary>
@@ -170,6 +187,8 @@ public sealed partial class EditorSession
         layer is TextLayer text ? string.IsNullOrWhiteSpace(text.Text) : layer is CaptionBarLayer bar && string.IsNullOrWhiteSpace(bar.Text);
 
     private LayerList Replaced(int index, Layer layer) => new(Layers.Layers.Select((each, i) => i == index ? layer : each));
+
+    private enum TypingChange { None, DismissDraft, RemoveBlank, KeepLayers }
 
     /// <summary>
     /// An open field: the layers and selection before it opened (before the click, for a layer the click added), whether

@@ -6,6 +6,7 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 
 ### Added
 
+- Undo and Redo are available beside Compare in the editor. The trash button beside the tool options deletes the selected layer.
 - Right-click a live tag chip or an entry in Every tag and choose Rename tag… to correct its spelling or merge it into another tag. Type one word and press Enter, or press Esc to cancel.
 - Every tag shows how many pictures in your stash carry each tag. The counts appear in the chip row's list, the selection's tag field and the preview's tag field, even while a search is active.
 - Right-click a live tag chip or an entry in Every tag to remove that tag from every picture carrying it. The menu gives the stash-wide count, and the notice offers Undo even when only one picture changed.

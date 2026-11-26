@@ -14,15 +14,16 @@ internal sealed class EditorOptions : Grid
     private readonly ChoiceArea choices = new();
     private readonly TextBlock hint = new() { Height = 20, FontSize = 13, Opacity = 0.7, Margin = new Thickness(0, 4, 0, 0) };
 
-    public EditorOptions()
+    public EditorOptions(Control layerAction)
     {
         Margin = new Thickness(12, 8, 12, 0);
-        // The trailing column holds room for a 36-unit layer action and its gap.
+        // The trailing column holds a 36-unit layer action and its gap in every tool.
         ColumnDefinitions = new ColumnDefinitions("*,44");
         RowDefinitions = new RowDefinitions("Auto,Auto");
         SetColumnSpan(hint, 2);
         SetRow(hint, 1);
-        Children.AddRange([choices, hint]);
+        SetColumn(layerAction, 1);
+        Children.AddRange([choices, layerAction, hint]);
     }
 
     public Control? Row

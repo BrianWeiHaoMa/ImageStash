@@ -94,7 +94,8 @@ unavailable shortcuts.
   version you have. Installing a new one over the old one keeps your pictures, tags, edits and settings, and starts
   the new version in place of the one it closed.
 - **Edits never touch the original.** Text, crops, trims, blurs and drawings stay layers you can change or remove at
-  the next Edit; Revert to original takes them all off.
+  the next Edit. Undo and Redo sit beside Compare. Use the trash button beside the tool options to remove the selected
+  layer, or choose Revert to original to remove every layer.
 - **Nothing claims delivery.** ImageStash puts the picture on the clipboard and presses `Ctrl+V` in the app you came
   from; when it cannot, it says "Copied · press Ctrl+V". Where an app ignores pastes, drag the picture into it or use
   Save a copy….
