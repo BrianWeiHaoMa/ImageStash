@@ -75,7 +75,7 @@ public sealed class EditingFromMenusTests
 
         await listed.Notices.Undo(listed.Notices.Shown.Single());
 
-        Assert.AreEqual("Undo Revert to original failed: cat, it is no longer in the stash", listed.Notices.Shown.Single().Text);
+        Assert.AreEqual("Can't undo Revert to original: cat is no longer in the stash.", listed.Notices.Shown.Single().Text);
     }
 
     [TestMethod]

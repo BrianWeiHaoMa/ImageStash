@@ -271,7 +271,7 @@ public sealed class ItemSaveTests
         var before = await Commits(store, cat.Id);
         var files = FilesWithHashes(stash);
 
-        Assert.AreEqual(new Failure("Save", "gone", ItemFactChange.NotInStash), (await store.Save(gone, BlackBoxAndBox, goneRender)).Failure);
+        Assert.AreEqual(Failure.Refusal("Save", "gone", ItemFactChange.NotInStash), (await store.Save(gone, BlackBoxAndBox, goneRender)).Failure);
         Assert.IsTrue(File.Exists(goneRender.WorkPath), "the render stays the caller's");
         Assert.AreEqual(new Failure("Save", "cat", "its rendered picture is not in the stash's work folder"), (await store.Save(cat, BlackBoxAndBox, render with { WorkPath = outside })).Failure);
         Assert.AreEqual(new Failure("Save", "cat", "its rendered picture is gone"), (await store.Save(cat, BlackBoxAndBox, vanished)).Failure);

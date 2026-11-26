@@ -488,7 +488,7 @@ public sealed class CaptureCardTests
 
         TrayDesktop.Run(() =>
         {
-            Assert.AreEqual("Rename failed: stash deleted, it is no longer in the stash", desk.Notifications.Shown[^1].Text);
+            Assert.AreEqual("Can't rename: stash deleted is no longer in the stash.", desk.Notifications.Shown[^1].Text);
             Assert.AreEqual("stash deleted", card.Field.Shown, "the card's name unchanged");
         });
         await TrayDesktop.Get(() => desk.Shown.Listing.Store!.UndoDelete([held[0].Value!]));
@@ -501,7 +501,7 @@ public sealed class CaptureCardTests
         var gone = desk.Items().Single();
         var card = await desk.Raise(gone, CaptureKind.Screenshot);
         var held = await TrayDesktop.Get(() => desk.Shown.Listing.Store!.Delete([gone.Id]));
-        var refusal = new Failure("Edit", "stash gone", "it is no longer in the stash").Sentence;
+        var refusal = Failure.Refusal("Edit", "stash gone", "it is no longer in the stash").Sentence;
 
         TestMouse.Click(Centre(TrayDesktop.Get(() => EditButton(card))));
         await Eventually(() => TrayDesktop.Get(() => desk.Shown.Notices.Shown.Any(notice => notice.Text == refusal)));

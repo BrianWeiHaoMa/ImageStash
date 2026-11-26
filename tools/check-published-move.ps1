@@ -181,7 +181,7 @@ function PathShown {
 function MoveLine {
     try {
         @(Elements (PageElement) '' $text | ForEach-Object { $_.Current.Name } |
-            Where-Object { $_ -match "^(Waiting for |Moving your stash|Moved your stash|Move the stash failed|Finish moving the stash failed)" }) -join ' | '
+            Where-Object { $_ -match "^(Waiting for |Moving your stash|Moved your stash|Move the stash failed|Can't move the stash|Finish moving the stash failed)" }) -join ' | '
     }
     catch { "(unread: $($_.Exception.Message))" }
 }
@@ -313,7 +313,7 @@ function WatchMove([string] $from, [string] $to, [int] $seconds, [switch] $Summo
         $oldThere = Test-Path -LiteralPath $from
         if ($line -and ($line -notlike '(unread*') -and ($lines.Count -eq 0 -or $lines[$lines.Count - 1] -ne $line)) { $lines.Add($line) }
         if (($path -eq $to) -and $oldThere) { $result.NewShownEarly = $true }
-        if (($line -like 'Moved your stash to *') -or ($line -like 'Move the stash failed*') -or ($line -like 'Finish moving the stash failed*')) {
+        if (($line -like 'Moved your stash to *') -or ($line -like 'Move the stash failed*') -or ($line -like 'Can''t move the stash*') -or ($line -like 'Finish moving the stash failed*')) {
             $result.End = $line
             $result.OldGoneAtEnd = -not $oldThere
             $result.PathAtEnd = PathShown
@@ -397,13 +397,13 @@ function Notifications { @([CaptureDesk]::Shown($running) | Where-Object { ($_ -
 # A new empty folder under the phase's own, by <name>.
 function EmptyFolder([string] $name) { (New-Item -ItemType Directory -Path (Join-Path $mine $name)).FullName }
 
-# Move... to <folder> refused with <reason> on the row, nothing changed (G30, G35).
-function Refused([string] $folder, [string] $reason, [string] $what) {
+# Move... to <folder> refused on the row, the folder's name followed by <said> (G30, G35), nothing changed.
+function Refused([string] $folder, [string] $said, [string] $what) {
     $before = SettingsText
     OpenPage
     AskMove $folder
     $subject = Split-Path $folder -Leaf
-    $sentence = "Move the stash failed: $subject, $reason"
+    $sentence = "Can't move the stash: $subject $said."
     Check (WaitFor { (MoveLine) -eq $sentence } 5000) "Move... to $what is refused, the row reading '$sentence' (G30, G35): '$(MoveLine)'"
     Check ((PathShown) -eq $stashNow) "the page still shows the stash folder, $stashNow (G32)"
     Check (((SettingsText) -eq $before) -and (Test-Path -LiteralPath $storeNow)) 'settings.json is as it was and the stash is where it was (G30)'
@@ -442,9 +442,9 @@ try {
     # G30, G35: three folders refused by name, nothing changed.
     $full = EmptyFolder 'not-empty'
     Set-Content -LiteralPath (Join-Path $full 'something.txt') -Value 'a file of the check''s own'
-    Refused $full 'it is not empty' 'a folder that is not empty'
-    Refused $openWithRoot "it lies inside the Open with$ellipsis folder" "the Open with$ellipsis folder, $openWithRoot"
-    Refused $stashNow 'it is the stash folder itself' 'the stash folder itself'
+    Refused $full 'is not empty' 'a folder that is not empty'
+    Refused $openWithRoot "lies inside the Open with$ellipsis folder" "the Open with$ellipsis folder, $openWithRoot"
+    Refused $stashNow 'is the stash folder itself' 'the stash folder itself'
 
     # State Move, G30, G35, R9: a recording in progress waited for, beginnings refused meanwhile, its notification's
     # Undo waited for, then the whole stash carried.
@@ -469,7 +469,7 @@ try {
     Check ((Test-Path -LiteralPath $storeNow) -and (@(Get-ChildItem -LiteralPath $to -Force).Count -eq 0) -and ((Settings).stashFolder -eq $from)) 'a second on, nothing has been copied and the settings still name the old folder (State Move)'
 
     # Nothing else starts: a capture and an import asked now are refused by name.
-    $refusedShot = "Take a screenshot failed: the screen, $movingAway"
+    $refusedShot = "Can't take a screenshot (the screen): $movingAway."
     ChooseInTrayMenu 'Take a screenshot'
     Check (WaitFor { [CaptureDesk]::TitledFrom($running, $refusedShot) -ne [IntPtr]::Zero } 3000) "the tray's Take a screenshot is refused by name, a notification reading '$refusedShot' (State Move, G35)"
     Check (@([ScreenshotDesk]::Titled($running, 'ImageStash screenshot')).Count -eq 0) 'and no screenshot overlay showed'
@@ -481,8 +481,8 @@ try {
     Need ([PasteInClipboard]::Put([OpenWithDesk]::Flat(6, 4, 200, 120, 40, 'png'), [PasteInClipboard]::DibV5(6, 4, $pixels))) 'a picture on the clipboard as a browser''s Copy image places it'
     $root = Summon
     $null = [PasteDesk]::Press([uint16[]]@(0x11, 0x56))
-    $refusedPaste = "Add to the stash failed: the clipboard, $movingAway"
-    Check (WaitFor { (WindowWords $root $refusedPaste).Count -ge 1 } 3000) "a real Ctrl+V in the stash window is refused by name, a notice reading '$refusedPaste' (State Move, G35): $((WindowWords $root 'Add to the stash') -join ' | ')"
+    $refusedPaste = "Can't add to the stash (the clipboard): $movingAway."
+    Check (WaitFor { (WindowWords $root $refusedPaste).Count -ge 1 } 3000) "a real Ctrl+V in the stash window is refused by name, a notice reading '$refusedPaste' (State Move, G35): $((WindowWords $root 'Can''t add to the stash') -join ' | ')"
     Check ((Count 'SELECT COUNT(*) FROM items') -eq $items) "nothing was added to the stash of $items"
     $null = [PasteDesk]::Press([uint16[]]@(0x11, 0x12, 0x20))
     $null = WaitFor { $null -eq (StashWindow) } 2000

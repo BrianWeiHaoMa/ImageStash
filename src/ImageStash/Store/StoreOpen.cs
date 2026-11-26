@@ -123,7 +123,7 @@ internal static class StoreOpen
     {
         if (!File.Exists(staging.StoreFile))
         {
-            return new Failure(Action, StashFolder.StoreFileName, notAStore);
+            return Failure.Refusal(Action, StashFolder.StoreFileName, notAStore);
         }
 
         var version = VersionBeforeOpening(staging, live.RetryDuration);
@@ -134,13 +134,14 @@ internal static class StoreOpen
 
         if (version.Value > StoreSchema.CurrentVersion)
         {
-            return Newer;
+            // An import refuses an export a newer build wrote (G36); opening the stash itself fails on one.
+            return Newer with { Refused = true };
         }
 
         // Every build's open leaves its store at version 1 or above; at 0 (an empty file) the migration would make an empty stash of it.
         if (version.Value < 1)
         {
-            return new Failure(Action, StashFolder.StoreFileName, notAStore);
+            return Failure.Refusal(Action, StashFolder.StoreFileName, notAStore);
         }
 
         using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
@@ -177,7 +178,7 @@ internal static class StoreOpen
             }
         });
         return !answered.Succeeded ? answered.Failure
-            : answered.Value.Answered ? Outcome<T>.Of(answered.Value.Value) : new Failure(Action, StashFolder.StoreFileName, notAStore);
+            : answered.Value.Answered ? Outcome<T>.Of(answered.Value.Value) : Failure.Refusal(Action, StashFolder.StoreFileName, notAStore);
     }
 
     private const int SqliteError = 1;

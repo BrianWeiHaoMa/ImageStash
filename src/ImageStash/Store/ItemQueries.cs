@@ -209,9 +209,9 @@ internal static class ItemQueries
                 answers[item.Id] = rows switch
                 {
                     [{ Listed: { } now }] => Outcome<StashItem>.Of(now),
-                    [var row] => Outcome<StashItem>.Fail(new Failure(action, Named(row.Name, row.FinishedFile), ItemFactChange.NotInStash)),
+                    [var row] => Outcome<StashItem>.Fail(Failure.Refusal(action, Named(row.Name, row.FinishedFile), ItemFactChange.NotInStash)),
                     // A row that is gone holds no name any more, so the item is named as the caller was shown it (G35).
-                    _ => Outcome<StashItem>.Fail(new Failure(action, Named(item.Name, item.FileName), ItemFactChange.NotInStash)),
+                    _ => Outcome<StashItem>.Fail(Failure.Refusal(action, Named(item.Name, item.FileName), ItemFactChange.NotInStash)),
                 };
             }
 

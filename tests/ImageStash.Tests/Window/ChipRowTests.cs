@@ -217,7 +217,7 @@ public sealed class ChipRowTests
 
         Assert.IsTrue(drag.TakenByChip, "the internal drop is consumed and records no outside use");
         Assert.IsEmpty((await store.TagCounts()).Value!, "the stale chip cannot recreate the tag");
-        Assert.AreEqual("Add a tag failed: dropped, no item carries #reaction any more", listed.Notices.Shown.Single().Text);
+        Assert.AreEqual("Can't add a tag (dropped): no item carries #reaction any more.", listed.Notices.Shown.Single().Text);
         Assert.IsEmpty(listed.Listing.LitTags);
         Assert.AreEqual(new TagCount("reaction", 0), listed.Listing.Chips.Single(), "its place remains inactive");
         Assert.IsTrue((await listed.Organising.AddTag([dropped], "reaction")).Succeeded);

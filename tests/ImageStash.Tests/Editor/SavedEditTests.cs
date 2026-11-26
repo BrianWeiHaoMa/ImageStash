@@ -55,7 +55,7 @@ public sealed class SavedEditTests
         var saved = await SavedEdit.Save(store, cat, catEdit, EditedItems.Arrow, thenRemoved, TestStash.ShortRetry);
         var made = await SavedEdit.SaveAsNew(store, dog, dogEdit, EditedItems.Arrow, thenRemoved, TestStash.ShortRetry);
 
-        Assert.AreEqual("Save failed: cat, it is no longer in the stash", saved.Failure?.Sentence);
+        Assert.AreEqual("Can't save: cat is no longer in the stash.", saved.Failure?.Sentence);
         Assert.IsNull(saved.Value);
         Assert.AreEqual("dog", made.Failure?.Subject, made.Failure?.Sentence);
         Assert.IsNull(made.Value);

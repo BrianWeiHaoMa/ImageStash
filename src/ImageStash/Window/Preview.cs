@@ -670,7 +670,7 @@ public sealed class Preview : Border
         return now.Value is { } stored ? await act(stored) : Outcome.Done;
 
         Failure? Refused() => (replacements != listing.Replacements ? Listing.ReplacedSinceReason : listing.NotOpenReason)
-            is { } reason ? new Failure(action, asked.NameOrFileName, reason) : null;
+            is { } reason ? Failure.Refusal(action, asked.NameOrFileName, reason) : null;
 
         Outcome Named(Failure failure)
         {

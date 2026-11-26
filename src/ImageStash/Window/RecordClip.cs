@@ -93,7 +93,7 @@ public sealed class RecordClip
         // A new recording only: Record and Stop of the one in progress went ahead above (State: Move).
         if (listing.CannotStartReason is { } notOpen)
         {
-            notifications.Raise(new Failure(Action, Subject, notOpen));
+            notifications.Raise(Failure.Refusal(Action, Subject, notOpen));
             return;
         }
 
@@ -112,7 +112,7 @@ public sealed class RecordClip
             // recording's start, so the session never refuses that start below.
             if (!capture.Selecting && !capture.RecordingInProgress)
             {
-                notifications.Raise(new Failure(Action, Subject, StillSaving));
+                notifications.Raise(Failure.Refusal(Action, Subject, StillSaving));
             }
 
             return;

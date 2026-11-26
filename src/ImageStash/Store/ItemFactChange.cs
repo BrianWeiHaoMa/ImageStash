@@ -25,7 +25,7 @@ internal sealed class ItemFactResult(
     internal bool IssuedBy(StoreContext store) => ReferenceEquals(issuer, store);
 
     internal ItemFactResult RefuseUndo(string reason) => new(issuer, UndoAction,
-        [.. Changes.Select(change => Outcome.Fail(new Failure(UndoAction, change.Item.Name, reason)))], []);
+        [.. Changes.Select(change => Outcome.Fail(Failure.Refusal(UndoAction, change.Item.Name, reason)))], []);
 }
 
 /// <summary>
@@ -56,7 +56,7 @@ internal static class ItemFactChange
         {
             if (refusedBecause?.Invoke() is { } reason)
             {
-                var refused = distinct.ToDictionary(item => item.Id, item => new Failure(action, item.Name, reason));
+                var refused = distinct.ToDictionary(item => item.Id, item => Failure.Refusal(action, item.Name, reason));
                 return (Failures: refused, Changes: ImmutableArray<ItemFactDelta>.Empty);
             }
 
@@ -89,7 +89,7 @@ internal static class ItemFactChange
             if (rows.Count == 0)
             {
                 // A row that is gone holds no name any more, so the item is named as the caller was shown it (G35).
-                notListed[item.Id] = new Failure(action, item.Name, NotInStash);
+                notListed[item.Id] = Failure.Refusal(action, item.Name, NotInStash);
                 continue;
             }
 
@@ -97,7 +97,7 @@ internal static class ItemFactChange
             var name = ItemQueries.Named(row.Name, row.FinishedFile);
             if (row.Deleted || !StashItem.IsListed(store.Folder, row.PendingSteps))
             {
-                notListed[item.Id] = new Failure(action, name, NotInStash);
+                notListed[item.Id] = Failure.Refusal(action, name, NotInStash);
             }
             else
             {

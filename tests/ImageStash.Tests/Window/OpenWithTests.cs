@@ -441,7 +441,7 @@ public sealed class OpenWithTests
 
         using var opening = new OpenWith(new Listing(_ => { }), listed.Notifications, listed.Editing, listed.Dialogs, listed.OpenWithClock, action => action());
         var notOpen = await opening.Begin(null!, cat, _ => Assert.Fail("no dialog while the stash is not open"));
-        Assert.AreEqual(new Failure(OpenWith.Action, "cat", "your stash is still opening"), notOpen.Failure);
+        Assert.AreEqual(Failure.Refusal(OpenWith.Action, "cat", "your stash is still opening"), notOpen.Failure);
     }
 
     [TestMethod]

@@ -259,7 +259,7 @@ public sealed class ImportOfferTests
 
             var refused = await page.Export(null!);
 
-            Assert.AreEqual(new Failure(StashExport.Action, Path.GetFileName(named), Transferring.OfferedFileReason).Sentence, refused.Failure?.Sentence, "refused by name, Windows' case ignored");
+            Assert.AreEqual(Failure.Refusal(StashExport.Action, Path.GetFileName(named), Transferring.OfferedFileReason).Sentence, refused.Failure?.Sentence, "refused by name, Windows' case ignored");
             CollectionAssert.AreEqual(bytes, File.ReadAllBytes(archive), "the offered file untouched");
             Assert.AreEqual(offered, page.ImportOffer, "the offer stands");
         }

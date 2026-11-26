@@ -219,7 +219,7 @@ public sealed class ItemRenameTests
         var outcomes = new[] { await store.Rename(gone, "x"), await store.Rename(marked, "x"), await store.Rename(waiting, "x") };
 
         CollectionAssert.AreEqual(
-            new[] { new Failure("Rename", "gone", ItemFactChange.NotInStash), new Failure("Rename", "marked", ItemFactChange.NotInStash), new Failure("Rename", "waiting", ItemFactChange.NotInStash) },
+            new[] { Failure.Refusal("Rename", "gone", ItemFactChange.NotInStash), Failure.Refusal("Rename", "marked", ItemFactChange.NotInStash), Failure.Refusal("Rename", "waiting", ItemFactChange.NotInStash) },
             outcomes.Select(o => o.Failure).ToList());
         Assert.IsTrue((await store.Rename(listed, "x")).Succeeded);
         stash.Close();

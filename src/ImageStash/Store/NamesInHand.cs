@@ -43,7 +43,7 @@ internal sealed class NamesInHand
         {
             if (items.FirstOrDefault(item => chosenAt.TryGetValue(HandedOver(item), out var at) && at >= item.CommitsWhenRead) is { } changed)
             {
-                return new Failure(action, changed.Name.Length > 0 ? changed.Name : changed.FileName, ChangedSinceShown);
+                return Failure.Refusal(action, changed.Name.Length > 0 ? changed.Name : changed.FileName, ChangedSinceShown);
             }
 
             return Outcome<IDisposable>.Of(Hold(items));

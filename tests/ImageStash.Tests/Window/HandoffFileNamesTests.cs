@@ -127,7 +127,7 @@ public sealed class HandoffFileNamesTests
         var dragging = 0;
         var dragged = await handing.Handoff.DragOut([shown], handing.Drag, _ => dragging++, () => dragging++);
 
-        Assert.AreEqual("Drag out failed: animated, it changed in the stash since it was shown", dragged.Failure?.Sentence);
+        Assert.AreEqual("Can't drag out: animated changed in the stash since it was shown.", dragged.Failure?.Sentence);
         Assert.AreEqual(dragged.Failure!.Sentence, handing.Notices.Shown.Single().Text);
         Assert.IsEmpty(handing.Clipboard.Dragged, "nothing dragged (G9)");
         Assert.AreEqual(0, dragging);

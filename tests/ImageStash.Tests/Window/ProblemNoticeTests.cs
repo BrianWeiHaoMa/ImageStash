@@ -29,7 +29,7 @@ public sealed class ProblemNoticeTests
         var refused = listed.Notices.Shown.Single();
         Pass(listed, AMinute);
 
-        Assert.AreEqual(new Failure(ClipboardPaste.Action, "the clipboard", "it holds no picture or file").Sentence, refused.Text);
+        Assert.AreEqual(Failure.Refusal(ClipboardPaste.Action, "the clipboard", "it holds no picture or file").Sentence, refused.Text);
         Assert.IsTrue(refused.NamesAProblem);
         CollectionAssert.AreEqual(new[] { refused }, listed.Notices.Shown.ToList(), "a refusal stays past its time");
         listed.Notices.Close(refused);

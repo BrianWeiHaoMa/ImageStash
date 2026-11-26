@@ -119,7 +119,7 @@ public sealed class AdoptionNotifications
         var subject = ItemQueries.Named(adopted.Name, adopted.FileName);
         if (listing.Store is not { } store)
         {
-            return new Failure(ItemAdoptionUndo.Action, subject, listing.NotOpenReason!);
+            return Failure.Refusal(ItemAdoptionUndo.Action, subject, listing.NotOpenReason!);
         }
 
         // A Save already made ends the Undo, the open edit left as it is; else the edit goes first, and a Save of the item
@@ -133,7 +133,7 @@ public sealed class AdoptionNotifications
         {
             await Expire(adopted, revision);
             await refresh();
-            return new Failure(ItemAdoptionUndo.Action, subject, ChangedSince);
+            return Failure.Refusal(ItemAdoptionUndo.Action, subject, ChangedSince);
         }
 
         var undone = await store.UndoAdoption(adopted.Id, revision);
@@ -142,7 +142,7 @@ public sealed class AdoptionNotifications
             await Expire(adopted, revision);
             var now = await store.Item(adopted.Id);
             await refresh();
-            return new Failure(ItemAdoptionUndo.Action, subject, now is { Succeeded: true, Value: null } ? ItemFactChange.NotInStash : ChangedSince);
+            return Failure.Refusal(ItemAdoptionUndo.Action, subject, now is { Succeeded: true, Value: null } ? ItemFactChange.NotInStash : ChangedSince);
         }
 
         // A refusal carries no item; a failure after the commit carries the item as committed.

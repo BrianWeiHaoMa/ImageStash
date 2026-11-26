@@ -276,7 +276,7 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
         // motion, perhaps into the folder it is copied to (State: Move); asked again once the picker has answered.
         if (listing.CannotStartReason is { } refused)
         {
-            return Named(new Failure(SaveACopyAction, ItemQueries.Named(item.Name, item.FileName), refused));
+            return Named(Failure.Refusal(SaveACopyAction, ItemQueries.Named(item.Name, item.FileName), refused));
         }
 
         string? chosen;
@@ -308,12 +308,12 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
 
         if (listing.Replacements != replacements)
         {
-            return Named(new Failure(SaveACopyAction, ItemQueries.Named(item.Name, item.FileName), Listing.ReplacedSinceReason));
+            return Named(Failure.Refusal(SaveACopyAction, ItemQueries.Named(item.Name, item.FileName), Listing.ReplacedSinceReason));
         }
 
         if (listing.Store is not { } store)
         {
-            return Named(new Failure(SaveACopyAction, Path.GetFileName(chosen), listing.NotOpenReason!));
+            return Named(Failure.Refusal(SaveACopyAction, Path.GetFileName(chosen), listing.NotOpenReason!));
         }
 
         // Confirmed again by its identity: while the picker was up a Move may have carried the stash elsewhere, or a rename
@@ -322,7 +322,7 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
         using var inHand = await store.Confirm([item], SaveACopyAction);
         if (listing.CannotStartReason is { } refusedSince)
         {
-            return Named(new Failure(SaveACopyAction, Path.GetFileName(chosen), refusedSince));
+            return Named(Failure.Refusal(SaveACopyAction, Path.GetFileName(chosen), refusedSince));
         }
 
         if (inHand.Items[0] is not { Succeeded: true, Value: { } current })
@@ -332,7 +332,7 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
 
         if (InsideStash(chosen))
         {
-            return Named(new Failure(SaveACopyAction, Path.GetFileName(chosen), "it would be inside the stash folder, which holds only ImageStash's own files"));
+            return Named(Failure.Refusal(SaveACopyAction, Path.GetFileName(chosen), "it would be inside the stash folder, which holds only ImageStash's own files"));
         }
 
         // In the turn of the refusal it passed, so a Move asked from now on waits until the file is written.

@@ -171,7 +171,7 @@ public sealed class Editing
     {
         if (begins && startOn is null && listing.WholeStashActAsked is { } asked && !Occupies(item.Id))
         {
-            return new Failure(Action, Name(item), asked);
+            return Failure.Refusal(Action, Name(item), asked);
         }
 
         return await StartOpening(() => OpenWhenReady(item, from, startOn, trim));
@@ -202,7 +202,7 @@ public sealed class Editing
         await ChangesOf(item.Id);
         if (replacements != listing.Replacements)
         {
-            return new Failure(Action, Name(item), Listing.ReplacedSinceReason);
+            return Failure.Refusal(Action, Name(item), Listing.ReplacedSinceReason);
         }
 
         if (Session is { } open)
@@ -217,13 +217,13 @@ public sealed class Editing
 
             if (!Cancel())
             {
-                return new Failure(Action, Name(item), $"“{Name(open.Item)}” is still being saved");
+                return Failure.Refusal(Action, Name(item), $"“{Name(open.Item)}” is still being saved");
             }
         }
 
         if (listing.Store is not { } store)
         {
-            return new Failure(Action, Name(item), listing.NotOpenReason!);
+            return Failure.Refusal(Action, Name(item), listing.NotOpenReason!);
         }
 
         var opening = ++openings;
@@ -428,7 +428,7 @@ public sealed class Editing
         using var acting = UserAct.Begin(RevertAction);
         if (listing.CannotStartReason is { } refused)
         {
-            return Named(new Failure(RevertAction, Name(item), refused));
+            return Named(Failure.Refusal(RevertAction, Name(item), refused));
         }
 
         var store = listing.Store!;
@@ -491,7 +491,7 @@ public sealed class Editing
         using var acting = UserAct.Begin(SaveAsNewItemAction);
         if (listing.CannotStartReason is { } refused)
         {
-            return Named(new Failure(SaveAsNewItemAction, Name(item), refused));
+            return Named(Failure.Refusal(SaveAsNewItemAction, Name(item), refused));
         }
 
         var store = listing.Store!;
@@ -534,7 +534,7 @@ public sealed class Editing
     {
         if (listing.Store is not { } store)
         {
-            return new Failure(UndoRevertAction, Name(item), listing.NotOpenReason!);
+            return Failure.Refusal(UndoRevertAction, Name(item), listing.NotOpenReason!);
         }
 
         Outcome<StashItem> saved;
@@ -544,7 +544,7 @@ public sealed class Editing
         {
             var read = await Read(store, item, UndoRevertAction);
             saved = !read.Succeeded ? read.Failure
-                : !read.Value!.OriginalSha256.AsSpan().SequenceEqual(under) ? new Failure(UndoRevertAction, Name(item), OriginalReplacedSinceRevert)
+                : !read.Value!.OriginalSha256.AsSpan().SequenceEqual(under) ? Failure.Refusal(UndoRevertAction, Name(item), OriginalReplacedSinceRevert)
                 : await SavedEdit.Save(store, read.Value.Item, read.Value, removed, renderer, heldFileRetry);
             await listing.Refresh();
         }
@@ -644,7 +644,7 @@ public sealed class Editing
     private async Task<Outcome<ItemForEdit>> Read(StashStore store, StashItem item, string action)
     {
         var read = await store.ForEdit(item.Id);
-        return !read.Succeeded ? read.Failure : read.Value is { } edit ? Outcome<ItemForEdit>.Of(edit) : new Failure(action, Name(item), NotInStash);
+        return !read.Succeeded ? read.Failure : read.Value is { } edit ? Outcome<ItemForEdit>.Of(edit) : Failure.Refusal(action, Name(item), NotInStash);
     }
 
     /// <summary>A menu's change begun, its busy state shown beside any other's (G35); the words, for <see cref="Acted"/>.</summary>

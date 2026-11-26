@@ -442,7 +442,7 @@ public sealed class StashStore : IDisposable
     {
         if (Begin(WholeStash.Move) is { } running)
         {
-            return new Failure(StashMove.Action, MoveFolders.Subject(destination), running);
+            return Failure.Refusal(StashMove.Action, MoveFolders.Subject(destination), running);
         }
 
         try
@@ -466,7 +466,7 @@ public sealed class StashStore : IDisposable
     {
         if (Begin(WholeStash.Export) is { } running)
         {
-            return new Failure(StashExport.Action, StashArchive.Subject(archivePath), running);
+            return Failure.Refusal(StashExport.Action, StashArchive.Subject(archivePath), running);
         }
 
         try
@@ -491,7 +491,7 @@ public sealed class StashStore : IDisposable
     {
         if (Begin(WholeStash.Import) is { } running)
         {
-            return new Failure(StashImport.Action, StashArchive.Subject(archivePath), running);
+            return Failure.Refusal(StashImport.Action, StashArchive.Subject(archivePath), running);
         }
 
         try

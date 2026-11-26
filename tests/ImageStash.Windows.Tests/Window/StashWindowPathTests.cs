@@ -350,7 +350,7 @@ public sealed partial class StashWindowPathTests
         {
             Assert.AreEqual("SO TRUE", editor.Field?.Text);
             Assert.AreEqual("SO TRUE", ((TextLayer)editor.Session!.Layers.Layers.Single()).Text);
-            Assert.AreEqual("Paste failed: the clipboard, it holds no text to paste", shown.Said());
+            Assert.AreEqual("Can't paste: the clipboard holds no text to paste.", shown.Said());
         });
     }
 

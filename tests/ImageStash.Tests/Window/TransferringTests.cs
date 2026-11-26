@@ -169,7 +169,7 @@ public sealed partial class TransferringTests
 
         var refused = await page.Import(null!);
 
-        Assert.AreEqual(new Failure(StashImport.Action, "bad.zip", reason), refused.Failure);
+        Assert.AreEqual(Failure.Refusal(StashImport.Action, "bad.zip", reason), refused.Failure);
         Assert.AreEqual(refused.Failure!.Sentence, page.WarningOf(SettingsPage.ImportTitle), "on the row (G35)");
         CollectionAssert.AreEqual(new[] { refused.Failure!.Sentence }, listed.Notices.Shown.Select(notice => notice.Text).ToList(), "and in a notice");
         Assert.IsNull(page.ImportOffer, "nothing offered for confirmation");
@@ -235,7 +235,7 @@ public sealed partial class TransferringTests
         Assert.AreEqual(StashImport.InProgress, listed.Listing.CannotStartReason, "from the confirmation nothing else starts (G36)");
         Assert.IsTrue(page.WholeStashActAsked, "the page takes no change");
         await listed.Turns.Act(() => listed.Import.Drop(ListedStash.Contents([listed.Stash.Source("dropped.png", MediaFixtures.Bytes("still.png"))])));
-        CollectionAssert.Contains(listed.Notices.Shown.Select(notice => notice.Text).ToList(), new Failure(Import.Action, "dropped.png", StashImport.InProgress).Sentence,
+        CollectionAssert.Contains(listed.Notices.Shown.Select(notice => notice.Text).ToList(), Failure.Refusal(Import.Action, "dropped.png", StashImport.InProgress).Sentence,
             "an import of files refused by name");
         Assert.IsTrue(listed.Turns.Act(listed.Editing.Cancel), "the edit's Cancel still works");
         listed.Stash.Clock.Now += Notices.Lasting;
@@ -485,7 +485,7 @@ public sealed partial class TransferringTests
         picker.SetResult(chosen);
         var saved = await saving;
 
-        Assert.AreEqual(new Failure(ItemMenu.SaveACopyAction, "cat", Listing.ReplacedSinceReason), saved.Failure, "refused by name (G35)");
+        Assert.AreEqual(Failure.Refusal(ItemMenu.SaveACopyAction, "cat", Listing.ReplacedSinceReason), saved.Failure, "refused by name (G35)");
         Assert.IsFalse(File.Exists(chosen), "no picture of the imported item given cat's identity copied in its place (G9, G36)");
     }
 

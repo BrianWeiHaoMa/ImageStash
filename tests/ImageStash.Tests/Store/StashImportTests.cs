@@ -206,7 +206,7 @@ public sealed class StashImportTests
         var store = await Target(target);
         var tree = Tree(target.Folder.Root);
         // No ImageStash wrote a manifest its store disagrees with, and the confirmation said 99 (G36 "says how many items it holds").
-        Assert.AreEqual(new Failure(StashImport.Action, "miscounted.zip", TransferReasons.NotAnExport), (await store.Import(Keeper(target), miscounted)).Failure);
+        Assert.AreEqual(Failure.Refusal(StashImport.Action, "miscounted.zip", TransferReasons.NotAnExport), (await store.Import(Keeper(target), miscounted)).Failure);
         CollectionAssert.AreEqual(tree, Tree(target.Folder.Root));
         Assert.IsEmpty(Beside(target));
     }
@@ -338,7 +338,7 @@ public sealed class StashImportTests
         var summary = StashImport.Summary(path, TestStash.ShortRetry);
         var imported = await store.Import(keeper, path);
 
-        var refusal = new Failure(StashImport.Action, "refused.zip", reason);
+        var refusal = Failure.Refusal(StashImport.Action, "refused.zip", reason);
         Assert.AreEqual(refusal, summary.Failure);
         Assert.AreEqual(refusal, imported.Failure);
         Assert.IsNull(imported.Value);
@@ -360,6 +360,7 @@ public sealed class StashImportTests
     [DataRow("an earlier build's unknown format")]
     [DataRow("an earlier build's undecodable steps")]
     [DataRow("an earlier build's file name outside")]
+    [DataRow("damaged")]
     public async Task AnArchiveWhoseStoreDoesNotOpenAsItsStashIsRefusedWithNoRecordAndNoStoreMade(string kind)
     {
         using var source = new TestStash();
@@ -374,6 +375,7 @@ public sealed class StashImportTests
             "not SQLite" => Rewritten(real, refused, ("stash.db", TestStash.Bytes(7, 4096))),
             "no tables" => Rewritten(real, refused, ("stash.db", StoreWithoutTables(source.Outside("no-tables.db")))),
             "empty" => Rewritten(real, refused, ("stash.db", [])),
+            "damaged" => Damaged(Rewritten(real, refused, ("stash.db", TestStash.Bytes(7, 65536)))),
             "a picture missing" => Rewritten(real, refused, ("plain.jpg", null)),
             "a file name outside" => WithStore(real, refused, @"UPDATE items SET finished_file = '..\victim.png', original_file = '..\victim.png'"),
             "a step outside" => WithStore(real, refused, @"UPDATE items SET pending_steps = '[{""step"":""rename in root"",""from"":""..\victim.png"",""to"":""plain.jpg""}]'"),
@@ -392,10 +394,17 @@ public sealed class StashImportTests
 
         Assert.AreEqual(StashImport.Action, imported.Failure?.Action);
         Assert.AreEqual("refused.zip", imported.Failure!.Subject);
-        if (kind != "not SQLite")
+        if (kind == "damaged")
+        {
+            Assert.AreEqual("it is damaged or incomplete", imported.Failure.Reason);
+        }
+        else if (kind != "not SQLite")
         {
             Assert.AreEqual(TransferReasons.NotAnExport, imported.Failure.Reason);
         }
+
+        // G36 and G35: a file that is no export, or whose data is damaged, is refused, never said to have failed.
+        Assert.AreEqual(kind != "not SQLite", imported.Failure.Refused, imported.Failure.Sentence);
 
         Assert.IsFalse(File.Exists(Path.Combine(Path.GetDirectoryName(target.Folder.Root)!, "victim.png")));
 
@@ -537,7 +546,7 @@ public sealed class StashImportTests
         Assert.IsTrue(answeredAtOnce, "refused at submission, nothing queued");
         var words = running switch { "import" => StashImport.InProgress, "export" => StashExport.InProgress, _ => MoveReasons.AlreadyMoving };
         var subject = asked switch { "import" => "export.zip", "export" => "second.zip", _ => "other" };
-        Assert.AreEqual(new Failure(asked == "move" ? StashMove.Action : asked == "export" ? StashExport.Action : StashImport.Action, subject, words), refusal);
+        Assert.AreEqual(Failure.Refusal(asked == "move" ? StashMove.Action : asked == "export" ? StashExport.Action : StashImport.Action, subject, words), refusal);
         Assert.AreEqual(running != "import", firstDone.Succeeded, firstDone.Failure?.ToString());
         Assert.IsFalse(File.Exists(stash.Outside("second.zip")));
         if (running != "move")
@@ -812,6 +821,29 @@ public sealed class StashImportTests
         var keeper = Keeper(stash);
         Assert.IsTrue((await keeper.ChangeNow(_ => settings)).Succeeded);
         return keeper;
+    }
+
+    /// <summary>
+    /// <paramref name="archive"/> with the middle of its store entry's compressed data overwritten, so that its manifest
+    /// and names still read and only extracting the store finds the damage.
+    /// </summary>
+    private static string Damaged(string archive)
+    {
+        var bytes = File.ReadAllBytes(archive);
+        var name = System.Text.Encoding.ASCII.GetBytes(StashFolder.StoreFileName);
+        for (var at = 0; at + 30 + name.Length < bytes.Length; at++)
+        {
+            if (BitConverter.ToUInt32(bytes, at) == 0x04034b50 && bytes.AsSpan(at + 30, name.Length).SequenceEqual(name))
+            {
+                var data = at + 30 + BitConverter.ToUInt16(bytes, at + 26) + BitConverter.ToUInt16(bytes, at + 28);
+                var size = (int)BitConverter.ToUInt32(bytes, at + 18);
+                bytes.AsSpan(data + size / 4, size / 2).Fill(0xFF);
+                File.WriteAllBytes(archive, bytes);
+                return archive;
+            }
+        }
+
+        throw new InvalidOperationException("the archive holds no store entry");
     }
 
     private static string WriteText(string path)

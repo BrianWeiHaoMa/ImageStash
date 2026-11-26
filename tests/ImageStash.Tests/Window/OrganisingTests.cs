@@ -251,8 +251,8 @@ public sealed class OrganisingTests
         var toggled = await listed.Organising.ToggleFavorite(selection);
         var tagged = await listed.Organising.AddTag(selection, "reaction");
 
-        Assert.AreEqual("Add to Favorites failed: gone, it is no longer in the stash", toggled.Failure?.Sentence);
-        Assert.AreEqual("Add a tag failed: gone, it is no longer in the stash", tagged.Failure?.Sentence);
+        Assert.AreEqual("Can't add to Favorites: gone is no longer in the stash.", toggled.Failure?.Sentence);
+        Assert.AreEqual("Can't add a tag: gone is no longer in the stash.", tagged.Failure?.Sentence);
         CollectionAssert.AreEqual(new[] { toggled.Failure!.Sentence, tagged.Failure!.Sentence },
             listed.Notices.Shown.Where(notice => notice.NamesAProblem).Select(notice => notice.Text).ToArray(), "each named once, by item (G35)");
         CollectionAssert.AreEqual(new[] { kept.Id }, await FavoriteIds(listed), "the other item changed");
@@ -288,8 +288,8 @@ public sealed class OrganisingTests
         Assert.IsEmpty(listed.Listing.Items.Single().Tags);
         CollectionAssert.AreEquivalent(new[]
         {
-            $"Undo adding a tag failed: {lostName}, it is no longer in the stash",
-            $"Undo adding a tag failed: {goneName}, it is no longer in the stash",
+            $"Can't undo adding a tag: {lostName} is no longer in the stash.",
+            $"Can't undo adding a tag: {goneName} is no longer in the stash.",
         }, listed.Notices.Shown.Where(notice => notice.NamesAProblem).Select(notice => notice.Text).ToArray());
     }
 
@@ -371,8 +371,8 @@ public sealed class OrganisingTests
         listing.StashFailed(new Failure("Open the stash", "stash", "the disk is gone"));
         var failed = await organising.AddTag(TestItems.Many(4), "dog");
 
-        Assert.AreEqual("Add to Favorites failed: “item 1”, your stash is still opening", opening.Failure?.Sentence);
-        Assert.AreEqual("Add a tag failed: 4 items, your stash could not be opened", failed.Failure?.Sentence);
+        Assert.AreEqual("Can't add to Favorites (“item 1”): your stash is still opening.", opening.Failure?.Sentence);
+        Assert.AreEqual("Can't add a tag (4 items): your stash could not be opened.", failed.Failure?.Sentence);
         CollectionAssert.AreEqual(new[] { opening.Failure!.Sentence, failed.Failure!.Sentence }, notices.Shown.Select(notice => notice.Text).ToList());
     }
 

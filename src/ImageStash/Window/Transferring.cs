@@ -116,7 +116,7 @@ public sealed class Transferring
         using var acting = UserAct.Begin(StashExport.Action);
         if (CannotBeginReason is { } refused)
         {
-            return new Failure(StashExport.Action, StashSubject, refused);
+            return Failure.Refusal(StashExport.Action, StashSubject, refused);
         }
 
         exported = null;
@@ -144,13 +144,13 @@ public sealed class Transferring
 
         if (Offer is { } offer && SameFile(chosen, offer.Path))
         {
-            return Named(new Failure(StashExport.Action, Path.GetFileName(chosen), OfferedFileReason));
+            return Named(Failure.Refusal(StashExport.Action, Path.GetFileName(chosen), OfferedFileReason));
         }
 
         // The stash may have stopped taking changes while the picker was up.
         if (listing.CannotStartReason is not null || listing.Store is not { } store)
         {
-            return Named(new Failure(StashExport.Action, Path.GetFileName(chosen), listing.CannotStartReason!));
+            return Named(Failure.Refusal(StashExport.Action, Path.GetFileName(chosen), listing.CannotStartReason!));
         }
 
         Begin(StashExport.InProgress, export: true, ExportingWords(chosen));
@@ -191,7 +191,7 @@ public sealed class Transferring
         using var acting = UserAct.Begin(StashImport.Action);
         if (CannotBeginReason is { } refused)
         {
-            return new Failure(StashImport.Action, StashSubject, refused);
+            return Failure.Refusal(StashImport.Action, StashSubject, refused);
         }
 
         imported = null;
@@ -223,7 +223,7 @@ public sealed class Transferring
             // The whole stash, as the store holds it now, never what the window's search or scope leaves.
             if (listing.Store is not { } store)
             {
-                return Named(new Failure(StashImport.Action, Path.GetFileName(chosen), listing.CannotStartReason!));
+                return Named(Failure.Refusal(StashImport.Action, Path.GetFileName(chosen), listing.CannotStartReason!));
             }
 
             var current = await store.Count();
@@ -268,7 +268,7 @@ public sealed class Transferring
         var subject = Path.GetFileName(offer.Path);
         if (CannotBeginReason is not null || listing.Store is not { } store)
         {
-            return Named(new Failure(StashImport.Action, subject, CannotBeginReason!));
+            return Named(Failure.Refusal(StashImport.Action, subject, CannotBeginReason!));
         }
 
         Begin(StashImport.InProgress, export: false, ImportingWords(subject));

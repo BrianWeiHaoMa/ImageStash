@@ -332,7 +332,7 @@ public sealed class ItemQueriesTests
         TestStash.AssertSameItem((await store.Item(listed.Id)).Value!, confirmed[0].Value);
         Assert.AreEqual("mood", confirmed[0].Value!.Tags.Single(), "as the stash lists it now, not as handed in");
         CollectionAssert.AreEqual(
-            new[] { "Copy failed: gone as shown, it is no longer in the stash", "Copy failed: marked, it is no longer in the stash", "Copy failed: waiting, it is no longer in the stash" },
+            new[] { "Can't copy: gone as shown is no longer in the stash.", "Can't copy: marked is no longer in the stash.", "Can't copy: waiting is no longer in the stash." },
             confirmed.Skip(1).Take(3).Select(outcome => outcome.Failure?.Sentence).ToList(),
             "a row that is gone named as handed in, the others as the stash names them");
         Assert.AreSame(confirmed[0].Value, confirmed[4].Value, "a repeated identity is answered as its first");

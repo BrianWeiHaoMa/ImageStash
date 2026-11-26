@@ -172,7 +172,7 @@ public sealed class StashWindowPathTests
         listed.Keys.Released(Key.V);
 
         Assert.HasCount(3, await listed.Stash.All(), "a picture there adds no item (G13)");
-        Assert.AreEqual("Paste failed: the clipboard, it holds no text to paste", listed.Notices.Shown.Single().Text, "the notice says so");
+        Assert.AreEqual("Can't paste: the clipboard holds no text to paste.", listed.Notices.Shown.Single().Text, "the notice says so");
         Assert.AreEqual("SO TRUE", ((TextLayer)session.SelectedLayer!).Text);
     }
 

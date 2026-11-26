@@ -88,7 +88,7 @@ public sealed partial class Listing
             {
                 if (fromPicker)
                 {
-                    failed(new Failure(SearchAct, $"#{tag}", "no item carries this tag any more"));
+                    failed(Failure.Refusal(SearchAct, $"#{tag}", "no item carries this tag any more"));
                 }
 
                 return Task.CompletedTask;

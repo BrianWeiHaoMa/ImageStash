@@ -2,12 +2,46 @@ namespace ImageStash;
 
 /// <summary>
 /// Why an operation did not complete, in words a user reads and every caller shows unchanged (G35):
-/// what was being done, to which file or item, and why.
+/// what was being done, to which file or item, and why. A <see cref="Refused"/> one is a refusal: the person asked for
+/// what ImageStash will not do, or cannot do now, and nothing went wrong.
 /// </summary>
 public sealed record Failure(string Action, string Subject, string Reason)
 {
-    /// <summary>The failure as one sentence, the way the tooltip and the window's notices show it.</summary>
-    public string Sentence => $"{Action} failed: {Subject}, {Reason}";
+    /// <summary>
+    /// True for a refusal, set where the record is made by the line governing that act ("refused", or nothing gone
+    /// wrong), never read from <see cref="Reason"/>: one reason serves both, as an item no longer in the stash refuses a
+    /// handoff (G8) and fails a use's record (G10).
+    /// </summary>
+    public bool Refused { get; init; }
+
+    /// <summary>
+    /// A refusal of <paramref name="action"/> on <paramref name="subject"/>. <paramref name="reason"/> is written as every
+    /// reason is, to follow the subject: "it …", "its …" or, for several, "they …", or else a clause of its own.
+    /// </summary>
+    public static Failure Refusal(string action, string subject, string reason) => new(action, subject, reason) { Refused = true };
+
+    /// <summary>
+    /// The one sentence either kind is said in, the way the tooltip, the window's notices and Settings show it. A
+    /// refusal: "Can't paste: the clipboard holds no picture or file.", its subject standing for the reason's leading
+    /// "it" or "they" so the verb the reason chose agrees with it, else "Can't take a screenshot (the screen): your stash
+    /// is still opening."; one capital, one closing period. A failure: "{Action} failed: {Subject}, {Reason}".
+    /// </summary>
+    public string Sentence => Refused ? RefusalSentence() : $"{Action} failed: {Subject}, {Reason}";
+
+    private string RefusalSentence()
+    {
+        var act = Action.Length > 1 && char.IsUpper(Action[0]) && char.IsLower(Action[1])
+            ? char.ToLowerInvariant(Action[0]) + Action[1..]
+            : Action;
+        var reason = Reason.TrimEnd('.');
+        var said = Following("it ") is { } rest ? $"{act}: {Subject} {rest}"
+            : Following("they ") is { } several ? $"{act}: {Subject} {several}"
+            : Following("its ") is { } owned ? $"{act}: {Subject}'s {owned}"
+            : $"{act} ({Subject}): {reason}";
+        return $"Can't {said}.";
+
+        string? Following(string pronoun) => reason.StartsWith(pronoun, StringComparison.Ordinal) ? reason[pronoun.Length..] : null;
+    }
 }
 
 /// <summary>

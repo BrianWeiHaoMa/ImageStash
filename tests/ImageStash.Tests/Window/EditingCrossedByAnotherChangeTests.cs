@@ -362,7 +362,7 @@ public sealed class EditingCrossedByAnotherChangeTests
 
         await listed.Notices.Undo(reverted);
 
-        CollectionAssert.Contains(listed.Notices.Shown.Select(notice => notice.Text).ToList(), new Failure(Editing.UndoRevertAction, "cat", Editing.OriginalReplacedSinceRevert).Sentence, "refused by name (G35)");
+        CollectionAssert.Contains(listed.Notices.Shown.Select(notice => notice.Text).ToList(), Failure.Refusal(Editing.UndoRevertAction, "cat", Editing.OriginalReplacedSinceRevert).Sentence, "refused by name (G35)");
         Assert.IsTrue((await EditedItems.ForEdit(listed.Stash.Store!, cat.Id)).Layers.IsEmpty, "no layer made over the earlier picture lands on the adopted one (G21)");
         Assert.AreEqual(EditedItems.Hash(rewrite), OpenedWith.OriginalHash(listed.Stash, cat.Id));
     }

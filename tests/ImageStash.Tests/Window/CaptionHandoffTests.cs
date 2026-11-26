@@ -208,7 +208,7 @@ public sealed class CaptionHandoffTests
         Assert.AreEqual(new UseHistory(0, null), (await listing.Store!.UseHistory(saved.Id)).Value,
             "the incoming item received no use");
         Assert.AreEqual(0L, listed.Uses());
-        Assert.Contains(new Failure(Handoff.Action, saved.Name, Listing.ReplacedSinceReason).Sentence,
+        Assert.Contains(Failure.Refusal(Handoff.Action, saved.Name, Listing.ReplacedSinceReason).Sentence,
             listed.Notices.Shown.Select(notice => notice.Text));
         await listing.SetQuery("cobalt");
         Assert.IsTrue(listing.NoMatch, "text from the displaced item does not follow its identity");

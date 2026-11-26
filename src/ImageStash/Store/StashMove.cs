@@ -212,36 +212,36 @@ public static class StashMove
         }
         catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
         {
-            return new Failure(Action, destination, MoveReasons.NotAFolder);
+            return Failure.Refusal(Action, destination, MoveReasons.NotAFolder);
         }
 
         var subject = Subject(chosen);
         if (!Directory.Exists(chosen))
         {
-            return new Failure(Action, subject, MoveReasons.NotAFolder);
+            return Failure.Refusal(Action, subject, MoveReasons.NotAFolder);
         }
 
         if (Same(chosen, store.Folder.Root))
         {
-            return new Failure(Action, subject, MoveReasons.TheStashItself);
+            return Failure.Refusal(Action, subject, MoveReasons.TheStashItself);
         }
 
         // .work\ is cleared at every start, so a stash there would not survive the next one.
         if (Same(chosen, store.Folder.Work) || Inside(chosen, store.Folder.Work))
         {
-            return new Failure(Action, subject, MoveReasons.InsideWork);
+            return Failure.Refusal(Action, subject, MoveReasons.InsideWork);
         }
 
         if (store.OpenWithRoot is { } openWith && (Same(chosen, openWith) || Inside(chosen, openWith)))
         {
-            return new Failure(Action, subject, MoveReasons.InsideOpenWith);
+            return Failure.Refusal(Action, subject, MoveReasons.InsideOpenWith);
         }
 
         try
         {
             if (Directory.EnumerateFileSystemEntries(chosen).Any())
             {
-                return new Failure(Action, subject, MoveReasons.NotEmpty);
+                return Failure.Refusal(Action, subject, MoveReasons.NotEmpty);
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -266,7 +266,7 @@ public static class StashMove
 
         if (inOld.Value is { } spelled && (Same(spelled, store.Folder.Work) || Inside(spelled, store.Folder.Work)))
         {
-            return new Failure(Action, subject, MoveReasons.InsideWork);
+            return Failure.Refusal(Action, subject, MoveReasons.InsideWork);
         }
 
         if (store.OpenWithRoot is { } root)
@@ -279,7 +279,7 @@ public static class StashMove
 
             if (inOpenWith.Value is not null)
             {
-                return new Failure(Action, subject, MoveReasons.InsideOpenWith);
+                return Failure.Refusal(Action, subject, MoveReasons.InsideOpenWith);
             }
         }
 

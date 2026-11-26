@@ -121,7 +121,7 @@ public sealed class EditingFromNotificationTests
 
         var refused = await listed.Editing.OpenFromNotification(new CaptureEdit(cat, Trim: false));
 
-        Assert.AreEqual(new Failure("Edit", "cat", "it is no longer in the stash"), refused.Failure);
+        Assert.AreEqual(Failure.Refusal("Edit", "cat", "it is no longer in the stash"), refused.Failure);
         Assert.AreEqual(refused.Failure!.Sentence, listed.Notices.Shown.Single().Text, "named in the window (G35)");
         Assert.IsFalse(listed.Editing.IsOpen);
     }
@@ -149,7 +149,7 @@ public sealed class EditingFromNotificationTests
 
         var refused = await listed.Editing.OpenFromNotification(new CaptureEdit(cat, Trim: false));
 
-        Assert.AreEqual(new Failure("Edit", "cat", "“dog” is still being saved"), refused.Failure);
+        Assert.AreEqual(Failure.Refusal("Edit", "cat", "“dog” is still being saved"), refused.Failure);
         Assert.AreEqual(refused.Failure!.Sentence, listed.Notices.Shown.Single().Text, "named in the window (G35)");
         Assert.AreSame(saved, listed.Editing.Session, "that edit stays, its Save running");
         release.Set();

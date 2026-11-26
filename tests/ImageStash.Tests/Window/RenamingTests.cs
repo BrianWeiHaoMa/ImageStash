@@ -142,7 +142,7 @@ public sealed class RenamingTests
 
         var refused = await listed.Renaming.Rename(gone, "dog");
 
-        Assert.AreEqual($"{ItemRename.Action} failed: gone, {ItemFactChange.NotInStash}", refused.Failure?.Sentence);
+        Assert.AreEqual("Can't rename: gone is no longer in the stash.", refused.Failure?.Sentence);
         CollectionAssert.AreEqual(new[] { refused.Failure!.Sentence }, listed.Notices.Shown.Select(notice => notice.Text).ToList());
         CollectionAssert.AreEqual(new[] { "kept" }, listed.Listing.Items.Select(item => item.Name).ToList());
         CollectionAssert.AreEqual(new[] { "kept.png" }, listed.Stash.RootFiles());
@@ -159,8 +159,8 @@ public sealed class RenamingTests
         listing.StashFailed(new Failure("Open the stash", "stash", "the disk is gone"));
         var failed = await renaming.Rename(TestItems.Sized(2, 10, 10), "dog");
 
-        Assert.AreEqual("Rename failed: “item 1”, your stash is still opening", opening.Failure?.Sentence);
-        Assert.AreEqual("Rename failed: “item 2”, your stash could not be opened", failed.Failure?.Sentence);
+        Assert.AreEqual("Can't rename (“item 1”): your stash is still opening.", opening.Failure?.Sentence);
+        Assert.AreEqual("Can't rename (“item 2”): your stash could not be opened.", failed.Failure?.Sentence);
         CollectionAssert.AreEqual(new[] { opening.Failure!.Sentence, failed.Failure!.Sentence }, notices.Shown.Select(notice => notice.Text).ToList());
         Assert.IsNull(renaming.Busy);
     }

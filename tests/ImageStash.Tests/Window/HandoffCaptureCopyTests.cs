@@ -70,7 +70,7 @@ public sealed class HandoffCaptureCopyTests
 
         var copied = await handing.Handoff.CopyCapture(null!, item);
 
-        Assert.AreEqual(new Failure("Copy", "transparent", ItemFactChange.NotInStash), copied.Failure, "confirmed by identity (G8)");
+        Assert.AreEqual(Failure.Refusal("Copy", "transparent", ItemFactChange.NotInStash), copied.Failure, "confirmed by identity (G8)");
         Assert.AreEqual(0, handing.Clipboard.Begun);
     }
 

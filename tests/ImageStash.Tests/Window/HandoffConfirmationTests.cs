@@ -26,7 +26,7 @@ public sealed class HandoffConfirmationTests
         var pasted = await handing.Paste(shown, RecordingTarget.Relay);
         var copied = await handing.Copy([shown[0]]);
 
-        Assert.AreEqual("Copy failed: animated, it is no longer in the stash", pasted.Failure?.Sentence);
+        Assert.AreEqual("Can't copy: animated is no longer in the stash.", pasted.Failure?.Sentence);
         Assert.AreEqual(pasted.Failure!.Sentence, copied.Failure?.Sentence, "an animated item alone, which goes as its file only, too");
         Assert.AreEqual(0, handing.Clipboard.Begun, "the clipboard is not touched");
         Assert.IsEmpty(handing.Steps, "nothing confirmed, hidden or pasted");
@@ -62,7 +62,7 @@ public sealed class HandoffConfirmationTests
         }
 
         Assert.HasCount(1, handing.Clipboard.Written, "only the first copy writes: a file name is never an item (G8)");
-        Assert.AreEqual($"Copy failed: {selected.Name}, it is no longer in the stash", (await queued).Failure?.Sentence);
+        Assert.AreEqual($"Can't copy: {selected.Name} is no longer in the stash.", (await queued).Failure?.Sentence);
     }
 
     [TestMethod]
@@ -110,7 +110,7 @@ public sealed class HandoffConfirmationTests
         var pasted = await handing.Paste([a, b], RecordingTarget.Relay);
         var copied = await handing.Copy([a, b, a]);
 
-        Assert.AreEqual("Copy failed: 2 items, they are no longer in the stash", pasted.Failure?.Sentence);
+        Assert.AreEqual("Can't copy: 2 items are no longer in the stash.", pasted.Failure?.Sentence);
         Assert.AreEqual(pasted.Failure!.Sentence, copied.Failure?.Sentence, "an item selected twice is one item");
         Assert.AreEqual(0, handing.Clipboard.Begun);
         Assert.IsEmpty(handing.Steps);
@@ -229,5 +229,5 @@ public sealed class HandoffConfirmationTests
     }
 
     /// <summary>A handoff refused, naming <paramref name="subject"/>, while another program holds the store.</summary>
-    private static string HeldStore(string subject) => $"Copy failed: {subject}, the stash could not be read ({StashFolder.StoreFileName}: {HeldFileRetry.HeldReason})";
+    private static string HeldStore(string subject) => $"Can't copy ({subject}): the stash could not be read ({StashFolder.StoreFileName}: {HeldFileRetry.HeldReason}).";
 }

@@ -255,7 +255,7 @@ public sealed class SettingsPageTests
 
         var moved = await page.Move(null!);
 
-        Assert.AreEqual(new Failure(StashMove.Action, "the stash folder", "your stash is still opening"), moved.Failure);
+        Assert.AreEqual(Failure.Refusal(StashMove.Action, "the stash folder", "your stash is still opening"), moved.Failure);
         Assert.AreEqual(moved.Failure!.Sentence, page.WarningOf(SettingsPage.StashFolderTitle), "named on its row (G35, G32)");
         Assert.IsEmpty(dialogs.FolderPickers, "the picker not shown");
         Assert.IsFalse(page.MoveAsked);

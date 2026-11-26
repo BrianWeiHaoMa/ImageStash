@@ -170,7 +170,7 @@ public static class StashExport
 
         if (Inside(archive, store.Folder.Root))
         {
-            return new Failure(Action, subject, MoveReasons.InsideTheStash);
+            return Failure.Refusal(Action, subject, MoveReasons.InsideTheStash);
         }
 
         var spelled = SpelledUnder(Action, folder, store.Folder.Root, (action, path, step) => store.RetryHeldFile(action, path, step));
@@ -179,7 +179,7 @@ public static class StashExport
             return new Failure(Action, subject, spelled.Failure.Reason);
         }
 
-        return spelled.Value is null ? Outcome<string>.Of(archive) : new Failure(Action, subject, MoveReasons.InsideTheStash);
+        return spelled.Value is null ? Outcome<string>.Of(archive) : Failure.Refusal(Action, subject, MoveReasons.InsideTheStash);
     }
 
     // Every file the archive carries, by its path on disk and its entry's name: the store first, then the root's files

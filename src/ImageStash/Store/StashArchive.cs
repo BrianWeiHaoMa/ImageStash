@@ -80,7 +80,9 @@ internal static class StashArchive
     /// </summary>
     public static Outcome<ReadArchive> Read(Stream stream, string action, string subject)
     {
-        Failure Refused(string reason) => new(action, subject, reason);
+        // A file that is no export, or one a newer build wrote, is refused (G36); one that could not be read failed.
+        Failure Refused(string reason) => Failure.Refusal(action, subject, reason);
+        Failure Failed(string reason) => new(action, subject, reason);
         ZipArchive zip;
         try
         {
@@ -90,7 +92,7 @@ internal static class StashArchive
         {
             // A file another program holds is held, not "not an export": its reader retries it (G35).
             stream.Dispose();
-            return Refused(HeldFileRetry.IsHeldRefusal(e) ? HeldFileRetry.HeldReason : e is IOException io ? HeldFileRetry.ReasonFor(io) : TransferReasons.NotAnExport);
+            return HeldFileRetry.IsHeldRefusal(e) ? Failed(HeldFileRetry.HeldReason) : e is IOException io ? Failed(HeldFileRetry.ReasonFor(io)) : Refused(TransferReasons.NotAnExport);
         }
 
         try
@@ -122,7 +124,7 @@ internal static class StashArchive
         {
             // An entry the archive cannot give back (damaged or truncated) is the file's refusal, never a crash (G35).
             zip.Dispose();
-            return Refused(HeldFileRetry.IsHeldRefusal(e) ? HeldFileRetry.HeldReason : e is IOException io ? HeldFileRetry.ReasonFor(io) : TransferReasons.NotAnExport);
+            return HeldFileRetry.IsHeldRefusal(e) ? Failed(HeldFileRetry.HeldReason) : e is IOException io ? Failed(HeldFileRetry.ReasonFor(io)) : Refused(TransferReasons.NotAnExport);
         }
     }
 

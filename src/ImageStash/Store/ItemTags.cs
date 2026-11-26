@@ -129,7 +129,7 @@ internal static class ItemTags
 
             if (count.Items == 0)
             {
-                return (new Failure(RemoveFromAllAction, $"#{tag}", NoCarrier(tag)), false);
+                return (Failure.Refusal(RemoveFromAllAction, $"#{tag}", NoCarrier(tag)), false);
             }
 
             var changes = carriers.Select(row => ChangeMemberships(store, row.Item, [], [tag]))
@@ -143,13 +143,13 @@ internal static class ItemTags
         var words = Words(text);
         if (words.Count != 1)
         {
-            return new Failure(RenameAction, $"#{tag}", "enter one tag word");
+            return Failure.Refusal(RenameAction, $"#{tag}", "enter one tag word");
         }
 
         var requested = words[0];
         if (requested.Contains('\0'))
         {
-            return new Failure(RenameAction, $"#{tag}", "the new tag contains a null character");
+            return Failure.Refusal(RenameAction, $"#{tag}", "the new tag contains a null character");
         }
 
         try
@@ -159,7 +159,7 @@ internal static class ItemTags
         }
         catch (EncoderFallbackException)
         {
-            return new Failure(RenameAction, $"#{tag}", "the new tag contains invalid Unicode");
+            return Failure.Refusal(RenameAction, $"#{tag}", "the new tag contains invalid Unicode");
         }
 
         return Write<TagRename>(store, RenameAction, () =>
@@ -170,7 +170,7 @@ internal static class ItemTags
             var carriers = Carriers(listed, tag);
             if (carriers.Count == 0)
             {
-                return (new Failure(RenameAction, $"#{tag}", NoCarrier(tag)), false);
+                return (Failure.Refusal(RenameAction, $"#{tag}", NoCarrier(tag)), false);
             }
 
             if (correctingSpelling)

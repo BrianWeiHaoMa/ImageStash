@@ -85,7 +85,7 @@ public sealed class EditingTests
 
         var refused = await listed.Editing.Open(cat, EditOrigin.Grid);
 
-        Assert.AreEqual(new Failure("Edit", "cat", "it is no longer in the stash"), refused.Failure);
+        Assert.AreEqual(Failure.Refusal("Edit", "cat", "it is no longer in the stash"), refused.Failure);
         Assert.IsFalse(listed.Editing.IsOpen);
     }
 
@@ -262,7 +262,7 @@ public sealed class EditingTests
         await listed.Notices.Undo(notice);
 
         Assert.IsFalse(listed.Editing.IsOpen);
-        Assert.AreEqual(new Failure("Edit", "cat", "it is no longer in the stash").Sentence, listed.Notices.Shown.Single().Text, "named once");
+        Assert.AreEqual(Failure.Refusal("Edit", "cat", "it is no longer in the stash").Sentence, listed.Notices.Shown.Single().Text, "named once");
     }
 
     [TestMethod]

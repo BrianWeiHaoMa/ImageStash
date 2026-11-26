@@ -230,8 +230,8 @@ public sealed class ClipboardPasteTests
         pasting.Clipboard.Reading = Outcome<ClipboardReading>.Of(new ClipboardReading([], null, null, false));
         await pasting.Paste.Paste();
 
-        CollectionAssert.AreEqual(new[] { "Paste failed: the link, links are not taken and nothing is downloaded; copy the picture itself" }, linkSaid);
-        CollectionAssert.AreEqual(new[] { "Paste failed: the clipboard, it holds no picture or file" }, pasting.Notices.Shown.Select(notice => notice.Text).ToList(),
+        CollectionAssert.AreEqual(new[] { "Can't paste (the link): links are not taken and nothing is downloaded; copy the picture itself." }, linkSaid);
+        CollectionAssert.AreEqual(new[] { "Can't paste: the clipboard holds no picture or file." }, pasting.Notices.Shown.Select(notice => notice.Text).ToList(),
             "the later paste's refusal took the place of the earlier's (G16)");
         Assert.AreEqual("kept", pasting.Listing.Query, "nothing was imported, so nothing was reset");
         Assert.AreEqual(0, ended, "no import ended, so a preview over the grid stays");
@@ -265,7 +265,7 @@ public sealed class ClipboardPasteTests
 
         await pasting.Paste.Paste();
 
-        Assert.AreEqual("Paste failed: the clipboard, it holds no picture or file", pasting.Notices.Shown.Single().Text);
+        Assert.AreEqual("Can't paste: the clipboard holds no picture or file.", pasting.Notices.Shown.Single().Text);
         Assert.IsEmpty(await pasting.Stash.All());
     }
 
@@ -297,8 +297,8 @@ public sealed class ClipboardPasteTests
         await pasting.Paste.Paste(box.Add);
 
         Assert.IsEmpty(box);
-        Assert.AreEqual("Paste failed: the clipboard, it holds no picture or file", first.Text);
-        Assert.AreEqual("Paste failed: the clipboard, it holds no picture or file", pasting.Notices.Shown.Single().Text);
+        Assert.AreEqual("Can't paste: the clipboard holds no picture or file.", first.Text);
+        Assert.AreEqual("Can't paste: the clipboard holds no picture or file.", pasting.Notices.Shown.Single().Text);
         Assert.AreNotSame(first, pasting.Notices.Shown.Single(), "the later paste's notice took the place of the earlier's (G16)");
     }
 
@@ -313,7 +313,7 @@ public sealed class ClipboardPasteTests
         await pasting.Paste.Paste();
 
         CollectionAssert.AreEqual(new[] { "https://example.com/cat.gif" }, box);
-        Assert.AreEqual("Paste failed: the link, links are not taken and nothing is downloaded; copy the picture itself", pasting.Notices.Shown.Single().Text);
+        Assert.AreEqual("Can't paste (the link): links are not taken and nothing is downloaded; copy the picture itself.", pasting.Notices.Shown.Single().Text);
         Assert.IsEmpty(await pasting.Stash.All());
     }
 
@@ -373,8 +373,8 @@ public sealed class ClipboardPasteTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "Add to the stash failed: the clipboard, your stash is still opening",
-                "Add to the stash failed: the clipboard, your stash could not be opened",
+                "Can't add to the stash (the clipboard): your stash is still opening.",
+                "Can't add to the stash (the clipboard): your stash could not be opened.",
             },
             notices.Shown.Select(notice => notice.Text).ToList());
         Assert.AreEqual(0, clipboard.Reads, "nothing could be added, so nothing is read (N9)");
@@ -401,7 +401,7 @@ public sealed class ClipboardPasteTests
         clipboard.Reading = Picture(MediaFixtures.Bytes("transparent.png"), null);
         await paste.Paste(box.Add);
 
-        Assert.AreEqual("Add to the stash failed: the clipboard, your stash is still opening", notices.Shown.Single().Text);
+        Assert.AreEqual("Can't add to the stash (the clipboard): your stash is still opening.", notices.Shown.Single().Text);
         Assert.HasCount(1, box);
         Assert.IsEmpty(stash.WorkFiles());
     }

@@ -489,6 +489,7 @@ public sealed class HandoffPasteTests
         }
 
         Assert.AreEqual("an edit is open", (await paste).Failure?.Reason);
+        Assert.AreEqual("Can't paste (Relay): an edit is open.", (await paste).Failure?.Sentence, "declined while an edit is open, nothing gone wrong (G35)");
         Assert.AreEqual(dog.Id, listed.Editing.Session?.Item.Id);
         Assert.IsFalse(hidden);
         Assert.IsEmpty(listed.Target.Pasted);

@@ -164,7 +164,7 @@ internal static class ItemAdoptionUndo
 
             if (finished)
             {
-                return new Failure(Action, row.Subject, ItemFactChange.NotInStash);
+                return Failure.Refusal(Action, row.Subject, ItemFactChange.NotInStash);
             }
 
             if (PendingStepRecovery.FinishBeforeChange(store, row.Files, row.Name, Action) is { } unfinished)

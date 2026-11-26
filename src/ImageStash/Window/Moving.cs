@@ -147,12 +147,12 @@ public sealed class Moving
         using var acting = UserAct.Begin(StashMove.Action);
         if (Asked || picking || running)
         {
-            return new Failure(StashMove.Action, StashSubject, MoveReasons.InProgress);
+            return Failure.Refusal(StashMove.Action, StashSubject, MoveReasons.InProgress);
         }
 
         if (listing.NotOpenReason is { } notOpen)
         {
-            return new Failure(StashMove.Action, StashSubject, notOpen);
+            return Failure.Refusal(StashMove.Action, StashSubject, notOpen);
         }
 
         string? chosen;
@@ -179,7 +179,7 @@ public sealed class Moving
         // The stash may have stopped being open while the picker was up.
         if (listing.Store is not { } store || listing.CannotStartReason is not null)
         {
-            return Named(new Failure(StashMove.Action, MoveFolders.Subject(chosen), listing.CannotStartReason ?? listing.NotOpenReason!));
+            return Named(Failure.Refusal(StashMove.Action, MoveFolders.Subject(chosen), listing.CannotStartReason ?? listing.NotOpenReason!));
         }
 
         running = true;

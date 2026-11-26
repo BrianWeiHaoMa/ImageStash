@@ -95,7 +95,7 @@ public sealed class NamesInHandTests
         var refused = store.HoldWhileDragged([unrelated, shown], "Drag out");
         var heldOutcome = store.HoldWhileDragged([unrelated, newCat], "Drag out");
 
-        Assert.AreEqual("Drag out failed: cat, it changed in the stash since it was shown", refused.Failure?.Sentence);
+        Assert.AreEqual("Can't drag out: cat changed in the stash since it was shown.", refused.Failure?.Sentence);
         Assert.IsTrue(heldOutcome.Succeeded, heldOutcome.Failure?.Sentence);
         using (heldOutcome.Value)
         {
@@ -142,7 +142,7 @@ public sealed class NamesInHandTests
         var refused = store.HoldWhileDragged([shown], "Drag out");
         using var held = refused.Value;
 
-        Assert.AreEqual("Drag out failed: cat, it changed in the stash since it was shown", refused.Failure?.Sentence);
+        Assert.AreEqual("Can't drag out: cat changed in the stash since it was shown.", refused.Failure?.Sentence);
     }
 
     // A first Save whose render's place is refused: the item is listed on its original, moved into originals\.

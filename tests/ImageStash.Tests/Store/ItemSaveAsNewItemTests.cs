@@ -178,7 +178,7 @@ public sealed class ItemSaveAsNewItemTests
 
         Assert.IsTrue((await store.Delete([cat.Id])).Single().Succeeded);
 
-        Assert.AreEqual(new Failure("Save as new item", "cat", ItemFactChange.NotInStash), (await store.SaveAsNewItem(cat, BlackBoxAndBox, render)).Failure);
+        Assert.AreEqual(Failure.Refusal("Save as new item", "cat", ItemFactChange.NotInStash), (await store.SaveAsNewItem(cat, BlackBoxAndBox, render)).Failure);
         Assert.AreEqual(1L, stash.SqlQueryWhileOpen("SELECT COUNT(*) FROM items", r => r.GetInt64(0)).Single());
         Assert.IsTrue(File.Exists(render.WorkPath));
     }

@@ -327,7 +327,8 @@ public sealed class TagRenameTests
             box.Text = refuseWrite ? "destination" : "two words";
             await listed.WaitForOrganising(() => Press(box, Key.Enter));
             var notice = listed.Notices.Shown.Single();
-            StringAssert.Contains(notice.Text, "Rename tag failed: #shared");
+            // Words that are no tag are refused; a refused write failed (G35).
+            StringAssert.Contains(notice.Text, refuseWrite ? "Rename tag failed: #shared" : "Can't rename tag (#shared)");
             StringAssert.Contains(notice.Text, refuseWrite ? "write refused" : "enter one tag word");
             Assert.IsFalse(listed.Notices.OffersUndo(notice));
             Assert.AreEqual(2, listed.Listing.Tags.Single(tag => tag.Tag == "shared").Items);
@@ -514,7 +515,7 @@ public sealed class TagRenameTests
 
             Assert.IsTrue(tried, "the key was pressed at the start of the copy");
             Assert.IsTrue(listed.Notices.Shown.Any(notice =>
-                notice.Text == "Rename tag failed: #shared, your stash is being exported"));
+                notice.Text == "Can't rename tag (#shared): your stash is being exported."));
             Assert.AreEqual("shared", (await Stored(listed, carrier)).Tags.Single());
             Assert.IsTrue((await reopened.ImportStash(archive)).Succeeded);
             Assert.AreEqual("shared", (await reopened.Listing.Store!.All()).Value!.Single().Tags.Single());

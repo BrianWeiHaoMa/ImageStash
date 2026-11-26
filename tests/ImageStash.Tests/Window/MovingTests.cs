@@ -131,7 +131,7 @@ public sealed class MovingTests
 
         var moved = await page.Move(null!);
 
-        var refused = new Failure(StashMove.Action, "new", MoveReasons.NotEmpty);
+        var refused = Failure.Refusal(StashMove.Action, "new", MoveReasons.NotEmpty);
         Assert.AreEqual(refused, moved.Failure);
         Assert.AreEqual(refused.Sentence, page.WarningOf(SettingsPage.StashFolderTitle), "on the row (G35)");
         CollectionAssert.AreEqual(new[] { refused.Sentence }, listed.Notices.Shown.Select(notice => notice.Text).ToList());
@@ -232,7 +232,7 @@ public sealed class MovingTests
         Assert.IsEmpty(listed.Listing.Items);
         Assert.AreEqual(chosen, MovingStash.Saved(listed.Stash).StashFolder, "the settings name the new folder; the next start opens it again");
         var deleted = await listed.Deletion.Delete([cat]);
-        Assert.AreEqual(new Failure(Deletion.Action, "“cat”", "your stash could not be opened"), deleted.Failure, "refused by name, never thrown");
+        Assert.AreEqual(Failure.Refusal(Deletion.Action, "“cat”", "your stash could not be opened"), deleted.Failure, "refused by name, never thrown");
         Assert.IsFalse((await listed.Handoff.Copy(null!, [cat])).Succeeded);
     }
 
@@ -261,19 +261,19 @@ public sealed class MovingTests
         await listed.Organising.AddTag([cat], "funny");
         var openWith = await listed.OpenWith.Begin(null!, cat, _ => { });
         var refused = MoveReasons.InProgress;
-        CollectionAssert.AreEqual(new[] { new Failure(Screenshot.Action, "the screen", refused).Sentence }, listed.Notifications.Shown.Select(notice => notice.Text).ToList(), "the screenshot refused above the tray");
+        CollectionAssert.AreEqual(new[] { Failure.Refusal(Screenshot.Action, "the screen", refused).Sentence }, listed.Notifications.Shown.Select(notice => notice.Text).ToList(), "the screenshot refused above the tray");
         CollectionAssert.AreEqual(
             new[]
             {
-                new Failure(Import.Action, "dropped.png", refused).Sentence,
-                new Failure(Editing.Action, "cat", refused).Sentence,
-                new Failure(Deletion.Action, "“cat”", refused).Sentence,
-                new Failure(ItemRename.Action, "“cat”", refused).Sentence,
-                new Failure(ItemTags.AddAction, "“cat”", refused).Sentence,
+                Failure.Refusal(Import.Action, "dropped.png", refused).Sentence,
+                Failure.Refusal(Editing.Action, "cat", refused).Sentence,
+                Failure.Refusal(Deletion.Action, "“cat”", refused).Sentence,
+                Failure.Refusal(ItemRename.Action, "“cat”", refused).Sentence,
+                Failure.Refusal(ItemTags.AddAction, "“cat”", refused).Sentence,
             },
             listed.Notices.Shown.Select(notice => notice.Text).ToList(),
             "each beginning refused by name with its own action (G35, State: Move)");
-        Assert.AreEqual(new Failure(OpenWith.Action, "cat", refused), openWith.Failure);
+        Assert.AreEqual(Failure.Refusal(OpenWith.Action, "cat", refused), openWith.Failure);
         Assert.IsNull(listed.Editing.Session);
         Assert.IsFalse(Directory.EnumerateFileSystemEntries(chosen).Any(), "nothing copied while the recording runs");
 
@@ -673,7 +673,7 @@ public sealed class MovingTests
         held.SetResult();
         var second = await asked.WaitAsync(TimeSpan.FromSeconds(20));
 
-        Assert.AreEqual(new Failure(StashMove.Action, "the stash folder", MoveReasons.InProgress), second.Failure);
+        Assert.AreEqual(Failure.Refusal(StashMove.Action, "the stash folder", MoveReasons.InProgress), second.Failure);
         Assert.HasCount(1, listed.Dialogs.FolderPickers, "no second picker");
         Assert.IsTrue((await first.WaitAsync(TimeSpan.FromSeconds(20))).Succeeded);
         Assert.IsNull(listed.Listing.WholeStashActAsked);

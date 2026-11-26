@@ -81,7 +81,7 @@ public sealed class ItemDeletionTests
 
         var again = await store.UndoDelete(deleted);
 
-        CollectionAssert.AreEqual(items.Select(i => new Failure("Undo the delete", i.Name, "it is not deleted")).ToList(), again.Select(o => o.Failure).ToList());
+        CollectionAssert.AreEqual(items.Select(i => Failure.Refusal("Undo the delete", i.Name, "it is not deleted")).ToList(), again.Select(o => o.Failure).ToList());
         Assert.HasCount(3, stash.RecycleBin.Removed);
         Assert.HasCount(3, stash.RootFiles());
         stash.Close();
@@ -459,8 +459,8 @@ public sealed class ItemDeletionTests
 
         var deleted = await store.Delete([9999, removing.Id, free.Id]);
 
-        Assert.AreEqual(new Failure("Delete", "9999", "it is no longer in the stash"), deleted[0].Failure);
-        Assert.AreEqual(new Failure("Delete", "removing", "it is no longer in the stash"), deleted[1].Failure);
+        Assert.AreEqual(Failure.Refusal("Delete", "9999", "it is no longer in the stash"), deleted[0].Failure);
+        Assert.AreEqual(Failure.Refusal("Delete", "removing", "it is no longer in the stash"), deleted[1].Failure);
         Assert.IsNull(deleted[1].Value);
         Assert.IsTrue(deleted[2].Succeeded, deleted[2].Failure?.ToString());
         CollectionAssert.AreEqual(new[] { free.FilePath }, stash.RecycleBin.Asked);

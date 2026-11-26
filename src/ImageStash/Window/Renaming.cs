@@ -31,7 +31,7 @@ public sealed class Renaming(Listing listing, Notices notices, Handoff handoff)
         using var acting = UserAct.Begin(ItemRename.Action);
         if (listing.CannotStartReason is { } refused)
         {
-            return Named(new Failure(ItemRename.Action, Notices.Describe([item]), refused));
+            return Named(Failure.Refusal(ItemRename.Action, Notices.Describe([item]), refused));
         }
 
         var store = listing.Store!;

@@ -114,7 +114,7 @@ public sealed class Organising(Listing listing, Notices notices)
                 return Outcome.Done;
             }
 
-            var failure = removal.Failure ?? new Failure(action, $"#{offer.Tag}", removal.Value!.Count.Items switch
+            var failure = removal.Failure ?? Failure.Refusal(action, $"#{offer.Tag}", removal.Value!.Count.Items switch
             {
                 0 => "no item carries this tag any more",
                 1 => "1 item now carries this tag. Open the tag menu again",
@@ -134,7 +134,7 @@ public sealed class Organising(Listing listing, Notices notices)
         }
 
         using var acting = UserAct.Begin(action);
-        var refusal = new Failure(action, $"#{tag}", reason);
+        var refusal = Failure.Refusal(action, $"#{tag}", reason);
         notices.Raise(refusal);
         return refusal;
     }
@@ -241,7 +241,7 @@ public sealed class Organising(Listing listing, Notices notices)
         if (listing.CannotStartReason is { } refused)
         {
             using var acting = UserAct.Begin(act);
-            var failure = new Failure(refusalAction, Notices.Describe(targets), refused);
+            var failure = Failure.Refusal(refusalAction, Notices.Describe(targets), refused);
             notices.Raise(failure);
             return Task.FromResult<Outcome>(failure);
         }

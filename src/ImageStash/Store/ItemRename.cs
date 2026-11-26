@@ -94,11 +94,11 @@ internal static class ItemRename
         if (read.Value is not { } row)
         {
             // A row that is gone holds no name any more, so the item is named as the caller was shown it (G35).
-            return new Failure(Action, Subject(item.Name, item.FileName), ItemFactChange.NotInStash);
+            return Failure.Refusal(Action, Subject(item.Name, item.FileName), ItemFactChange.NotInStash);
         }
 
         return row.Deleted || !StashItem.IsListed(store.Folder, row.Files.Steps)
-            ? new Failure(Action, Subject(row.Name, row.Files.FinishedFile), ItemFactChange.NotInStash)
+            ? Failure.Refusal(Action, Subject(row.Name, row.Files.FinishedFile), ItemFactChange.NotInStash)
             : Outcome<Row>.Of(row);
     }
 
@@ -235,7 +235,7 @@ internal static class ItemRename
             return read.Failure;
         }
 
-        return read.Value is { } recorded ? Outcome<StashItem>.Of(recorded) : new Failure(Action, Subject(item.Name, item.FileName), ItemFactChange.NotInStash);
+        return read.Value is { } recorded ? Outcome<StashItem>.Of(recorded) : Failure.Refusal(Action, Subject(item.Name, item.FileName), ItemFactChange.NotInStash);
     }
 
     private static string Subject(string name, string fileName) => name.Length > 0 ? name : fileName;

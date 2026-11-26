@@ -175,7 +175,7 @@ public sealed class RecordClipTests
         await act.StartOrStop();
 
         CollectionAssert.AreEqual(
-            new[] { "Record a clip failed: the screen, your stash is still opening", "Record a clip failed: the screen, your stash could not be opened" },
+            new[] { "Can't record a clip (the screen): your stash is still opening.", "Can't record a clip (the screen): your stash could not be opened." },
             recording.Notifications.Shown.Select(notice => notice.Text).ToList());
         Assert.AreEqual((0, 0), (recording.Screen.DisplayReads, recording.Screen.Grabs.Count), "nothing grabbed (G28)");
         Assert.IsEmpty(recording.WindowSteps, "nothing hidden");
@@ -356,7 +356,7 @@ public sealed class RecordClipTests
             await Handing.Eventually(() => recording.Stash.WorkFiles().Length == 1);
             await recording.RecordClip.StartOrStop();
 
-            CollectionAssert.AreEqual(new[] { "Record a clip failed: the screen, the last screenshot is still being saved" },
+            CollectionAssert.AreEqual(new[] { "Can't record a clip (the screen): the last screenshot is still being saved." },
                 recording.Notifications.Shown.Select(notice => notice.Text).ToList(), "nothing on screen says the act is busy, so the refusal is named (G35)");
             CollectionAssert.AreEqual(new[] { "hide" }, recording.WindowSteps, "the screenshot's hide only");
             Assert.HasCount(1, recording.Screen.Grabs, "the screenshot's grab only (Approach)");

@@ -254,7 +254,7 @@ public sealed class ImportShowTests
 
         Assert.AreEqual("older", listed.Listing.Query, "a Move asked: Show starts nothing (G36)");
         CollectionAssert.AreEqual(new[] { older.Id }, listed.Listing.Selection.ToList());
-        var refused = new Failure(ImportEnd.Show, ImportEnd.ShownSubject, MoveReasons.InProgress);
+        var refused = Failure.Refusal(ImportEnd.Show, ImportEnd.ShownSubject, MoveReasons.InProgress);
         Assert.IsTrue(listed.Notices.Shown.Any(shown => shown.Text == refused.Sentence), "and is refused by name (G35)");
         await listed.Turns.Act(() =>
         {

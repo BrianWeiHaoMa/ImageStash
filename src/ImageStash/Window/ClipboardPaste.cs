@@ -67,11 +67,11 @@ public sealed class ClipboardPaste(Listing listing, Notices notices, Import impo
         }
         else if (read.Value!.OnlyLink)
         {
-            notices.Raise(new Failure(Action, "the link", "links are not taken and nothing is downloaded; copy the picture itself"));
+            notices.Raise(Failure.Refusal(Action, "the link", "links are not taken and nothing is downloaded; copy the picture itself"));
         }
         else
         {
-            notices.Raise(new Failure(Action, "the clipboard", "it holds no picture or file"));
+            notices.Raise(Failure.Refusal(Action, "the clipboard", "it holds no picture or file"));
         }
     }
 
@@ -98,7 +98,7 @@ public sealed class ClipboardPaste(Listing listing, Notices notices, Import impo
         }
         else
         {
-            notices.Raise(new Failure(Action, "the clipboard", "it holds no text to paste"));
+            notices.Raise(Failure.Refusal(Action, "the clipboard", "it holds no text to paste"));
         }
     }
 

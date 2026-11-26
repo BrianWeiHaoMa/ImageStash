@@ -59,7 +59,7 @@ public sealed class LayerTextPasteTests
         {
             Assert.AreEqual("KEEP", editor.Field?.Text, "the field keeps its text (G13)");
             Assert.AreEqual("KEEP", ((TextLayer)editor.Session!.Layers.Layers.Single()).Text, "the layer keeps its text (G25)");
-            Assert.AreEqual("Paste failed: the clipboard, it holds no text to paste", shown.Said());
+            Assert.AreEqual("Can't paste: the clipboard holds no text to paste.", shown.Said());
         });
     }
 

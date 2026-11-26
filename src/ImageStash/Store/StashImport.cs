@@ -103,12 +103,12 @@ public static class StashImport
 
         if (Same(archive, stash) || Inside(archive, stash))
         {
-            return new Failure(Action, subject, MoveReasons.InsideTheStash);
+            return Failure.Refusal(Action, subject, MoveReasons.InsideTheStash);
         }
 
         if (Path.GetDirectoryName(stash) is null)
         {
-            return new Failure(Action, subject, AtADriveRoot);
+            return Failure.Refusal(Action, subject, AtADriveRoot);
         }
 
         // An old folder a Move still has to remove may hold this stash, and so the folders made beside it: removed first,
@@ -183,7 +183,7 @@ public static class StashImport
                 // Every entry's name was checked to be a root file, a file of originals\ or the store; this is the last word.
                 if (!Inside(target, folder))
                 {
-                    return new Failure(Action, subject, TransferReasons.NotAnExport);
+                    return Failure.Refusal(Action, subject, TransferReasons.NotAnExport);
                 }
 
                 Directory.CreateDirectory(Path.GetDirectoryName(target)!);
@@ -204,7 +204,8 @@ public static class StashImport
         }
         catch (InvalidDataException e)
         {
-            return new Failure(Action, subject, HeldFileRetry.IsHeldRefusal(e) ? HeldFileRetry.HeldReason : "it is damaged or incomplete");
+            // A damaged archive is refused as unreadable (G35); one another program holds failed.
+            return HeldFileRetry.IsHeldRefusal(e) ? new Failure(Action, subject, HeldFileRetry.HeldReason) : Failure.Refusal(Action, subject, "it is damaged or incomplete");
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -215,12 +216,12 @@ public static class StashImport
         var staged = StoreOpen.OpenStaged(store, staging, TransferReasons.NotAnExport, StagedStore.Read);
         if (!staged.Succeeded)
         {
-            return new Failure(Action, subject, staged.Failure.Reason);
+            return staged.Failure with { Action = Action, Subject = subject };
         }
 
         if (!staged.Value!.AgreesWith(staging, archive.Manifest.Items))
         {
-            return new Failure(Action, subject, TransferReasons.NotAnExport);
+            return Failure.Refusal(Action, subject, TransferReasons.NotAnExport);
         }
 
         var marker = Path.Combine(folder, record.Marker);

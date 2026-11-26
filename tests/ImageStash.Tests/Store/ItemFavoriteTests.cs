@@ -44,12 +44,12 @@ public sealed class ItemFavoriteTests
         var setFlags = Flags(stash);
         var cleared = await store.SetFavorite([gone, marked, a], false);
 
-        Assert.AreEqual(new Failure("Add to Favorites", "gone", "it is no longer in the stash"), set[0].Failure);
-        Assert.AreEqual(new Failure("Add to Favorites", "marked", "it is no longer in the stash"), set[1].Failure);
+        Assert.AreEqual(Failure.Refusal("Add to Favorites", "gone", "it is no longer in the stash"), set[0].Failure);
+        Assert.AreEqual(Failure.Refusal("Add to Favorites", "marked", "it is no longer in the stash"), set[1].Failure);
         Assert.IsTrue(set[2].Succeeded, set[2].Failure?.ToString());
         CollectionAssert.AreEqual(new[] { (marked.Id, false), (a.Id, true) }, setFlags);
-        Assert.AreEqual(new Failure("Remove from Favorites", "gone", "it is no longer in the stash"), cleared[0].Failure);
-        Assert.AreEqual(new Failure("Remove from Favorites", "marked", "it is no longer in the stash"), cleared[1].Failure);
+        Assert.AreEqual(Failure.Refusal("Remove from Favorites", "gone", "it is no longer in the stash"), cleared[0].Failure);
+        Assert.AreEqual(Failure.Refusal("Remove from Favorites", "marked", "it is no longer in the stash"), cleared[1].Failure);
         Assert.IsTrue(cleared[2].Succeeded, cleared[2].Failure?.ToString());
         CollectionAssert.AreEqual(new[] { (marked.Id, false), (a.Id, false) }, Flags(stash));
     }
@@ -100,8 +100,8 @@ public sealed class ItemFavoriteTests
         var cleared = await store.SetFavoriteWithChanges([gone, marked, live, live], false);
 
         Assert.HasCount(4, cleared.Outcomes);
-        Assert.AreEqual(new Failure("Remove from Favorites", "gone", "it is no longer in the stash"), cleared.Outcomes[0].Failure);
-        Assert.AreEqual(new Failure("Remove from Favorites", "marked", "it is no longer in the stash"), cleared.Outcomes[1].Failure);
+        Assert.AreEqual(Failure.Refusal("Remove from Favorites", "gone", "it is no longer in the stash"), cleared.Outcomes[0].Failure);
+        Assert.AreEqual(Failure.Refusal("Remove from Favorites", "marked", "it is no longer in the stash"), cleared.Outcomes[1].Failure);
         Assert.IsTrue(cleared.Outcomes.Skip(2).All(o => o.Succeeded));
         Assert.AreEqual(live.Id, cleared.Changes.Single().Item.Id);
         Assert.AreEqual("renamed", cleared.Changes.Single().Item.Name);

@@ -113,7 +113,7 @@ public sealed class StashClipboardImageTests
         await Stash(act);
 
         TrayDesktop.Run(() => CollectionAssert.AreEqual(
-            Enumerable.Repeat("Stash clipboard image failed: the clipboard, it holds no image", 4).ToList(),
+            Enumerable.Repeat("Can't stash clipboard image: the clipboard holds no image.", 4).ToList(),
             shown.Notifications.Shown.Select(notice => notice.Text).ToList(),
             "files do not count, and nothing is fetched (G13, N2)"));
         Assert.IsEmpty(TrayDesktop.Get(() => shown.Listing.Store!.All()).GetAwaiter().GetResult().Value!);

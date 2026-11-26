@@ -117,7 +117,8 @@ public sealed class StashExportTests
         var exported = await stash.Store!.Export(Keeper(stash), archive);
 
         var reason = where == "no folder" ? HeldFileRetry.FolderMissingReason : MoveReasons.InsideTheStash;
-        Assert.AreEqual(new Failure(StashExport.Action, "export.zip", reason), exported.Failure);
+        // A folder that is not there failed; one inside the stash folder is refused (G36).
+        Assert.AreEqual(where == "no folder" ? new Failure(StashExport.Action, "export.zip", reason) : Failure.Refusal(StashExport.Action, "export.zip", reason), exported.Failure);
         Assert.IsFalse(File.Exists(archive));
         CollectionAssert.AreEqual(before, Tree(stash.Folder.Root));
         Assert.IsFalse(Directory.Exists(stash.Outside("missing")));

@@ -267,7 +267,7 @@ public sealed class DeletionTests
         var opening = new Listing(_ => { });
         var notices = new Notices(listed.Stash.Clock);
         var refused = await new Deletion(opening, notices).Delete([item]);
-        Assert.AreEqual(new Failure(Deletion.Action, "“one”", "your stash is still opening"), refused.Failure);
+        Assert.AreEqual(Failure.Refusal(Deletion.Action, "“one”", "your stash is still opening"), refused.Failure);
         Assert.AreEqual(refused.Failure!.Sentence, notices.Shown.Single().Text);
         Assert.IsEmpty(opening.SelectedItems, "while the stash opens nothing is selected, so Del has nothing to delete");
         Assert.IsEmpty(listed.Stash.RecycleBin.Asked);
@@ -474,7 +474,7 @@ public sealed class DeletionTests
 
         var deleted = await listed.Deletion.Delete([item]);
 
-        Assert.AreEqual(new Failure(Deletion.Action, "still", "it is no longer in the stash"), deleted.Failure);
+        Assert.AreEqual(Failure.Refusal(Deletion.Action, "still", "it is no longer in the stash"), deleted.Failure);
         Assert.AreEqual(deleted.Failure!.Sentence, listed.Notices.Shown.Single().Text, "the one failure, and no Delete notice with nothing to undo");
     }
 

@@ -108,7 +108,7 @@ public sealed class StashMoveTests
 
         var moved = await store.Move(keeper, chosen);
 
-        Assert.AreEqual(new Failure(StashMove.Action, Path.GetFileName(chosen), reason), moved.Failure);
+        Assert.AreEqual(Failure.Refusal(StashMove.Action, Path.GetFileName(chosen), reason), moved.Failure);
         CollectionAssert.AreEqual(settings, File.ReadAllBytes(SettingsPath(stash)), "the settings file unchanged byte for byte");
         CollectionAssert.AreEquivalent(before, Tree(stash.Folder.Root));
         CollectionAssert.AreEquivalent(around, Tree(stash.Outside("")), "nothing written anywhere");
@@ -239,7 +239,7 @@ public sealed class StashMoveTests
         var moving = store.Move(Keeper(stash), chosen, new Reported(_ => copying.TrySetResult()));
         await copying.Task;
 
-        Assert.AreEqual(new Failure(StashMove.Action, "second", MoveReasons.AlreadyMoving), (await store.Move(Keeper(stash), Chosen(stash, "second"))).Failure);
+        Assert.AreEqual(Failure.Refusal(StashMove.Action, "second", MoveReasons.AlreadyMoving), (await store.Move(Keeper(stash), Chosen(stash, "second"))).Failure);
         var delete = store.Delete([cat.Id]);
         var import = store.CommitImport(TestStash.Candidate(staged, "late", MediaFixtures.DistinctPng(9)));
         var rename = store.Rename(cat, "renamed");

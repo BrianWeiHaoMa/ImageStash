@@ -108,7 +108,7 @@ public sealed class TagListsTests
         var clicked = await TagLists.Click(listed.Organising, ItemMenuAction.AddTag, opened, "late");
         var present = await listed.Organising.Present(opened);
 
-        Assert.AreEqual("Add a tag failed: gone, it is no longer in the stash", clicked.Failure?.Sentence);
+        Assert.AreEqual("Can't add a tag: gone is no longer in the stash.", clicked.Failure?.Sentence);
         CollectionAssert.AreEqual(new[] { clicked.Failure!.Sentence },
             listed.Notices.Shown.Where(notice => notice.NamesAProblem).Select(notice => notice.Text).ToArray(), "named once, by item (G35)");
         Assert.AreEqual("Tagged 2 items #late", listed.Notices.Shown.Single(listed.Notices.OffersUndo).Text);
@@ -131,7 +131,7 @@ public sealed class TagListsTests
 
         var picked = await TagLists.Click(listed.Organising, entry.Action, [target], entry.Tag!);
 
-        Assert.AreEqual("Add a tag failed: target, no item carries #picked any more", picked.Failure?.Sentence);
+        Assert.AreEqual("Can't add a tag (target): no item carries #picked any more.", picked.Failure?.Sentence);
         Assert.IsEmpty((await store.TagCounts()).Value!);
     }
 

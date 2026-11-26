@@ -246,7 +246,7 @@ public sealed class StashClipboardImageTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "Stash clipboard image failed: the clipboard, it holds no image",
+                "Can't stash clipboard image: the clipboard holds no image.",
                 "Stash clipboard image failed: the clipboard, another program is holding the clipboard open",
             },
             stashing.Notifications.Shown.Select(notice => notice.Text).ToList());
@@ -264,7 +264,7 @@ public sealed class StashClipboardImageTests
 
         await stashing.StashClipboardImage.Stash();
 
-        Assert.AreEqual("Stash clipboard image failed: Screenshot 2026-10-16 17.30.00, it is unreadable", stashing.Notifications.Shown.Single().Text);
+        Assert.AreEqual("Can't stash clipboard image: Screenshot 2026-10-16 17.30.00 is unreadable.", stashing.Notifications.Shown.Single().Text);
         Assert.IsEmpty(await stashing.Stash.All());
         Assert.IsEmpty(stashing.Stash.RootFiles());
         Assert.IsEmpty(stashing.Stash.WorkFiles());
@@ -288,8 +288,8 @@ public sealed class StashClipboardImageTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "Stash clipboard image failed: the clipboard, your stash is still opening",
-                "Stash clipboard image failed: the clipboard, your stash could not be opened",
+                "Can't stash clipboard image (the clipboard): your stash is still opening.",
+                "Can't stash clipboard image (the clipboard): your stash could not be opened.",
             },
             notifications.Shown.Select(notice => notice.Text).ToList());
         Assert.AreEqual((0, 0), (clipboard.ImageReads, clipboard.Reads), "nothing could be added, so nothing is read (N9)");

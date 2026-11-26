@@ -20,7 +20,7 @@ namespace ImageStash.Tests.Window;
 [TestClass]
 public sealed class LayerTextClipboardPasteTests
 {
-    private const string NoText = "Paste failed: the clipboard, it holds no text to paste";
+    private const string NoText = "Can't paste: the clipboard holds no text to paste.";
 
     /// <summary>The picture each check edits, 64 × 48, room for two layers.</summary>
     private static readonly byte[] Picture = MediaFixtures.DistinctPng(0x808080, 64, 48);
@@ -281,7 +281,7 @@ public sealed class LayerTextClipboardPasteTests
 
         await listed.Press(Key.V, KeyModifiers.Control, KeyPlace.Editor);
 
-        Assert.AreEqual("Paste failed: the clipboard, it holds no picture or file", listed.Notices.Shown.Single().Text, "the ordinary window paste (G13)");
+        Assert.AreEqual("Can't paste: the clipboard holds no picture or file.", listed.Notices.Shown.Single().Text, "the ordinary window paste (G13)");
         listed.Clipboard.Reading = Outcome<ClipboardReading>.Of(new ClipboardReading([], MediaFixtures.Bytes("transparent.png"), null, false));
         listed.Keys.Released(Key.V);
         await listed.Press(Key.V, KeyModifiers.Control, KeyPlace.Editor);

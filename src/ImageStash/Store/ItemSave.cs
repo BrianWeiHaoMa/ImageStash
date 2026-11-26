@@ -271,11 +271,11 @@ internal static class ItemSave
         if (read.Value is not { } row)
         {
             // A row that is gone holds no name any more, so the item is named as the caller was shown it (G35).
-            return new Failure(action, ItemQueries.Named(item.Name, item.FileName), ItemFactChange.NotInStash);
+            return Failure.Refusal(action, ItemQueries.Named(item.Name, item.FileName), ItemFactChange.NotInStash);
         }
 
         return row.Deleted || !StashItem.IsListed(store.Folder, row.Files.Steps)
-            ? new Failure(action, row.Subject, ItemFactChange.NotInStash)
+            ? Failure.Refusal(action, row.Subject, ItemFactChange.NotInStash)
             : Outcome<SaveRow>.Of(row);
     }
 
@@ -287,7 +287,7 @@ internal static class ItemSave
             return read.Failure;
         }
 
-        return read.Value is { } listed ? Outcome<StashItem>.Of(listed) : new Failure(action, ItemQueries.Named(item.Name, item.FileName), ItemFactChange.NotInStash);
+        return read.Value is { } listed ? Outcome<StashItem>.Of(listed) : Failure.Refusal(action, ItemQueries.Named(item.Name, item.FileName), ItemFactChange.NotInStash);
     }
 }
 

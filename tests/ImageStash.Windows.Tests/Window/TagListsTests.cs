@@ -104,7 +104,7 @@ public sealed class TagListsTests
         TrayDesktop.Run(shown.CloseMenu);
         await shown.Listing.Store!.UndoDelete([deleted.Single().Value!]);
 
-        Assert.AreEqual("Add a tag failed: refused tile, it is no longer in the stash", named, "the refusal named (G35)");
+        Assert.AreEqual("Can't add a tag: refused tile is no longer in the stash.", named, "the refusal named (G35)");
         Assert.IsFalse(marked, "the mark shows the store's answer, not the menu's own flip of it");
         Assert.IsTrue(open, "the list stays open");
         Assert.IsEmpty(shown.TagsOf(items[0].Id));

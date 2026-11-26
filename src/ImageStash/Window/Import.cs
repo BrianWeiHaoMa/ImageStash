@@ -150,9 +150,10 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
         var refused = Refusal(subject);
         if (refused is null && contents.Items.Count == 0)
         {
-            refused = new Failure(Action, subject, contents.OnlyLink
-                ? "links are not taken and nothing is downloaded; drag the picture itself in"
-                : contents.FilesUnavailable ? "its files could not be read from what was dragged" : "it holds no file");
+            // A link alone, or no file, is refused (N2); files that could not be read went wrong (G35).
+            refused = contents.OnlyLink ? Failure.Refusal(Action, subject, "links are not taken and nothing is downloaded; drag the picture itself in")
+                : contents.FilesUnavailable ? new Failure(Action, subject, "its files could not be read from what was dragged")
+                : Failure.Refusal(Action, subject, "it holds no file");
         }
 
         if (refused is not null)
@@ -235,7 +236,7 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
     /// The refusal of an import while the stash cannot take one: it is still opening, or did not open, or a Move is asked
     /// (G35, State: Move); null while it can, so the paste refuses before it reads the clipboard (N9).
     /// </summary>
-    public Failure? Refusal(string subject) => listing.CannotStartReason is { } reason ? new Failure(Action, subject, reason) : null;
+    public Failure? Refusal(string subject) => listing.CannotStartReason is { } reason ? Failure.Refusal(Action, subject, reason) : null;
 
     /// <summary>
     /// The files a drop carries, in order: each file, and each folder's own files but not its subfolders' (G11), by
@@ -440,7 +441,7 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
         using var acting = UserAct.Begin(ImportEnd.Show);
         if (listing.CannotStartReason is { } reason)
         {
-            notices.Raise(new Failure(ImportEnd.Show, ImportEnd.ShownSubject, reason));
+            notices.Raise(Failure.Refusal(ImportEnd.Show, ImportEnd.ShownSubject, reason));
             return;
         }
 

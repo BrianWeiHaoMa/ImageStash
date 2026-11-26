@@ -44,7 +44,7 @@ public sealed class Deletion(Listing listing, Notices notices)
 
         if (listing.CannotStartReason is { } cannot)
         {
-            return Named(new Failure(Action, Notices.Describe(asked), cannot));
+            return Named(Failure.Refusal(Action, Notices.Describe(asked), cannot));
         }
 
         var store = listing.Store!;

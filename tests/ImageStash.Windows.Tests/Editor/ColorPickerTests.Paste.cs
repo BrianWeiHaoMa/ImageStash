@@ -247,7 +247,7 @@ public sealed partial class ColorPickerTests
         var item = (await shown.OpenStash(shown.Picture("grey.png", 200, 150, (_, _) => TextFieldTests.Grey))).Single();
         var other = shown.Fixture("transparent.png", "other.png");
         var png = File.ReadAllBytes(other);
-        const string noText = "Paste failed: the clipboard, it holds no text to paste";
+        const string noText = "Can't paste: the clipboard holds no text to paste.";
         var cases = new (Outcome<ClipboardReading> Read, string Notice)[]
         {
             (Outcome<ClipboardReading>.Of(new ClipboardReading([], png, null, false, "ff0000")), noText),

@@ -36,7 +36,7 @@ public sealed class StashClipboardImage(Listing listing, Notices notifications, 
     {
         if (listing.CannotStartReason is { } notOpen)
         {
-            notifications.Raise(new Failure(Action, Subject, notOpen));
+            notifications.Raise(Failure.Refusal(Action, Subject, notOpen));
             return;
         }
 
@@ -67,7 +67,7 @@ public sealed class StashClipboardImage(Listing listing, Notices notifications, 
         if (read.Value is not { } image)
         {
             // Files, words, a web address or nothing: no image, and nothing is fetched (N2).
-            notifications.Raise(new Failure(Action, Subject, "it holds no image"));
+            notifications.Raise(Failure.Refusal(Action, Subject, "it holds no image"));
             return;
         }
 
@@ -80,7 +80,7 @@ public sealed class StashClipboardImage(Listing listing, Notices notifications, 
                 captured.Raise(item, CaptureKind.StashedClipboardImage, onClipboard: false, lengthMs: null);
                 break;
             case { Result: ImportResultKind.Unreadable }:
-                notifications.Raise(new Failure(Action, saved.Name, MediaDecoder.UnreadableReason));
+                notifications.Raise(Failure.Refusal(Action, saved.Name, MediaDecoder.UnreadableReason));
                 if (saved.Failure is { } discarded)
                 {
                     notifications.Raise(discarded);

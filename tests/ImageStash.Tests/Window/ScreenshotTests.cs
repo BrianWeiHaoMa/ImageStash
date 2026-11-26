@@ -255,8 +255,8 @@ public sealed class ScreenshotTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "Take a screenshot failed: the screen, your stash is still opening",
-                "Take a screenshot failed: the screen, your stash could not be opened",
+                "Can't take a screenshot (the screen): your stash is still opening.",
+                "Can't take a screenshot (the screen): your stash could not be opened.",
             },
             taking.Notifications.Shown.Select(notice => notice.Text).ToList());
         Assert.AreEqual((0, 0), (taking.Screen.DisplayReads, taking.Screen.Grabs.Count), "nothing grabbed (G28)");
@@ -295,7 +295,7 @@ public sealed class ScreenshotTests
             await Handing.Eventually(() => taking.Stash.WorkFiles().Length == 1);
             await taking.Screenshot.Take();
 
-            CollectionAssert.AreEqual(new[] { "Take a screenshot failed: the screen, the last screenshot is still being saved" },
+            CollectionAssert.AreEqual(new[] { "Can't take a screenshot (the screen): the last screenshot is still being saved." },
                 taking.Notifications.Shown.Select(notice => notice.Text).ToList(), "the refusal named (G35)");
             CollectionAssert.AreEqual(new[] { "hide" }, taking.WindowSteps, "neither hidden again nor brought back by the second press");
             Assert.HasCount(1, taking.Screen.Grabs, "no second capture (Approach)");

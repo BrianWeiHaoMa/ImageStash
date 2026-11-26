@@ -160,12 +160,12 @@ public sealed class ItemTagsTests
         var addedRows = stash.TagRows();
         var removed = await store.RemoveTag([gone, marked, a], "x");
 
-        Assert.AreEqual(new Failure("Add a tag", "gone", "it is no longer in the stash"), added[0].Failure, "a row that is gone is named as it was handed in");
-        Assert.AreEqual(new Failure("Add a tag", "marked", "it is no longer in the stash"), added[1].Failure);
+        Assert.AreEqual(Failure.Refusal("Add a tag", "gone", "it is no longer in the stash"), added[0].Failure, "a row that is gone is named as it was handed in");
+        Assert.AreEqual(Failure.Refusal("Add a tag", "marked", "it is no longer in the stash"), added[1].Failure);
         Assert.IsTrue(added[2].Succeeded, added[2].Failure?.ToString());
         CollectionAssert.AreEqual(new[] { (marked.Id, "x"), (a.Id, "x") }, addedRows);
-        Assert.AreEqual(new Failure("Remove a tag", "gone", "it is no longer in the stash"), removed[0].Failure);
-        Assert.AreEqual(new Failure("Remove a tag", "marked", "it is no longer in the stash"), removed[1].Failure);
+        Assert.AreEqual(Failure.Refusal("Remove a tag", "gone", "it is no longer in the stash"), removed[0].Failure);
+        Assert.AreEqual(Failure.Refusal("Remove a tag", "marked", "it is no longer in the stash"), removed[1].Failure);
         Assert.IsTrue(removed[2].Succeeded, removed[2].Failure?.ToString());
         CollectionAssert.AreEqual(new[] { (marked.Id, "x") }, stash.TagRows(), "the marked row keeps its tags for its Undo");
     }
@@ -183,7 +183,7 @@ public sealed class ItemTagsTests
 
         Assert.HasCount(4, added);
         Assert.IsTrue(added[0].Succeeded && added[2].Succeeded);
-        Assert.AreEqual(new Failure("Add a tag", "missing", "it is no longer in the stash"), added[1].Failure);
+        Assert.AreEqual(Failure.Refusal("Add a tag", "missing", "it is no longer in the stash"), added[1].Failure);
         Assert.AreEqual(added[1].Failure, added[3].Failure);
         CollectionAssert.AreEqual(new[] { (a.Id, "x") }, stash.TagRows());
     }
@@ -251,7 +251,7 @@ public sealed class ItemTagsTests
         CollectionAssert.AreEqual(new[] { "Ärger" }, loss.RemovedTags.ToArray());
         AssertCounts([], await store.TagCounts());
         var failedAdd = await store.AddExistingTag([b], "ärger");
-        Assert.AreEqual(new Failure("Add a tag", "b", "no item carries #ärger any more"), failedAdd.Outcomes.Single().Failure);
+        Assert.AreEqual(Failure.Refusal("Add a tag", "b", "no item carries #ärger any more"), failedAdd.Outcomes.Single().Failure);
         Assert.IsEmpty(failedAdd.Changes);
         await store.AddTag([a, b], "Later");
 
@@ -355,7 +355,7 @@ public sealed class ItemTagsTests
         var added = await store.AddTag([placed, waiting], "x");
 
         Assert.IsTrue(added[0].Succeeded, added[0].Failure?.ToString());
-        Assert.AreEqual(new Failure("Add a tag", "waiting", "it is no longer in the stash"), added[1].Failure);
+        Assert.AreEqual(Failure.Refusal("Add a tag", "waiting", "it is no longer in the stash"), added[1].Failure);
         CollectionAssert.AreEqual(new[] { (placed.Id, "x") }, stash.TagRows());
         Assert.AreEqual(placedSteps, stash.SqlQueryWhileOpen("SELECT pending_steps FROM items WHERE id = $id", r => r.GetString(0), ("$id", placed.Id)).Single(), "the step stays as recorded");
     }

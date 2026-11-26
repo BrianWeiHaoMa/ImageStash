@@ -111,7 +111,7 @@ public sealed class ClipboardPasteTests
             Press(shown.PreviewPicture, Key.V, KeyModifiers.Control);
             Release(shown.PreviewPicture, Key.V);
         });
-        await Eventually(() => TrayDesktop.Get(() => shown.Notices.Shown[^1].Text == "Paste failed: the clipboard, it holds no picture or file"));
+        await Eventually(() => TrayDesktop.Get(() => shown.Notices.Shown[^1].Text == "Can't paste: the clipboard holds no picture or file."));
         TrayDesktop.Run(() => Assert.AreEqual(item.Id, shown.Preview.Item?.Id, "a notice leaves the preview open"));
 
         TestClipboard.Put((TestClipboard.Png, File.ReadAllBytes(shown.Picture("paste into preview.png"))));
@@ -452,7 +452,7 @@ public sealed class ClipboardPasteTests
         try
         {
             TestClipboard.SetClipboard($"http://127.0.0.1:{((IPEndPoint)server.LocalEndpoint).Port}/cat.gif");
-            Assert.AreEqual("Paste failed: the link, links are not taken and nothing is downloaded; copy the picture itself", await PasteForNotice(shown, () => shown.Grid));
+            Assert.AreEqual("Can't paste (the link): links are not taken and nothing is downloaded; copy the picture itself.", await PasteForNotice(shown, () => shown.Grid));
             await Task.Delay(500);
             Assert.IsFalse(server.Pending(), "nothing asked the address for its picture (N2)");
         }
@@ -462,9 +462,9 @@ public sealed class ClipboardPasteTests
         }
 
         TestClipboard.Empty();
-        Assert.AreEqual("Paste failed: the clipboard, it holds no picture or file", await PasteForNotice(shown, () => shown.Search), "an emptied clipboard, from the box too (G13)");
+        Assert.AreEqual("Can't paste: the clipboard holds no picture or file.", await PasteForNotice(shown, () => shown.Search), "an emptied clipboard, from the box too (G13)");
         TestClipboard.SetClipboard("a reaction for later");
-        Assert.AreEqual("Paste failed: the clipboard, it holds no picture or file", await PasteForNotice(shown, () => shown.Grid), "words, from the grid (G13)");
+        Assert.AreEqual("Can't paste: the clipboard holds no picture or file.", await PasteForNotice(shown, () => shown.Grid), "words, from the grid (G13)");
         TrayDesktop.Run(() =>
         {
             Assert.HasCount(1, shown.Listing.Items, "nothing was added");

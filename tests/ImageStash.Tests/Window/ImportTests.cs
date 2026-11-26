@@ -502,9 +502,9 @@ public sealed class ImportTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "Add to the stash failed: still.png, your stash is still opening",
-                "Add to the stash failed: the files to import, your stash is still opening",
-                "Add to the stash failed: still.png, your stash could not be opened",
+                "Can't add to the stash (still.png): your stash is still opening.",
+                "Can't add to the stash (the files to import): your stash is still opening.",
+                "Can't add to the stash (still.png): your stash could not be opened.",
             },
             notices.Shown.Select(notice => notice.Text).ToList());
         Assert.IsFalse(picked, "the picker does not open");
@@ -529,8 +529,8 @@ public sealed class ImportTests
         Assert.IsEmpty(link);
         Assert.IsEmpty(nothing);
         Assert.IsEmpty(unavailable);
-        CollectionAssert.AreEqual(new[] { "Add to the stash failed: the link, links are not taken and nothing is downloaded; drag the picture itself in" }, linkSaid);
-        CollectionAssert.AreEqual(new[] { "Add to the stash failed: what was dropped, it holds no file" }, nothingSaid);
+        CollectionAssert.AreEqual(new[] { "Can't add to the stash (the link): links are not taken and nothing is downloaded; drag the picture itself in." }, linkSaid);
+        CollectionAssert.AreEqual(new[] { "Can't add to the stash: what was dropped holds no file." }, nothingSaid);
         CollectionAssert.AreEqual(new[] { "Add to the stash failed: what was dropped, its files could not be read from what was dragged" },
             importing.Notices.Shown.Select(notice => notice.Text).ToList());
         Assert.AreEqual("cat", importing.Listing.Query, "a refused drop is not an import");

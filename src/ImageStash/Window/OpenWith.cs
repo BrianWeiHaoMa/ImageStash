@@ -107,7 +107,7 @@ public sealed class OpenWith : IDisposable
     {
         if (listing.CannotStartReason is { } refused)
         {
-            return new Failure(Action, ItemQueries.Named(item.Name, item.FileName), refused);
+            return Failure.Refusal(Action, ItemQueries.Named(item.Name, item.FileName), refused);
         }
 
         // Counted from the turn the refusal passed until the store has answered, so a Move asked meanwhile waits for the

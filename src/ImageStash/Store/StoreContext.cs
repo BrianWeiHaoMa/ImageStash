@@ -61,8 +61,8 @@ internal sealed record StoreContext(
     /// an import has spent this store; null otherwise.
     /// </summary>
     public Failure? MoveRefusal(string action, string subject) =>
-        importSpent ? new Failure(action, subject, StashImport.InProgress)
-        : moveStage == MoveStage.None ? null : new Failure(action, subject, MoveReasons.InProgress);
+        importSpent ? Failure.Refusal(action, subject, StashImport.InProgress)
+        : moveStage == MoveStage.None ? null : Failure.Refusal(action, subject, MoveReasons.InProgress);
 
     /// <summary>Whether nothing of this store runs any more: a Move has switched away from it, or an import has spent it.</summary>
     public bool Spent => importSpent || moveStage == MoveStage.Switched;

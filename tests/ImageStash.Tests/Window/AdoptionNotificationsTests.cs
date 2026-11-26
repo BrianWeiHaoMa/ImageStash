@@ -44,7 +44,7 @@ public sealed class AdoptionNotificationsTests
         await listed.Notifications.Undo(shown);
 
         var reason = saved ? AdoptionNotifications.ChangedSince : ItemFactChange.NotInStash;
-        CollectionAssert.AreEqual(new[] { new Failure(ItemAdoptionUndo.Action, "cat", reason).Sentence }, listed.Notifications.Shown.Select(notice => notice.Text).ToList(), "the refusal named (G35)");
+        CollectionAssert.AreEqual(new[] { Failure.Refusal(ItemAdoptionUndo.Action, "cat", reason).Sentence }, listed.Notifications.Shown.Select(notice => notice.Text).ToList(), "the refusal named (G35)");
         CollectionAssert.Contains(OpenedWith.Recycled(listed.Stash), EditedItems.Hash(still), "the previous original in the Recycle Bin, the notification gone (G27, G29)");
         Assert.IsNull(OpenedWith.Undo(listed.Stash, cat.Id), "the record cleared");
         if (saved)
@@ -117,7 +117,7 @@ public sealed class AdoptionNotificationsTests
 
         await listed.Notifications.Undo(replaced);
 
-        CollectionAssert.AreEqual(new[] { new Failure(ItemAdoptionUndo.Action, "cat", AdoptionNotifications.ChangedSince).Sentence }, listed.Notifications.Shown.Select(notice => notice.Text).ToList(), "refused by name after a Save of the item (G27, G35)");
+        CollectionAssert.AreEqual(new[] { Failure.Refusal(ItemAdoptionUndo.Action, "cat", AdoptionNotifications.ChangedSince).Sentence }, listed.Notifications.Shown.Select(notice => notice.Text).ToList(), "refused by name after a Save of the item (G27, G35)");
         Assert.AreEqual(EditedItems.Hash(rewrite), OpenedWith.OriginalHash(listed.Stash, cat.Id), "the adopted picture stays");
         CollectionAssert.Contains(OpenedWith.Recycled(listed.Stash), EditedItems.Hash(still), "the previous original in the Recycle Bin, its Undo refused (G27, G29)");
         Assert.IsNull(OpenedWith.Undo(listed.Stash, cat.Id), "the record cleared");
@@ -167,7 +167,7 @@ public sealed class AdoptionNotificationsTests
         said.Raise(adopted, adopted.RenderedRevision);
         await listed.Notifications.Undo(listed.Notifications.Shown.Single());
 
-        CollectionAssert.AreEqual(new[] { new Failure(ItemAdoptionUndo.Action, "cat", AdoptionNotifications.ChangedSince).Sentence }, listed.Notifications.Shown.Select(notice => notice.Text).ToList(), "refused by name (G27, G35)");
+        CollectionAssert.AreEqual(new[] { Failure.Refusal(ItemAdoptionUndo.Action, "cat", AdoptionNotifications.ChangedSince).Sentence }, listed.Notifications.Shown.Select(notice => notice.Text).ToList(), "refused by name (G27, G35)");
         Assert.AreEqual(EditedItems.Hash(rewrite), OpenedWith.OriginalHash(listed.Stash, cat.Id));
     }
 

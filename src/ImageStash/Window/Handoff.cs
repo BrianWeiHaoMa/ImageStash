@@ -279,7 +279,7 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
             if (hide.RefusalBeforePaste?.Invoke() is { } reason)
             {
                 notifications.Raise(CopiedNotification);
-                return Named(new Failure(PasteTargetReasons.Action, target.AppName, reason));
+                return Named(Failure.Refusal(PasteTargetReasons.Action, target.AppName, reason));
             }
 
             var reachable = targets.Confirm(target);
@@ -389,9 +389,11 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
         {
             // One read answers them all, so they share one reason: the stash no longer holds them, or could not be read.
             var first = refused[0].Second.Failure!;
+            // G8 refuses by name an item the stash no longer holds, or one it cannot confirm while the store is held, which
+            // the store, answering a clipboard refresh too, names as a failure.
             return refused.Count == 1
-                ? first
-                : new Failure(Action, Subject(refused.ConvertAll(answer => answer.First)), first.Reason == ItemFactChange.NotInStash ? NoneInStash : first.Reason);
+                ? first with { Refused = true }
+                : Failure.Refusal(Action, Subject(refused.ConvertAll(answer => answer.First)), first.Reason == ItemFactChange.NotInStash ? NoneInStash : first.Reason);
         }
 
         var current = confirmed.Select(answer => answer.Value!).ToList();
@@ -443,9 +445,9 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
     /// a Move's copy, an export or an import has begun (State: Move, G36); null otherwise.
     /// </summary>
     private Failure? Refusal(IReadOnlyList<StashItem> items, string action, int? replacements = null) =>
-        replacements is { } at && at != listing.Replacements ? new Failure(action, Subject(items), Listing.ReplacedSinceReason)
-        : listing.Store is null ? new Failure(action, Subject(items), listing.NotOpenReason!)
-        : listing.WholeStashActBegun ? new Failure(action, Subject(items), listing.WholeStashActAsked!)
+        replacements is { } at && at != listing.Replacements ? Failure.Refusal(action, Subject(items), Listing.ReplacedSinceReason)
+        : listing.Store is null ? Failure.Refusal(action, Subject(items), listing.NotOpenReason!)
+        : listing.WholeStashActBegun ? Failure.Refusal(action, Subject(items), listing.WholeStashActAsked!)
         : null;
 
     /// <summary>

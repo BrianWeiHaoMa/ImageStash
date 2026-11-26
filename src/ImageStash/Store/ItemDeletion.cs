@@ -76,7 +76,7 @@ internal static class ItemDeletion
             if (row is null || row.Deleted || !StashItem.IsListed(store.Folder, row.Files.Steps))
             {
                 // The store holds no name for a row that is gone; the caller names it by the item it was given.
-                answers[id] = new Failure(Action, row?.Name ?? id.ToString(), NotInStash);
+                answers[id] = Failure.Refusal(Action, row?.Name ?? id.ToString(), NotInStash);
                 continue;
             }
 
@@ -115,7 +115,7 @@ internal static class ItemDeletion
         foreach (var (row, copies) in held.Where(h => !markedIds.Contains(h.Row.Files.Id)))
         {
             Discard(store, copies);
-            answers[row.Files.Id] = marked.Succeeded ? new Failure(Action, row.Name, NotInStash) : marked.Failure;
+            answers[row.Files.Id] = marked.Succeeded ? Failure.Refusal(Action, row.Name, NotInStash) : marked.Failure;
         }
 
         if (marked.Succeeded)
@@ -164,7 +164,7 @@ internal static class ItemDeletion
         {
             if (row is not { Deleted: true, Copies: not null })
             {
-                answers[item.Id] = new Failure(UndoAction, item.Name, row is { Deleted: false } ? "it is not deleted" : NotInStash);
+                answers[item.Id] = Failure.Refusal(UndoAction, item.Name, row is { Deleted: false } ? "it is not deleted" : NotInStash);
                 continue;
             }
 
@@ -220,7 +220,7 @@ internal static class ItemDeletion
 
         // A repeated item finds its row unmarked by the first, as a second Undo would.
         return items.Select((item, index) => items.Take(index).Any(earlier => earlier.Id == item.Id)
-            ? new Failure(UndoAction, item.Name, "it is not deleted")
+            ? Failure.Refusal(UndoAction, item.Name, "it is not deleted")
             : answers[item.Id]).ToList();
     }
 
