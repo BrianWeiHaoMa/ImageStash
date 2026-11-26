@@ -58,7 +58,18 @@ public sealed class RecordingClipboard(TimeProvider clock) : IClipboardAndDrops
         return Outcome.Done;
     }
 
-    public Task<Outcome> WriteText(TopLevel owner, string action, string text, TimeSpan heldClipboardRetry) => Task.FromResult(Outcome.Done);
+    /// <summary>The text writes, in order.</summary>
+    public List<string> TextsWritten { get; } = [];
+
+    /// <summary>Run as each text write is made.</summary>
+    public Action? AtWriteText { get; set; }
+
+    public Task<Outcome> WriteText(TopLevel owner, string action, string text, TimeSpan heldClipboardRetry)
+    {
+        TextsWritten.Add(text);
+        AtWriteText?.Invoke();
+        return Task.FromResult(Outcome.Done);
+    }
 
     /// <summary>The identities the latest completed write or write again put there, as the real seam remembers them.</summary>
     public IReadOnlyList<long> LastWritten { get; set; } = [];

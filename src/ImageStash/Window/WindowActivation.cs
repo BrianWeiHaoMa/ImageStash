@@ -36,6 +36,7 @@ public sealed class WindowActivation
     private bool ownShowingRuns;
     private int ownShowings;
     private bool activationUnread;
+    private int timesShown;
     private readonly PasteHide forPaste;
 
     /// <summary>
@@ -59,6 +60,7 @@ public sealed class WindowActivation
         forPaste = new PasteHide(HideForPaste, heldKeys)
         {
             RefusalBeforePaste = () => editing.IsOpen ? PasteFallback.EditOpen : null,
+            TimesShown = () => timesShown,
         };
         this.dialogUp = dialogUp;
         this.dragInProgress = dragInProgress;
@@ -95,6 +97,14 @@ public sealed class WindowActivation
 
             activationUnread = true;
             Dispatcher.UIThread.Post(ReadActivation, DispatcherPriority.Background);
+        };
+        // A paste that hid the flyout leaves a window shown again before it ends to the person (G1).
+        window.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == Visual.IsVisibleProperty && window.IsVisible)
+            {
+                timesShown++;
+            }
         };
         window.Closing += (_, e) =>
         {
@@ -201,8 +211,8 @@ public sealed class WindowActivation
         : null;
 
     /// <summary>
-    /// Enter's paste hides the flyout before the target is brought to the front; a pinned window stays, and so does a
-    /// flyout whose dialog was opened, or whose drag was started, while the paste's write was retried (G2). A flyout a
+    /// Enter's paste hides the flyout before the target is brought to the front, while its write may still run; a pinned
+    /// window stays, and so does a flyout whose dialog was opened, or whose drag was started, before the hide (G2). A flyout a
     /// capture hid meanwhile is left to the capture, which puts back what it hid (G3). Answers whether the flyout is hidden
     /// once the paste has hidden it, which starts the next summon on Recent (G1).
     /// </summary>

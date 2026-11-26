@@ -237,9 +237,16 @@ public sealed class StashKeysTests
         keys.Released();
         keys.Released(Key.V);
         Assert.IsFalse(unseen.IsCompleted, "focus gone with Enter down: its release unseen, it may still be down (N3)");
-        Assert.IsTrue(keys.LetGo(Key.Enter).IsCompleted, "a later wait has no press of the window's to wait for");
+        var later = keys.LetGo(Key.Enter);
+        Assert.IsFalse(later.IsCompleted, "N3, \"Nothing is ever sent\": a later wait, a paste asked again after its write, waits too, since the key may still be down");
         keys.Released(Key.Enter);
-        await unseen.WaitAsync(TimeSpan.FromSeconds(5));
+        await Task.WhenAll(unseen, later).WaitAsync(TimeSpan.FromSeconds(5));
+
+        keys.Acting(Key.Enter, KeyAction.Handoff);
+        keys.Released();
+        keys.Acting(Key.Enter, KeyAction.Handoff);
+        keys.Released(Key.Enter);
+        Assert.IsTrue(keys.LetGo(Key.Enter).IsCompleted, "a press the window saw again, and its release, leave nothing to wait for");
     }
 
     [TestMethod]

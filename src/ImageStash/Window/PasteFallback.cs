@@ -35,13 +35,20 @@ public sealed class PasteFallback(Notices notifications)
     /// the clipboard is written (technical G8): on <paramref name="stoodOn"/> when that is not the primary display, else
     /// above the tray.
     /// </summary>
-    public void Raise(string reason, string appName, Display? stoodOn)
+    public void Raise(string reason, string appName, Display? stoodOn) => On(stoodOn).Raise(Says(reason, appName), heading: Copied);
+
+    /// <summary>
+    /// Names a paste's clipboard write that failed behind the hidden flyout, where the fallback would have stood, so the
+    /// person sees it without summoning the window; never as "Copied", since nothing was (G8, G35).
+    /// </summary>
+    public void RaiseFailure(Failure failure, Display? stoodOn) => On(stoodOn).Raise(failure);
+
+    /// <summary>The notifications above the tray, or, when <paramref name="stoodOn"/> is another display, that display's own stack.</summary>
+    private Notices On(Display? stoodOn)
     {
-        var words = Says(reason, appName);
         if (stoodOn is not { IsPrimary: false } display)
         {
-            notifications.Raise(words, heading: Copied);
-            return;
+            return notifications;
         }
 
         if (!elsewhere.TryGetValue(display.Bounds, out var stack))
@@ -50,7 +57,7 @@ public sealed class PasteFallback(Notices notifications)
             Opened?.Invoke(stack, display);
         }
 
-        stack.Raise(words, heading: Copied);
+        return stack;
     }
 
     /// <summary>

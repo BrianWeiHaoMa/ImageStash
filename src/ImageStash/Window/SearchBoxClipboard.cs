@@ -1,14 +1,14 @@
 using Avalonia.Controls;
-using ImageStash.Seams;
 
 namespace ImageStash.Window;
 
 /// <summary>
-/// The search box's <c>Ctrl+C</c> and <c>Ctrl+X</c> of its selected text (G7), written through the seam, the one place
-/// that reaches the clipboard. The text box's own write only logs a clipboard another program holds, so the words would
-/// silently not arrive; here that is retried, then named, and text a cut could not write stays in the box (E3, G35).
+/// The search box's <c>Ctrl+C</c> and <c>Ctrl+X</c> of its selected text (G7), written through the handoff, which holds it
+/// behind a paste's keystroke (G8), and the seam, the one place that reaches the clipboard. The text box's own write only
+/// logs a clipboard another program holds, so the words would silently not arrive; here that is retried, then named, and
+/// text a cut could not write stays in the box (E3, G35).
 /// </summary>
-public sealed class SearchBoxClipboard(TextBox box, IClipboardAndDrops clipboard, Notices notices, TimeSpan heldClipboardRetry)
+public sealed class SearchBoxClipboard(TextBox box, Handoff handoff, Notices notices)
 {
     public const string CopyAction = "Copy the search text";
     public const string CutAction = "Cut the search text";
@@ -36,7 +36,7 @@ public sealed class SearchBoxClipboard(TextBox box, IClipboardAndDrops clipboard
             return;
         }
 
-        var written = await clipboard.WriteText(owner, action, text, heldClipboardRetry);
+        var written = await handoff.CopyText(owner, action, text);
         if (!written.Succeeded)
         {
             notices.Raise(written.Failure);

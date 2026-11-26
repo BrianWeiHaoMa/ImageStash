@@ -1,5 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Input;
 using ImageStash.Media;
 using ImageStash.Seams;
 using ImageStash.Store;
@@ -14,12 +13,13 @@ namespace ImageStash.Window;
 /// completed, never before, and one that fails records nothing (State: Tags, favorite, use). Nothing here says or
 /// implies that anything was delivered (G10). A paste the target cannot take is announced by <see cref="Fallback"/>'s
 /// notification, above the tray in <paramref name="notifications"/> or on the display the stash window stood on, since the
-/// flyout may already be hidden (G8, G16). After a Save
+/// flyout may already be hidden (G8, G16); a paste's clipboard write that fails behind the hidden flyout is named there
+/// too (<c>HandoffPaste.cs</c>). After a Save
 /// or a Rename, the clipboard's copy of the item is replaced when nothing has changed it since (G26), and after a Move
 /// every item's, at its new path. While the listing holds no store, a handoff, a copy and a drag out are refused by name
 /// (G35).
 /// </summary>
-public sealed class Handoff(Listing listing, Notices notices, Notices notifications, IClipboardAndDrops clipboard, ITarget targets, TimeProvider clock, TimeSpan heldFileRetry, TimeSpan heldClipboardRetry)
+public sealed partial class Handoff(Listing listing, Notices notices, Notices notifications, IClipboardAndDrops clipboard, ITarget targets, TimeProvider clock, TimeSpan heldFileRetry, TimeSpan heldClipboardRetry)
 {
     public const string Action = "Copy";
 
@@ -129,6 +129,24 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
     }
 
     /// <summary>
+    /// The search box's selected <paramref name="text"/> on the clipboard as <paramref name="action"/> (G7), under the
+    /// one-write-at-a-time gate, so it never lands between a handoff's write and its paste keystroke (G8); a failure is the
+    /// caller's to name.
+    /// </summary>
+    public async Task<Outcome> CopyText(TopLevel owner, string action, string text)
+    {
+        await oneWriteAtATime.WaitAsync();
+        try
+        {
+            return await clipboard.WriteText(owner, action, text, heldClipboardRetry);
+        }
+        finally
+        {
+            oneWriteAtATime.Release();
+        }
+    }
+
+    /// <summary>
     /// After a published Save of <paramref name="saved"/> (G26, How G26 holds): when ImageStash's latest write put it on
     /// the clipboard, the items of that write, any deleted since left out, written again as they are now through the one
     /// content rule, under the one-write-at-a-time gate, so it never lands between a handoff's write and its paste. The
@@ -225,90 +243,6 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
         target is null ? Copy(owner, items) : Paste(owner, items, target, hide);
 
     /// <summary>
-    /// The paste into <paramref name="target"/>, in How G8 holds's order: the items onto the clipboard and their uses
-    /// recorded, exactly as <see cref="Copy"/>; then, while the Enter that asked for it is still held, a wait within
-    /// <see cref="PasteBound"/> for its release, so no other app is given the front while its repeats would reach it as
-    /// Send (N3); then the seam confirms the window still exists and may be sent input; then <paramref name="hide"/>'s
-    /// hide, which answers whether the flyout is hidden after it; then the target is brought to the front and sent one
-    /// paste keystroke. Enter held past the bound hides nothing, activates nothing and sends nothing: the copy is made,
-    /// and <see cref="Fallback"/>'s notification says so and why (G8). A write that fails is named and nothing else happens.
-    /// A window that is gone or cannot be sent input gets the copy that is already made, the flyout hidden as a paste hides
-    /// it, so the app the user came from is in front for its <c>Ctrl+V</c>, and then that notification, never a second write
-    /// or a second use. The notification stands on the display <paramref name="hide"/> says the stash window stood on as
-    /// the paste was asked (G16). A paste that leaves the flyout hidden, either way, starts the next summon on Recent
-    /// (<see cref="StartNextSummonOnRecent"/>). The one-at-a-time gate is held from the write through the keystroke, so
-    /// nothing else ImageStash writes lands on the clipboard before the target pastes it, and so are the items' file names,
-    /// so no other item comes under them before then.
-    /// </summary>
-    public async Task<Outcome> Paste(TopLevel owner, IReadOnlyList<StashItem> items, PasteTarget target, PasteHide hide)
-    {
-        using var acting = UserAct.Begin(HandOverAct);
-        if (items.Count == 0)
-        {
-            return Outcome.Done;
-        }
-
-        var stoodOn = hide.StoodOn;
-        var replacements = listing.Replacements;
-        await oneWriteAtATime.WaitAsync();
-        try
-        {
-            if (Refusal(items, Action, replacements) is { } refused)
-            {
-                return Named(refused);
-            }
-
-            SetBusy($"Copying {Subject(items)} to the clipboard…");
-            // Held through the keystroke: the target reads the files once it pastes.
-            using var confirmed = await listing.Store!.Confirm(items, Action);
-            var written = await Write(owner, items, confirmed);
-            if (!written.Succeeded)
-            {
-                notices.Raise(written.Failure);
-                return written;
-            }
-
-            await Record(items);
-            SetBusy($"Bringing {target.AppName} to the front…");
-            if (!await LetGoInTime(Task.WhenAll(hide.OriginatingRelease, hide.CurrentRelease)) || !hide.CurrentRelease.IsCompleted)
-            {
-                // The flyout stays, so the held Enter's repeats stay with ImageStash, and nothing starts the next summon anew (G1).
-                fallback.Raise(PasteFallback.EnterHeld, target.AppName, stoodOn);
-                return new Failure(PasteTargetReasons.Action, target.AppName, PasteFallback.EnterHeld);
-            }
-
-            if (hide.RefusalBeforePaste?.Invoke() is { } reason)
-            {
-                fallback.Raise(reason, target.AppName, stoodOn);
-                return Named(Failure.Refusal(PasteTargetReasons.Action, target.AppName, reason));
-            }
-
-            var reachable = targets.Confirm(target);
-            var started = StartNextSummonOnRecent(hide.Hide());
-            if (!reachable.Succeeded)
-            {
-                fallback.Raise(reachable.Failure!.Reason, target.AppName, stoodOn);
-                await started;
-                return reachable;
-            }
-
-            var pasted = await targets.ActivateAndPaste(target, PasteBound);
-            if (!pasted.Succeeded)
-            {
-                fallback.Raise(pasted.Failure!.Reason, target.AppName, stoodOn);
-            }
-
-            await started;
-            return pasted;
-        }
-        finally
-        {
-            SetBusy(null);
-            oneWriteAtATime.Release();
-        }
-    }
-
-    /// <summary>
     /// A drag of <paramref name="items"/> out of the window as files (G9), started by <paramref name="drag"/> with
     /// their files in order. <paramref name="dragging"/> says a drag is in progress from before it starts until it has
     /// returned, so the flyout stays meanwhile (G2); <paramref name="dragEnded"/> then lets the window judge its hide
@@ -379,11 +313,19 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
     /// </summary>
     private async Task<Outcome<IReadOnlyList<StashItem>>> Write(TopLevel owner, IReadOnlyList<StashItem> items, Confirmation confirmation)
     {
-        // The items as the store has them now, by identity, since a file name never is one: a Delete, an import's Undo
-        // or a Rename since the menu opened or the selection was read changes whether, and where, each one's file is (G8).
-        // One read for them all, so a held store costs one wait. While it cannot be read, an item unchanged since its read
-        // still goes, so the handoff stands as G10 has it; any other is refused, and the whole handoff with it (G35).
-        // Their file names stay in hand while the confirmation is held, so no other item comes under them meanwhile.
+        var current = Confirmed(items, confirmation);
+        return current.Succeeded ? await WriteCurrent(owner, current.Value!) : current.Failure;
+    }
+
+    /// <summary>
+    /// The items as the store has them now, by identity, since a file name never is one: a Delete, an import's Undo or a
+    /// Rename since the menu opened or the selection was read changes whether, and where, each one's file is (G8). One
+    /// read for them all, so a held store costs one wait. While it cannot be read, an item unchanged since its read still
+    /// goes, so the handoff stands as G10 has it; any other is refused, and the whole handoff with it (G35). Their file
+    /// names stay in hand while <paramref name="confirmation"/> is held, so no other item comes under them meanwhile.
+    /// </summary>
+    private static Outcome<IReadOnlyList<StashItem>> Confirmed(IReadOnlyList<StashItem> items, Confirmation confirmation)
+    {
         var confirmed = confirmation.Items;
         var refused = items.Zip(confirmed).Where(answer => !answer.Second.Succeeded).DistinctBy(answer => answer.First.Id).ToList();
         if (refused.Count > 0)
@@ -397,7 +339,12 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
                 : Failure.Refusal(Action, Subject(refused.ConvertAll(answer => answer.First)), first.Reason == ItemFactChange.NotInStash ? NoneInStash : first.Reason);
         }
 
-        var current = confirmed.Select(answer => answer.Value!).ToList();
+        return Outcome<IReadOnlyList<StashItem>>.Of(confirmed.Select(answer => answer.Value!).ToList());
+    }
+
+    /// <summary>The confirmed items' finished pictures decoded, encoded and written to the clipboard (G8); answers them as written.</summary>
+    private async Task<Outcome<IReadOnlyList<StashItem>>> WriteCurrent(TopLevel owner, IReadOnlyList<StashItem> current)
+    {
         var content = await Content(current);
         if (!content.Succeeded)
         {
@@ -473,27 +420,6 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
         await listing.Refresh();
     }
 
-    /// <summary>Whether <paramref name="letGo"/> completes within <see cref="PasteBound"/> on the handoff's clock: at once when it already has.</summary>
-    private async Task<bool> LetGoInTime(Task letGo)
-    {
-        if (letGo.IsCompleted)
-        {
-            return true;
-        }
-
-        using var bound = new CancellationTokenSource();
-        var first = await Task.WhenAny(letGo, Task.Delay(PasteBound, clock, bound.Token));
-        await bound.CancelAsync();
-        return first == letGo;
-    }
-
-    /// <summary>
-    /// After a paste whose flyout is <paramref name="hidden"/>, its uses recorded: Recent with no search, its first item,
-    /// the one just handed over, selected alone, for the next summon (G1); the pinned window, or a flyout a dialog or drag
-    /// of its own kept up, as it was. Started before the keystroke, which does not wait for it.
-    /// </summary>
-    private Task StartNextSummonOnRecent(bool hidden) => hidden ? listing.ShowScope(Scope.Recent, byPerson: false) : Task.CompletedTask;
-
     /// <summary>The items as a failure, a busy state and a copy's confirmation name them: one by its name, or its file's name when it has none; several by count.</summary>
     public static string Subject(IReadOnlyList<StashItem> items) => items switch
     {
@@ -510,23 +436,4 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
         Busy = busy;
         Changed?.Invoke();
     }
-}
-
-/// <summary>
-/// The window's part in a paste into a target (G8): <see cref="Hide"/> hides the flyout as the paste hides it and answers
-/// whether it is hidden after (G1, G2); <see cref="HeldKeys"/> are the keys the window holds down, an Enter among which the
-/// paste waits to be let go before any other app is given the front (N3); with none, nothing is held.
-/// </summary>
-public sealed record PasteHide(Func<bool> Hide, PressOnce? HeldKeys = null)
-{
-    internal Task OriginatingRelease { get; init; } = Task.CompletedTask;
-    internal Func<string?>? RefusalBeforePaste { get; init; }
-
-    /// <summary>The display the stash window stood on as the paste was asked; null when it is not known (G16).</summary>
-    internal Display? StoodOn { get; init; }
-
-    internal Task CurrentRelease => HeldKeys?.LetGo(Key.Enter) ?? Task.CompletedTask;
-
-    // A release from a later press cannot validate the press whose release was never seen.
-    internal PasteHide ForEnterPress() => this with { OriginatingRelease = CurrentRelease };
 }

@@ -90,12 +90,21 @@ public sealed class Handing : IDisposable
     /// <summary>The keys the window holds down, as its key-downs and key-ups tell them: a held Enter, which the paste waits to be let go.</summary>
     public PressOnce Keys { get; } = new();
 
+    /// <summary>How many times the window has been shown, as the window counts them: a check summoning it during a paste adds one.</summary>
+    public int TimesShown { get; set; }
+
     /// <summary>The paste as the window makes it, its hide recorded as a step.</summary>
-    public Task<Outcome> Paste(IReadOnlyList<StashItem> items, PasteTarget target) => Handoff.Paste(null!, items, target, new PasteHide(() =>
+    public Task<Outcome> Paste(IReadOnlyList<StashItem> items, PasteTarget target) => Handoff.Paste(null!, items, target, Hide);
+
+    /// <summary>The window's part in a paste, its hide recorded as a step, answering <see cref="PasteHidesFlyout"/>, with <see cref="Keys"/> and <see cref="TimesShown"/>.</summary>
+    public PasteHide Hide => new(() =>
     {
         Steps.Add("hide");
         return PasteHidesFlyout;
-    }, Keys));
+    }, Keys)
+    {
+        TimesShown = () => TimesShown,
+    };
 
     /// <summary>The seam's drag as the window starts it; the recording seam has no use for the window or the press.</summary>
     public Task<Outcome<bool>> Drag(IReadOnlyList<string> paths) => Clipboard.StartDrag(null!, null!, paths);

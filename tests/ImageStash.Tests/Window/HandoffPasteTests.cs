@@ -9,9 +9,10 @@ using Microsoft.Data.Sqlite;
 namespace ImageStash.Tests.Window;
 
 /// <summary>
-/// The handoff's paste over a real stash with real pictures: in How G8 holds's order, its fallbacks with the
-/// notification and no second write or use, a clipboard that cannot be written pasting nothing, and the one-at-a-time
-/// gate held through the keystroke (G8, G10, G16); and Enter's handover, a paste with a target and a copy without (G8),
+/// The handoff's paste over a real stash with real pictures: the hide, the write, the target asked again, the keystroke
+/// and then the use (<c>HandoffPasteOrderTests</c> holds the write open), its fallbacks with the notification and no second
+/// write or use, a clipboard that cannot be written pasting nothing, and the one-at-a-time gate held through the keystroke
+/// (G8, G10, G16); and Enter's handover, a paste with a target and a copy without (G8),
 /// waiting while the Enter that asked for it is held before any other app is given the front, and past the paste's
 /// bound giving nothing the front at all (N3).
 /// </summary>
@@ -19,22 +20,17 @@ namespace ImageStash.Tests.Window;
 public sealed class HandoffPasteTests
 {
     [TestMethod]
-    public async Task APasteWritesRecordsTheUseConfirmsHidesThenBringsTheTargetForwardAndSaysNothing()
+    public async Task APasteConfirmsHidesConfirmsAgainThenBringsTheTargetForwardRecordsTheUseAfterAndSaysNothing()
     {
         using var handing = await Handing.Open("transparent.png");
         var item = handing.Items.Single();
-        handing.Clipboard.AtWrite = () =>
-        {
-            handing.Steps.Add("write");
-            return Task.CompletedTask;
-        };
         handing.Target.AtConfirm = () => handing.Steps.Add($"uses {handing.Stash.Store!.Recent().Result.Value!.Count}");
 
         var pasted = await handing.Paste([item], RecordingTarget.Relay);
 
         Assert.IsTrue(pasted.Succeeded, pasted.Failure?.Sentence);
-        CollectionAssert.AreEqual(new[] { "write", "confirm Relay", "uses 1", "hide", "activate and paste Relay", "pasted Relay" }, handing.Steps,
-            "How G8 holds: the write, the use, the confirmation, the hide, then the target brought forward and sent the keystroke");
+        CollectionAssert.AreEqual(new[] { "confirm Relay", "uses 0", "hide", "confirm Relay", "uses 0", "activate and paste Relay", "pasted Relay" }, handing.Steps,
+            "G8 \"hides the flyout, activates that window and sends it a paste keystroke\": the target confirmed before the hide and again before it is brought forward; State: \"a use is written after the clipboard write ... never before\", here after the keystroke");
         Assert.AreEqual((RecordingTarget.Relay, Handoff.PasteBound), handing.Target.Pasted.Single());
         var content = handing.Clipboard.Written.Single().Content;
         CollectionAssert.AreEqual(new[] { item.FilePath }, content.FilePaths.ToList());
@@ -67,8 +63,8 @@ public sealed class HandoffPasteTests
         }));
 
         Assert.AreEqual(expectedSentence, pasted.Failure?.Sentence, "named in the outcome (G35)");
-        CollectionAssert.AreEqual(new[] { "write", "confirm Relay", "uses 1", "hide with 0 notifications" }, handing.Steps,
-            "the copy and the use first, then the hide, before the notification, so the app is in front for its Ctrl+V, and no activation or keystroke (G8, G2, N3)");
+        CollectionAssert.AreEqual(new[] { "write", "confirm Relay", "uses 0", "hide with 0 notifications" }, handing.Steps,
+            "an animated item's write completes at once here; then the hide, before the notification, so the app is in front for its Ctrl+V, the use after the copy, and no activation or keystroke (G8, G2, G10, N3)");
         Assert.AreEqual("Copied · press Ctrl+V", handing.Notifications.Shown.Single().Heading, "G8's words");
         Assert.IsEmpty(handing.Notices.Shown, "the notification, not a notice inside the window");
         Assert.HasCount(1, handing.Clipboard.Written, "the copy is made once");
@@ -84,7 +80,7 @@ public sealed class HandoffPasteTests
         var pasted = await handing.Paste(handing.Items, RecordingTarget.Relay);
 
         Assert.AreEqual("Couldn't paste: Relay could not be brought to the front.", pasted.Failure?.Sentence);
-        CollectionAssert.AreEqual(new[] { "confirm Relay", "hide", "activate and paste Relay", "pasted Relay" }, handing.Steps);
+        CollectionAssert.AreEqual(new[] { "confirm Relay", "hide", "confirm Relay", "activate and paste Relay", "pasted Relay" }, handing.Steps);
         Assert.AreEqual(PasteFallback.Copied, handing.Notifications.Shown.Single().Heading);
         Assert.IsEmpty(handing.Notices.Shown);
         Assert.HasCount(1, handing.Clipboard.Written);
@@ -100,9 +96,11 @@ public sealed class HandoffPasteTests
         var pasted = await handing.Paste(handing.Items, RecordingTarget.Relay);
 
         Assert.AreEqual($"Couldn't copy (transparent): {HeldClipboard.Reason}.", pasted.Failure?.Sentence);
-        Assert.AreEqual(pasted.Failure!.Sentence, handing.Notices.Shown.Single().Text, "named as a copy's failure is (G8, G35)");
-        Assert.IsEmpty(handing.Steps, "no confirmation, no hide, no keystroke");
-        Assert.IsEmpty(handing.Notifications.Shown);
+        var named = handing.Notifications.Shown.Single();
+        Assert.AreEqual(pasted.Failure!.Sentence, named.Text, "G8: \"When the clipboard cannot be written, nothing is pasted and the failure is named (G35)\": above the tray, the flyout having hidden");
+        Assert.IsNull(named.Heading, "not \"Copied · press Ctrl+V\": nothing was copied");
+        Assert.IsEmpty(handing.Notices.Shown, "not inside the hidden window");
+        CollectionAssert.AreEqual(new[] { "confirm Relay", "hide" }, handing.Steps, "no second confirmation, no activation, no keystroke");
         Assert.IsEmpty(handing.Uses());
     }
 
@@ -127,7 +125,7 @@ public sealed class HandoffPasteTests
         Assert.AreEqual(1, handing.Clipboard.Begun, "the copy waits for the paste's keystroke");
         keystroke.SetResult();
         await Task.WhenAll(pasting, copying);
-        CollectionAssert.AreEqual(new[] { "write True", "confirm Relay", "hide", "activate and paste Relay", "pasted Relay", "write False" }, handing.Steps,
+        CollectionAssert.AreEqual(new[] { "write True", "confirm Relay", "hide", "confirm Relay", "activate and paste Relay", "pasted Relay", "write False" }, handing.Steps,
             "the target pastes the picture the Enter was for (G8)");
     }
 
@@ -357,10 +355,10 @@ public sealed class HandoffPasteTests
 
         Assert.AreEqual(KeyAction.Handoff, handing.Keys.Acting(Key.Enter, KeyAction.Handoff));
         var pasting = handing.Paste([myCat], RecordingTarget.Relay);
-        await Handing.Eventually(() => clock.NextDue is not null);
+        await Handing.Eventually(() => clock.NextDue is not null && handing.Steps.Contains("write"));
 
         Assert.AreEqual(Handoff.PasteBound, clock.NextDue, "waiting within the paste's bound");
-        CollectionAssert.AreEqual(new[] { "write" }, handing.Steps, "while Enter is down the flyout stays and the target is not brought forward, so its repeats reach no app as Send (N3)");
+        CollectionAssert.AreEqual(new[] { "write" }, handing.Steps, "while Enter is down the write goes on, but the flyout stays and the target is not brought forward, so its repeats reach no app as Send (N3)");
         Assert.IsFalse(pasting.IsCompleted);
         clock.Pass(TimeSpan.FromMilliseconds(400));
         handing.Keys.Released(Key.Enter);
@@ -369,7 +367,7 @@ public sealed class HandoffPasteTests
         Assert.IsNull(clock.NextDue, "the bound's wait let go");
         var after = into == "a target that cannot take it"
             ? new[] { "write", "confirm Relay", "hide" }
-            : new[] { "write", "confirm Relay", "hide", "activate and paste Relay", "pasted Relay" };
+            : new[] { "write", "confirm Relay", "hide", "confirm Relay", "activate and paste Relay", "pasted Relay" };
         CollectionAssert.AreEqual(after, handing.Steps, "once Enter is let go: the hide, then the one paste keystroke (G8, R6)");
         Assert.HasCount(into == "a target that cannot take it" ? 0 : 1, handing.Target.Pasted);
         Assert.HasCount(into == "a target that cannot take it" ? 1 : 0, handing.Notifications.Shown);
@@ -481,6 +479,8 @@ public sealed class HandoffPasteTests
         var paste = listed.Handoff.Paste(null!, [cat], RecordingTarget.Relay, hide);
         try
         {
+            // The flyout hides at once, the write still running; an edit then opens, as from a notification's Edit (G16).
+            await Handing.Eventually(() => hidden);
             Assert.IsTrue((await listed.Editing.Open(dog, EditOrigin.Grid)).Succeeded);
         }
         finally
@@ -491,7 +491,6 @@ public sealed class HandoffPasteTests
         Assert.AreEqual("an edit is open", (await paste).Failure?.Reason);
         Assert.AreEqual("Can't paste (Relay): an edit is open.", (await paste).Failure?.Sentence, "declined while an edit is open, nothing gone wrong (G35)");
         Assert.AreEqual(dog.Id, listed.Editing.Session?.Item.Id);
-        Assert.IsFalse(hidden);
         Assert.IsEmpty(listed.Target.Pasted);
         Assert.AreEqual(1L, listed.Uses());
         CollectionAssert.AreEqual(new[] { cat.FilePath }, listed.Clipboard.Written.Single().Content.FilePaths.ToArray());
@@ -509,7 +508,7 @@ public sealed class HandoffPasteTests
         var pasted = await handing.Paste(handing.Items, RecordingTarget.Relay);
 
         Assert.IsTrue(pasted.Succeeded, pasted.Failure?.Sentence);
-        CollectionAssert.AreEqual(new[] { "confirm Relay", "hide", "activate and paste Relay", "pasted Relay" }, handing.Steps);
+        CollectionAssert.AreEqual(new[] { "confirm Relay", "hide", "confirm Relay", "activate and paste Relay", "pasted Relay" }, handing.Steps);
         Assert.IsNull(clock.NextDue, "no wait was armed");
     }
 

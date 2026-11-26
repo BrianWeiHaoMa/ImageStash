@@ -302,6 +302,9 @@ public sealed class PressOnce
     private readonly HashSet<Key> downInMenu = [];
     private readonly Dictionary<Key, TaskCompletionSource> waiting = [];
 
+    /// <summary>Keys that were down when focus went where their release is not seen: each may still be down (N3).</summary>
+    private readonly HashSet<Key> unseen = [];
+
     /// <summary>Whether this press of <paramref name="key"/> acts: not while it is still held from an earlier press.</summary>
     public bool Pressed(Key key)
     {
@@ -334,6 +337,7 @@ public sealed class PressOnce
 
         // A new press after focus was lost cannot lend its release to the earlier press.
         waiting.Remove(key);
+        unseen.Remove(key);
         return true;
     }
 
@@ -373,6 +377,7 @@ public sealed class PressOnce
         {
             if (key is not { } one)
             {
+                unseen.UnionWith(down);
                 down.Clear();
                 downInMenu.Clear();
                 return;
@@ -380,6 +385,7 @@ public sealed class PressOnce
 
             down.Remove(one);
             downInMenu.Remove(one);
+            unseen.Remove(one);
             if (waiting.Remove(one, out var wait))
             {
                 letGo = wait;
@@ -391,13 +397,14 @@ public sealed class PressOnce
 
     /// <summary>
     /// Completes once <paramref name="key"/> is let go: at once when it is not held, else at its release; a release unseen,
-    /// focus having gone elsewhere, completes nothing, so a caller bounds its wait.
+    /// focus having gone elsewhere, completes nothing, and a key down as focus went counts as held until it is next seen
+    /// pressed or let go, so a caller bounds its wait and never takes a key it lost sight of as up.
     /// </summary>
     public Task LetGo(Key key)
     {
         lock (gate)
         {
-            if (!down.Contains(key))
+            if (!down.Contains(key) && !unseen.Contains(key))
             {
                 return Task.CompletedTask;
             }

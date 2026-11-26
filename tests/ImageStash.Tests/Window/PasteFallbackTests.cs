@@ -110,7 +110,7 @@ public sealed class PasteFallbackTests
     }
 
     [TestMethod]
-    public async Task AClipboardThatCannotBeWrittenRaisesNoNotificationAnywhere()
+    public async Task AClipboardThatCannotBeWrittenRaisesNoCopiedAnywhereAndIsNamedWhereTheWindowStood()
     {
         using var handing = await Handing.Open("photo.jpg");
         handing.Clipboard.FailNext = RecordingClipboard.Held;
@@ -120,9 +120,11 @@ public sealed class PasteFallbackTests
         var pasted = await handing.Handoff.Paste(null!, handing.Items, RecordingTarget.Relay, StandingOn(Right, handing));
 
         Assert.IsFalse(pasted.Succeeded);
-        Assert.IsEmpty(handing.Notifications.Shown, "\"Copied\" only once the clipboard is written (technical G8, R9)");
-        Assert.IsEmpty(opened);
-        Assert.HasCount(1, handing.Notices.Shown, "the failure named as before (G35)");
+        Assert.IsEmpty(handing.Notifications.Shown, "nothing above the tray: the flyout stood on another display");
+        var named = opened.Single().Stack.Shown.Single();
+        Assert.IsNull(named.Heading, "\"Copied\" only once the clipboard is written (technical G8, R9)");
+        Assert.AreEqual(pasted.Failure!.Sentence, named.Text, "G8: \"the failure is named (G35)\", where the person was looking, the flyout having hidden");
+        Assert.IsEmpty(handing.Notices.Shown);
         Assert.IsEmpty(handing.Uses());
     }
 
@@ -172,8 +174,8 @@ public sealed class PasteFallbackTests
         handing.Keys.Released(Key.Enter);
         await pasting;
 
-        CollectionAssert.AreEqual(new[] { "confirm Relay", "hide", "activate and paste Relay", "pasted Relay" }, handing.Steps,
-            "the flyout hid before the notification, which still stands where the window stood (G16)");
+        CollectionAssert.AreEqual(new[] { "confirm Relay", "hide", "confirm Relay", "activate and paste Relay", "pasted Relay" }, handing.Steps,
+            "the flyout hid before the notification, which still stands where the window stood (G16); the target asked again once the write completed (G8)");
         Assert.AreEqual(Right, opened.Single().Display);
         Assert.HasCount(1, opened.Single().Stack.Shown);
         Assert.IsEmpty(handing.Notifications.Shown);

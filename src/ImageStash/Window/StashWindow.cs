@@ -454,7 +454,7 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
         search.PastingFromClipboard += (_, e) => e.Handled = true;
         // Its own menu would then offer a Paste that does nothing (G35); Cut and Copy of its text stay on their keys.
         search.ContextFlyout = null;
-        new SearchBoxClipboard(search, drops, notices, HeldClipboard.Retry).Wire();
+        new SearchBoxClipboard(search, handoff, notices).Wire();
         SearchBoxQuery.Wire(search, listing, summonSelection);
     }
 
