@@ -40,6 +40,7 @@ public sealed partial class EditorSession : IDisposable
     private RectangleF? handleRoom;
     private Task<EditResult>? saving;
     private bool closed;
+    private LayerList layers;
 
     // The original's hash as the session decoded and shows it, which every read of the item since (an estimate's, a
     // Save's) is compared against before a Save renders (G21).
@@ -55,7 +56,7 @@ public sealed partial class EditorSession : IDisposable
         Edit = edit;
         shownOriginal = edit.OriginalSha256;
         this.first = first;
-        Layers = layers;
+        this.layers = layers;
         Colors = colors;
         // The frames first: whether the original is animated decides whether Trim is listed (G20).
         StartFrames(original, time, ui);
@@ -77,8 +78,16 @@ public sealed partial class EditorSession : IDisposable
     /// <summary>What Edit opens on, read again at each Save: the original's place and record and the finished picture's format.</summary>
     public ItemForEdit Edit { get; private set; }
 
-    /// <summary>The live layers.</summary>
-    public LayerList Layers { get; private set; }
+    /// <summary>The live layers; the play goes round the frames their trim keeps, whichever change set them (G22).</summary>
+    public LayerList Layers
+    {
+        get => layers;
+        private set
+        {
+            layers = value;
+            PlayKept();
+        }
+    }
 
     /// <summary>The index of the selected layer in <see cref="Layers"/>, or null.</summary>
     public int? Selected { get; private set; }

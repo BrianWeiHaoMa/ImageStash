@@ -103,6 +103,8 @@ public sealed partial class EditorSession
 
         Action<Action> onUiThread = ui is null ? action => action() : action => ui.Post(_ => action(), null);
         player = new FramePlayer(decoder, first, Subject, time, onUiThread, () => FrameChanged?.Invoke(), FramesFailed);
+        // An edit opened with a saved trim plays its kept frames from the start.
+        PlayKept();
         timeline = ClipTimeline.Read(Edit.OriginalPath, Edit.OriginalSha256, Subject, heldFileRetry, RaiseChanged, (read, failure) =>
         {
             player.Limit(read);
@@ -113,6 +115,13 @@ public sealed partial class EditorSession
             });
         });
         player.Play();
+    }
+
+    /// <summary>Tells the player the frames the live trim keeps, every frame without one, so the play goes round them alone (G22).</summary>
+    private void PlayKept()
+    {
+        var kept = Layers.Trim?.Range;
+        player?.Keep(kept?.First ?? 0, kept?.Last ?? int.MaxValue);
     }
 
     /// <summary>Keeps the first frame failure of the session, for the view to name once (G35).</summary>

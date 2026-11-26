@@ -54,7 +54,7 @@ public sealed class TrimToolTests
             var words = editor.Overlay.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible).ToList();
             var position = words.Single(text => (text.Text ?? "").EndsWith(" / 0:00.6", StringComparison.Ordinal));
             var kept = words.Single(text => text.Text == "Keeps 0:00.0 – 0:00.6 · 0.6 s of 0.6 s");
-            var hint = words.Single(text => text.Text == "Drag the handles under the picture");
+            var hint = words.Single(text => text.Text == "Drag the handles; [ and ] set the start and end here");
             foreach (var control in new Control[] { editor.Button(editor.Shows("Pause") ? "Pause" : "Play"), position, kept, editor.Button("Reset"), hint, editor.Button("Cancel"), editor.Button(EditorOverlay.OutputSize), editor.Button("Save") })
             {
                 TextOptionRowTests.AssertInside(shown, control, $"{(control as TextBlock)?.Text ?? Avalonia.Automation.AutomationProperties.GetName(control)} at the minimum (G20, G21)");
@@ -202,6 +202,68 @@ public sealed class TrimToolTests
     /// A GIF of three 160 × 120 frames lasting 100, 200 and 300 ms, each pixel's blue, green and red from
     /// <paramref name="colorAt"/>, written by the product's encoder into the check's folder.
     /// </summary>
+    [TestMethod]
+    public async Task TheBracketKeysSetTheTrimUnderTrimAloneAndInALayersTextTypeTheirCharacter()
+    {
+        using var shown = ShownWindow.Open();
+        using var editor = new ShownEditor(shown);
+        var items = await shown.OpenStash(shown.Fixture("animated.gif", "brackets.gif"));
+        await EditorOverlayTests.Open(shown, items[0]);
+        TrayDesktop.Run(() =>
+        {
+            editor.Session!.Pause();
+            editor.Session.Seek(1);
+        });
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => editor.Session!.FrameIndex == 1));
+
+        TrayDesktop.Run(() =>
+        {
+            editor.Canvas.Focus();
+            Assert.IsFalse(Bracket(editor.Canvas, "[").Handled, "under Text the key is not the editor's");
+            Assert.IsTrue(editor.Session!.Layers.IsEmpty, "and sets no trim");
+            editor.Click(0.5, 0.5);
+        });
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => editor.Field is not null));
+        TrayDesktop.Run(() =>
+        {
+            var field = editor.Field!;
+            field.Focus();
+            Assert.IsFalse(Bracket(field, "[").Handled, "in a layer's text the key is the field's");
+            Assert.IsFalse(Bracket(field, "]").Handled);
+            ShownWindow.Type(field, "[]");
+            StringAssert.EndsWith(field.Text, "[]", "and types its character");
+            Assert.IsNull(editor.Session!.Layers.Trim, "no trim set from inside the field");
+            ShownWindow.Tap(field, Key.Enter, KeyModifiers.Control);
+        });
+
+        TrayDesktop.Run(() =>
+        {
+            var session = editor.Session!;
+            editor.Choose("Trim");
+            editor.Canvas.Focus();
+            Assert.IsTrue(Bracket(editor.Canvas, "[").Handled, "under Trim [ is the editor's");
+            Assert.AreEqual(new FrameRange(1, 2), session.Layers.Trim?.Range, "the kept frames start at the frame showing (G25)");
+            Assert.IsTrue(Bracket(editor.Canvas, "]").Handled);
+            Assert.AreEqual(new FrameRange(1, 1), session.Layers.Trim?.Range, "and end there");
+            ShownWindow.Tap(editor.Canvas, Key.Z, KeyModifiers.Control);
+            Assert.AreEqual(new FrameRange(1, 2), session.Layers.Trim?.Range, "each key one step");
+        });
+    }
+
+    /// <summary>The key typing <paramref name="symbol"/> pressed on <paramref name="target"/>, as Windows reports it to the editor.</summary>
+    private static KeyEventArgs Bracket(Control target, string symbol)
+    {
+        var pressed = new KeyEventArgs
+        {
+            RoutedEvent = InputElement.KeyDownEvent,
+            Key = symbol == "[" ? Key.OemOpenBrackets : Key.OemCloseBrackets,
+            KeySymbol = symbol,
+            Source = target,
+        };
+        target.RaiseEvent(pressed);
+        return pressed;
+    }
+
     private static string Clip(ShownWindow shown, string name, Func<int, int, int, (byte B, byte G, byte R)> colorAt)
     {
         var path = Path.ChangeExtension(shown.Picture(name + ".png", 1, 1, (_, _) => SKColors.Black), ".gif");
@@ -226,7 +288,7 @@ public sealed class TrimToolTests
     private static (Point Reset, Point Hint) RowPlaces(ShownWindow shown, ShownEditor editor)
     {
         shown.Window.UpdateLayout();
-        var hint = editor.Overlay.GetVisualDescendants().OfType<TextBlock>().Single(text => text.IsEffectivelyVisible && text.Text == "Drag the handles under the picture");
+        var hint = editor.Overlay.GetVisualDescendants().OfType<TextBlock>().Single(text => text.IsEffectivelyVisible && text.Text == "Drag the handles; [ and ] set the start and end here");
         return (editor.Button("Reset").TranslatePoint(default, editor.Overlay)!.Value, hint.TranslatePoint(default, editor.Overlay)!.Value);
     }
 

@@ -5,7 +5,8 @@ namespace ImageStash.Editor;
 
 /// <summary>
 /// Trim (G22), listed for an animated item only (G20): two handles on the filmstrip whose drags set the frames the
-/// finished clip keeps, each one step Undo reverses (G25), and Reset, which keeps every frame again; the option row states
+/// finished clip keeps, and `[` and `]`, which set an end at the frame showing (G25), each one step Undo reverses, and
+/// Reset, which keeps every frame again; the play goes round the kept frames alone. The option row states
 /// the position over the clip's length and what is kept and for how long. The trim is the list's one trim layer, its
 /// range in the original's frame indices, so the frames outside the handles stay in the original and a trim can be
 /// widened later; one covering the whole clip is no trim, and the list then holds none. The trim never moves a layer's
@@ -21,7 +22,7 @@ public sealed class TrimTool : EditorTool
 
     public override string Name => "Trim";
 
-    public override string Hint => "Drag the handles under the picture";
+    public override string Hint => "Drag the handles; [ and ] set the start and end here";
 
     /// <summary>The frames the handles keep: the trim's range clamped into the frames the editor can show, or every frame without a trim.</summary>
     public FrameRange Kept
@@ -102,6 +103,26 @@ public sealed class TrimTool : EditorTool
         if (Session.Accepts)
         {
             ReleaseEnd();
+        }
+    }
+
+    /// <summary>
+    /// <c>[</c> or <c>]</c> (G25): moves <paramref name="end"/> of the kept frames to the frame the playhead is on, as one
+    /// step, none when it is there already; at a frame past the other end it changes nothing, as G25 bounds it, so the
+    /// ends never cross, as the handles never do.
+    /// </summary>
+    public void EndAtPlayhead(RangeEnd end)
+    {
+        if (!Session.Accepts)
+        {
+            return;
+        }
+
+        Session.EndTyping();
+        var (range, at) = (Session.Layers.Trim?.Range ?? new FrameRange(0, Session.ClipFrames - 1), Session.FrameIndex);
+        if (end == RangeEnd.First ? at <= range.Last : at >= range.First)
+        {
+            Session.ChangeKeepingSelected(Trimmed(Session.Layers, end == RangeEnd.First ? range with { First = at } : range with { Last = at }));
         }
     }
 

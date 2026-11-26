@@ -51,6 +51,18 @@ public sealed class EditorKeysTests
     }
 
     [TestMethod]
+    public void TheKeysTypingTheBracketsSetTheTrimsEndsOutsideATextFieldWhateverTheLayout()
+    {
+        Assert.AreEqual(EditorKeyAction.TrimStartHere, EditorKeys.Route(Key.OemOpenBrackets, KeyModifiers.None, inTextField: false, selected: false, symbol: "["));
+        Assert.AreEqual(EditorKeyAction.TrimEndHere, EditorKeys.Route(Key.OemCloseBrackets, KeyModifiers.None, inTextField: false, selected: true, symbol: "]"));
+        Assert.AreEqual(EditorKeyAction.TrimStartHere, EditorKeys.Route(Key.D8, KeyModifiers.Control | KeyModifiers.Alt, inTextField: false, selected: false, symbol: "["), "a layout typing [ with AltGr");
+        Assert.AreEqual(EditorKeyAction.None, EditorKeys.Route(Key.OemOpenBrackets, KeyModifiers.None, inTextField: false, selected: false, symbol: "ü"), "the key where a US keyboard has [ types another character here");
+        Assert.AreEqual(EditorKeyAction.None, EditorKeys.Route(Key.OemOpenBrackets, KeyModifiers.Shift, inTextField: false, selected: false, symbol: "{"));
+        Assert.AreEqual(EditorKeyAction.None, EditorKeys.Route(Key.OemOpenBrackets, KeyModifiers.None, inTextField: true, selected: true, symbol: "["), "in a field the key types its character");
+        Assert.AreEqual(EditorKeyAction.None, EditorKeys.Route(Key.OemCloseBrackets, KeyModifiers.None, inTextField: true, selected: false, symbol: "]"));
+    }
+
+    [TestMethod]
     public void OtherModifiersAreNotTheEditorsKeys()
     {
         Assert.AreEqual(EditorKeyAction.None, EditorKeys.Route(Key.C, KeyModifiers.Control, inTextField: false, selected: true), "Ctrl+C is the window's copy");

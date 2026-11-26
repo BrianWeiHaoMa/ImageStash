@@ -212,6 +212,176 @@ public sealed class FramePlayerTests
     }
 
     [TestMethod]
+    public async Task AnEditOpenedWithASavedTrimPlaysRoundItsKeptFramesFromTheFrameOutsideThem()
+    {
+        using var clip = await AnimationInTheEditor.Open(stash => stash.ImportFixture("clip", "animated.gif"), List(new TrimLayer(new FrameRange(1, 2))));
+        var session = clip.Session;
+        var shown = Shown(session);
+        AssertShowing(session, 0, Red);
+
+        await clip.Advance(100, 1);
+        await clip.Advance(200, 2);
+        await clip.Advance(300, 1);
+        await clip.Advance(200, 2);
+        await clip.Advance(300, 1);
+
+        Assert.IsTrue(session.Playing);
+        CollectionAssert.AreEqual(new[] { 1, 2, 1, 2, 1 }, shown.ToArray(), "after the first frame, the kept frames alone, the first kept following the last (G22)");
+    }
+
+    [TestMethod]
+    public async Task ATrimReachingBeyondTheFramesPlaysTheKeptFramesTheEditorCanShow()
+    {
+        using var clip = await AnimationInTheEditor.Open(stash => stash.ImportFixture("clip", "animated.gif"), List(new TrimLayer(new FrameRange(1, 9))));
+        var shown = Shown(clip.Session);
+
+        await clip.Advance(100, 1);
+        await clip.Advance(200, 2);
+        await clip.Advance(300, 1);
+
+        CollectionAssert.AreEqual(new[] { 1, 2, 1 }, shown.ToArray());
+    }
+
+    [TestMethod]
+    public async Task ThePlayFollowsTheTrimAsAKeyUndoRedoAndResetChangeItAndWithoutOneWrapsTheWholeClip()
+    {
+        using var clip = await AnimationInTheEditor.Open("animated.gif");
+        var session = clip.Session;
+        session.Tool = session.Trim();
+        await clip.Advance(100, 1);
+        // Frame 2 is read and waits for its time when the end comes in under it.
+        await clip.NextFrameRead();
+        var shown = Shown(session);
+
+        session.Trim().EndAtPlayhead(RangeEnd.Last);
+        Assert.AreEqual(List(new TrimLayer(new FrameRange(0, 1))), session.Layers);
+        Assert.IsTrue(session.Playing, "a key sets the end without pausing");
+        await clip.Advance(200, 0);
+        await clip.Advance(100, 1);
+        await clip.Advance(200, 0);
+
+        session.Undo();
+        await clip.Advance(100, 1);
+        await clip.Advance(200, 2);
+        await clip.Advance(300, 0);
+
+        session.Redo();
+        await clip.Advance(100, 1);
+        await clip.Advance(200, 0);
+
+        session.Trim().Reset();
+        await clip.Advance(100, 1);
+        await clip.Advance(200, 2);
+
+        CollectionAssert.AreEqual(new[] { 0, 1, 0, 1, 2, 0, 1, 0, 1, 2 }, shown.ToArray(), "frame 2 only while no trim cuts it away");
+    }
+
+    [TestMethod]
+    public async Task PlayAskedWhileAFrameOutsideTheTrimIsSoughtShowsOnlyKeptFramesAfterIt()
+    {
+        using var clip = await AnimationInTheEditor.Open(stash => stash.ImportFixture("clip", "animated.gif"), List(new TrimLayer(new FrameRange(1, 2))));
+        var session = clip.Session;
+        await clip.Advance(100, 1);
+        session.Pause();
+
+        session.Seek(0);
+        session.Play();
+        var asked = session.FrameIndex;
+        var shown = Shown(session);
+        // The sought frame may have shown before play was asked, or been forgotten: either way four more frames show.
+        while (shown.Count < 4)
+        {
+            await Until(() => clip.Clock.NextDue is not null, "the play never waits for a frame's time");
+            var count = shown.Count;
+            clip.Clock.Advance(TimeSpan.FromSeconds(1));
+            await Until(() => shown.Count > count, "no frame follows");
+        }
+
+        Assert.IsTrue(shown.All(index => index is 1 or 2), $"from frame {asked}, only kept frames: {string.Join(", ", shown)}");
+    }
+
+    [TestMethod]
+    public async Task ASingleKeptFrameReachedFromOutsideHoldsStill()
+    {
+        using var clip = await AnimationInTheEditor.Open(stash => stash.ImportFixture("clip", "animated.gif"), List(new TrimLayer(new FrameRange(2, 2))));
+        var session = clip.Session;
+
+        await clip.Advance(100, 2);
+        clip.Clock.Advance(TimeSpan.FromSeconds(5));
+        await Task.Delay(50);
+
+        AssertShowing(session, 2, Blue);
+        Assert.IsFalse(session.Playing, "nothing follows the one kept frame");
+        session.Play();
+        Assert.IsFalse(session.Playing, "and play has nothing to go round");
+    }
+
+    [TestMethod]
+    public async Task KeysNarrowingTheTrimToTheFrameShowingStopThePlayAndSaySo()
+    {
+        using var clip = await AnimationInTheEditor.Open("animated.gif");
+        var session = clip.Session;
+        session.Tool = session.Trim();
+        await clip.Advance(100, 1);
+        await clip.NextFrameRead();
+        session.Trim().EndAtPlayhead(RangeEnd.First);
+        Assert.IsTrue(session.Playing, "frames 1 and 2 still go round");
+        var told = 0;
+        session.FrameChanged += () => told++;
+
+        session.Trim().EndAtPlayhead(RangeEnd.Last);
+
+        Assert.AreEqual(List(new TrimLayer(new FrameRange(1, 1))), session.Layers);
+        Assert.IsFalse(session.Playing, "one kept frame, showing: nothing to go round");
+        Assert.IsGreaterThan(0, told, "the play button is told the play stopped");
+        clip.Clock.Advance(TimeSpan.FromSeconds(5));
+        await Task.Delay(50);
+        AssertShowing(session, 1, Green);
+    }
+
+    [TestMethod]
+    public async Task SpaceWhileAFrameOutsideAOneFrameTrimIsSoughtEndsOnTheKeptFrame()
+    {
+        using var clip = await AnimationInTheEditor.Open(stash => stash.ImportFixture("clip", "animated.gif"), List(new TrimLayer(new FrameRange(1, 1))));
+        var session = clip.Session;
+        await clip.Advance(100, 1);
+        Assert.IsFalse(session.Playing, "one kept frame holds still");
+
+        session.Seek(2);
+        session.TogglePlaying();
+        var shown = Shown(session);
+        for (var i = 0; i < 20 && (session.Playing || session.FrameIndex != 1); i++)
+        {
+            clip.Clock.Advance(TimeSpan.FromSeconds(1));
+            await Task.Delay(20);
+        }
+
+        await Task.Delay(100);
+        AssertShowing(session, 1, Green);
+        Assert.DoesNotContain(2, shown, $"the frame sought shows after Space: {string.Join(", ", shown)}");
+    }
+
+    // Alone, as the long clip's check beside it.
+    [TestMethod]
+    [DoNotParallelize]
+    public async Task ATrimmedRangeGoingRoundHoldsAtMostTwoFullSizeFrames()
+    {
+        using var clip = await AnimationInTheEditor.Open(stash => stash.ImportPicture("clip", "clip.gif", SyntheticClips.Long(60, 200, 150)), List(new TrimLayer(new FrameRange(40, 49))));
+        var session = clip.Session;
+        var most = session.FullSizeFramesHeld;
+
+        foreach (var frame in Enumerable.Range(0, 25).Select(lap => 40 + lap % 10))
+        {
+            await clip.NextFrameRead();
+            most = Math.Max(most, session.FullSizeFramesHeld);
+            await clip.Advance(20, frame);
+            most = Math.Max(most, session.FullSizeFramesHeld);
+        }
+
+        Assert.IsLessThanOrEqualTo(2, most, "the frame showing and the one on its way, round the kept frames too (R7)");
+    }
+
+    [TestMethod]
     public async Task OnAStillNothingPlaysAndNoKeyChangesTheFrame()
     {
         using var cat = await CatInTheEditor.Open();
@@ -230,6 +400,25 @@ public sealed class FramePlayerTests
         Assert.IsEmpty(session.Thumbnails);
         Assert.IsTrue(session.TimelineComplete);
         Assert.IsNull(session.FramesBusy);
+    }
+
+    /// <summary>The index of every frame shown from now on, as the canvas is told of it.</summary>
+    private static List<int> Shown(EditorSession session)
+    {
+        var shown = new List<int>();
+        var last = session.FrameIndex;
+        session.FrameChanged += () =>
+        {
+            lock (shown)
+            {
+                if (session.FrameIndex != last)
+                {
+                    last = session.FrameIndex;
+                    shown.Add(last);
+                }
+            }
+        };
+        return shown;
     }
 
     private static bool Held(string path)

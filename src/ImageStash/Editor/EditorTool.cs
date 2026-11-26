@@ -163,12 +163,14 @@ public abstract class EditorTool
     /// A press on <paramref name="end"/> of <paramref name="range"/> as the filmstrip shows it (the trim's handles, a ranged
     /// layer's bar; G22): its drag moves that end to a frame among those the editor can show, never past the other end,
     /// so at least one frame stays inside, and shows <paramref name="placed"/>'s layers for the range so far; its release
-    /// is one step Undo reverses (G25), none when the range came back to where it was.
+    /// is one step Undo reverses (G25), none when the range came back to where it was. From the press the play pauses
+    /// on the frame that end is on, and follows it as it moves, so the picture shows where the end lands.
     /// </summary>
     internal void PressEnd(FrameRange range, RangeEnd end, Func<FrameRange, LayerList> placed)
     {
         Abandon();
         gesture = new Gesture(default, Session.Now, Grip.End, null) { Ends = (range, end, placed) };
+        Session.Seek(EndFrame(range, end));
     }
 
     /// <summary>The end pressed moved to <paramref name="frame"/>.</summary>
@@ -181,6 +183,8 @@ public abstract class EditorTool
             var moved = end == RangeEnd.First ? range with { First = Math.Min(at, range.Last) } : range with { Last = Math.Max(at, range.First) };
             drag.Dragging = true;
             Session.Show(moved == range ? drag.Before.Layers : placed(moved), drag.Before.Selected);
+            // The end the range took, not the frame the pointer asked for: a start dragged past the end shows where it stopped.
+            Session.Seek(EndFrame(moved, end));
         }
     }
 
@@ -334,6 +338,8 @@ public abstract class EditorTool
             Abandon();
         }
     }
+
+    private static int EndFrame(FrameRange range, RangeEnd end) => end == RangeEnd.First ? range.First : range.Last;
 
     private static LayerList Replaced(Snapshot at, Layer layer) =>
         new(at.Layers.Layers.Select((each, i) => i == at.Selected ? layer : each));

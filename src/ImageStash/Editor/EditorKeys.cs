@@ -40,17 +40,27 @@ public enum EditorKeyAction
 
     /// <summary>Left: steps one frame back (G25).</summary>
     StepBack,
+
+    /// <summary>The key typing <c>[</c>: with Trim current, the kept frames start at the frame showing (G25).</summary>
+    TrimStartHere,
+
+    /// <summary>The key typing <c>]</c>: with Trim current, the kept frames end at the frame showing (G25).</summary>
+    TrimEndHere,
 }
 
 /// <summary>
 /// G25's keys in the editor: <c>Ctrl+Z</c>, <c>Ctrl+Y</c> and <c>Ctrl+S</c> from everywhere in it; Del, Esc, C, Space,
-/// Left and Right outside a text field, Esc deselecting before it cancels; inside a text field (a layer's, or the
-/// picker's hex box) <c>Ctrl+Enter</c> and Esc leave it and every other key is the field's, Enter a new line and Del a
-/// character. Enter is never the editor's, and never a handoff.
+/// Left and Right, and the keys typing <c>[</c> and <c>]</c>, outside a text field, Esc deselecting before it cancels;
+/// inside a text field (a layer's, or the picker's hex box) <c>Ctrl+Enter</c> and Esc leave it and every other key is
+/// the field's, Enter a new line and Del a character. Enter is never the editor's, and never a handoff.
 /// </summary>
 public static class EditorKeys
 {
-    public static EditorKeyAction Route(Key key, KeyModifiers modifiers, bool inTextField, bool selected) => (key, modifiers) switch
+    /// <param name="symbol">
+    /// The character the key types on the keyboard layout in use, with the modifiers held (Avalonia's <c>KeySymbol</c>):
+    /// <c>[</c> and <c>]</c> are found by it, so on a layout typing them with AltGr that press is the key.
+    /// </param>
+    public static EditorKeyAction Route(Key key, KeyModifiers modifiers, bool inTextField, bool selected, string? symbol = null) => (key, modifiers) switch
     {
         (Key.Z, KeyModifiers.Control) => EditorKeyAction.Undo,
         (Key.Y, KeyModifiers.Control) => EditorKeyAction.Redo,
@@ -63,6 +73,8 @@ public static class EditorKeys
         (Key.Space, KeyModifiers.None) => EditorKeyAction.PlayPause,
         (Key.Right, KeyModifiers.None) => EditorKeyAction.StepForward,
         (Key.Left, KeyModifiers.None) => EditorKeyAction.StepBack,
+        _ when symbol == "[" => EditorKeyAction.TrimStartHere,
+        _ when symbol == "]" => EditorKeyAction.TrimEndHere,
         _ => EditorKeyAction.None,
     };
 }

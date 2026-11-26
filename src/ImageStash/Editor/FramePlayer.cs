@@ -9,9 +9,10 @@ public readonly record struct ShownFrame(MediaFrame Frame, int Index);
 /// The editor's own player of an animated original (G22, G25, G6, R7): one decoder, opened with the session and closed
 /// with it, reads the original's frames at full size one at a time, each after the one before, on a pool thread; the
 /// frame showing and its index change together, on the UI thread, and the one other frame held is the one on its way.
-/// It plays over its frames and round again, each showing for <see cref="ShownDuration"/> of its own, as the preview
-/// times them: a frame read early shows at its time, one read late shows at once and the next is timed from it, so
-/// frames never rush to catch up. A pause keeps the frame showing and what was left of its time; a step or a seek
+/// It plays over the kept frames (<see cref="Keep"/>: the trim's, every frame without one) and round again, from a
+/// frame outside them to their first, each showing for <see cref="ShownDuration"/> of its own, as the preview times
+/// them: a frame read early shows at its time, one read late shows at once and the next is timed from it, so frames
+/// never rush to catch up. A pause keeps the frame showing and what was left of its time; a step or a seek
 /// pauses, then shows the frame asked for, reached by decoding forward, from the first frame again when it lies before
 /// the decoder's place, so a clip's length never grows what is held. A frame on its way when the play is paused, stepped
 /// or sought never shows unasked; it is kept only while it is the next one asked for. The decoder shares the file's
@@ -43,6 +44,10 @@ internal sealed class FramePlayer : IDisposable
 
     private int count;
     private bool playing;
+
+    /// <summary>The kept frames on the original's timeline, which the play goes round; every frame until told otherwise.</summary>
+    private int keptFirst;
+    private int keptLast = int.MaxValue;
 
     /// <summary>Moved on by every pause, step, seek and failure, so a frame asked for before it never shows.</summary>
     private long generation;
@@ -129,21 +134,38 @@ internal sealed class FramePlayer : IDisposable
 
     private TimeSpan Now => time.GetElapsedTime(origin);
 
-    /// <summary>Plays on from the frame showing, after what was left of its time, or from a frame a step or a seek has asked for once it shows.</summary>
+    /// <summary>
+    /// Plays on from the frame showing, after what was left of its time, or from a kept frame a step or a seek has asked
+    /// for once it shows; a frame asked for outside the kept frames is forgotten, so the next to show is a kept one.
+    /// </summary>
     public void Play()
     {
         lock (gate)
         {
-            if (disposed || playing || count < 2)
+            if (disposed || playing)
             {
                 return;
             }
 
-            playing = true;
+            if (wanted is { } asked && !Kept(asked) && keptFirst < count)
+            {
+                // A seek outside the kept frames gives way to the play, which shows kept frames alone.
+                Forget();
+            }
+
             if (wanted is null)
             {
-                Want(Following(shown.Index), Now + left);
+                var next = Following(shown.Index);
+                if (next == shown.Index)
+                {
+                    // Nothing to play: one frame, or one kept frame showing already.
+                    return;
+                }
+
+                Want(next, Now + left);
             }
+
+            playing = true;
         }
 
         changed();
@@ -218,6 +240,30 @@ internal sealed class FramePlayer : IDisposable
         changed();
     }
 
+    /// <summary>
+    /// Plays round frames <paramref name="first"/> to <paramref name="last"/> alone from now on: a frame the play asked
+    /// for that no longer follows the one showing is forgotten for the one that does, at the same time. Those it cannot
+    /// read are left out; with none of them left it plays nothing. A step or a seek still reaches every frame.
+    /// </summary>
+    public void Keep(int first, int last)
+    {
+        lock (gate)
+        {
+            if (disposed || (first, last) == (keptFirst, keptLast))
+            {
+                return;
+            }
+
+            (keptFirst, keptLast) = (first, last);
+            if (!FollowKept())
+            {
+                return;
+            }
+        }
+
+        changed();
+    }
+
     /// <summary>Plays only the first <paramref name="frames"/>: what the filmstrip could read when a later frame failed (G35).</summary>
     public void Limit(int frames)
     {
@@ -245,6 +291,8 @@ internal sealed class FramePlayer : IDisposable
                     Want(instead, at);
                 }
             }
+
+            FollowKept();
         }
     }
 
@@ -268,7 +316,52 @@ internal sealed class FramePlayer : IDisposable
 
     private static TimeSpan Max(TimeSpan a, TimeSpan b) => a > b ? a : b;
 
-    private int Following(int index) => index + 1 < count ? index + 1 : 0;
+    /// <summary>The frame the play shows after <paramref name="index"/>: the next kept one, the first kept after the last or from outside them; itself when none can follow.</summary>
+    private int Following(int index)
+    {
+        if (keptFirst >= count)
+        {
+            return index;
+        }
+
+        var last = Math.Min(keptLast, count - 1);
+        return index >= keptFirst && index < last ? index + 1 : keptFirst;
+    }
+
+    /// <summary>Whether frame <paramref name="index"/> is one the play goes round.</summary>
+    private bool Kept(int index) => index >= keptFirst && index <= Math.Min(keptLast, count - 1);
+
+    /// <summary>
+    /// Under the gate, while playing: the frame asked for put right when the kept frames or the readable ones changed
+    /// under it, at the time it was asked for, or the play paused when nothing follows the frame showing; true when it
+    /// paused. A play left asking for nothing (a seek it went on from given up) asks for the next frame.
+    /// </summary>
+    private bool FollowKept()
+    {
+        if (!playing)
+        {
+            return false;
+        }
+
+        var at = wantedAt;
+        var next = Following(shown.Index);
+        // A seek's frame still on its way stays while it is kept; the play goes on from it.
+        if (wanted is { } asked && (at is null ? Kept(asked) : asked == next))
+        {
+            return false;
+        }
+
+        Forget();
+        if (next == shown.Index)
+        {
+            playing = false;
+            left = at is { } due ? Max(TimeSpan.Zero, due - Now) : left;
+            return true;
+        }
+
+        Want(next, at ?? Now + left);
+        return false;
+    }
 
     /// <summary>Asks for frame <paramref name="index"/>, read after any read in progress, to show at <paramref name="at"/> or once read.</summary>
     private void Want(int index, TimeSpan? at)
@@ -418,12 +511,14 @@ internal sealed class FramePlayer : IDisposable
             wanted = null;
             wantedAt = null;
             waiting = false;
-            if (playing)
+            if (playing && Following(index) != index)
             {
                 Want(Following(index), shownAt + ShownDuration.Of(next.Frame.DurationMs));
             }
             else
             {
+                // A single kept frame, reached from outside, holds still: nothing follows it.
+                playing = false;
                 left = ShownDuration.Of(next.Frame.DurationMs);
             }
         }

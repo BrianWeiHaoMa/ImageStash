@@ -211,7 +211,14 @@ public sealed class EditorOptionLayoutTests
                 TextOptionRowTests.AssertInside(shown, readout, "Trim readout");
             }
             AssertOptionsFit(shown, editor);
+
+            editor.DragOnStrip(editor.Edge(0), editor.Edge(1));
+            Assert.AreEqual(new FrameRange(1, 2), editor.Session!.Layers.Trim?.Range, "the start handle dragged on the strip");
+            Assert.IsFalse(editor.Session.Playing, "the drag paused the play");
+            Assert.AreEqual(initial, Geometry(shown, editor, pointer), "a paused handle drag leaves the picture where it was");
+            AssertOptionsFit(shown, editor);
         });
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => editor.Session!.FrameIndex == 1));
     }
 
     [TestMethod]

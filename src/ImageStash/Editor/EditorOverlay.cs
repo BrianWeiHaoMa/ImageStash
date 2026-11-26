@@ -570,7 +570,8 @@ public sealed class EditorOverlay : Border
             return;
         }
 
-        switch (EditorKeys.Route(e.Key, e.KeyModifiers, inField, open.Selected is not null))
+        var action = EditorKeys.Route(e.Key, e.KeyModifiers, inField, open.Selected is not null, e.KeySymbol);
+        switch (action)
         {
             case EditorKeyAction.Undo:
                 open.Undo();
@@ -608,6 +609,10 @@ public sealed class EditorOverlay : Border
                 break;
             case EditorKeyAction.StepBack when open.Animated:
                 open.Step(-1);
+                break;
+            // With another tool current the key is the focused control's.
+            case EditorKeyAction.TrimStartHere or EditorKeyAction.TrimEndHere when open.Tool is TrimTool trim:
+                trim.EndAtPlayhead(action == EditorKeyAction.TrimStartHere ? RangeEnd.First : RangeEnd.Last);
                 break;
             default:
                 return;

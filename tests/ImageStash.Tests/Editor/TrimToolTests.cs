@@ -31,7 +31,7 @@ public sealed class TrimToolTests
 
         CollectionAssert.AreEqual(new[] { "Text", "Crop", "Trim", "Hide", "Draw" }, clip.Session.Tools.Select(tool => tool.Name).ToArray());
         Assert.AreEqual("Text", clip.Session.Tool.Name, "Text current at the opening");
-        Assert.AreEqual("Drag the handles under the picture", clip.Session.Trim().Hint, "what the mouse does (G20)");
+        Assert.AreEqual("Drag the handles; [ and ] set the start and end here", clip.Session.Trim().Hint, "what the mouse and the keys do (G20, G25)");
         CollectionAssert.AreEqual(new[] { "Text", "Crop", "Hide", "Draw" }, still.Session.Tools.Select(tool => tool.Name).ToArray());
         Assert.IsFalse(oneImage.Clip.Facts.Animated, "a clip of one image is a still by its facts");
         CollectionAssert.AreEqual(new[] { "Text", "Crop", "Hide", "Draw" }, oneImage.Session.Tools.Select(tool => tool.Name).ToArray());
@@ -53,7 +53,8 @@ public sealed class TrimToolTests
         Assert.AreEqual(List(new TrimLayer(new FrameRange(1, 2))), session.Layers, "the trim on the original's frame indices");
         Assert.AreEqual(new FrameRange(1, 2), trim.Kept);
         Assert.AreEqual("Keeps 0:00.1 – 0:00.6 · 0.5 s of 0.6 s", trim.KeptWords, "the second and third frames' own 200 and 300 ms");
-        Assert.AreEqual("0:00.0 / 0:00.6", trim.Position, "the playhead still on the first frame, over the whole clip");
+        await Until(() => session.FrameIndex == 1, "the drag never shows the frame its handle is on");
+        Assert.AreEqual("0:00.1 / 0:00.6", trim.Position, "the playhead on the handle's frame, over the whole clip");
         Assert.AreEqual(new PixelSize(8, 6), session.OutputSize);
         Assert.IsNull(session.Selected, "the trim is never selected");
         session.Undo();
@@ -277,15 +278,21 @@ public sealed class TrimToolTests
         using var clip = await AnimationInTheEditor.Open("animated.gif");
         var session = clip.Session;
         session.Tool = session.Trim();
-        session.Trim().DragHandle(RangeEnd.First, 1);
         Assert.IsTrue(session.Playing, "it plays from the opening");
+        session.Trim().DragHandle(RangeEnd.First, 1);
+        Assert.IsFalse(session.Playing, "the drag paused on its handle's frame");
 
         session.TogglePlaying();
+        Assert.IsTrue(session.Playing);
+        session.TogglePlaying();
         Assert.IsFalse(session.Playing);
+        session.Seek(1);
         session.Step(1);
-        await Until(() => session.FrameIndex == 1, "Right never steps on");
+        await Until(() => session.FrameIndex == 2, "Right never steps on");
         session.Step(-1);
-        await Until(() => session.FrameIndex == 0, "Left never steps back");
+        await Until(() => session.FrameIndex == 1, "Left never steps back");
+        session.Step(-1);
+        await Until(() => session.FrameIndex == 0, "Left never steps back past the trim");
         Assert.AreEqual(EditorKeyAction.DeleteSelected, EditorKeys.Route(Avalonia.Input.Key.Delete, Avalonia.Input.KeyModifiers.None, false, false));
         session.DeleteSelected();
 
@@ -364,7 +371,8 @@ public sealed class TrimToolTests
         session.Trim().DragHandle(RangeEnd.First, 5);
 
         Assert.AreEqual("Keeps 0:00.2 – 0:01.8 · 1.7 s of 1.8 s", session.Trim().KeptWords, "what the saved clip lasts, not how long it shows here (F3)");
-        Assert.AreEqual("0:00.0 / 0:01.8", session.Trim().Position);
+        await Until(() => session.FrameIndex == 5, "the drag never shows the frame its handle is on");
+        Assert.AreEqual("0:00.2 / 0:01.8", session.Trim().Position, "the handle's frame starts after the first five frames' 150 ms");
     }
 
     [TestMethod]
