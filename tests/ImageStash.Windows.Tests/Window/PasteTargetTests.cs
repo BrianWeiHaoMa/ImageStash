@@ -475,7 +475,7 @@ public sealed class PasteTargetTests
         Assert.AreEqual("Copied · press Ctrl+V", shown.Notifications.Shown.Single().Heading, "G8's words");
         Assert.IsEmpty(target.Pasted, "no keystroke");
         TrayDesktop.Run(() => Assert.IsFalse(shown.Window.IsVisible, "the flyout hides as for a paste, so the app is in front for its Ctrl+V (G2, G8)"));
-        Assert.IsFalse(shown.Notices.Shown.Any(notice => notice.Text.StartsWith("Copied") || notice.Text.StartsWith("Paste")), "the notification, not a notice inside the window");
+        Assert.IsFalse(shown.Notices.Shown.Any(notice => (notice.Heading ?? notice.Text).StartsWith("Copied") || notice.Text.StartsWith("Paste")), "the notification, not a notice inside the window");
         Assert.AreEqual(1, shown.Uses(), "the copy it made is a use (G10)");
     }
 
