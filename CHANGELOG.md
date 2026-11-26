@@ -77,7 +77,7 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 ### Fixed
 
 - The editor keeps the picture in place at the same scale when you switch tools or select and deselect layers. The tool hint has its own line, and Text's font and colours stay visible, disabled until you select a text layer.
-- Undo and Redo close the color picker and discard its unfinished hex value when they select a different layer.
+- Undo and Redo update Hex to the restored color when the picker stays open. If history selects a different layer, the picker closes.
 - The editor shows “Pasting from the clipboard…” while it waits for the clipboard, including when you paste into Hex or layer text.
 - Import notices name the tags a batch gave pictures across spelling corrections and removals. They also name the tags it gave a picture that reached the stash before the final write failed.
 - Del pressed while the editor is opening after `Ctrl+E` or the preview’s Edit leaves the saved picture in the stash, even when a search delays `Ctrl+E`.

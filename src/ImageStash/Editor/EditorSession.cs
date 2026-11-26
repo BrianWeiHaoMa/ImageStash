@@ -382,6 +382,9 @@ public sealed partial class EditorSession : IDisposable
         return new Rgba(color.Red, color.Green, color.Blue, color.Alpha);
     }
 
+    /// <summary>Advances when Undo or Redo restores a snapshot.</summary>
+    internal int HistoryRevision { get; private set; }
+
     internal void RaiseChanged() => Changed?.Invoke();
 
     /// <summary>Shows <paramref name="layers"/> while a drag runs, as no step of its own.</summary>
@@ -489,6 +492,7 @@ public sealed partial class EditorSession : IDisposable
             tool = OwnerOf(layer);
         }
 
+        HistoryRevision++;
         estimate.Ask(Layers);
         RaiseChanged();
     }

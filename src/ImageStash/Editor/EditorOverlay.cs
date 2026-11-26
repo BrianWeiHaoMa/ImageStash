@@ -59,7 +59,7 @@ public sealed class EditorOverlay : Border
     private readonly TextBlock busyText;
     private readonly Button save;
     private EditorSession? session;
-    private (EditorTool? Tool, int? Index, Layer? Layer, int Count) refreshedFor;
+    private (EditorTool? Tool, int? Index, Layer? Layer, int Count, int HistoryRevision) refreshedFor;
     private IInputElement? focusLeft;
     private bool focusByKeys;
     private bool spaceTaken;
@@ -468,10 +468,11 @@ public sealed class EditorOverlay : Border
             return;
         }
 
-        var target = (Tool: shown.Tool, Index: shown.Selected, Layer: shown.SelectedLayer, Count: shown.Layers.Layers.Count);
+        var target = (Tool: shown.Tool, Index: shown.Selected, Layer: shown.SelectedLayer, Count: shown.Layers.Layers.Count, shown.HistoryRevision);
         // An edit replaces a layer in its slot. Undoing an addition or removal can put a different layer in that same slot.
-        var layerChanged = !ReferenceEquals(refreshedFor.Layer, target.Layer)
-            && (refreshedFor.Index != target.Index || refreshedFor.Count != target.Count);
+        var layerReplaced = !ReferenceEquals(refreshedFor.Layer, target.Layer);
+        var layerChanged = layerReplaced && (refreshedFor.Index != target.Index || refreshedFor.Count != target.Count);
+        var historyStepped = refreshedFor.HistoryRevision != target.HistoryRevision;
         var toolChanged = !ReferenceEquals(refreshedFor.Tool, target.Tool);
         refreshedFor = target;
         if (toolChanged || layerChanged)
@@ -483,6 +484,10 @@ public sealed class EditorOverlay : Border
                 var inReplacedRow = toolChanged && focused is Visual inside && options.IsVisualAncestorOf(inside);
                 ClosePane(returnFocus: pane.Holds(focused) || inReplacedRow);
             }
+        }
+        else if (historyStepped && pane.Shown is ColorPicker picker)
+        {
+            picker.RestoreAfterHistory(layerReplaced);
         }
 
         name.Text = shown.Subject;

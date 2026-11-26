@@ -19,7 +19,7 @@ namespace ImageStash.Editor;
 /// None above the square. While the square or the strip is dragged, what the picker was opened for shows each colour
 /// the pointer passes, as no step, so the choice is made by looking at the picture; letting go applies the last one, as
 /// one step and one recent colour (G21, G25), and a drag that ends any other way (its pointer lost, the picker closed)
-/// puts back what was there. A colour is applied at once when Enter is pressed in the hex, when a recent colour is
+/// puts back what was there. A colour is applied at once when Enter confirms a hex choice, when a recent colour is
 /// clicked, or when the eyedropper's click samples the picture. Ctrl+V in the hex uses the window's text paste (G13, N9, R5).
 /// </summary>
 internal sealed class ColorPicker : StackPanel
@@ -44,6 +44,7 @@ internal sealed class ColorPicker : StackPanel
     private readonly List<(Outline Outline, ToggleButton Button)> outlines = [];
     private readonly Func<Outline?>? outlineShown;
     private Hsv shown;
+    private bool hexNeedsEdit;
 
     /// <param name="current">The colour the picker opens on.</param>
     /// <param name="chosen">Told of each colour applied at once: the hex's, a recent one's, the eyedropper's.</param>
@@ -73,16 +74,17 @@ internal sealed class ColorPicker : StackPanel
         square.Other = strip;
         strip.Other = square;
 
-        hex = new TextBox { Width = 110, VerticalContentAlignment = VerticalAlignment.Center };
+        hex = new HexBox(() => hexNeedsEdit = false) { Width = 110, VerticalContentAlignment = VerticalAlignment.Center };
         AutomationProperties.SetName(hex, HexName);
         // Its own paste would read the clipboard's text (N9, R5); its menu would offer a Paste that does nothing.
         hex.PastingFromClipboard += (_, e) => e.Handled = true;
         hex.ContextFlyout = null;
+        hex.TextChanging += (_, _) => hexNeedsEdit = false;
         hex.AddHandler(KeyDownEvent, (_, e) =>
         {
             if (e.Key == Key.Enter && e.KeyModifiers == KeyModifiers.None)
             {
-                if (ColorChoices.ParseHex(hex.Text ?? "") is { } typed)
+                if (!hexNeedsEdit && ColorChoices.ParseHex(hex.Text ?? "") is { } typed)
                 {
                     Apply(typed);
                 }
@@ -133,8 +135,28 @@ internal sealed class ColorPicker : StackPanel
     /// <summary>Shows the colour it was opened for as it is now, Auto or None checked when either is, and the colours used recently, as it opens.</summary>
     public void Reset()
     {
-        Show(ColorChoices.ToHsv(current()));
+        hexNeedsEdit = false;
+        ShowCurrentColor();
         ShowRecent();
+    }
+
+    internal void RestoreAfterHistory(bool layerReplaced)
+    {
+        if (!layerReplaced && !square.IsHeld && !strip.IsHeld)
+        {
+            return;
+        }
+
+        square.IgnoreUntilRelease();
+        strip.IgnoreUntilRelease();
+        // Auto, None and a sampled translucent colour can share Hex with an explicit opaque colour.
+        ShowCurrentColor();
+        hexNeedsEdit = true;
+    }
+
+    private void ShowCurrentColor()
+    {
+        Show(ColorChoices.ToHsv(current()));
         ShowOutline();
     }
 
@@ -142,6 +164,7 @@ internal sealed class ColorPicker : StackPanel
     private void Apply(Rgba color)
     {
         chosen(color);
+        hexNeedsEdit = false;
         Show(ColorChoices.ToHsv(color));
         ShowRecent();
         ShowOutline();
@@ -156,7 +179,7 @@ internal sealed class ColorPicker : StackPanel
         Show(hsv);
         if (!drag.Preview(ColorChoices.FromHsv(hsv)))
         {
-            Reset();
+            ShowCurrentColor();
         }
     }
 
@@ -169,10 +192,11 @@ internal sealed class ColorPicker : StackPanel
     {
         if (!drag.LetGo(ColorChoices.FromHsv(shown)))
         {
-            Reset();
+            ShowCurrentColor();
             return;
         }
 
+        hexNeedsEdit = false;
         ShowRecent();
         ShowOutline();
     }
@@ -181,7 +205,7 @@ internal sealed class ColorPicker : StackPanel
     private void Abandon()
     {
         drag.Abandon();
-        Reset();
+        ShowCurrentColor();
     }
 
     /// <summary>A row of the outline's own choices: a round mark, its name, and beneath the name faint words saying what it does.</summary>
@@ -234,7 +258,9 @@ internal sealed class ColorPicker : StackPanel
         shown = hsv;
         square.Show(hsv);
         strip.Show(hsv.Hue);
+        var needsEdit = hexNeedsEdit;
         hex.Text = ColorChoices.Hex(ColorChoices.FromHsv(hsv));
+        hexNeedsEdit = needsEdit;
     }
 
     private void ShowRecent()
@@ -246,10 +272,27 @@ internal sealed class ColorPicker : StackPanel
         }
     }
 
+    private sealed class HexBox(Action replacedSelection) : TextBox
+    {
+        protected override Type StyleKeyOverride => typeof(TextBox);
+
+        protected override void OnTextInput(TextInputEventArgs e)
+        {
+            var hadSelection = SelectionStart != SelectionEnd;
+            base.OnTextInput(e);
+            // An accepted replacement can leave Text unchanged. Rejected input leaves the selection in place.
+            if (hadSelection && SelectionStart == SelectionEnd)
+            {
+                replacedSelection();
+            }
+        }
+    }
+
     /// <summary>A surface the pointer is pressed on and dragged over, telling where it is as it moves and when it lets go.</summary>
     private abstract class PickSurface : Control
     {
         private IPointer? holder;
+        private bool ignoreHeldPointer;
 
         protected PickSurface() => Look = new DrawnLook(this);
 
@@ -260,6 +303,9 @@ internal sealed class ColorPicker : StackPanel
 
         /// <summary>Whether a pointer holds it pressed: only that pointer's moves and let-go count.</summary>
         public bool IsHeld => holder is not null;
+
+        // History ends the color preview. Keep the pointer until release so another pointer cannot take over meanwhile.
+        public void IgnoreUntilRelease() => ignoreHeldPointer = true;
 
         /// <summary>Raised as a press begins, before its first move.</summary>
         public event Action? Pressed;
@@ -279,6 +325,7 @@ internal sealed class ColorPicker : StackPanel
             }
 
             holder = e.Pointer;
+            ignoreHeldPointer = false;
             e.Pointer.Capture(this);
             Pressed?.Invoke();
             Move(e.GetPosition(this));
@@ -287,7 +334,7 @@ internal sealed class ColorPicker : StackPanel
         protected override void OnPointerMoved(PointerEventArgs e)
         {
             base.OnPointerMoved(e);
-            if (ReferenceEquals(e.Pointer, holder))
+            if (!ignoreHeldPointer && ReferenceEquals(e.Pointer, holder))
             {
                 Move(e.GetPosition(this));
             }
@@ -300,7 +347,10 @@ internal sealed class ColorPicker : StackPanel
             {
                 holder = null;
                 e.Pointer.Capture(null);
-                LetGo?.Invoke();
+                if (!ignoreHeldPointer)
+                {
+                    LetGo?.Invoke();
+                }
             }
         }
 
@@ -326,7 +376,10 @@ internal sealed class ColorPicker : StackPanel
             if (IsHeld)
             {
                 holder = null;
-                Abandoned?.Invoke();
+                if (!ignoreHeldPointer)
+                {
+                    Abandoned?.Invoke();
+                }
             }
         }
     }
