@@ -69,7 +69,7 @@ public sealed class HandoffPasteTests
         Assert.AreEqual(expectedSentence, pasted.Failure?.Sentence, "named in the outcome (G35)");
         CollectionAssert.AreEqual(new[] { "write", "confirm Relay", "uses 1", "hide with 0 notifications" }, handing.Steps,
             "the copy and the use first, then the hide, before the notification, so the app is in front for its Ctrl+V, and no activation or keystroke (G8, G2, N3)");
-        Assert.AreEqual("Copied · press Ctrl+V", handing.Notifications.Shown.Single().Text, "G8's words");
+        Assert.AreEqual("Copied · press Ctrl+V", handing.Notifications.Shown.Single().Heading, "G8's words");
         Assert.IsEmpty(handing.Notices.Shown, "the notification, not a notice inside the window");
         Assert.HasCount(1, handing.Clipboard.Written, "the copy is made once");
         Assert.HasCount(1, handing.Uses(), "and its use recorded once (G10)");
@@ -85,7 +85,7 @@ public sealed class HandoffPasteTests
 
         Assert.AreEqual("Couldn't paste: Relay could not be brought to the front.", pasted.Failure?.Sentence);
         CollectionAssert.AreEqual(new[] { "confirm Relay", "hide", "activate and paste Relay", "pasted Relay" }, handing.Steps);
-        Assert.AreEqual(Handoff.CopiedNotification, handing.Notifications.Shown.Single().Text);
+        Assert.AreEqual(PasteFallback.Copied, handing.Notifications.Shown.Single().Heading);
         Assert.IsEmpty(handing.Notices.Shown);
         Assert.HasCount(1, handing.Clipboard.Written);
         Assert.HasCount(1, handing.Uses());
@@ -245,7 +245,7 @@ public sealed class HandoffPasteTests
 
         await handing.Paste([myCat], RecordingTarget.Relay);
 
-        Assert.AreEqual(Handoff.CopiedNotification, handing.Notifications.Shown.Single().Text);
+        Assert.AreEqual(PasteFallback.Copied, handing.Notifications.Shown.Single().Heading);
         Assert.AreEqual(Scope.Recent, handing.Listing.Scope, "the Copied · press Ctrl+V path hides the flyout as a paste does (G8, G1)");
         Assert.AreEqual("", handing.Listing.Query);
         CollectionAssert.AreEqual(new[] { myCat.Id }, handing.Listing.Selection.ToList());
@@ -413,10 +413,10 @@ public sealed class HandoffPasteTests
         clock.Advance(Handoff.PasteBound);
         var pasted = await pasting;
 
-        Assert.AreEqual($"Couldn't paste (Relay): {Handoff.EnterHeld}.", pasted.Failure?.Sentence);
+        Assert.AreEqual($"Couldn't paste (Relay): {PasteFallback.EnterHeld}.", pasted.Failure?.Sentence);
         Assert.IsEmpty(handing.Steps, "no hide, no activation, no keystroke: the target receives nothing of the press (N3, R6)");
         Assert.IsEmpty(handing.Target.Pasted);
-        Assert.AreEqual(Handoff.CopiedNotification, handing.Notifications.Shown.Single().Text, "it says where the picture is (G8)");
+        Assert.AreEqual(PasteFallback.Copied, handing.Notifications.Shown.Single().Heading, "it says where the picture is (G8)");
         Assert.IsEmpty(handing.Notices.Shown);
         CollectionAssert.AreEqual(new[] { myCat.FilePath }, handing.Clipboard.Written.Single().Content.FilePaths.ToList(), "the picture is on the clipboard");
         Assert.AreEqual("my", handing.Listing.Query, "the flyout still shows as it was: no start on Recent (G1)");
@@ -450,7 +450,7 @@ public sealed class HandoffPasteTests
         if (releaseLostWithFocus)
         {
             clock.Advance(Handoff.PasteBound);
-            Assert.AreEqual(Handoff.EnterHeld, (await pasting).Failure?.Reason);
+            Assert.AreEqual(PasteFallback.EnterHeld, (await pasting).Failure?.Reason);
             Assert.IsEmpty(handing.Target.Pasted);
         }
         else
@@ -475,7 +475,7 @@ public sealed class HandoffPasteTests
         var hidden = false;
         var hide = new PasteHide(() => hidden = true)
         {
-            RefusalBeforePaste = () => listed.Editing.IsOpen ? "an edit is open" : null,
+            RefusalBeforePaste = () => listed.Editing.IsOpen ? PasteFallback.EditOpen : null,
         };
 
         var paste = listed.Handoff.Paste(null!, [cat], RecordingTarget.Relay, hide);

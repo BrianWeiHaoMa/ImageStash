@@ -317,7 +317,7 @@ public sealed class ProblemNoticeTests
         listed.Notifications.Raise(new Failure("Stash clipboard image", "the clipboard", "it holds no image"));
         using (UserAct.Begin("Hand over"))
         {
-            listed.Notifications.Raise(Handoff.CopiedNotification);
+            listed.Notifications.Raise(PasteFallback.Copied);
         }
 
         listed.Stash.Clock.Now += Notices.Lasting;

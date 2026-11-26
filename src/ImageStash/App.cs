@@ -125,7 +125,8 @@ public sealed class App : Application
     /// <summary>
     /// The stash window, created now and kept hidden so a summon only shows it (G1), with the listing it shows, the
     /// editor it opens over its items, rendering a Save through Media (G20, G26), and the settings it remembers its
-    /// sizes in (G2); and the notifications above the tray, which a paste the target cannot take raises (G8, G16), as
+    /// sizes in (G2); and the notifications above the tray, which a paste the target cannot take raises (G8, G16), or on
+    /// the display the stash window stood on when that is another, as
     /// do Stash clipboard image and its capture notification, which open no window (G13), and Open with…'s adoption of
     /// a copy another program rewrote (G27); a notification the platform will not keep out of captures is named in the
     /// tooltip (G35); and Take a screenshot and Record a clip, over one capture session on the screen, the overlay and
@@ -151,6 +152,8 @@ public sealed class App : Application
             LocalClock.Instance, HeldFileRetry.Duration);
         window = new StashWindow(listing, notices, keeper, new Import(listing, notices, HeldFileRetry.Duration), handoff, editing, openWith, moving, seams);
         window.Follow(notification, captured);
+        handoff.Fallback.Opened += (standing, display) =>
+            window.FollowNotification(new Notification(standing, seams.QuietWindows, seams.Screen, trayMenu.Name, () => display));
         var capture = new CaptureSession(seams.Screen, new RegionOverlay(), new RecordingFrame(seams.QuietWindows, seams.Screen, trayMenu.Name, LocalClock.Instance),
             GifEncoder.Opener(HeldFileRetry.Duration), LocalClock.Instance, failure => notifications.Raise(failure));
         screenshot = new Screenshot(listing, notifications, captured, handoff, capture, keeper, window.CaptureHiding, window, HeldFileRetry.Duration);

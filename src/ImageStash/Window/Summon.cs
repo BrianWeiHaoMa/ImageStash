@@ -89,21 +89,39 @@ public static class Summon
 
     /// <summary>
     /// A notification (G16): above the tray icon when its rectangle lies on the primary display, else above that
-    /// display's bottom-right working-area corner, and always wholly inside the primary display's working area.
+    /// display's bottom-right working-area corner, and always wholly inside the primary display's working area; one
+    /// <paramref name="on"/> another display (a paste that could not be made, asked while the stash window stood there,
+    /// G8) above that display's bottom-right working-area corner instead, sized by its scaling, wholly inside its working
+    /// area as <paramref name="displays"/> report it now.
     /// </summary>
-    public static PixelRect NotificationPlace(PixelRect? icon, IReadOnlyList<Display> displays, WindowSize size)
+    public static PixelRect NotificationPlace(PixelRect? icon, IReadOnlyList<Display> displays, WindowSize size, Display? on = null)
     {
         var primary = Primary(displays);
+        // Found again by its bounds: a taskbar or scaling changed there since keeps the notification inside it.
+        var display = on is { IsPrimary: false } ? displays.FirstOrDefault(d => d.Bounds == on.Bounds && !d.IsPrimary) ?? on : primary;
         // Sized to its words alone: a notification never holds the editor, so the window's minimum is not its own.
-        var (width, height) = Scaled(primary, size);
-        if (icon is { } at && primary.Bounds.Contains(at.Center))
+        var (width, height) = Scaled(display, size);
+        if (display == primary && icon is { } at && primary.Bounds.Contains(at.Center))
         {
             return AboveIcon(at, primary, (width, height));
         }
 
-        var gap = (int)Math.Round(IconGap * primary.Scaling);
-        var area = primary.WorkingArea;
+        var gap = (int)Math.Round(IconGap * display.Scaling);
+        var area = display.WorkingArea;
         return Inside(area, new PixelRect(area.Right - gap - width, area.Bottom - gap - height, width, height));
+    }
+
+    /// <summary>
+    /// The display a window at <paramref name="window"/> stands on: the one holding most of it, as Windows scales a window
+    /// by; else, lying on none, the one nearest its centre.
+    /// </summary>
+    public static Display StandsOn(PixelRect window, IReadOnlyList<Display> displays) => Holding(window, displays) ?? DisplayAt(window.Center, displays);
+
+    /// <summary>The display holding most of <paramref name="rect"/>, as Windows scales a window by; null when it lies on none.</summary>
+    private static Display? Holding(PixelRect rect, IReadOnlyList<Display> displays)
+    {
+        var holding = displays.MaxBy(d => Area(d.Bounds.Intersect(rect)))!;
+        return Area(holding.Bounds.Intersect(rect)) > 0 ? holding : null;
     }
 
     /// <summary>
@@ -125,8 +143,7 @@ public static class Summon
         var (width, height) = SizeOn(display, size);
         var placed = new PixelRect(at.X, at.Y, width, height);
         // Windows scales a window by the display holding most of it, which sets its title bar's height.
-        var holding = displays.MaxBy(d => Area(d.Bounds.Intersect(placed)))!;
-        var scaling = Area(holding.Bounds.Intersect(placed)) > 0 ? holding.Scaling : display.Scaling;
+        var scaling = (Holding(placed, displays) ?? display).Scaling;
         var strip = new PixelRect(at.X, at.Y, width, Math.Min(height, (int)Math.Ceiling(TitleStrip * scaling)));
         return displays.Any(d => d.WorkingArea.Intersects(strip)) ? placed : Inside(display.WorkingArea, placed);
     }

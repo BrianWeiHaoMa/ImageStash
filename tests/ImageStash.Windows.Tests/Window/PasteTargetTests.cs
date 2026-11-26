@@ -472,7 +472,7 @@ public sealed class PasteTargetTests
         TrayDesktop.Run(() => ShownWindow.Tap(shown.Search, Key.Enter));
         await Eventually(() => shown.Notifications.Shown.Count == 1);
 
-        Assert.AreEqual("Copied · press Ctrl+V", shown.Notifications.Shown.Single().Text, "G8's words");
+        Assert.AreEqual("Copied · press Ctrl+V", shown.Notifications.Shown.Single().Heading, "G8's words");
         Assert.IsEmpty(target.Pasted, "no keystroke");
         TrayDesktop.Run(() => Assert.IsFalse(shown.Window.IsVisible, "the flyout hides as for a paste, so the app is in front for its Ctrl+V (G2, G8)"));
         Assert.IsFalse(shown.Notices.Shown.Any(notice => notice.Text.StartsWith("Copied") || notice.Text.StartsWith("Paste")), "the notification, not a notice inside the window");
@@ -491,7 +491,7 @@ public sealed class PasteTargetTests
         TrayDesktop.Run(() => ShownWindow.Tap(shown.Search, Key.Enter));
         await Eventually(() => shown.Notifications.Shown.Count == 1);
 
-        Assert.AreEqual("Copied · press Ctrl+V", shown.Notifications.Shown.Single().Text);
+        Assert.AreEqual("Copied · press Ctrl+V", shown.Notifications.Shown.Single().Heading);
         TrayDesktop.Run(() => Assert.IsTrue(shown.Window.IsVisible, "the pinned window stays (G2)"));
     }
 

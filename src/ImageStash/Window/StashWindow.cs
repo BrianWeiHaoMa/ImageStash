@@ -684,10 +684,19 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
     /// </summary>
     public void Follow(Notification notification, CaptureNotification captured)
     {
-        notification.Deactivated += activation.NotificationLostFocus;
-        notification.StayAbove(this);
+        FollowNotification(notification);
         captured.FieldTookFocus += activation.NotificationTookFocus;
         _ = new NotificationOpening(captured, pasteTarget, targets, SummonFromNotification, editing, preview.Close);
+    }
+
+    /// <summary>
+    /// A window of ImageStash's notifications, above the tray or on another display (G8, G16): a click on it takes no focus
+    /// from the window's hide rule and paste target, and it stays above this window.
+    /// </summary>
+    public void FollowNotification(Notification notification)
+    {
+        notification.Deactivated += activation.NotificationLostFocus;
+        notification.StayAbove(this);
     }
 
     /// <summary>

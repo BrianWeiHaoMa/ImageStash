@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using ImageStash.Seams;
@@ -35,6 +36,7 @@ public sealed class WindowActivation
     private bool ownShowingRuns;
     private int ownShowings;
     private bool activationUnread;
+    private readonly PasteHide forPaste;
 
     /// <summary>
     /// Follows <paramref name="window"/>'s activation, deactivation and Close from now on; <paramref name="dialogUp"/> and
@@ -54,9 +56,9 @@ public sealed class WindowActivation
         this.pasteTarget = pasteTarget;
         this.targets = targets;
         this.heldKeys = heldKeys;
-        ForPaste = new PasteHide(HideForPaste, heldKeys)
+        forPaste = new PasteHide(HideForPaste, heldKeys)
         {
-            RefusalBeforePaste = () => editing.IsOpen ? "an edit is open" : null,
+            RefusalBeforePaste = () => editing.IsOpen ? PasteFallback.EditOpen : null,
         };
         this.dialogUp = dialogUp;
         this.dragInProgress = dragInProgress;
@@ -187,8 +189,16 @@ public sealed class WindowActivation
         }
     }
 
-    /// <summary>The paste's part of the window: Enter let go, then <see cref="HideForPaste"/> (G8, N3).</summary>
-    public PasteHide ForPaste { get; }
+    /// <summary>
+    /// The paste's part of the window: Enter let go, then <see cref="HideForPaste"/> (G8, N3); and the display the window
+    /// stands on now, read as each handoff is asked, so a paste it cannot make is said there (G16).
+    /// </summary>
+    public PasteHide ForPaste => forPaste with { StoodOn = StandsOn() };
+
+    /// <summary>The display holding most of the window while it shows, where a paste it cannot make is said (G16); null while it is hidden.</summary>
+    private Display? StandsOn() => window.IsVisible
+        ? Summon.StandsOn(new PixelRect(window.Position, PixelSize.FromSize(window.FrameSize ?? window.ClientSize, window.RenderScaling)), Summon.DisplaysOf(window.Screens))
+        : null;
 
     /// <summary>
     /// Enter's paste hides the flyout before the target is brought to the front; a pinned window stays, and so does a

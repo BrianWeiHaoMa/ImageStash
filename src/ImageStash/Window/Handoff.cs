@@ -12,8 +12,9 @@ namespace ImageStash.Window;
 /// finished picture goes as a file; a single still also as its PNG bytes and a bitmap that keeps its transparency; an
 /// animated item or several items as files only. A use is recorded on each item only after the write or the drop has
 /// completed, never before, and one that fails records nothing (State: Tags, favorite, use). Nothing here says or
-/// implies that anything was delivered (G10). A paste the target cannot take is announced by a notification above the
-/// tray, raised into <paramref name="notifications"/>, since the flyout may already be hidden (G8, G16). After a Save
+/// implies that anything was delivered (G10). A paste the target cannot take is announced by <see cref="Fallback"/>'s
+/// notification, above the tray in <paramref name="notifications"/> or on the display the stash window stood on, since the
+/// flyout may already be hidden (G8, G16). After a Save
 /// or a Rename, the clipboard's copy of the item is replaced when nothing has changed it since (G26), and after a Move
 /// every item's, at its new path. While the listing holds no store, a handoff, a copy and a drag out are refused by name
 /// (G35).
@@ -28,14 +29,8 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
     /// <summary>The act of a paste into the app the person came from, for the notices it raises (G16).</summary>
     public const string HandOverAct = "Paste into an app";
 
-    /// <summary>G8's words when the target is gone or cannot be sent input: what is on the clipboard, never that anything arrived (G10).</summary>
-    public const string CopiedNotification = "Copied · press Ctrl+V";
-
     /// <summary>How long the target has to come to the front before the paste falls back to the notification (G8); a busy app takes a moment.</summary>
     public static readonly TimeSpan PasteBound = TimeSpan.FromSeconds(1);
-
-    /// <summary>Why a paste whose Enter was held past <see cref="PasteBound"/> was not made: in front, the target would have taken its repeats as Send (N3).</summary>
-    public const string EnterHeld = "Enter was still held, and would have reached it";
 
     /// <summary><see cref="ItemFactChange.NotInStash"/> said of several items.</summary>
     private const string NoneInStash = "they are no longer in the stash";
@@ -43,6 +38,7 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
     private const string DragAction = "Drag out";
 
     private readonly SemaphoreSlim oneWriteAtATime = new(1, 1);
+    private readonly PasteFallback fallback = new(notifications);
     private int drags;
 
     /// <summary>Raised whenever <see cref="Busy"/> or <see cref="Dragging"/> changes.</summary>
@@ -54,6 +50,9 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
     /// whose own words are its notification, nor for a capture's copy or a refresh.
     /// </summary>
     public event Action<IReadOnlyList<StashItem>>? Copied;
+
+    /// <summary>The notification of a paste that could not be made, and where it stands (G8, G16).</summary>
+    public PasteFallback Fallback => fallback;
 
     /// <summary>The running write's busy state in words, or null while none runs (G35).</summary>
     public string? Busy { get; private set; }
@@ -232,10 +231,11 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
     /// Send (N3); then the seam confirms the window still exists and may be sent input; then <paramref name="hide"/>'s
     /// hide, which answers whether the flyout is hidden after it; then the target is brought to the front and sent one
     /// paste keystroke. Enter held past the bound hides nothing, activates nothing and sends nothing: the copy is made,
-    /// and the notification "Copied · press Ctrl+V" says so (G8). A write that fails is named and nothing else happens. A window that is
-    /// gone or cannot be sent input gets the copy that is already made, the flyout hidden as a paste hides it, so the app
-    /// the user came from is in front for its <c>Ctrl+V</c>, and then the notification "Copied · press Ctrl+V", never a
-    /// second write or a second use. A paste that leaves the flyout hidden, either way, starts the next summon on Recent
+    /// and <see cref="Fallback"/>'s notification says so and why (G8). A write that fails is named and nothing else happens.
+    /// A window that is gone or cannot be sent input gets the copy that is already made, the flyout hidden as a paste hides
+    /// it, so the app the user came from is in front for its <c>Ctrl+V</c>, and then that notification, never a second write
+    /// or a second use. The notification stands on the display <paramref name="hide"/> says the stash window stood on as
+    /// the paste was asked (G16). A paste that leaves the flyout hidden, either way, starts the next summon on Recent
     /// (<see cref="StartNextSummonOnRecent"/>). The one-at-a-time gate is held from the write through the keystroke, so
     /// nothing else ImageStash writes lands on the clipboard before the target pastes it, and so are the items' file names,
     /// so no other item comes under them before then.
@@ -248,6 +248,7 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
             return Outcome.Done;
         }
 
+        var stoodOn = hide.StoodOn;
         var replacements = listing.Replacements;
         await oneWriteAtATime.WaitAsync();
         try
@@ -272,13 +273,13 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
             if (!await LetGoInTime(Task.WhenAll(hide.OriginatingRelease, hide.CurrentRelease)) || !hide.CurrentRelease.IsCompleted)
             {
                 // The flyout stays, so the held Enter's repeats stay with ImageStash, and nothing starts the next summon anew (G1).
-                notifications.Raise(CopiedNotification);
-                return new Failure(PasteTargetReasons.Action, target.AppName, EnterHeld);
+                fallback.Raise(PasteFallback.EnterHeld, target.AppName, stoodOn);
+                return new Failure(PasteTargetReasons.Action, target.AppName, PasteFallback.EnterHeld);
             }
 
             if (hide.RefusalBeforePaste?.Invoke() is { } reason)
             {
-                notifications.Raise(CopiedNotification);
+                fallback.Raise(reason, target.AppName, stoodOn);
                 return Named(Failure.Refusal(PasteTargetReasons.Action, target.AppName, reason));
             }
 
@@ -286,7 +287,7 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
             var started = StartNextSummonOnRecent(hide.Hide());
             if (!reachable.Succeeded)
             {
-                notifications.Raise(CopiedNotification);
+                fallback.Raise(reachable.Failure!.Reason, target.AppName, stoodOn);
                 await started;
                 return reachable;
             }
@@ -294,7 +295,7 @@ public sealed class Handoff(Listing listing, Notices notices, Notices notificati
             var pasted = await targets.ActivateAndPaste(target, PasteBound);
             if (!pasted.Succeeded)
             {
-                notifications.Raise(CopiedNotification);
+                fallback.Raise(pasted.Failure!.Reason, target.AppName, stoodOn);
             }
 
             await started;
@@ -520,6 +521,10 @@ public sealed record PasteHide(Func<bool> Hide, PressOnce? HeldKeys = null)
 {
     internal Task OriginatingRelease { get; init; } = Task.CompletedTask;
     internal Func<string?>? RefusalBeforePaste { get; init; }
+
+    /// <summary>The display the stash window stood on as the paste was asked; null when it is not known (G16).</summary>
+    internal Display? StoodOn { get; init; }
+
     internal Task CurrentRelease => HeldKeys?.LetGo(Key.Enter) ?? Task.CompletedTask;
 
     // A release from a later press cannot validate the press whose release was never seen.

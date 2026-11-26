@@ -432,7 +432,7 @@ public sealed class HandoffTests
         Assert.AreEqual(targetTakesIt, pasted.Succeeded, pasted.Failure?.Sentence);
         Assert.HasCount(1, handing.Clipboard.Written);
         Assert.IsNull(footer.Confirmation, "a paste never says it arrived; its fallback's notification is its own word (G10, G8)");
-        CollectionAssert.AreEqual(targetTakesIt ? Array.Empty<string>() : [Handoff.CopiedNotification], handing.Notifications.Shown.Select(notice => notice.Text).ToList());
+        CollectionAssert.AreEqual(targetTakesIt ? Array.Empty<string>() : [PasteFallback.Copied], handing.Notifications.Shown.Select(notice => notice.Heading).ToList());
     }
 
     [TestMethod]

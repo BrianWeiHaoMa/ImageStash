@@ -11,13 +11,15 @@ namespace ImageStash.Window;
 /// <summary>
 /// The notifications above the tray (G16, F4): ImageStash's own small window, shown through the Quiet-windows seam so
 /// it never takes focus, topmost and without a taskbar button, above the tray icon on the primary display, or above
-/// that display's bottom-right corner, wholly on screen and sized to its cards. Each card is a notice of
+/// that display's bottom-right corner, wholly on screen and sized to its cards; or, made for the notifications that
+/// stand <paramref name="on"/> another display (G8's paste that could not be made), the same window above that
+/// display's bottom-right working-area corner. Each card is a notice of
 /// <paramref name="notifications"/>, drawn as the card it carries (a capture's) or as the notice card; the notices keep
 /// the six seconds, the hover and a field's focus (Notice.cs), whether or not the stash
 /// window shows; the window closes once the last notice has left and is made afresh for the next, each window, and each
 /// popup it opens (a tooltip, a field's menu), left out of every capture before it is first shown (G15, S4), a refused
 /// mark named through <paramref name="named"/> and the window shown anyway (G35). Its caption is the newest notice's
-/// words, so another program finds it by what it says.
+/// first line, so another program finds it by what it says.
 /// </summary>
 public sealed class Notification
 {
@@ -25,18 +27,21 @@ public sealed class Notification
     private readonly IQuietWindows quietWindows;
     private readonly IScreen screen;
     private readonly Action<Failure> named;
+    private readonly Func<Display?>? on;
     private readonly DispatcherTimer sweep;
     private readonly Dictionary<Notice, Control> cards = [];
     private Avalonia.Controls.Window? window;
     private StackPanel? stack;
     private ScrollViewer? scroller;
 
-    public Notification(Notices notifications, IQuietWindows quietWindows, IScreen screen, Action<Failure> named)
+    /// <param name="on">The display its notifications stand on, read at each placing; null, or none given, for above the tray.</param>
+    public Notification(Notices notifications, IQuietWindows quietWindows, IScreen screen, Action<Failure> named, Func<Display?>? on = null)
     {
         this.notifications = notifications;
         this.quietWindows = quietWindows;
         this.screen = screen;
         this.named = named;
+        this.on = on;
         sweep = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => notifications.Sweep());
         notifications.Changed += Show;
         // A popup is a window of its own, made afresh at each opening; its template is applied before it is first shown
@@ -118,7 +123,8 @@ public sealed class Notification
             stack.Children.Add(cards[notice]);
         }
 
-        window.Title = notifications.Shown[^1].Text;
+        // The heading leads a notice's words, "Copied · press Ctrl+V" above why (G8), and names the window as it does.
+        window.Title = notifications.Shown[^1].Heading ?? notifications.Shown[^1].Text;
         Place(window, stack);
         // More than the working area holds: the newest stays in sight at the bottom, the oldest scroll away (G16).
         Dispatcher.UIThread.Post(scroller.ScrollToEnd, DispatcherPriority.Background);
@@ -168,7 +174,7 @@ public sealed class Notification
         return (window, stack, scroller);
     }
 
-    /// <summary>Puts the window, at the size its cards ask for, above the tray icon on the primary display (G16).</summary>
+    /// <summary>Puts the window, at the size its cards ask for, above the tray icon on the primary display, or on its own display (G16).</summary>
     private void Place(Avalonia.Controls.Window shown, StackPanel content)
     {
         if (!ReferenceEquals(shown, window))
@@ -178,10 +184,10 @@ public sealed class Notification
 
         content.Measure(Size.Infinity);
         var wanted = content.DesiredSize;
-        var place = Summon.NotificationPlace(quietWindows.TrayIconRectangle(), Summon.DisplaysOf(shown.Screens), new Store.WindowSize(wanted.Width, wanted.Height));
+        var place = Summon.NotificationPlace(quietWindows.TrayIconRectangle(), Summon.DisplaysOf(shown.Screens), new Store.WindowSize(wanted.Width, wanted.Height), on?.Invoke());
         if (shown.IsVisible)
         {
-            // Never past its old place or its new one, both on the primary display: moved first at its old size, a window
+            // Never past its old place or its new one, both on its display: moved first at its old size, a window
             // shrinking towards a display to its right stood on it for a moment and took its scaling, the × of the card
             // left then falling outside the window. So the smaller of the two sizes where it stands, applied now, before
             // the move; Avalonia applies a size at the next layout pass, a position at once.
