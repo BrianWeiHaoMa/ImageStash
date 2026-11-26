@@ -220,6 +220,42 @@ public sealed class HandoffPasteOrderTests
     }
 
     [TestMethod]
+    [DataRow("Enter on a menu item that took focus away")]
+    [DataRow("Enter lost while an earlier paste ran")]
+    public async Task APointerPasteAfterAnEnterWhoseReleaseWentUnseenIsPasted(string before)
+    {
+        var clock = new SteppedClock();
+        using var handing = await Handing.Open(clock, "photo.jpg");
+        if (before == "Enter on a menu item that took focus away")
+        {
+            // Reveal in File Explorer, Save a copy… or Open with…: another window takes focus while Enter is down.
+            Assert.IsTrue(handing.Keys.PressedInMenu(Key.Enter));
+            handing.Keys.Released();
+        }
+        else
+        {
+            var write = HoldTheWrite(handing);
+            var earlier = handing.Paste(handing.Items, RecordingTarget.Relay);
+            await Handing.Eventually(() => handing.Steps.Contains("hide"));
+            handing.Keys.Acting(Key.Enter, KeyAction.Handoff);
+            handing.Keys.Released();
+            write.SetResult();
+            await Handing.Eventually(() => clock.NextDue is not null);
+            clock.Advance(Handoff.PasteBound);
+            Assert.AreEqual(PasteFallback.EnterHeld, (await earlier).Failure?.Reason, "lost while that paste ran, it kept that one (N3)");
+        }
+
+        // Back in the window, a double-click on a tile: the pointer's paste, with no key held.
+        var pasting = handing.Paste(handing.Items, RecordingTarget.Relay);
+        await Handing.Eventually(() => clock.NextDue is not null || pasting.IsCompleted);
+        Assert.IsTrue(pasting.IsCompleted, "nothing to wait for: no key the window saw is down, and no paste ran as one was lost");
+
+        var pasted = await pasting;
+        Assert.IsTrue(pasted.Succeeded, pasted.Failure?.Sentence);
+        Assert.AreEqual(RecordingTarget.Relay, handing.Target.Pasted.Single().Target, "G8, G7: the paste with the pointer alone");
+    }
+
+    [TestMethod]
     public async Task AWriteThatFailsBehindTheHiddenFlyoutSendsNothingAndIsSaidAboveTheTrayAtOnce()
     {
         using var handing = await Handing.Open("photo.jpg");

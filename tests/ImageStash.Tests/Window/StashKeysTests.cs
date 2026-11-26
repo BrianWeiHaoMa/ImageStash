@@ -232,21 +232,43 @@ public sealed class StashKeysTests
         keys.Released(Key.Enter);
         await letGo.WaitAsync(TimeSpan.FromSeconds(5));
 
-        keys.Acting(Key.Enter, KeyAction.Handoff);
-        var unseen = keys.LetGo(Key.Enter);
-        keys.Released();
-        keys.Released(Key.V);
-        Assert.IsFalse(unseen.IsCompleted, "focus gone with Enter down: its release unseen, it may still be down (N3)");
-        var later = keys.LetGo(Key.Enter);
-        Assert.IsFalse(later.IsCompleted, "N3, \"Nothing is ever sent\": a later wait, a paste asked again after its write, waits too, since the key may still be down");
-        keys.Released(Key.Enter);
-        await Task.WhenAll(unseen, later).WaitAsync(TimeSpan.FromSeconds(5));
+        using (keys.Watching(Key.Enter))
+        {
+            keys.Acting(Key.Enter, KeyAction.Handoff);
+            var unseen = keys.LetGo(Key.Enter);
+            keys.Released();
+            keys.Released(Key.V);
+            Assert.IsFalse(unseen.IsCompleted, "focus gone with Enter down: its release unseen, it may still be down (N3)");
+            var later = keys.LetGo(Key.Enter);
+            Assert.IsFalse(later.IsCompleted, "N3, \"Nothing is ever sent\": a later wait, a paste asked again after its write, waits too, since the key may still be down");
+            keys.Released(Key.Enter);
+            await Task.WhenAll(unseen, later).WaitAsync(TimeSpan.FromSeconds(5));
 
+            keys.Acting(Key.Enter, KeyAction.Handoff);
+            keys.Released();
+            keys.Acting(Key.Enter, KeyAction.Handoff);
+            keys.Released(Key.Enter);
+            Assert.IsTrue(keys.LetGo(Key.Enter).IsCompleted, "a press the window saw again, and its release, leave nothing to wait for");
+        }
+    }
+
+    [TestMethod]
+    public void AnEnterLostFromSightIsHeldOnlyWhileAnActWatchingItRuns()
+    {
+        var keys = new PressOnce();
         keys.Acting(Key.Enter, KeyAction.Handoff);
         keys.Released();
+        Assert.IsTrue(keys.LetGo(Key.Enter).IsCompleted, "G8: lost with no paste running, it keeps no later double-click's paste");
+
+        var watching = keys.Watching(Key.Enter);
+        var other = keys.Watching(Key.Enter);
         keys.Acting(Key.Enter, KeyAction.Handoff);
-        keys.Released(Key.Enter);
-        Assert.IsTrue(keys.LetGo(Key.Enter).IsCompleted, "a press the window saw again, and its release, leave nothing to wait for");
+        keys.Released();
+        watching.Dispose();
+        watching.Dispose();
+        Assert.IsFalse(keys.LetGo(Key.Enter).IsCompleted, "N3: lost while a paste runs, it may still be down for that paste");
+        other.Dispose();
+        Assert.IsTrue(keys.LetGo(Key.Enter).IsCompleted, "G8: once no paste runs, the next one waits on no key the window does not see down");
     }
 
     [TestMethod]

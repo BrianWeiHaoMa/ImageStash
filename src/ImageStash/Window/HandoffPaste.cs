@@ -34,6 +34,8 @@ public sealed partial class Handoff
     public async Task<Outcome> Paste(TopLevel owner, IReadOnlyList<StashItem> items, PasteTarget target, PasteHide hide)
     {
         using var acting = UserAct.Begin(HandOverAct);
+        // An Enter lost from sight while this paste runs may still be down; one lost before it began keeps nothing (N3, G8).
+        using var watchingEnter = hide.HeldKeys?.Watching(Key.Enter);
         if (items.Count == 0)
         {
             return Outcome.Done;

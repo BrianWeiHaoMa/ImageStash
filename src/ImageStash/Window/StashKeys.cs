@@ -302,8 +302,11 @@ public sealed class PressOnce
     private readonly HashSet<Key> downInMenu = [];
     private readonly Dictionary<Key, TaskCompletionSource> waiting = [];
 
-    /// <summary>Keys that were down when focus went where their release is not seen: each may still be down (N3).</summary>
+    /// <summary>Keys that were down when focus went where their release is not seen, while watched: each may still be down (N3).</summary>
     private readonly HashSet<Key> unseen = [];
+
+    /// <summary>How many acts in flight watch each key's release, a paste for Enter's.</summary>
+    private readonly Dictionary<Key, int> watched = [];
 
     /// <summary>Whether this press of <paramref name="key"/> acts: not while it is still held from an earlier press.</summary>
     public bool Pressed(Key key)
@@ -377,7 +380,8 @@ public sealed class PressOnce
         {
             if (key is not { } one)
             {
-                unseen.UnionWith(down);
+                // Only a key an act in flight watches: a release lost before that act began could keep it from no app.
+                unseen.UnionWith(down.Where(watched.ContainsKey));
                 down.Clear();
                 downInMenu.Clear();
                 return;
@@ -397,8 +401,9 @@ public sealed class PressOnce
 
     /// <summary>
     /// Completes once <paramref name="key"/> is let go: at once when it is not held, else at its release; a release unseen,
-    /// focus having gone elsewhere, completes nothing, and a key down as focus went counts as held until it is next seen
-    /// pressed or let go, so a caller bounds its wait and never takes a key it lost sight of as up.
+    /// focus having gone elsewhere, completes nothing, and a key down as focus went while <see cref="Watching"/> it counts as
+    /// held until it is next seen pressed or let go, or no act watches it any more, so a caller bounds its wait and never
+    /// takes a key it lost sight of during its act as up.
     /// </summary>
     public Task LetGo(Key key)
     {
@@ -416,6 +421,47 @@ public sealed class PressOnce
             }
 
             return wait.Task;
+        }
+    }
+
+    /// <summary>
+    /// Watches <paramref name="key"/>'s release for an act in flight until disposed: while any act watches it, a key down as
+    /// focus goes counts as held for <see cref="LetGo"/>; once none does, what was lost is forgotten, since the act it could
+    /// have kept from another app has ended, and the next act, a double-click's paste among them, waits on no key the window
+    /// does not see down (G8, N3).
+    /// </summary>
+    public IDisposable Watching(Key key)
+    {
+        lock (gate)
+        {
+            watched[key] = watched.GetValueOrDefault(key) + 1;
+        }
+
+        return new Watch(this, key);
+    }
+
+    private void Unwatch(Key key)
+    {
+        lock (gate)
+        {
+            if (--watched[key] == 0)
+            {
+                watched.Remove(key);
+                unseen.Remove(key);
+            }
+        }
+    }
+
+    private sealed class Watch(PressOnce keys, Key key) : IDisposable
+    {
+        private int ended;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref ended, 1) == 0)
+            {
+                keys.Unwatch(key);
+            }
         }
     }
 }
