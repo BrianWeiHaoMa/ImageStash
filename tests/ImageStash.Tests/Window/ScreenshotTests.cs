@@ -249,16 +249,12 @@ public sealed class ScreenshotTests
             taking.Handoff, taking.Capture, taking.Settings, taking.Hiding, null!, TestStash.ShortRetry);
 
         await act.Take();
+        Assert.AreEqual("Can't take a screenshot (the screen): your stash is still opening.", taking.Notifications.Shown.Single().Text);
         opening.StashFailed(new Failure("Open the stash", "stash.db", "it is broken"));
         await act.Take();
 
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                "Can't take a screenshot (the screen): your stash is still opening.",
-                "Can't take a screenshot (the screen): your stash could not be opened.",
-            },
-            taking.Notifications.Shown.Select(notice => notice.Text).ToList());
+        Assert.AreEqual("Can't take a screenshot (the screen): your stash could not be opened.", taking.Notifications.Shown.Single().Text,
+            "the next screenshot's refusal takes the earlier one's place (G16)");
         Assert.AreEqual((0, 0), (taking.Screen.DisplayReads, taking.Screen.Grabs.Count), "nothing grabbed (G28)");
         Assert.IsEmpty(taking.WindowSteps, "nothing hidden");
     }

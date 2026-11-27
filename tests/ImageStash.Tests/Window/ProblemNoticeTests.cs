@@ -14,7 +14,7 @@ namespace ImageStash.Tests.Window;
 /// naming none leaves at its time; the notices one act raises stand together, and a later act of the same action, by
 /// when the person asked, takes the place of an earlier act's problem notices, one still offering its Undo leaving
 /// when that Undo ends; an Undo acts for the notice's time only (G18), what the notice was given for leaving running
-/// once at that end, the card dropping its Undo button with it; the notifications above the tray keep six seconds.
+/// once at that end, the card dropping its Undo button with it; above the tray a failure stays too.
 /// </summary>
 [TestClass]
 public sealed class ProblemNoticeTests
@@ -311,10 +311,10 @@ public sealed class ProblemNoticeTests
     }
 
     [TestMethod]
-    public async Task AboveTheTrayAFailureAndCopiedPressCtrlVLeaveAtSixSeconds()
+    public async Task AboveTheTrayAFailureStaysAndCopiedPressCtrlVLeavesAtItsTime()
     {
         using var listed = await ListedStash.Open();
-        listed.Notifications.Raise(new Failure("Stash clipboard image", "the clipboard", "it holds no image"));
+        var failure = listed.Notifications.Raise(new Failure("Stash clipboard image", "the clipboard", "it holds no image"));
         using (UserAct.Begin("Hand over"))
         {
             listed.Notifications.Raise(PasteFallback.Copied);
@@ -322,8 +322,11 @@ public sealed class ProblemNoticeTests
 
         listed.Stash.Clock.Now += Notices.Lasting;
         listed.Notifications.Sweep();
+        Assert.AreSame(failure, listed.Notifications.Shown.Single(), "\"Copied · press Ctrl+V\" leaves at its six seconds");
+        listed.Stash.Clock.Now += Notices.LastingAtMost;
+        listed.Notifications.Sweep();
 
-        Assert.IsEmpty(listed.Notifications.Shown);
+        Assert.AreSame(failure, listed.Notifications.Shown.Single(), "the failure stays until its ×, as in the window");
     }
 
     [TestMethod]

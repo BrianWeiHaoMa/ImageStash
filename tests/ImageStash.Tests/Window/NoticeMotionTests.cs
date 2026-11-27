@@ -38,7 +38,7 @@ public sealed class NoticeMotionTests
         var notices = InWindow();
         ControlThread.Run(() =>
         {
-            var stack = Stack(notices, plays: () => true, holdsTogether: false);
+            var stack = Stack(notices, plays: () => true, inWindow: true);
             var notice = notices.Raise("3 added");
             stack.Show();
             var room = stack.RoomOf(notice)!;
@@ -76,7 +76,7 @@ public sealed class NoticeMotionTests
         var left = 0;
         ControlThread.Run(() =>
         {
-            var stack = Stack(notices, plays: () => true, holdsTogether: false);
+            var stack = Stack(notices, plays: () => true, inWindow: true);
             var notice = notices.Raise("Deleted “cat”.", "Undo", () =>
             {
                 undone++;
@@ -120,7 +120,7 @@ public sealed class NoticeMotionTests
         var undone = 0;
         ControlThread.Run(() =>
         {
-            var stack = Stack(notices, plays: () => true, holdsTogether: true);
+            var stack = Stack(notices, plays: () => true, inWindow: false);
             var notice = notices.Raise("Screenshot stashed", "Undo", () =>
             {
                 undone++;
@@ -147,7 +147,7 @@ public sealed class NoticeMotionTests
         var notices = InWindow();
         ControlThread.Run(() =>
         {
-            var stack = Stack(notices, plays: () => true, holdsTogether: false);
+            var stack = Stack(notices, plays: () => true, inWindow: true);
             var notice = notices.Raise("Skipped clip.mp4 (a video).", namesAProblem: true, button: new NoticeButton("Show", () => Task.CompletedTask));
             stack.Show();
             Step(stack, Entrance);
@@ -172,7 +172,7 @@ public sealed class NoticeMotionTests
         var showing = true;
         ControlThread.Run(() =>
         {
-            var stack = Stack(notices, plays: () => showing, holdsTogether: false);
+            var stack = Stack(notices, plays: () => showing, inWindow: true);
             var leaving = notices.Raise("Renamed “cat”.");
             var arriving = notices.Raise("Tagged “cat”.");
             stack.Show();
@@ -209,7 +209,7 @@ public sealed class NoticeMotionTests
             var effectsShown = false;
             ControlThread.Run(() =>
             {
-                var stack = Stack(notices, plays: () => effectsShown, holdsTogether);
+                var stack = Stack(notices, plays: () => effectsShown, inWindow: !holdsTogether);
                 var notice = notices.Raise("3 added");
                 stack.Show();
                 Assert.AreEqual(1, stack.RoomOf(notice)!.Opacity, $"{Place(holdsTogether)}: whole in its first frame");
@@ -252,8 +252,8 @@ public sealed class NoticeMotionTests
         var tray = new Notices(clock);
         ControlThread.Run(() =>
         {
-            var inWindow = Stack(window, plays: () => true, holdsTogether: false, look: Slower());
-            var aboveTray = Stack(tray, plays: () => true, holdsTogether: true, look: Slower());
+            var inWindow = Stack(window, plays: () => true, inWindow: true, look: Slower());
+            var aboveTray = Stack(tray, plays: () => true, inWindow: false, look: Slower());
             var a = window.Raise("3 added");
             var b = tray.Raise("Screenshot stashed");
             inWindow.Show();
@@ -318,7 +318,7 @@ public sealed class NoticeMotionTests
         var notices = new Notices(clock);
         ControlThread.Run(() =>
         {
-            var stack = Stack(notices, plays: () => true, holdsTogether: true);
+            var stack = Stack(notices, plays: () => true, inWindow: false);
             var upper = notices.Raise("Screenshot stashed: “one”.");
             var lower = notices.Raise("Screenshot stashed: “two”.");
             stack.Show();
@@ -366,7 +366,7 @@ public sealed class NoticeMotionTests
         var notices = new Notices(clock);
         ControlThread.Run(() =>
         {
-            var stack = Stack(notices, plays: () => true, holdsTogether: true);
+            var stack = Stack(notices, plays: () => true, inWindow: false);
             var upper = notices.Raise("one");
             var lower = notices.Raise("two");
             stack.Show();
@@ -404,7 +404,7 @@ public sealed class NoticeMotionTests
         var notice = listed.Notifications.Shown.Single();
         ControlThread.Run(() =>
         {
-            var stack = Stack(listed.Notifications, plays: () => true, holdsTogether: true, card: n => n.Card!(n, listed.Notifications));
+            var stack = Stack(listed.Notifications, plays: () => true, inWindow: false, card: n => n.Card!(n, listed.Notifications));
             stack.Show();
             Step(stack, Entrance, listed.Stash.Clock);
             var card = (CaptureCard)stack.CardOf(notice)!;
@@ -428,9 +428,9 @@ public sealed class NoticeMotionTests
     }
 
     /// <summary>A stack as the windows make it, dressed in the product's look, its cards the notice card unless given.</summary>
-    private static NoticeStack Stack(Notices notices, Func<bool> plays, bool holdsTogether, Func<Notice, Control>? card = null, ResourceDictionary? look = null)
+    private static NoticeStack Stack(Notices notices, Func<bool> plays, bool inWindow, Func<Notice, Control>? card = null, ResourceDictionary? look = null)
     {
-        var stack = new NoticeStack(notices, card ?? (notice => NoticeCard.For(notice, notices)), plays, holdsTogether);
+        var stack = new NoticeStack(notices, card ?? (notice => NoticeCard.For(notice, notices)), plays, inWindow);
         stack.View.Resources.MergedDictionaries.Add(look ?? Look());
         return stack;
     }

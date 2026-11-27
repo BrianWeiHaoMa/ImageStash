@@ -12,9 +12,9 @@ namespace ImageStash.Window;
 /// A notice as a card, in the stash window's stack and in a notification above the tray alike (G16): its words, under
 /// its heading in semi-bold when it has one (an import's counts, G12), its button beside the Undo when it has one (an
 /// import's Show, G12), its Undo while the notice offers it, naming the key that runs it in the stash window (G7), and a
-/// close button, none of them taking focus; its stack (<see cref="NoticeStack"/>) holds its time under the pointer, six
-/// seconds above the tray and as long as its words need in the window (Notice.cs), where a notice naming a problem stays
-/// past its time with its words and its close button, its Undo button gone with the Undo's end.
+/// close button, none of them taking focus; its stack (<see cref="NoticeStack"/>) holds its time under the pointer, as
+/// long as its words need (Notice.cs), and a notice naming a problem stays past its time with its words and its close
+/// button, its Undo button gone with the Undo's end.
 /// </summary>
 public static class NoticeCard
 {

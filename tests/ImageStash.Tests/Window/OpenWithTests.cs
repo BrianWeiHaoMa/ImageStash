@@ -187,9 +187,9 @@ public sealed class OpenWithTests
 
         var rewrite = MediaFixtures.DistinctPng(12, 6, 4);
         await OpenedWith.RewriteWhenFree(copy, rewrite);
-        await OpenedWith.Eventually(listed, () => Said(listed).Count == 2);
+        await OpenedWith.Eventually(listed, () => Said(listed).Contains(Replaced("cat")));
 
-        Assert.AreEqual(Replaced("cat"), Said(listed)[1]);
+        CollectionAssert.AreEqual(new[] { Replaced("cat") }, Said(listed), "the adoption's notification takes the earlier failure's place (G16)");
         Assert.AreEqual(EditedItems.Hash(rewrite), OpenedWith.OriginalHash(listed.Stash, cat.Id));
     }
 
@@ -212,8 +212,9 @@ public sealed class OpenWithTests
         CollectionAssert.AreEqual(new[] { refusal.Sentence }, Said(listed), "asked again and refused again, but named once (G35)");
         listed.Stash.Reader = MediaDecoder.ReadPicture;
         await listed.Listing.Refresh();
-        await Handing.Eventually(() => Said(listed).Count == 2);
-        Assert.AreEqual(Replaced("cat"), Said(listed)[1], "the next change of the listing asked again, and the rewrite was adopted");
+        await Handing.Eventually(() => Said(listed).Contains(Replaced("cat")));
+        CollectionAssert.AreEqual(new[] { Replaced("cat") }, Said(listed),
+            "the next change of the listing asked again, and the rewrite was adopted, its notification in the failure's place (G16)");
     }
 
     [TestMethod]

@@ -16,8 +16,9 @@ namespace ImageStash.Window;
 /// display's bottom-right working-area corner. Each card is a notice of
 /// <paramref name="notifications"/>, drawn as the card it carries (a capture's) or as the notice card, arriving and leaving
 /// with the stack's motion (<see cref="NoticeStack"/>), unless the system's animation effects are off; the notices keep
-/// the six seconds, the hover and a field's focus (Notice.cs), whether or not the stash window shows, the pointer anywhere
-/// on the window holding every card; the window is sized to its cards as they take or give up their room, never while one
+/// their time by their words, the hover and a field's focus (Notice.cs), whether or not the stash window shows, the pointer
+/// anywhere on the window holding every card, and a refusal or a failure stays until its × or the next notification of its
+/// action; the window is sized to its cards as they take or give up their room, never while one
 /// fades, and closes once the last has left and faded, made afresh for the next, each window, and each
 /// popup it opens (a tooltip, a field's menu), left out of every capture before it is first shown (G15, S4), a refused
 /// mark named through <paramref name="named"/> and the window shown anyway (G35). Its caption is the newest notice's
@@ -43,7 +44,7 @@ public sealed class Notification
         this.screen = screen;
         this.named = named;
         this.on = on;
-        stack = new NoticeStack(notifications, notice => (notice.Card ?? NoticeCard.For)(notice, notifications), quietWindows.AnimationEffectsShown, holdsTogether: true);
+        stack = new NoticeStack(notifications, notice => (notice.Card ?? NoticeCard.For)(notice, notifications), quietWindows.AnimationEffectsShown, inWindow: false);
         stack.View.Margin = new Thickness(NoticeStack.Gap);
         stack.RoomChanged += RoomChanged;
         // The sweep steps the motion too, should a frame not come.

@@ -171,12 +171,12 @@ public sealed class RecordClipTests
             recording.Handoff, recording.Capture, recording.Settings, recording.Hiding, null!, _ => { }, TestStash.ShortRetry);
 
         await act.StartOrStop();
+        Assert.AreEqual("Can't record a clip (the screen): your stash is still opening.", recording.Notifications.Shown.Single().Text);
         opening.StashFailed(new Failure("Open the stash", "stash.db", "it is broken"));
         await act.StartOrStop();
 
-        CollectionAssert.AreEqual(
-            new[] { "Can't record a clip (the screen): your stash is still opening.", "Can't record a clip (the screen): your stash could not be opened." },
-            recording.Notifications.Shown.Select(notice => notice.Text).ToList());
+        Assert.AreEqual("Can't record a clip (the screen): your stash could not be opened.", recording.Notifications.Shown.Single().Text,
+            "the next recording's refusal takes the earlier one's place (G16)");
         Assert.AreEqual((0, 0), (recording.Screen.DisplayReads, recording.Screen.Grabs.Count), "nothing grabbed (G28)");
         Assert.IsEmpty(recording.WindowSteps, "nothing hidden");
     }

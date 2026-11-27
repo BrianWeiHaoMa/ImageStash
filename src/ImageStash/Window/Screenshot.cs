@@ -36,6 +36,8 @@ public sealed class Screenshot(Listing listing, Notices notifications, CaptureNo
     /// <summary>One act: the user's, from the shortcut, the tray menu or the window's own menu. UI thread.</summary>
     public async Task Take()
     {
+        // Its own act wherever it is asked from, so the next screenshot's notification takes this one's failure's place (G16).
+        using var acting = UserAct.BeginNew(Action);
         if (listing.CannotStartReason is { } notOpen)
         {
             notifications.Raise(Failure.Refusal(Action, Subject, notOpen));

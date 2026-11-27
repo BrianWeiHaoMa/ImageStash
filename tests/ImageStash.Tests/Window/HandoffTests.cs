@@ -155,12 +155,13 @@ public sealed class HandoffTests
         handing.Clipboard.FailNext = RecordingClipboard.Held;
 
         var one = await handing.Copy([handing.Items[0]]);
+        Assert.AreEqual(one.Failure?.Sentence, handing.Notices.Shown.Single().Text, "named in a notice");
         handing.Clipboard.FailNext = RecordingClipboard.Held;
         var several = await handing.Copy(handing.Items);
 
         Assert.AreEqual("Couldn't copy (transparent): another program is holding the clipboard open.", one.Failure?.Sentence);
         Assert.AreEqual("Couldn't copy (3 items): another program is holding the clipboard open.", several.Failure?.Sentence);
-        CollectionAssert.AreEqual(new[] { one.Failure!.Sentence, several.Failure!.Sentence }, handing.Notices.Shown.Select(notice => notice.Text).ToList());
+        Assert.AreEqual(several.Failure!.Sentence, handing.Notices.Shown.Single().Text, "the next copy's failure takes the earlier one's place (G16)");
         Assert.IsEmpty(handing.Clipboard.Written);
         Assert.IsEmpty((await handing.Stash.Store!.Recent()).Value!, "a write that failed records nothing (G10)");
 

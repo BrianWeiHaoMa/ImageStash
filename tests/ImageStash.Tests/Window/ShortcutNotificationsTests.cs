@@ -37,17 +37,17 @@ public sealed class ShortcutNotificationsTests
     }
 
     [TestMethod]
-    public void ItGoesThroughTheTraysNotificationsAndLeavesAfterSixSeconds()
+    public void ItGoesThroughTheTraysNotificationsAndStaysPastItsTimeUntilItsClose()
     {
         var started = StartedShortcuts.Start(held: TakeScreenshot);
+        var said = started.Notifications.Shown.Single();
 
-        started.Clock.Advance(Notices.Lasting - TimeSpan.FromMilliseconds(1));
+        started.Clock.Advance(Notices.LastingAtMost + TimeSpan.FromMinutes(1));
         started.Notifications.Sweep();
-        Assert.HasCount(1, started.Notifications.Shown, "six seconds above the tray (G16)");
+        Assert.AreSame(said, started.Notifications.Shown.Single(), "a shortcut's problem names a failure and stays above the tray (G16)");
 
-        started.Clock.Advance(TimeSpan.FromMilliseconds(1));
-        started.Notifications.Sweep();
-        Assert.IsEmpty(started.Notifications.Shown, "then gone, as every notification goes");
+        started.Notifications.Close(said);
+        Assert.IsEmpty(started.Notifications.Shown, "until its ×");
     }
 
     [TestMethod]
@@ -110,7 +110,7 @@ public sealed class ShortcutNotificationsTests
         started.Shortcuts.BindFromSettings();
 
         Assert.AreEqual("Ctrl+F9 is used by another app, so Take a screenshot has no shortcut.", raised.Single().Text, "the new combination said");
-        Assert.HasCount(2, started.Notifications.Shown, "beside the earlier one, which keeps its own six seconds (G16)");
+        Assert.AreSame(raised.Single(), started.Notifications.Shown.Single(), "in place of the earlier one of the same shortcut, which said what no longer holds (G16)");
 
         // Then typing rather than held, the same combination.
         started.Seam.Refuse(Shortcut.Parse("Ctrl+F9").Value!, ShortcutRefusal.TypesACharacter("x"));
@@ -150,7 +150,7 @@ public sealed class ShortcutNotificationsTests
         }
 
         started.Notifications.Sweep();
-        Assert.AreSame(said, started.Notifications.Shown.Single(), "a notification stays six seconds (G16), Choose another's remap notwithstanding");
+        Assert.AreSame(said, started.Notifications.Shown.Single(), "a notification stays its time (G16), Choose another's remap notwithstanding");
     }
 
     [TestMethod]

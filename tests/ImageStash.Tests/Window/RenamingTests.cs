@@ -156,12 +156,13 @@ public sealed class RenamingTests
         var renaming = new Renaming(listing, notices, new Handoff(listing, notices, notices, new RecordingClipboard(TimeProvider.System), new RecordingTarget(), TimeProvider.System, TestStash.ShortRetry, TestStash.ShortRetry));
 
         var opening = await renaming.Rename(TestItems.Sized(1, 10, 10), "dog");
+        Assert.AreEqual(opening.Failure?.Sentence, notices.Shown.Single().Text, "named in a notice");
         listing.StashFailed(new Failure("Open the stash", "stash", "the disk is gone"));
         var failed = await renaming.Rename(TestItems.Sized(2, 10, 10), "dog");
 
         Assert.AreEqual("Can't rename (“item 1”): your stash is still opening.", opening.Failure?.Sentence);
         Assert.AreEqual("Can't rename (“item 2”): your stash could not be opened.", failed.Failure?.Sentence);
-        CollectionAssert.AreEqual(new[] { opening.Failure!.Sentence, failed.Failure!.Sentence }, notices.Shown.Select(notice => notice.Text).ToList());
+        Assert.AreEqual(failed.Failure!.Sentence, notices.Shown.Single().Text, "the next rename's refusal takes the earlier one's place (G16)");
         Assert.IsNull(renaming.Busy);
     }
 

@@ -17,6 +17,9 @@ namespace ImageStash.Window;
 /// </summary>
 public sealed class AdoptionNotifications
 {
+    /// <summary>The action of an adoption and of what it names, the same for every item's (G16).</summary>
+    public const string Action = "Adopt a picture saved through Open with…";
+
     /// <summary>Why an Undo is refused once the item has been saved, reverted or replaced again since the adoption.</summary>
     public const string ChangedSince = "it has changed since that picture replaced it";
 

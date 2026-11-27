@@ -46,8 +46,11 @@ public sealed class WindowStatus
         this.clearSearch = clearSearch;
         this.waysIn = waysIn;
         stashState = new ContentControl { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(20) };
-        noticeStack = new NoticeStack(notices, notice => NoticeCard.For(notice, notices), () => showing && animationEffectsShown(), holdsTogether: false);
+        noticeStack = new NoticeStack(notices, notice => NoticeCard.For(notice, notices), () => showing && animationEffectsShown(), inWindow: true);
         NoticeArea = WindowLayout.NoticeArea(noticeStack.View);
+        // The pointer anywhere on the notices holds them all, as above the tray (G16).
+        NoticeArea.PointerEntered += (_, _) => noticeStack.Held(over: true);
+        NoticeArea.PointerExited += (_, _) => noticeStack.Held(over: false);
         pausedShortcuts = new PausedShortcutsLine(() => shortcuts?.ResumePaused(), focusable: false);
         footer = new WindowFooter(pausedShortcuts);
     }
@@ -129,11 +132,17 @@ public sealed class WindowStatus
 
     /// <summary>
     /// The window began or stopped showing, as <see cref="WindowShowing"/> judges it: a motion under way ends at once, so
-    /// at the next show every notice is whole in the first frame and a card that left meanwhile is simply gone (G1).
+    /// at the next show every notice is whole in the first frame and a card that left meanwhile is simply gone (G1); no
+    /// pointer is on the notices of a window that does not show, so their hold ends with its showing.
     /// </summary>
     public void NoticesShowing(bool shows)
     {
         showing = shows;
+        if (!shows)
+        {
+            noticeStack.Held(over: false);
+        }
+
         noticeStack.Finish();
     }
 }

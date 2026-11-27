@@ -28,7 +28,7 @@ public sealed class Notice
 
     /// <summary>
     /// Whether the notice names a problem: a file skipped as unsupported, an unreadable file, a refusal or a failure
-    /// (G12, G35). In the stash window such a notice stays past its time (G16); a result naming none does not.
+    /// (G12, G35). Such a notice stays past its time, in the stash window and above the tray (G16); a result naming none does not.
     /// </summary>
     public bool NamesAProblem { get; }
 
@@ -73,11 +73,11 @@ public sealed class Notice
 }
 
 /// <summary>
-/// The person's one act, by its entry point (a paste, a drop, Import files…, a Delete, a rename), which every notice it
-/// raises carries, whichever part raises it, and what the notice starts on leaving too (G16): the notices of one act
-/// stand together, and in the stash window a notice of a later act of the same action takes the place of an earlier
-/// act's notices that name a problem, later meaning asked for later. An entry point opens it with <see cref="Begin"/> at
-/// its start, before any wait, and every notice raised in its flow, across awaits, carries it.
+/// The person's one act, by its entry point (a paste, a drop, Import files…, a Delete, a rename, a screenshot), which every
+/// notice it raises carries, whichever part raises it, and what the notice starts on leaving too (G16): the notices of one
+/// act stand together, and a notice of a later act of the same action takes the place of an earlier act's notices that
+/// name a problem (<see cref="SameActionStacks"/>), later meaning asked for later. An entry point opens it with
+/// <see cref="Begin"/> at its start, before any wait, and every notice raised in its flow, across awaits, carries it.
 /// </summary>
 public sealed class UserAct
 {
@@ -103,7 +103,16 @@ public sealed class UserAct
     /// Begins a new act of <paramref name="action"/> for this flow until the scope is disposed; inside an act already, as
     /// when one entry point calls another or a part's search runs within an import, it is that act, whichever part raises.
     /// </summary>
-    public static IDisposable Begin(string action) => Within(Acting.Value ?? new UserAct(action, Interlocked.Increment(ref asked)));
+    public static IDisposable Begin(string action) => Within(Acting.Value ?? New(action));
+
+    /// <summary>
+    /// Begins a new act of <paramref name="action"/> for this flow until the scope is disposed, even inside another act:
+    /// for an entry point whose notifications take one another's place by its own action, whoever calls it, as a
+    /// shortcut found unavailable while an import applies its settings.
+    /// </summary>
+    public static IDisposable BeginNew(string action) => Within(New(action));
+
+    private static UserAct New(string action) => new(action, Interlocked.Increment(ref asked));
 
     /// <summary>Runs this flow as <paramref name="act"/>'s, none when null, until the scope is disposed.</summary>
     internal static IDisposable Within(UserAct? act)
@@ -120,14 +129,16 @@ public sealed class UserAct
 }
 
 /// <summary>
-/// A stack of notices (G16), oldest first, each on its own clock, which stops while the pointer is over the notice or its
-/// field has focus. Above the tray (<see cref="Notices(TimeProvider)"/>) each notice lasts six seconds and its clock runs
-/// whether or not the stash window shows. Inside the stash window (<see cref="InWindow"/>) a notice lasts as long as its
-/// words need, six seconds or two and one more for every three and a half words, up to twenty, and its clock runs only
-/// while the window shows (<see cref="WindowShows"/>), so a notice raised into a hidden window is there, its whole time
-/// ahead of it, when the window shows. There, one that names a problem (<see cref="Notice.NamesAProblem"/>) stays past
-/// its time, until its × or a notice of a later act of the same action (<see cref="UserAct"/>), which takes its place; one
-/// still offering its Undo when taken over is not cut short, and leaves when its time ends. Undo acts only while the
+/// A stack of notices (G16), oldest first, each on its own clock, which stops while the pointer holds it (the stack's
+/// <see cref="NoticeStack.Held"/>) or its field has focus. Each lasts as long as its words need, six seconds or two and
+/// one more for every three and a half words, up to twenty (<see cref="LastingFor"/>). Above the tray
+/// (<see cref="Notices(TimeProvider)"/>, and <see cref="Beside"/> for another display) its clock runs whether or not the
+/// stash window shows; inside the stash window (<see cref="InWindow"/>) only while the window shows
+/// (<see cref="WindowShows"/>), so a notice raised into a hidden window is there, its whole time ahead of it, when the
+/// window shows. One that names a problem (<see cref="Notice.NamesAProblem"/>) stays past its time, until its × or a
+/// notice of a later act of the same action (<see cref="UserAct"/>), which takes its place among the stacks that share
+/// a history (<see cref="SameActionStacks"/>); one still offering its Undo when taken over is not cut short, and leaves
+/// when its time ends. Undo acts only while the
 /// notice still offers it (<see cref="OffersUndo"/>), for the notice's time and at most once; a notice whose time ends
 /// (<see cref="Sweep"/>, <see cref="EndUndosWhileHidden"/>), stays or not, or that is closed by its × or taken over
 /// runs what it was given for leaving, once, as its act's. A notice saying a change was made is raised from the
@@ -136,10 +147,10 @@ public sealed class UserAct
 /// </summary>
 public sealed class Notices
 {
-    /// <summary>A notice's time above the tray, and the least a notice in the stash window has (G16).</summary>
+    /// <summary>The least a notice or a notification has (G16).</summary>
     public static readonly TimeSpan Lasting = TimeSpan.FromSeconds(6);
 
-    /// <summary>The most a notice in the stash window has, however many its words (G16).</summary>
+    /// <summary>The most a notice or a notification has, however many its words, its holds aside (G16).</summary>
     public static readonly TimeSpan LastingAtMost = TimeSpan.FromSeconds(20);
 
     /// <summary>The action of every notice's Undo, the person's act of its own.</summary>
@@ -152,8 +163,8 @@ public sealed class Notices
     private readonly bool inWindow;
     private readonly List<Notice> shown = [];
 
-    /// <summary>For each action, the latest of its acts that has raised a notice here.</summary>
-    private readonly Dictionary<string, long> latestRaised = [];
+    /// <summary>The stacks whose notices take one another's place by the same action, this one among them.</summary>
+    private readonly SameActionStacks sameAction;
 
     /// <summary>Whether the clocks run: always above the tray; in the stash window, while it shows.</summary>
     private bool clockRuns;
@@ -161,21 +172,32 @@ public sealed class Notices
     /// <summary>What notices started on leaving that has not yet answered.</summary>
     private int finishing;
 
-    /// <summary>The notifications above the tray: six seconds each, whether or not the stash window shows (G16).</summary>
+    /// <summary>The notifications above the tray: each as long as its words need, whether or not the stash window shows (G16).</summary>
     public Notices(TimeProvider clock)
-        : this(clock, inWindow: false)
+        : this(clock, inWindow: false, new SameActionStacks())
     {
     }
 
-    private Notices(TimeProvider clock, bool inWindow)
+    private Notices(TimeProvider clock, bool inWindow, SameActionStacks sameAction)
     {
         this.clock = clock;
         this.inWindow = inWindow;
+        this.sameAction = sameAction;
         clockRuns = !inWindow;
+        sameAction.Add(this);
     }
 
     /// <summary>The stash window's notices: each as long as its words need, on time the window shows; hidden until told it shows.</summary>
-    public static Notices InWindow(TimeProvider clock) => new(clock, inWindow: true);
+    public static Notices InWindow(TimeProvider clock) => new(clock, inWindow: true, new SameActionStacks());
+
+    /// <summary>
+    /// Another stack of these notifications, standing on another display (G8, G16): on the same clock, lasting as these
+    /// do, and sharing their history of acts, so a later act of an action takes the place of an earlier one's problem in
+    /// whichever of them either stands. Only the notifications have stacks beside them.
+    /// </summary>
+    public Notices Beside() => inWindow
+        ? throw new InvalidOperationException("The stash window has one stack of notices.")
+        : new Notices(clock, inWindow: false, sameAction);
 
     /// <summary>The clock the notices keep time by, which the window's other times on screen read too.</summary>
     public TimeProvider Clock => clock;
@@ -204,16 +226,21 @@ public sealed class Notices
     /// <param name="heading">The line shown first above <paramref name="text"/>, counted with it for the notice's time.</param>
     /// <param name="button">Its button beside the Undo (<see cref="NoticeButton"/>).</param>
     /// <returns>
-    /// The notice, carrying the act whose flow raised it; in the stash window, one naming a problem without an Undo is not
-    /// shown when a later act of its action has raised a notice already, which takes its place.
+    /// The notice, carrying the act whose flow raised it; one naming a problem without an Undo is not shown when a later
+    /// act of its action has raised a notice already, which takes its place.
     /// </returns>
     public Notice Raise(string text, string? undoLabel = null, Func<Task<Outcome>>? undo = null, Func<Task>? left = null, Func<Notice, Notices, Control>? card = null,
         bool namesAProblem = false, string? heading = null, NoticeButton? button = null)
     {
         var notice = new Notice(text, heading, undo is null ? null : undoLabel, undo, left, card, namesAProblem, UserAct.Current, button);
-        notice.TimeLeft = inWindow ? LastingFor(notice.Words) : Lasting;
+        notice.TimeLeft = LastingFor(notice.Words);
         Settle(notice, clock.GetUtcNow());
-        var replaced = inWindow ? TakeOver(notice) : [];
+        var replaced = sameAction.TakeOver(notice);
+        foreach (var (stack, gone) in replaced)
+        {
+            stack.shown.Remove(gone);
+        }
+
         var placeTaken = notice.TakenOver && notice.NamesAProblem && notice.UndoAction is null;
         if (!placeTaken)
         {
@@ -221,13 +248,18 @@ public sealed class Notices
         }
         else
         {
-            replaced.Add(notice);
+            replaced.Add((this, notice));
         }
 
         Changed?.Invoke();
-        foreach (var gone in replaced)
+        foreach (var stack in replaced.Select(each => each.Stack).Where(stack => stack != this).Distinct())
         {
-            Left(gone);
+            stack.Changed?.Invoke();
+        }
+
+        foreach (var (stack, gone) in replaced)
+        {
+            stack.Left(gone);
         }
 
         return notice;
@@ -237,8 +269,9 @@ public sealed class Notices
     public Notice Raise(Failure failure) => Raise(failure.Sentence, namesAProblem: true);
 
     /// <summary>
-    /// A notice's time in the stash window for <paramref name="words"/> (G16): six seconds, or two seconds and one more for
-    /// every three and a half words when that is longer, up to twenty; a word is what stands between spaces.
+    /// A notice's or a notification's time for <paramref name="words"/> (G16), the one definition of it: six seconds, or
+    /// two seconds and one more for every three and a half words when that is longer, up to twenty; a word is what stands
+    /// between spaces.
     /// </summary>
     public static TimeSpan LastingFor(string words)
     {
@@ -318,7 +351,7 @@ public sealed class Notices
         }
     }
 
-    /// <summary>The pointer came over the notice, or left it.</summary>
+    /// <summary>The pointer came onto the notice's stack, or left it (<see cref="NoticeStack.Held"/>).</summary>
     public void Hover(Notice notice, bool over)
     {
         notice.Hovered = over;
@@ -414,9 +447,9 @@ public sealed class Notices
     public string? UndoKey => inWindow ? "Ctrl+Z" : null;
 
     /// <summary>
-    /// The one transition of a notice's time ending, whatever ends it: its Undo is offered no more; in the stash window a
-    /// notice naming a problem that no later act took over stays, its words and its ×, and every other leaves; each runs
-    /// what it was given for leaving, once.
+    /// The one transition of a notice's time ending, whatever ends it: its Undo is offered no more; a notice naming a
+    /// problem that no later act took over stays, its words and its ×, in the window and above the tray alike, and every
+    /// other leaves; each runs what it was given for leaving, once.
     /// </summary>
     private void TimeUp(IReadOnlyList<Notice> due)
     {
@@ -430,44 +463,12 @@ public sealed class Notices
             notice.TimeEnded = true;
         }
 
-        shown.RemoveAll(notice => due.Contains(notice) && !(inWindow && notice.NamesAProblem && !notice.TakenOver));
+        shown.RemoveAll(notice => due.Contains(notice) && !(notice.NamesAProblem && !notice.TakenOver));
         Changed?.Invoke();
         foreach (var notice in due)
         {
             Left(notice);
         }
-    }
-
-    /// <summary>
-    /// The same action's rule for a notice just raised in the stash window (G16): when a later act of its action has
-    /// raised a notice already, it is taken over at once; otherwise each earlier act's notice of that action naming a
-    /// problem is: one still offering its Undo keeps it until its time ends and then leaves, and every other is taken off
-    /// and returned, to run what it was given for leaving once the stack has changed. The notices of one act, and those
-    /// of no act, never take each other's place.
-    /// </summary>
-    private List<Notice> TakeOver(Notice notice)
-    {
-        if (notice.Act is not { } act)
-        {
-            return [];
-        }
-
-        if (latestRaised.TryGetValue(act.Action, out var latest) && latest > act.Order)
-        {
-            notice.TakenOver = true;
-            return [];
-        }
-
-        latestRaised[act.Action] = act.Order;
-        var earlier = shown.Where(other => other.NamesAProblem && other.Act is { } by && by.Action == act.Action && by.Order < act.Order).ToList();
-        foreach (var other in earlier)
-        {
-            other.TakenOver = true;
-        }
-
-        var replaced = earlier.Where(other => !OffersUndo(other)).ToList();
-        shown.RemoveAll(replaced.Contains);
-        return replaced;
     }
 
     /// <summary>

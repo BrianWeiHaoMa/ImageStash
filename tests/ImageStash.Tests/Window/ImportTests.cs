@@ -495,6 +495,7 @@ public sealed class ImportTests
         var released = new Released();
 
         await import.Drop(new DropContents([ListedStash.File(MediaFixtures.Path("still.png"))], false, false, [released]));
+        Assert.AreEqual("Can't add to the stash (still.png): your stash is still opening.", notices.Shown.Single().Text);
         await import.Pick(_ => { picked = true; return Task.FromResult<IReadOnlyList<string>?>(null); }, _ => { });
         opening.StashFailed(new Failure("Open the stash", "stash.db", "it is broken"));
         await import.Drop(new DropContents([ListedStash.File(MediaFixtures.Path("still.png"))], false, false, []));
@@ -502,11 +503,11 @@ public sealed class ImportTests
         CollectionAssert.AreEqual(
             new[]
             {
-                "Can't add to the stash (still.png): your stash is still opening.",
                 "Can't add to the stash (the files to import): your stash is still opening.",
                 "Can't add to the stash (still.png): your stash could not be opened.",
             },
-            notices.Shown.Select(notice => notice.Text).ToList());
+            notices.Shown.Select(notice => notice.Text).ToList(),
+            "the second drop's refusal takes the first drop's place; Import files… is another action (G16)");
         Assert.IsFalse(picked, "the picker does not open");
         Assert.IsTrue(released.Disposed);
         Assert.IsEmpty(stash.WorkFiles(), "nothing is staged");

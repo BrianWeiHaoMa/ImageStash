@@ -367,16 +367,12 @@ public sealed class ClipboardPasteTests
         var paste = new ClipboardPaste(opening, notices, new Import(opening, notices, TestStash.ShortRetry), clipboard, stash.Clock, TestStash.ShortRetry);
 
         await paste.Paste();
+        Assert.AreEqual("Can't add to the stash (the clipboard): your stash is still opening.", notices.Shown.Single().Text);
         opening.StashFailed(new Failure("Open the stash", "stash.db", "it is broken"));
         await paste.Paste();
 
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                "Can't add to the stash (the clipboard): your stash is still opening.",
-                "Can't add to the stash (the clipboard): your stash could not be opened.",
-            },
-            notices.Shown.Select(notice => notice.Text).ToList());
+        Assert.AreEqual("Can't add to the stash (the clipboard): your stash could not be opened.", notices.Shown.Single().Text,
+            "the next paste's refusal takes the earlier one's place (G16)");
         Assert.AreEqual(0, clipboard.Reads, "nothing could be added, so nothing is read (N9)");
         Assert.IsEmpty(stash.WorkFiles());
         Assert.IsEmpty(await stash.All());

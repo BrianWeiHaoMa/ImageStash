@@ -199,7 +199,7 @@ public sealed class PasteFallbackTests
     }
 
     [TestMethod]
-    public async Task AFallbackElsewhereLastsSixSecondsLongerWhileHoveredAndLeavesOnItsX()
+    public async Task AFallbackElsewhereLastsAsItsWordsNeedLongerWhileHoveredAndLeavesOnItsX()
     {
         using var handing = await Handing.Open("photo.jpg");
         handing.Target.Confirms = new Failure(PasteTargetReasons.Action, "Relay", PasteTargetReasons.Gone);
@@ -207,18 +207,19 @@ public sealed class PasteFallbackTests
         await handing.Handoff.Paste(null!, handing.Items, RecordingTarget.Relay, StandingOn(Right, handing));
         var elsewhere = opened.Single().Stack;
         var notice = elsewhere.Shown.Single();
+        var lasting = Notices.LastingFor($"{notice.Heading} {notice.Text}");
 
         elsewhere.Hover(notice, over: true);
-        handing.Stash.Clock.Now += TimeSpan.FromSeconds(10);
+        handing.Stash.Clock.Now += TimeSpan.FromSeconds(30);
         elsewhere.Sweep();
         Assert.HasCount(1, elsewhere.Shown, "longer while hovered (G16)");
         elsewhere.Hover(notice, over: false);
-        handing.Stash.Clock.Now += TimeSpan.FromSeconds(5.9);
+        handing.Stash.Clock.Now += lasting - TimeSpan.FromMilliseconds(100);
         elsewhere.Sweep();
         Assert.HasCount(1, elsewhere.Shown);
-        handing.Stash.Clock.Now += TimeSpan.FromSeconds(0.2);
+        handing.Stash.Clock.Now += TimeSpan.FromMilliseconds(200);
         elsewhere.Sweep();
-        Assert.IsEmpty(elsewhere.Shown, "six seconds (G16)");
+        Assert.IsEmpty(elsewhere.Shown, "as long as its words need (G16)");
 
         await handing.Handoff.Paste(null!, handing.Items, RecordingTarget.Relay, StandingOn(Right, handing));
         elsewhere.Close(elsewhere.Shown.Single());

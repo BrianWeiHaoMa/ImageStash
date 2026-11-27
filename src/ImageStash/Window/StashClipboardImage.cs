@@ -34,6 +34,8 @@ public sealed class StashClipboardImage(Listing listing, Notices notifications, 
     /// <summary>One act: the user's, from the tray menu's entry.</summary>
     public async Task Stash()
     {
+        // Its own act wherever it is asked from, so the next one's notification takes this one's refusal's place (G16).
+        using var act = UserAct.BeginNew(Action);
         if (listing.CannotStartReason is { } notOpen)
         {
             notifications.Raise(Failure.Refusal(Action, Subject, notOpen));

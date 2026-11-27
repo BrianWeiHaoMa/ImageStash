@@ -4,9 +4,9 @@ using ImageStash.Window;
 namespace ImageStash.Tests.Window;
 
 /// <summary>
-/// G16's notices: above the tray, six seconds on its own clock, longer while hovered or while its field has focus, each
-/// hold ending on its own and time held by both counted once; in the stash window, through the window's wiring over a
-/// test stash, as long as its words need, up to twenty seconds, on time the window shows as its rule tells it, a hover
+/// G16's notices: above the tray, as long as its words need on its own clock, longer while hovered or while its field has
+/// focus, each hold ending on its own and time held by both counted once; in the stash window, through the window's wiring
+/// over a test stash, as long as its words need, up to twenty seconds, on time the window shows as its rule tells it, a hover
 /// begun before a hide ending with it; Undo while it shows and once, and what a notice leaving without its Undo was
 /// given run once, never after Undo; a notice a later one replaces taken down running neither; G35's failures named.
 /// </summary>
@@ -307,22 +307,23 @@ public sealed class NoticeTests
     }
 
     [TestMethod]
-    public async Task AboveTheTrayANoticeKeepsItsSixSecondsWhateverItsWordsAndWhateverTheWindowDoes()
+    public async Task AboveTheTrayANoticeLastsAsItsWordsNeedWhateverTheWindowDoes()
     {
         using var listed = await ListedStash.Open();
         var raisedAt = listed.Stash.Clock.Now;
         var held = listed.Notifications.Raise(Words(40, "word"));
         listed.WindowShowing.Seen(visible: false, minimised: false);
         listed.Notifications.Raise(Words(40, "word"));
+        var lasting = Notices.LastingFor(Words(40, "word"));
 
-        listed.Stash.Clock.Now = raisedAt + TimeSpan.FromMilliseconds(5_999);
+        listed.Stash.Clock.Now = raisedAt + lasting - TimeSpan.FromMilliseconds(1);
         listed.Notifications.Sweep();
         Assert.HasCount(2, listed.Notifications.Shown);
         listed.Notifications.Hover(held, over: true);
-        listed.Stash.Clock.Now = raisedAt + Notices.Lasting;
+        listed.Stash.Clock.Now = raisedAt + lasting;
         listed.Notifications.Sweep();
 
-        Assert.AreEqual(held, listed.Notifications.Shown.Single(), "the hovered one held, the other gone at six seconds with the window hidden");
+        Assert.AreEqual(held, listed.Notifications.Shown.Single(), "the hovered one held, the other gone at its words' time with the window hidden");
     }
 
     [TestMethod]

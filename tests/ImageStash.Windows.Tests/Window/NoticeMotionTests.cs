@@ -12,8 +12,9 @@ using static ImageStash.Windows.Tests.Support.ShownWindow;
 namespace ImageStash.Windows.Tests.Window;
 
 /// <summary>
-/// Notification fades leave the window whole, stash notices close their rooms in place, hover holds both notification
-/// clocks and preserves the stack's placement, and a real click cannot Undo from a fading card (F10, G16).
+/// Notification fades leave the window whole, stash notices close their rooms in place, hover holds every clock of the
+/// notifications and of the stash window's notices and preserves the stack's placement, a failure above the tray stays
+/// past its time, and a real click cannot Undo from a fading card (F10, G16).
 /// They need a signed-in desktop: a shell in Windows session 0 cannot run them.
 /// </summary>
 [TestClass]
@@ -162,6 +163,80 @@ public sealed class NoticeMotionTests
             shown.Notices.Sweep();
             Assert.IsEmpty(shown.Notices.Shown, "the upper card's remaining time runs after pointer exit");
         });
+    }
+
+    [TestMethod]
+    public async Task PointerOnTheUpperStashNoticeHoldsBothClocksAndClosingTheLowerKeepsItsRoomUntilPointerExit()
+    {
+        using var pointer = TestMouse.PutBackAfterwards();
+        var away = DisplayPlaces.At(DisplayPlaces.Primary(), 1050, 700);
+        TestMouse.MoveTo(away);
+        using var shown = ShownWindow.Open();
+        await shown.OpenStash();
+        var (upper, lower) = TrayDesktop.Get(() => (shown.Notices.Raise("First notice"), shown.Notices.Raise("Second notice")));
+        await Placed();
+        var (window, stack, upperCard) = TrayDesktop.Get(() =>
+        {
+            var window = shown.Window;
+            var stack = NoticeMotion.StashStack(window);
+            NoticeMotion.Advance(shown.Notices, stack, NoticeMotion.Entrance);
+            window.UpdateLayout();
+            return (window, stack, stack.CardOf(upper)!);
+        });
+        var upperPoint = TestMouse.Centre(upperCard);
+        await Eventually(() => TrayDesktop.Get(() => NoticeMotion.Hits(window, upperPoint, upperCard)));
+        TestMouse.MoveTo(upperPoint);
+        await Eventually(() => TrayDesktop.Get(() => upperCard.IsPointerOver));
+
+        TrayDesktop.Run(() =>
+        {
+            NoticeMotion.Advance(shown.Notices, stack, TimeSpan.FromSeconds(30));
+            shown.Notices.Sweep();
+            CollectionAssert.AreEqual(new[] { upper, lower }, shown.Notices.Shown.ToArray(), "the pointer on the upper notice holds the lower's clock too");
+            shown.Notices.Close(lower);
+            NoticeMotion.Advance(shown.Notices, stack, NoticeMotion.Exit);
+            window.UpdateLayout();
+            Assert.AreEqual(0d, stack.RoomOf(lower)!.Opacity, "the lower room is faded but held");
+            Assert.AreEqual(upperPoint, TestMouse.Centre(upperCard), "the upper notice stays under the pointer");
+        });
+
+        TestMouse.MoveTo(away);
+        await Eventually(() => TrayDesktop.Get(() => stack.RoomOf(lower) is null));
+        TrayDesktop.Run(() =>
+        {
+            window.UpdateLayout();
+            Assert.IsGreaterThan(upperPoint.Y, TestMouse.Centre(upperCard).Y, "the upper notice moves down only once the pointer leaves");
+            NoticeMotion.Advance(shown.Notices, stack, Notices.Lasting - NoticeMotion.Entrance);
+            shown.Notices.Sweep();
+            Assert.IsEmpty(shown.Notices.Shown, "its remaining time runs once the pointer has gone");
+        });
+    }
+
+    [TestMethod]
+    public async Task AFailureAboveTheTrayStillShowsPastItsTimeAndLeavesAtItsClose()
+    {
+        using var shown = new ShownNotifications();
+        var failure = TrayDesktop.Get(() => shown.Notices.Raise(new Failure(Screenshot.Action, "the screen", "the disk is full")));
+        await Placed();
+        TrayDesktop.Run(() =>
+        {
+            shown.Advance(Notices.LastingAtMost + TimeSpan.FromSeconds(10));
+            shown.Notices.Sweep();
+            Assert.AreSame(failure, shown.Notices.Shown.Single(), "a failure stays above the tray past its time (G16)");
+            Assert.IsTrue(shown.Notification.Shown is { IsVisible: true }, "its window still shows");
+        });
+        var (window, close) = TrayDesktop.Get(() =>
+        {
+            var window = shown.Notification.Shown!;
+            window.UpdateLayout();
+            return (window, CloseButton(shown.Stack.CardOf(failure)!));
+        });
+        var at = TestMouse.Centre(close);
+        await Eventually(() => TrayDesktop.Get(() => NoticeMotion.Hits(window, at, close)));
+
+        TestMouse.Click(at);
+
+        await Eventually(() => TrayDesktop.Get(() => shown.Notices.Shown.Count == 0));
     }
 
     [TestMethod]

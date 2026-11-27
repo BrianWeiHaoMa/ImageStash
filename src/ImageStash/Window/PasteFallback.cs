@@ -26,7 +26,8 @@ public sealed class PasteFallback(Notices notifications)
 
     /// <summary>
     /// Raised, on the raising thread, with the notifications standing on a display other than the primary that none has
-    /// stood on before, and that display: drawn in a window of their own, as the tray's are, and lasting as theirs do (G16).
+    /// stood on before, and that display: drawn in a window of their own, as the tray's are, lasting as theirs do, and one
+    /// history of acts with them, so the next paste's notification takes a failure's place on whichever display (G16).
     /// </summary>
     public event Action<Notices, Display>? Opened;
 
@@ -53,7 +54,7 @@ public sealed class PasteFallback(Notices notifications)
 
         if (!elsewhere.TryGetValue(display.Bounds, out var stack))
         {
-            stack = elsewhere[display.Bounds] = new Notices(notifications.Clock);
+            stack = elsewhere[display.Bounds] = notifications.Beside();
             Opened?.Invoke(stack, display);
         }
 

@@ -19,7 +19,8 @@ namespace ImageStash.Windows.Tests.Window;
 /// The notification above the tray as Windows shows it (G16, F4): while another program's window is in front, it
 /// appears without taking the foreground, and a click on it leaves that program with the keystrokes; it is topmost,
 /// without a taskbar button, its caption its words, wholly on the primary display above the tray icon or its corner,
-/// and stays there while it narrows as one leaves; each stays six seconds from its own raising, longer while the
+/// and stays there while it narrows as one leaves; each stays as long as its words need from its own raising, six seconds
+/// for these, longer while the
 /// pointer is over it, and the window closes once the last has gone; each window it shows, and the tooltip over it, is
 /// left out of screen captures from before its first showing, and one the platform will not leave out is shown anyway
 /// with the refusal named (S4, G35). These checks show it on the primary display, click it, type a letter into a window

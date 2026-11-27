@@ -240,17 +240,15 @@ public sealed class StashClipboardImageTests
         await stashing.Listing.SetQuery("kept");
 
         await stashing.StashClipboardImage.Stash();
+        var refused = stashing.Notifications.Shown.Single();
+        Assert.AreEqual("Can't stash clipboard image: the clipboard holds no image.", refused.Text);
+        Assert.IsNull(refused.UndoLabel);
         stashing.Clipboard.ImageReading = new Failure(StashClipboardImage.Action, "the clipboard", HeldClipboard.Reason);
         await stashing.StashClipboardImage.Stash();
 
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                "Can't stash clipboard image: the clipboard holds no image.",
-                "Couldn't stash clipboard image (the clipboard): another program is holding the clipboard open.",
-            },
-            stashing.Notifications.Shown.Select(notice => notice.Text).ToList());
-        Assert.IsTrue(stashing.Notifications.Shown.All(notice => notice.UndoLabel is null));
+        Assert.AreEqual("Couldn't stash clipboard image (the clipboard): another program is holding the clipboard open.", stashing.Notifications.Shown.Single().Text,
+            "the next act's failure takes the earlier refusal's place (G16)");
+        Assert.IsNull(stashing.Notifications.Shown.Single().UndoLabel);
         Assert.AreEqual("kept", stashing.Listing.Query);
         Assert.IsEmpty(await stashing.Stash.All());
         Assert.IsEmpty(stashing.Stash.WorkFiles());
@@ -282,16 +280,12 @@ public sealed class StashClipboardImageTests
         var act = new StashClipboardImage(opening, notifications, new CaptureNotification(notifications, opening, handoff, new NoWindowShown(), TestStash.ShortRetry), clipboard, stash.Clock, TestStash.ShortRetry, TestStash.ShortRetry);
 
         await act.Stash();
+        Assert.AreEqual("Can't stash clipboard image (the clipboard): your stash is still opening.", notifications.Shown.Single().Text);
         opening.StashFailed(new Failure("Open the stash", "stash.db", "it is broken"));
         await act.Stash();
 
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                "Can't stash clipboard image (the clipboard): your stash is still opening.",
-                "Can't stash clipboard image (the clipboard): your stash could not be opened.",
-            },
-            notifications.Shown.Select(notice => notice.Text).ToList());
+        Assert.AreEqual("Can't stash clipboard image (the clipboard): your stash could not be opened.", notifications.Shown.Single().Text,
+            "the next act's refusal takes the earlier one's place (G16)");
         Assert.AreEqual((0, 0), (clipboard.ImageReads, clipboard.Reads), "nothing could be added, so nothing is read (N9)");
         Assert.IsEmpty(stash.WorkFiles());
         Assert.IsEmpty(await stash.All());

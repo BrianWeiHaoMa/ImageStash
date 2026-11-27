@@ -94,7 +94,8 @@ public sealed class HandoffConfirmationTests
         Assert.AreEqual(named, pasted.Failure?.Sentence);
         Assert.AreEqual(named, copied.Failure?.Sentence);
         Assert.AreEqual(named, pastedBeside.Failure?.Sentence, "the item the store may have changed is named; the new one, read since, is not");
-        CollectionAssert.AreEqual(new[] { named, named, named }, handing.Notices.Shown.Select(notice => notice.Text).ToList());
+        CollectionAssert.AreEqual(new[] { named, named }, handing.Notices.Shown.Select(notice => notice.Text).ToList(),
+            "the copy's and the second paste's, which took the first paste's place (G16)");
         Assert.AreEqual(0, handing.Clipboard.Begun, "nothing of the new item, nor anything else, is written (G8)");
         Assert.IsEmpty(handing.Steps, "nothing confirmed, hidden or pasted");
         Assert.IsEmpty(handing.Uses());
@@ -223,7 +224,8 @@ public sealed class HandoffConfirmationTests
         Assert.IsLessThan(3000, four.TotalMilliseconds, times);
         Assert.IsTrue(pastedOne.Succeeded && pastedFour.Succeeded, "nothing committed since they were read, so both go (G10)");
         Assert.HasCount(4, handing.Clipboard.Written[1].Content.FilePaths);
-        Assert.HasCount(2, handing.Notices.Shown.Where(notice => notice.Text.StartsWith("Couldn't record a use: ")).ToList());
+        Assert.HasCount(1, handing.Notices.Shown.Where(notice => notice.Text.StartsWith("Couldn't record a use: ")).ToList(),
+            "the second paste's failure takes the first one's place (G16)");
         Assert.IsNotEmpty(handing.LoadFailures);
         Assert.IsTrue(handing.LoadFailures.All(failure => failure.Reason.Contains(HeldFileRetry.HeldReason)), "the listing names the held store (G35): " + string.Join("; ", handing.LoadFailures));
     }

@@ -413,6 +413,8 @@ public sealed class OpenWith : IDisposable
 
         foreach (var adoption in due)
         {
+            // Each adoption an act of its own, as a round's is, so what one says never stands as another's (G16).
+            using var acting = UserAct.BeginNew(AdoptionNotifications.Action);
             var item = await store.Item(adoption.Id);
             // An import replaced the stash meanwhile, its store giving this identity to another item: never said (G27, G36).
             if (listing.Replacements != replacements)
@@ -492,6 +494,8 @@ public sealed class OpenWith : IDisposable
     /// <summary>One classification of the session's copy, and the adoption it may lead to; then whatever asked meanwhile.</summary>
     private async Task Round(Session session)
     {
+        // An act of the adoption's own, so a later adoption's notification takes this one's failure's place (G16).
+        using var acting = UserAct.BeginNew(AdoptionNotifications.Action);
         var then = Then.Rest;
         try
         {

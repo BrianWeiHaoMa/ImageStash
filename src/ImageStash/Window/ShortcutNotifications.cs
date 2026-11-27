@@ -4,13 +4,13 @@ namespace ImageStash.Window;
 /// The notification above the tray that a shortcut became unavailable (G33, G16), at start or later: the tooltip's
 /// sentence for it (<see cref="ShortcutWords.Notification"/>), with Choose another, which asks for Settings on that
 /// shortcut's own row, the ask the tray's and the window's Settings make, so an open page is brought forward on it
-/// (G32). It goes through the tray's notifications like every other: shown without taking focus, six seconds and longer
-/// while hovered, with its ×. A shortcut is said once while it stays unavailable for the same combination and the same
-/// kind of reason, however often a registration judges it again (Pause's toggle back, a field's end, settings applied
-/// again, under Pause too); it is said again when the combination or the kind differs, or once it has worked in
-/// between, which a change of the shortcuts finding it acting, or bound to another combination, tells. The character a
-/// layout types is detail, never a new reason. Two shortcuts unavailable at once are two notifications, each leading to
-/// its own row.
+/// (G32). It goes through the tray's notifications like every other: shown without taking focus, as long as its words
+/// need and longer while hovered, with its ×, and, naming a problem, staying until its × or the shortcut's next one. A
+/// shortcut is said once while it stays unavailable for the same combination and the same kind of reason, however often
+/// a registration judges it again (Pause's toggle back, a field's end, settings applied again, under Pause too); it is
+/// said again when the combination or the kind differs, or once it has worked in between, which a change of the
+/// shortcuts finding it acting, or bound to another combination, tells. The character a layout types is detail, never a
+/// new reason. Two shortcuts unavailable at once are two notifications, each leading to its own row.
 /// </summary>
 public sealed class ShortcutNotifications
 {
@@ -42,7 +42,9 @@ public sealed class ShortcutNotifications
         }
 
         told[act] = (problem.Combination, problem.Reason.Kind);
-        // An earlier notification of the act keeps its own time (G16); this one says what holds now.
+        // This one says what holds now, in place of an earlier notification of the same shortcut, which stays until then
+        // (G16); another shortcut's is another action and stays.
+        using var acting = UserAct.BeginNew(ActionOf(act));
         notifications.Raise(ShortcutWords.Notification(problem), namesAProblem: true,
             button: new NoticeButton(ChooseAnother, () =>
             {
@@ -50,6 +52,9 @@ public sealed class ShortcutNotifications
                 return Task.CompletedTask;
             }));
     }
+
+    /// <summary>The action of <paramref name="act"/>'s shortcut found unavailable, one for each of the four (G16).</summary>
+    internal static string ActionOf(ShortcutAct act) => $"The {act} shortcut unavailable";
 
     /// <summary>
     /// Forgets each act whose shortcut works now, or is bound to another combination than the one said; one only held off

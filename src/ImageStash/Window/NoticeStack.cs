@@ -9,11 +9,12 @@ namespace ImageStash.Window;
 /// and the notifications above the tray alike (F10, L2). A card raised takes its room at once and fades in over the look's
 /// <see cref="LookKeys.CardEntrance"/>; a card whose notice has left (its time, its ×, its Undo, a later notice of its act)
 /// fades out over <see cref="LookKeys.CardExit"/>, dead from that instant: it takes no pointer, and what its buttons ask of
-/// <see cref="Notices"/> is refused for a notice no longer shown, so motion never lengthens what a card can do (G16). In
-/// the stash window the room it gives up closes over that same time; above the tray (<c>holdsTogether</c>) the pointer
-/// anywhere on the stack's window holds every card's clock (<see cref="Held"/>; G16's "longer while hovered" read for the
-/// whole stack), and a card that leaves meanwhile keeps its room, faded, until the pointer has gone, so nothing slides
-/// under a hand reaching for Undo; else its room goes once it has faded, at once. No motion plays while <c>mayPlay</c>
+/// <see cref="Notices"/> is refused for a notice no longer shown, so motion never lengthens what a card can do (G16). The
+/// pointer on the stack, the notifications' window or the stash window's notices, holds every card's clock in it
+/// (<see cref="Held"/>; G16's hold read for the whole stack), and a card that leaves meanwhile keeps its room, faded,
+/// until the pointer has gone, so nothing slides under a hand reaching for Undo or Show. Unheld, in the stash window
+/// (<c>inWindow</c>) the room a leaving card gives up closes over its fade; above the tray it goes once the card has
+/// faded, at once, the window then sized again. No motion plays while <c>mayPlay</c>
 /// says not (the stash window hidden or minimised, or the system's animation effects off): a card then appears and leaves
 /// in one step, and <see cref="Finish"/> ends a motion under way, so a hidden window's cards are whole at its next show.
 /// Time is the notices' clock, stepped at each frame the stack's window renders, or by a check through <see cref="Step"/>.
@@ -26,22 +27,22 @@ public sealed class NoticeStack
     private readonly Notices notices;
     private readonly Func<Notice, Control> cardFor;
     private readonly Func<bool> mayPlay;
-    private readonly bool holdsTogether;
+    private readonly bool inWindow;
     private readonly List<Room> rooms = [];
     private bool held;
     private bool frameAsked;
 
     /// <param name="cardFor">The card a notice is drawn as.</param>
     /// <param name="mayPlay">Whether motion may play now; read as each card arrives or leaves.</param>
-    /// <param name="holdsTogether">The notifications' stack: held whole by the pointer, a leaving card's room kept while held.</param>
-    public NoticeStack(Notices notices, Func<Notice, Control> cardFor, Func<bool> mayPlay, bool holdsTogether)
+    /// <param name="inWindow">The stash window's stack: each card's gap its own, a room closing as its card fades out.</param>
+    public NoticeStack(Notices notices, Func<Notice, Control> cardFor, Func<bool> mayPlay, bool inWindow)
     {
         this.notices = notices;
         this.cardFor = cardFor;
         this.mayPlay = mayPlay;
-        this.holdsTogether = holdsTogether;
+        this.inWindow = inWindow;
         // In the stash window the gap is each card's own, so it closes with the card's room and nothing jumps at the end.
-        View = new StackPanel { Spacing = holdsTogether ? Gap : 0 };
+        View = new StackPanel { Spacing = inWindow ? 0 : Gap };
     }
 
     /// <summary>The cards, the newest at the bottom.</summary>
@@ -68,21 +69,13 @@ public sealed class NoticeStack
         var now = notices.Clock.GetUtcNow();
         var plays = mayPlay();
         var changed = false;
-        foreach (var room in rooms.Where(room => !room.Leaving && !notices.Shown.Contains(room.Notice)).ToList())
-        {
-            changed |= Leave(room, plays ? Lasting(LookKeys.CardExit) : TimeSpan.Zero, now);
-        }
-
+        var leaving = rooms.Where(room => !room.Leaving && !notices.Shown.Contains(room.Notice)).ToList();
+        // The arriving cards take their rooms first, so a card leaving in one step under the pointer, one taking its place
+        // included, keeps its room while held, and the hold goes on to the arrival.
         foreach (var notice in notices.Shown.Where(notice => rooms.All(room => room.Notice != notice)).ToList())
         {
-            var room = new Room(notice, cardFor(notice), holdsTogether);
-            if (!holdsTogether)
-            {
-                // In the stash window each notice's own clock stops under the pointer (G16).
-                room.View.PointerEntered += (_, _) => notices.Hover(notice, over: true);
-                room.View.PointerExited += (_, _) => notices.Hover(notice, over: false);
-            }
-            else if (held)
+            var room = new Room(notice, cardFor(notice), inWindow);
+            if (held)
             {
                 notices.Hover(notice, over: true);
             }
@@ -98,6 +91,11 @@ public sealed class NoticeStack
             rooms.Add(room);
             View.Children.Add(room.View);
             changed = true;
+        }
+
+        foreach (var room in leaving)
+        {
+            changed |= Leave(room, plays ? Lasting(LookKeys.CardExit) : TimeSpan.Zero, now);
         }
 
         if (changed)
@@ -135,7 +133,7 @@ public sealed class NoticeStack
             {
                 var part = Part(now - leaving, room.Exit);
                 room.View.Opacity = room.OpacityAtLeaving * (1 - part);
-                if (!holdsTogether && room.HeightAtLeaving > 0)
+                if (inWindow && !held && room.HeightAtLeaving > 0)
                 {
                     room.View.Height = room.HeightAtLeaving * (1 - part);
                 }
@@ -179,13 +177,13 @@ public sealed class NoticeStack
     }
 
     /// <summary>
-    /// The pointer came onto the notifications' window, or left it (G16): while it is there every card's clock is held, a
-    /// card raised meanwhile's too; once it has gone the clocks run on from where they stopped and the room a card that
-    /// left meanwhile kept is given up. Only the stack that holds together is held.
+    /// The pointer came onto the stack, or left it (G16): while it is there every card's clock is held, a card raised
+    /// meanwhile's too; once it has gone, or the stash window holding it has stopped showing, the clocks run on from where
+    /// they stopped and the room a card that left meanwhile kept is given up.
     /// </summary>
     public void Held(bool over)
     {
-        if (!holdsTogether || held == over)
+        if (held == over)
         {
             return;
         }
@@ -222,7 +220,7 @@ public sealed class NoticeStack
         room.OpacityAtLeaving = room.View.Opacity;
         room.HeightAtLeaving = room.View.Bounds.Height;
         // Clipped only while its room closes: a card's shadow lies beyond its bounds.
-        room.View.ClipToBounds = !holdsTogether;
+        room.View.ClipToBounds = inWindow;
         return false;
     }
 
@@ -282,11 +280,15 @@ public sealed class NoticeStack
     /// <summary>A card and the room it stands in, with its motion's state.</summary>
     private sealed class Room
     {
-        public Room(Notice notice, Control card, bool holdsTogether)
+        public Room(Notice notice, Control card, bool inWindow)
         {
             Notice = notice;
             Card = card;
-            View = new Border { Child = card, Padding = holdsTogether ? default : new Avalonia.Thickness(0, Gap, 0, 0) };
+            // In the stash window the gap above a card is its room's ground too, so a hand moving between two cards stays on
+            // the stack and keeps its hold; above the tray the pointer anywhere on the window holds it.
+            View = inWindow
+                ? new Border { Child = card, Padding = new Avalonia.Thickness(0, Gap, 0, 0), Background = Brushes.Transparent }
+                : new Border { Child = card };
         }
 
         public Notice Notice { get; }
