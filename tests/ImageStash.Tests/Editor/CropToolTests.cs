@@ -417,4 +417,30 @@ public sealed partial class CropToolTests
         Assert.AreEqual(EditEnding.Saved, whole.Ending, whole.Failure?.Sentence);
         CollectionAssert.AreEqual(original.Pixels, MediaFixtures.FirstFrame(whole.Item!.FilePath).Pixels, "the whole original again");
     }
+
+    [TestMethod]
+    public async Task ResetShowsOnlyWhileThereIsACropToReset()
+    {
+        using var editing = await StillInTheEditor.Open();
+        var session = editing.Session;
+
+        ControlThread.Run(() =>
+        {
+            var shown = EditorShown.Over(session);
+            session.Tool = session.Crop();
+            Assert.AreEqual((false, false), shown.State(CropOptionRow.Reset), "no crop");
+
+            session.DragThrough((10.5f, 10.5f), (40.5f, 30.5f));
+            Assert.IsNotNull(session.Layers.Crop);
+            Assert.AreEqual((true, true), shown.State(CropOptionRow.Reset), "after a crop");
+
+            shown.Click(CropOptionRow.Reset);
+            Assert.IsNull(session.Layers.Crop);
+            Assert.AreEqual((false, false), shown.State(CropOptionRow.Reset), "after Reset");
+
+            session.Undo();
+            Assert.IsNotNull(session.Layers.Crop);
+            Assert.AreEqual((true, true), shown.State(CropOptionRow.Reset), "after Undo of that Reset");
+        });
+    }
 }

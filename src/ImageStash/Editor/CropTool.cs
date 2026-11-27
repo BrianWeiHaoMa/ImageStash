@@ -56,11 +56,14 @@ public sealed class CropTool : EditorTool
         }
     }
 
+    /// <summary>Whether there is a crop for <see cref="Reset"/> to give back (G22).</summary>
+    public bool CanReset => Session.Layers.Crop is not null;
+
     /// <summary>Gives the whole picture back, with 1:1 off, as one step.</summary>
     public void Reset()
     {
         Square = false;
-        if (Session.Accepts && Session.Layers.Crop is not null)
+        if (Session.Accepts && CanReset)
         {
             Session.Change(Cropped(Session.Layers, Whole), null);
         }

@@ -79,6 +79,8 @@ public sealed class EditorActionTests
             ShownWindow.Tap(undo, Key.Enter);
             Assert.IsTrue(editor.Session!.Layers.IsEmpty);
             AssertActions(editor, undo: false, redo: true, delete: false);
+            Assert.IsTrue(undo.IsEffectivelyVisible && editor.Shows("Redo") && editor.Shows("Compare"), "undone to nothing, Undo dimmed in its place beside Redo (G20)");
+            Assert.IsFalse(editor.Shows("Delete"), "Delete absent with nothing selected (G20)");
             Assert.IsTrue(shown.Focused is Visual focused && editor.Overlay.IsVisualAncestorOf(focused),
                 "focus stays in the editor when an action disables the focused button");
 
@@ -263,6 +265,7 @@ public sealed class EditorActionTests
             Assert.AreSame(session, editor.Session, "the editing session continues on the copy");
             Assert.AreNotEqual(item.Id, session.Item.Id);
             AssertActions(editor, undo: false, redo: false, delete: true);
+            Assert.IsTrue(editor.Shows("Undo") && editor.Shows("Redo") && editor.Shows("Compare"), "the three stay for the edit going on with the copy (G20)");
             editor.Choose("Delete");
             AssertActions(editor, undo: true, redo: false, delete: false);
             ShownWindow.RaiseClick(sourceUndo);
@@ -337,6 +340,15 @@ public sealed class EditorActionTests
             shown.Window.UpdateLayout();
             WindowMinimum.AssertAt(shown.Window.Bounds.Size, "the window at its minimum");
             var before = (editor.Canvas.Bounds, editor.Box);
+            Assert.IsFalse(editor.Shows("Undo") || editor.Shows("Redo") || editor.Shows("Compare") || editor.Shows("Delete"), "a fresh item: nothing to step, compare or delete (G20)");
+            foreach (var words in new[] { "Back", "More options", "Cancel", "Save", "Output size", "Caption bar" })
+            {
+                TextOptionRowTests.AssertInside(shown, editor.Button(words), words);
+            }
+
+            // The first change brings Undo, Redo and Compare, and the layer it selects brings Delete.
+            editor.Click(0.5, 0.25);
+            shown.Window.UpdateLayout();
             foreach (var (words, tip) in new[] { ("Undo", "Undo (Ctrl+Z)"), ("Redo", "Redo (Ctrl+Y)"), ("Delete", "Delete (Del)") })
             {
                 var button = editor.Button(words);
@@ -361,10 +373,8 @@ public sealed class EditorActionTests
                     head[index].TranslatePoint(default, editor.Overlay)!.Value.X);
             }
 
-            editor.Click(0.5, 0.25);
-            shown.Window.UpdateLayout();
             Assert.IsTrue(editor.Button("Delete").IsEnabled);
-            Assert.AreEqual(before, (editor.Canvas.Bounds, editor.Box), "the enabled trash button leaves the picture in place");
+            Assert.AreEqual(before, (editor.Canvas.Bounds, editor.Box), "the head's three and the trash button appearing leave the picture in place");
             Assert.Contains("Drag to move, corners resize, round handle turns. Double-click to edit.", editor.Texts());
             ShownWindow.Type(editor.Field!, "compare");
             ShownWindow.Tap(editor.Field!, Key.Enter, KeyModifiers.Control);
@@ -412,10 +422,13 @@ public sealed class EditorActionTests
         ShownWindow.Type(field, words);
     }
 
+    /// <summary>Whether each action can be clicked: shown and enabled; an absent one cannot.</summary>
     private static void AssertActions(ShownEditor editor, bool undo, bool redo, bool delete)
     {
-        Assert.AreEqual(undo, editor.Button("Undo").IsEffectivelyEnabled, "Undo");
-        Assert.AreEqual(redo, editor.Button("Redo").IsEffectivelyEnabled, "Redo");
-        Assert.AreEqual(delete, editor.Button("Delete").IsEffectivelyEnabled, "Delete");
+        Assert.AreEqual(undo, Able(editor, "Undo"), "Undo");
+        Assert.AreEqual(redo, Able(editor, "Redo"), "Redo");
+        Assert.AreEqual(delete, Able(editor, "Delete"), "Delete");
     }
+
+    private static bool Able(ShownEditor editor, string words) => editor.Shows(words) && editor.Button(words).IsEffectivelyEnabled;
 }

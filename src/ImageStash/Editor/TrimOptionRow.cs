@@ -10,7 +10,7 @@ namespace ImageStash.Editor;
 
 /// <summary>
 /// Trim's option row (G20, G22, G25): play and pause, where the play is over the clip's length, what the
-/// handles keep and for how long, and Reset. The position and what is kept hold room for their widest readings.
+/// handles keep and for how long, and Reset, shown while there is a trim to reset (<see cref="ControlPresence"/>). The position and what is kept hold room for their widest readings.
 /// The load and failure state stands in for the readings until every frame has been timed (G35).
 /// </summary>
 internal sealed class TrimOptionRow : WrapPanel, IOptionRow
@@ -27,6 +27,7 @@ internal sealed class TrimOptionRow : WrapPanel, IOptionRow
     private readonly SteadyReadout position;
     private readonly TextBlock busy;
     private readonly SteadyReadout kept;
+    private readonly Button reset;
 
     public TrimOptionRow(TrimTool tool, EditorSession session)
     {
@@ -48,7 +49,7 @@ internal sealed class TrimOptionRow : WrapPanel, IOptionRow
             MaxWidth = 320,
             TextWrapping = TextWrapping.Wrap,
         };
-        var reset = EditorButtons.Labelled(null, Reset);
+        reset = EditorButtons.Labelled(null, Reset);
         reset.Height = EditorButtons.ChoiceHeight;
         reset.Click += (_, _) => tool.Reset();
         Children.AddRange([EditorOptions.Group([play, position, busy], spacing: 4), EditorOptions.Group([kept, reset], EditorOptions.GroupSpacing)]);
@@ -73,6 +74,7 @@ internal sealed class TrimOptionRow : WrapPanel, IOptionRow
         kept.IsVisible = keeps is not null;
         busy.Text = session.FramesFailure is null ? Reading : Unread;
         busy.IsVisible = keeps is null && (session.FramesBusy is not null || session.FramesFailure is not null);
+        ControlPresence.Show(reset, tool.CanReset, true);
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)

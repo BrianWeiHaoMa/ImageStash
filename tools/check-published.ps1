@@ -610,7 +610,7 @@ Write-Host ' 26. with a picture copied in a browser, Win+Alt+V over a chat adds 
 Write-Host '     its notification, titled Clipboard image stashed, shows the picture, its size, nothing of the clipboard, and that an animated picture is added by dragging its file in, the chat keeps'
 Write-Host '     its keystrokes, and a name typed in the notification with Enter renames the item; with words or nothing on the clipboard a'
 Write-Host '     notification says there is no image (G13, G16, In use);'
-Write-Host ' 27. Ctrl+E on an item with a long name: the name ends with an ellipsis clear of Compare and the More options button, also at the window''s smallest;'
+Write-Host ' 27. Ctrl+E on an item with a long name: the name ends with an ellipsis clear of the More options button, and of Undo, Redo and Compare once the first change shows them, also at the window''s smallest;'
 Write-Host '     on the display of the other scaling the tooltips of Label and of Thin, Medium and Thick show their whole word;'
 Write-Host '     on a transparent PNG: Meme text in Comic Sans MS with a fill and an outline colour, turned by its handle with Shift held,'
 Write-Host '     an arrow, a box and a marker stroke, a blur and a black box; Save: the tile, the preview ("Edited here") and a paste into Paint and'

@@ -37,30 +37,27 @@ public sealed class DrawTool : EditorTool
     public Thickness Thickness { get; private set; } = Thickness.Medium;
 
     /// <summary>The kind the option row shows: the selected mark's, else <see cref="Mark"/>.</summary>
-    public MarkKind MarkShown => Selected?.Kind ?? Mark;
+    public MarkKind MarkShown => OptionShown(layer => ((DrawMarkLayer)layer).Kind, Mark);
 
     /// <summary>The color the option row shows: the selected mark's, else <see cref="Color"/>.</summary>
-    public Rgba ColorShown => Selected?.Color ?? Color;
+    public Rgba ColorShown => OptionShown(layer => ((DrawMarkLayer)layer).Color, Color);
 
     /// <summary>The thickness the option row shows: the selected mark's, else <see cref="Thickness"/>.</summary>
-    public Thickness ThicknessShown => Selected?.Thickness ?? Thickness;
+    public Thickness ThicknessShown => OptionShown(layer => ((DrawMarkLayer)layer).Thickness, Thickness);
 
     private DrawMarkLayer? Selected => Session.SelectedLayer as DrawMarkLayer;
 
     /// <summary>Chooses the kind of the next mark; the selected mark becomes that kind over the same pixels.</summary>
-    public void Choose(MarkKind mark)
-    {
-        Mark = mark;
-        ApplyToSelected(layer => LayerGeometry.Reshaped((DrawMarkLayer)layer, mark));
-    }
+    public void Choose(MarkKind mark) => ChooseOption(() => Mark = mark, layer => LayerGeometry.Reshaped((DrawMarkLayer)layer, mark));
 
     /// <summary>Chooses the color of the next mark and of the selected one; a color that is not a swatch becomes a recent one (G21).</summary>
-    public void Choose(Rgba color)
-    {
-        Color = color;
-        Session.Colors.Use(color);
-        ApplyToSelected(layer => (DrawMarkLayer)layer with { Color = color });
-    }
+    public void Choose(Rgba color) => ChooseOption(
+        () =>
+        {
+            Color = color;
+            Session.Colors.Use(color);
+        },
+        layer => (DrawMarkLayer)layer with { Color = color });
 
     /// <summary>Shows the selected mark in the <paramref name="color"/> the picker is dragged to, as no step; with no mark selected, nothing yet (G23, G25); false when the drag was ended meanwhile.</summary>
     public bool Preview(Rgba color) => PreviewOnSelected(layer => (DrawMarkLayer)layer with { Color = color });
@@ -69,25 +66,17 @@ public sealed class DrawTool : EditorTool
     /// The picker's drag let go on <paramref name="color"/>: the next mark's color, and the selected mark's as one step,
     /// recorded once as a recent one (G21, G23); false, applying nothing, when the drag was abandoned meanwhile.
     /// </summary>
-    public bool LetGo(Rgba color)
-    {
-        if (!CommitOnSelected(layer => (DrawMarkLayer)layer with { Color = color }))
+    public bool LetGo(Rgba color) => LetGoOption(
+        color,
+        () =>
         {
-            return false;
-        }
-
-        Color = color;
-        Session.Colors.Use(color);
-        Session.RaiseChanged();
-        return true;
-    }
+            Color = color;
+            return true;
+        },
+        layer => (DrawMarkLayer)layer with { Color = color });
 
     /// <summary>Chooses the thickness of the next mark and of the selected one.</summary>
-    public void Choose(Thickness thickness)
-    {
-        Thickness = thickness;
-        ApplyToSelected(layer => (DrawMarkLayer)layer with { Thickness = thickness });
-    }
+    public void Choose(Thickness thickness) => ChooseOption(() => Thickness = thickness, layer => (DrawMarkLayer)layer with { Thickness = thickness });
 
     public override bool Owns(Layer layer) => layer is DrawMarkLayer;
 

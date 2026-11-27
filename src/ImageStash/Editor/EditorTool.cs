@@ -218,6 +218,47 @@ public abstract class EditorTool
     }
 
     /// <summary>
+    /// An option row's value (G20, G21): the selected layer's, read by <paramref name="ofSelected"/>, while the selected
+    /// layer is this tool's, else <paramref name="ofNext"/>, the value the next layer takes; so what the row shows is what
+    /// a choice there sets (<see cref="ChooseOption"/>) and what the next layer gets.
+    /// </summary>
+    private protected T OptionShown<T>(Func<Layer, T> ofSelected, T ofNext) =>
+        Session.SelectedLayer is { } layer && Owns(layer) ? ofSelected(layer) : ofNext;
+
+    /// <summary>
+    /// An option row's choice (G20, G21): <paramref name="ofNext"/> records it for the next layer, then the selected layer,
+    /// while it is this tool's, takes it through <paramref name="ofSelected"/> as one step (<see cref="ApplyToSelected"/>).
+    /// </summary>
+    private protected void ChooseOption(Action ofNext, Func<Layer, Layer> ofSelected)
+    {
+        ofNext();
+        ApplyToSelected(ofSelected);
+    }
+
+    /// <summary>
+    /// An option row's colour drag let go on <paramref name="color"/> (G21): one step made by <paramref name="ofSelected"/>
+    /// when the drag showed on a layer of this tool's (<see cref="CommitOnSelected"/>), then <paramref name="ofNext"/>
+    /// records it for the next layer, true when it did; the colour recorded once as a recent one when either took it.
+    /// False, applying nothing, when the drag was ended meanwhile.
+    /// </summary>
+    private protected bool LetGoOption(Rgba color, Func<bool> ofNext, Func<Layer, Layer> ofSelected)
+    {
+        var onLayer = ColorDragShowsOnLayer;
+        if (!CommitOnSelected(ofSelected))
+        {
+            return false;
+        }
+
+        if (ofNext() | onLayer)
+        {
+            Session.Colors.Use(color);
+        }
+
+        Session.RaiseChanged();
+        return true;
+    }
+
+    /// <summary>
     /// Applies a changed option to the selected layer when it is this tool's, as one step; the option row shows the change
     /// either way. An open field closes first, but while its layer holds no letter, which closing would take away, the
     /// option changes that layer, the field stays open, and the change joins the field's step.
@@ -334,7 +375,7 @@ public abstract class EditorTool
     }
 
     /// <summary>Whether a colour drag is held and shows on a layer of this tool's.</summary>
-    private protected bool ColorDragShowsOnLayer => gesture is { Grip: Grip.Color, Dragging: true };
+    private bool ColorDragShowsOnLayer => gesture is { Grip: Grip.Color, Dragging: true };
 
     /// <summary>Ends a colour drag that will not be let go (the picker closed, Esc, its pointer lost), putting back what it showed.</summary>
     internal void AbandonColor()

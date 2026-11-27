@@ -18,8 +18,9 @@ public enum TextKind
 /// band above the picture with near-black text and no outline) or Label (Segoe UI with an automatic outline where the
 /// click was). A drag moves a text layer, a corner resizes a text layer or a caption bar by its font size, and the round
 /// handle turns a text layer; dragging never draws one. The font, the fill and the outline, chosen with such a layer
-/// selected, change that layer; a new one takes, property by property, the ones last chosen in this edit for a layer of
-/// its preset, else its preset's own (F8, G21). Its letters are measured by Media alone; a Meme a click adds stays on two
+/// selected, change that layer, and with none selected, the next layer of the current preset; a new one takes, property
+/// by property, the ones last chosen in this edit for a layer of its preset or for its next layer, else its preset's own
+/// (F8, G21), which the option row shows while none is selected. Its letters are measured by Media alone; a Meme a click adds stays on two
 /// lines as it is typed (<see cref="EditorSession.Laid"/>).
 /// </summary>
 public sealed class TextTool : EditorTool
@@ -30,8 +31,9 @@ public sealed class TextTool : EditorTool
 
     private const string MemeFont = "Impact", OtherFont = "Segoe UI";
 
-    // What was last chosen in this edit for a layer of each preset (F8, G21): recorded as a layer takes the choice, kept
-    // through Undo and Save as new item, as the Draw tool keeps its last mark's options, and gone with the session.
+    // What was last chosen in this edit for a layer of each preset, or for its next layer while none was selected (F8,
+    // G21): recorded as a layer or the next one takes the choice, kept through Undo and Save as new item, as the Draw tool
+    // keeps its last mark's options, and gone with the session.
     private readonly Dictionary<TextKind, string> fonts = [];
     private readonly Dictionary<TextKind, Rgba> fills = [];
     private readonly Dictionary<TextKind, Outline> outlines = [];
@@ -54,31 +56,16 @@ public sealed class TextTool : EditorTool
     public TextKind Kind { get; private set; } = TextKind.Meme;
 
     /// <summary>The preset the option row shows: the selected text or caption-bar layer's, else <see cref="Kind"/>.</summary>
-    public TextKind KindShown => Session.SelectedLayer is { } layer && KindOf(layer) is { } kind ? kind : Kind;
+    public TextKind KindShown => OptionShown(layer => KindOf(layer) ?? Kind, Kind);
 
-    /// <summary>The selected text or caption-bar layer's font family; null while none is selected.</summary>
-    public string? FontShown => Session.SelectedLayer switch
-    {
-        TextLayer text => text.Font,
-        CaptionBarLayer bar => bar.Font,
-        _ => null,
-    };
+    /// <summary>The font family the option row shows: the selected text or caption-bar layer's, else the one the next layer of the current preset takes (F8).</summary>
+    public string FontShown => OptionShown(layer => layer is TextLayer text ? text.Font : ((CaptionBarLayer)layer).Font, NextFont(Kind));
 
-    /// <summary>The selected text or caption-bar layer's fill, the text's color; null while none is selected.</summary>
-    public Rgba? FillShown => Session.SelectedLayer switch
-    {
-        TextLayer text => text.Fill,
-        CaptionBarLayer bar => bar.Fill,
-        _ => null,
-    };
+    /// <summary>The fill, the text's color, the option row shows: the selected text or caption-bar layer's, else the one the next layer of the current preset takes (G21).</summary>
+    public Rgba FillShown => OptionShown(layer => layer is TextLayer text ? text.Fill : ((CaptionBarLayer)layer).Fill, NextFill(Kind));
 
-    /// <summary>The selected text or caption-bar layer's outline; null while none is selected.</summary>
-    public Outline? OutlineShown => Session.SelectedLayer switch
-    {
-        TextLayer text => text.Outline,
-        CaptionBarLayer bar => bar.Outline,
-        _ => null,
-    };
+    /// <summary>The outline the option row shows: the selected text or caption-bar layer's, else the one the next layer of the current preset takes (G21).</summary>
+    public Outline OutlineShown => OptionShown(layer => layer is TextLayer text ? text.Outline : ((CaptionBarLayer)layer).Outline, NextOutline(Kind));
 
     /// <summary>The fill a new caption bar's text takes: the near-black swatch, since its band is always white (G21).</summary>
     private static Rgba CaptionFill => ColorChoices.Swatches[1];
@@ -90,13 +77,9 @@ public sealed class TextTool : EditorTool
     /// text, font and size kept; between Meme and Label its colors, origin and rotation kept too; made a caption bar, the
     /// caption's colors (its text sits on white); made text from a caption bar, the preset's colors, placed as a new one.
     /// </summary>
-    public void Choose(TextKind kind)
-    {
-        Kind = kind;
-        ApplyToSelected(layer => Converted(layer, kind));
-    }
+    public void Choose(TextKind kind) => ChooseOption(() => Kind = kind, layer => Converted(layer, kind));
 
-    /// <summary>Gives the selected text or caption-bar layer the font <paramref name="family"/>, as one step; a name no layer can carry changes nothing.</summary>
+    /// <summary>Gives the selected text or caption-bar layer the font <paramref name="family"/>, as one step, or with none selected the next layer of the current preset; a name no layer can carry changes nothing.</summary>
     public void Choose(string family)
     {
         if (string.IsNullOrWhiteSpace(family) || !LayerList.WellFormed(family))
@@ -104,7 +87,7 @@ public sealed class TextTool : EditorTool
             return;
         }
 
-        ApplyToSelected(layer => Chosen(fonts, layer, family) switch
+        ChooseOption(() => ForNext(fonts, family), layer => Chosen(fonts, layer, family) switch
         {
             TextLayer text => Session.Laid(text, text with { Font = family }),
             CaptionBarLayer bar => bar with { Font = family },
@@ -112,21 +95,29 @@ public sealed class TextTool : EditorTool
         });
     }
 
-    /// <summary>Gives the selected text or caption-bar layer's text the fill <paramref name="color"/>, as one step; a color that is not a swatch becomes a recent one (G21).</summary>
-    public void ChooseFill(Rgba color) => ApplyToSelected(layer =>
-    {
-        // Recorded as the choice applies, before the change is shown, so the picker shows it among the recent ones.
-        Session.Colors.Use(color);
-        return WithFill(Chosen(fills, layer, color), color);
-    });
+    /// <summary>Gives the selected text or caption-bar layer's text the fill <paramref name="color"/>, as one step, or with none selected the next layer of the current preset; a color that is not a swatch becomes a recent one (G21).</summary>
+    public void ChooseFill(Rgba color) => ChooseOption(
+        () =>
+        {
+            if (ForNext(fills, color))
+            {
+                Session.Colors.Use(color);
+            }
+        },
+        layer =>
+        {
+            // Recorded as the choice applies, before the change is shown, so the picker shows it among the recent ones.
+            Session.Colors.Use(color);
+            return WithFill(Chosen(fills, layer, color), color);
+        });
 
     /// <summary>Shows the selected text or caption-bar layer's text in the fill <paramref name="color"/> the picker is dragged to, as no step (G21, G25); false when the drag was ended meanwhile.</summary>
     public bool PreviewFill(Rgba color) => PreviewOnSelected(layer => WithFill(layer, color));
 
     /// <summary>The picker's drag let go on the fill <paramref name="color"/>: one step and one recent colour; false, applying nothing, when the drag was abandoned meanwhile.</summary>
-    public bool LetGoFill(Rgba color) => LetGo(color, layer => WithFill(Chosen(fills, layer, color), color));
+    public bool LetGoFill(Rgba color) => LetGoOption(color, () => ForNext(fills, color), layer => WithFill(Chosen(fills, layer, color), color));
 
-    /// <summary>Gives the selected text or caption-bar layer the outline Auto, None or a color, as one step; a color that is not a swatch becomes a recent one (G21).</summary>
+    /// <summary>Gives the selected text or caption-bar layer the outline Auto, None or a color, as one step, or with none selected the next layer of the current preset; a color that is not a swatch becomes a recent one (G21).</summary>
     public void ChooseOutline(Outline outline)
     {
         if (outline is null)
@@ -134,22 +125,30 @@ public sealed class TextTool : EditorTool
             return;
         }
 
-        ApplyToSelected(layer =>
-        {
-            if (outline.Color is { } color)
+        ChooseOption(
+            () =>
             {
-                Session.Colors.Use(color);
-            }
+                if (ForNext(outlines, outline) && outline.Color is { } color)
+                {
+                    Session.Colors.Use(color);
+                }
+            },
+            layer =>
+            {
+                if (outline.Color is { } color)
+                {
+                    Session.Colors.Use(color);
+                }
 
-            return WithOutline(Chosen(outlines, layer, outline), outline);
-        });
+                return WithOutline(Chosen(outlines, layer, outline), outline);
+            });
     }
 
     /// <summary>Shows the selected text or caption-bar layer with the outline <paramref name="color"/> the picker is dragged to, as no step (G21, G25); false when the drag was ended meanwhile.</summary>
     public bool PreviewOutline(Rgba color) => PreviewOnSelected(layer => WithOutline(layer, Outline.Of(color)));
 
     /// <summary>The picker's drag let go on the outline <paramref name="color"/>: one step and one recent colour; false, applying nothing, when the drag was abandoned meanwhile.</summary>
-    public bool LetGoOutline(Rgba color) => LetGo(color, layer => WithOutline(Chosen(outlines, layer, Outline.Of(color)), Outline.Of(color)));
+    public bool LetGoOutline(Rgba color) => LetGoOption(color, () => ForNext(outlines, Outline.Of(color)), layer => WithOutline(Chosen(outlines, layer, Outline.Of(color)), Outline.Of(color)));
 
     public override bool Owns(Layer layer) => layer is TextLayer or CaptionBarLayer;
 
@@ -177,6 +176,27 @@ public sealed class TextTool : EditorTool
         return layer;
     }
 
+    /// <summary>
+    /// Records <paramref name="value"/> as last chosen for the next layer of the current preset while none of this tool's
+    /// layers is selected and the session takes choices (not while a Save runs); true when it did.
+    /// </summary>
+    private bool ForNext<T>(Dictionary<TextKind, T> last, T value)
+    {
+        if (!Session.Accepts || Session.SelectedLayer is { } layer && Owns(layer))
+        {
+            return false;
+        }
+
+        last[Kind] = value;
+        return true;
+    }
+
+    private string NextFont(TextKind kind) => fonts.GetValueOrDefault(kind, kind == TextKind.Meme ? MemeFont : OtherFont);
+
+    private Rgba NextFill(TextKind kind) => fills.GetValueOrDefault(kind, kind == TextKind.CaptionBar ? CaptionFill : White);
+
+    private Outline NextOutline(TextKind kind) => outlines.GetValueOrDefault(kind, kind == TextKind.CaptionBar ? Outline.None : Outline.Auto);
+
     private static Layer WithFill(Layer layer, Rgba color) => layer switch
     {
         TextLayer text => text with { Fill = color },
@@ -190,26 +210,6 @@ public sealed class TextTool : EditorTool
         CaptionBarLayer bar => bar with { Outline = outline },
         _ => layer,
     };
-
-    /// <summary>
-    /// A colour drag let go on <paramref name="color"/>: one step made by <paramref name="change"/>, the colour recorded
-    /// once as a recent one when a layer took it (G21); false, applying nothing, when the drag was ended meanwhile.
-    /// </summary>
-    private bool LetGo(Rgba color, Func<Layer, Layer> change)
-    {
-        var onLayer = ColorDragShowsOnLayer;
-        if (!CommitOnSelected(change))
-        {
-            return false;
-        }
-
-        if (onLayer)
-        {
-            Session.Colors.Use(color);
-        }
-
-        return true;
-    }
 
     /// <summary>On a text layer a drag moves it, selected or not (G21); a caption bar is never moved.</summary>
     private protected override bool MovesWhenPressed(Layer layer) => layer is TextLayer;
@@ -229,9 +229,7 @@ public sealed class TextTool : EditorTool
 
         Kind = KindShown;
         var atTop = point.Y < shown.Y + shown.Height / 2f;
-        var font = fonts.GetValueOrDefault(Kind, Kind == TextKind.Meme ? MemeFont : OtherFont);
-        var fill = fills.GetValueOrDefault(Kind, Kind == TextKind.CaptionBar ? CaptionFill : White);
-        var outline = outlines.GetValueOrDefault(Kind, Kind == TextKind.CaptionBar ? Outline.None : Outline.Auto);
+        var (font, fill, outline) = (NextFont(Kind), NextFill(Kind), NextOutline(Kind));
         Layer added = Kind switch
         {
             TextKind.CaptionBar => new CaptionBarLayer("", font, SizeOf(shown, CaptionSizeOfWidth), fill, outline),

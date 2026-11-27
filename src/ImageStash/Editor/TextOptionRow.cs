@@ -15,7 +15,8 @@ namespace ImageStash.Editor;
 /// Text's option row (G20, G21, F8): the presets Meme, Caption bar and Label, the selected
 /// layer's checked, else the next one's; also the font button, which opens the font menu, the five fill swatches with
 /// the More swatch, which opens the colour picker, and the outline swatch, which opens it with Auto and None.
-/// The font and swatches keep their places while disabled without a selected text or caption-bar layer.
+/// The font and swatches show and set the selected text or caption-bar layer's values, else those the next layer of the
+/// current preset takes (<see cref="EditorTool.OptionShown"/>).
 /// It wraps onto further lines when the window is narrower, so nothing is clipped or hidden.
 /// </summary>
 internal sealed class TextOptionRow : WrapPanel, IOptionRow
@@ -33,8 +34,8 @@ internal sealed class TextOptionRow : WrapPanel, IOptionRow
     private readonly OutlineSwatch outline;
     private readonly ColorPicker fillPicker;
     private readonly ColorPicker outlinePicker;
-    private readonly Control[] ofTheSelected;
     private Control? allFonts;
+    private TextKind? refreshedKind;
 
     /// <param name="menu">Makes one of the editor's menus, which hands the editor its keys.</param>
     public TextOptionRow(TextTool tool, ColorChoices colors, EditorCanvas canvas, EditorPane pane, Func<PlacementMode, ContextMenu> menu, IFonts fonts)
@@ -64,7 +65,7 @@ internal sealed class TextOptionRow : WrapPanel, IOptionRow
         });
 
         swatches = [.. ColorChoices.Swatches.Select(color => (color, EditorButtons.Swatch(color, () => tool.ChooseFill(color))))];
-        fillPicker = new ColorPicker(colors, canvas, () => tool.FillShown ?? ColorChoices.Swatches[0], tool.ChooseFill, new ColorDrag(tool.BeginColor, tool.PreviewFill, tool.LetGoFill, tool.AbandonColor));
+        fillPicker = new ColorPicker(colors, canvas, () => tool.FillShown, tool.ChooseFill, new ColorDrag(tool.BeginColor, tool.PreviewFill, tool.LetGoFill, tool.AbandonColor));
         fillPicker.Done += pane.Hide;
         (more, moreFill) = EditorButtons.More(DrawOptionRow.MoreColors, anchor => Open(fillPicker, anchor));
 
@@ -74,7 +75,6 @@ internal sealed class TextOptionRow : WrapPanel, IOptionRow
         outline = new OutlineSwatch(anchor => Open(outlinePicker, anchor));
 
         var colorsRow = EditorOptions.Group([.. swatches.Select(swatch => swatch.Button), more, outline]);
-        ofTheSelected = [font, colorsRow];
         var presetRow = EditorOptions.Group(presets.Select(preset => preset.Button));
         Children.AddRange([EditorOptions.Group([presetRow, font], EditorOptions.GroupSpacing), colorsRow]);
         Refresh();
@@ -84,34 +84,19 @@ internal sealed class TextOptionRow : WrapPanel, IOptionRow
 
     public void Refresh()
     {
-        EditorButtons.Check(presets, tool.KindShown);
-        var (family, fill, shownOutline) = (tool.FontShown, tool.FillShown, tool.OutlineShown);
-        fontName.Text = family ?? FontButton;
+        var kind = tool.KindShown;
+        EditorButtons.Check(presets, kind);
+        // Another preset is another set of values: an open picker shows, and its hex gives, the new one's colour.
+        if (refreshedKind is { } before && before != kind && pane.Shown is ColorPicker picker && (ReferenceEquals(picker, fillPicker) || ReferenceEquals(picker, outlinePicker)))
+        {
+            picker.Reset();
+        }
+
+        refreshedKind = kind;
+        var (family, color, shownOutline) = (tool.FontShown, tool.FillShown, tool.OutlineShown);
+        fontName.Text = family;
         AutomationProperties.SetHelpText(font, family);
         ToolTipRule.ShowWhole(font, family);
-        foreach (var control in ofTheSelected)
-        {
-            control.IsEnabled = family is not null;
-        }
-
-        if (family is null || fill is not { } color || shownOutline is null)
-        {
-            foreach (var swatch in swatches)
-            {
-                swatch.Button.IsChecked = false;
-            }
-
-            EditorButtons.ShowPicked(more, moreFill, ColorChoices.Swatches[0]);
-            outline.Show(Outline.None, ColorChoices.Swatches[0]);
-            // What the pane shows was for the layer no longer selected.
-            if (pane.Shown is { } shown && (ReferenceEquals(shown, fillPicker) || ReferenceEquals(shown, outlinePicker) || ReferenceEquals(shown, allFonts)))
-            {
-                pane.Hide();
-            }
-
-            return;
-        }
-
         if (allFonts is not null && ReferenceEquals(pane.Shown, allFonts))
         {
             FontMenu.Mark(allFonts, family);
@@ -133,7 +118,7 @@ internal sealed class TextOptionRow : WrapPanel, IOptionRow
     private Rgba OutlineColorShown() => tool.OutlineShown switch
     {
         { Color: { } color } => color,
-        { IsAuto: true } when tool.FillShown is { } fill => LayerComposer.AutoOutline(fill),
+        { IsAuto: true } => LayerComposer.AutoOutline(tool.FillShown),
         _ => new Rgba(0, 0, 0, 255),
     };
 }

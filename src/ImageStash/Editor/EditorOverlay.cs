@@ -19,7 +19,7 @@ namespace ImageStash.Editor;
 /// <summary>
 /// The editor as the stash window shows it (F4, G20): an overlay over the whole of the window's content,
 /// never a window of its own. Its head has the back arrow, the item's name with "editing", Undo, Redo, Compare, which shows the
-/// original while held, and a ⋯ menu with Save as new item, Revert to original on an edited item, and Discard changes;
+/// original while held (the three absent until the edit holds a layer or a change), and a ⋯ menu with Save as new item, Revert to original on an edited item, and Discard changes;
 /// under it, while the picture draws a font this PC lacks, a line saying so (G21); then the canvas, with the field a
 /// text is typed in over it while typing; on an animated item the filmstrip (G22); the tool row; the current tool's
 /// option row, which states what the mouse does and offers Delete for the selected layer; and its own footer
@@ -50,7 +50,7 @@ public sealed class EditorOverlay : Border
     private readonly Button compare;
     private readonly Button more;
     private readonly StackPanel tools;
-    private readonly EditorLayerActions layerActions = new();
+    private readonly EditorLayerActions layerActions;
     private readonly EditorOptions options;
     private readonly Button cancel;
     private readonly Button size;
@@ -70,13 +70,14 @@ public sealed class EditorOverlay : Border
     public EditorOverlay(Action<Failure> failed, IFonts fonts)
     {
         this.fonts = fonts;
+        compare = EditorButtons.Labelled("", "Compare");
+        layerActions = new EditorLayerActions(compare);
         options = new EditorOptions(layerActions.SelectedLayer);
         canvas = new EditorCanvas(failed) { Margin = new Thickness(10, 0) };
         field = new TextField(canvas) { Margin = canvas.Margin };
         filmstrip = new Filmstrip(failed) { Margin = new Thickness(10, 8, 10, 0) };
         canvas.FallbacksChanged += () => note.Show(canvas.Fallbacks);
         name = new TextBlock { FontSize = 16, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        compare = EditorButtons.Labelled("\ue8ab", "Compare");
         more = EditorButtons.Icon("\ue712", "More options");
         tools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(10, 8, 10, 0) };
         cancel = EditorButtons.Labelled(null, "Cancel", "Esc");
@@ -204,7 +205,7 @@ public sealed class EditorOverlay : Border
         Refresh();
     }
 
-    /// <summary>The head: Back, the item's name with "editing", history, Compare held, the ⋯ menu and the window's pin (G20, G2).</summary>
+    /// <summary>The head: Back, the item's name with "editing", Undo, Redo and Compare held, the ⋯ menu and the window's pin (G20, G2).</summary>
     private Grid Head()
     {
         var back = EditorButtons.Icon("\ue72b", "Back", "Back (Esc)");
@@ -220,14 +221,13 @@ public sealed class EditorOverlay : Border
         compare.AddHandler(PointerReleasedEvent, (_, _) => SetCompare(false), RoutingStrategies.Tunnel, handledEventsToo: true);
         compare.AddHandler(PointerCaptureLostEvent, (_, _) => SetCompare(false), RoutingStrategies.Bubble, handledEventsToo: true);
         more.Click += (_, _) => ShowMenu();
-        var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto,Auto,Auto"), Margin = new Thickness(10, 10, 10, 8) };
+        var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto,Auto"), Margin = new Thickness(10, 10, 10, 8) };
         Grid.SetColumn(title, 1);
         Grid.SetColumn(layerActions.History, 2);
-        Grid.SetColumn(compare, 3);
-        Grid.SetColumn(more, 4);
-        Grid.SetColumn(PinSlot, 5);
+        Grid.SetColumn(more, 3);
+        Grid.SetColumn(PinSlot, 4);
         more.Margin = new Thickness(6, 0, 0, 0);
-        head.Children.AddRange([back, title, layerActions.History, compare, more, PinSlot]);
+        head.Children.AddRange([back, title, layerActions.History, more, PinSlot]);
         return head;
     }
 
@@ -497,6 +497,7 @@ public sealed class EditorOverlay : Border
             return;
         }
 
+        var focusWasHere = FocusIsHere();
         var target = (Tool: shown.Tool, Index: shown.Selected, Layer: shown.SelectedLayer, Count: shown.Layers.Layers.Count, shown.HistoryRevision);
         // An edit replaces a layer in its slot. Undoing an addition or removal can put a different layer in that same slot.
         var layerReplaced = !ReferenceEquals(refreshedFor.Layer, target.Layer);
@@ -538,8 +539,9 @@ public sealed class EditorOverlay : Border
 
         // G20, G21: the asking words stand in for what the mouse does while they show.
         options.Hint = shown.Asking ?? shown.Tool.Hint;
-        // A button can disable itself on its last step. Keep the editor's keys and Tab loop on the canvas.
-        if (layerActions.Show(shown) && shown.IsOpen)
+        // A button can disable itself on its last step, or go absent (Delete, Reset), or leave with a replaced row or a
+        // closed pane, which leaves focus nowhere. Keep the editor's keys and Tab loop on the canvas.
+        if ((layerActions.Show(shown) || focusWasHere && !FocusIsHere()) && shown.IsOpen)
         {
             canvas.Focus();
         }
@@ -555,6 +557,10 @@ public sealed class EditorOverlay : Border
         busyText.Text = shown.Busy ?? "";
         save.IsEnabled = cancel.IsEnabled = size.IsEnabled = more.IsEnabled = shown.Busy is null && shown.IsOpen;
     }
+
+    /// <summary>Whether keyboard focus is in the editor, on one of its controls that shows, or in its pane.</summary>
+    private bool FocusIsHere() =>
+        TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is Visual { IsEffectivelyVisible: true } focused && (this.IsVisualAncestorOf(focused) || pane.Holds(focused));
 
     private void ChooseShrink(Shrink shrink)
     {

@@ -17,7 +17,7 @@ namespace ImageStash.Windows.Tests.Editor;
 
 /// <summary>
 /// Text's option row on the real window (G20, G21, F8, F4, F13, G25): with nothing selected the presets and "Click the
-/// picture to add text"; the font button, the five fill swatches, More and the outline swatch disabled until selected,
+/// picture to add text"; the font button, the five fill swatches, More and the outline swatch able with none selected, showing the next layer's,
 /// and what the mouse does; with a hide selected, Hide's row instead; the font menu's ten in F8's order, each in its
 /// face, then All fonts… listing the Fonts seam's families in a list that scrolls inside the window, stays open as fonts
 /// are chosen from it and checks the chosen one, which the menu then shows checked after the ten; the editor's keys
@@ -31,7 +31,7 @@ public sealed class TextOptionRowTests
     private static readonly string[] F8 = ["Impact", "Arial Black", "Segoe UI", "Comic Sans MS", "Georgia", "Consolas", "Bahnschrift", "Segoe Script", "Ink Free", "Verdana"];
 
     [TestMethod]
-    public async Task TextOptionsKeepTheirPlacesAndEnableForASelectedLayerAndHideWithAnotherTool()
+    public async Task TextOptionsAreAbleWithOrWithoutASelectedLayerAndHideWithAnotherTool()
     {
         using var shown = ShownWindow.Open();
         using var editor = new ShownEditor(shown);
@@ -43,13 +43,14 @@ public sealed class TextOptionRowTests
             Assert.IsTrue(Checked(editor.Button("Text")), "and current at open");
             CollectionAssert.IsSubsetOf(new[] { "Meme", "Caption bar", "Label", "Click the picture to add text" }, editor.Texts(), "the presets and the hint (G21)");
             Assert.IsTrue(Checked(editor.Button("Meme")), "Meme for the next layer");
-            AssertSelectionControls(editor, enabled: false);
+            AssertFontAndColoursAble(editor);
+            Assert.AreEqual("Impact", FontWords(editor), "the font the next Meme takes (F8, G21)");
 
             editor.Click(0.5, 0.25);
             Assert.IsTrue(editor.Session!.SelectedLayer is TextLayer { Preset: TextPreset.Meme }, "a click adds a Meme");
             Assert.IsTrue(Checked(editor.Button("Meme")));
             Assert.AreEqual("Impact", FontWords(editor), "the font button reads the layer's font (F8)");
-            AssertSelectionControls(editor, enabled: true);
+            AssertFontAndColoursAble(editor);
             Assert.Contains(editor.Session.Tool.Hint, editor.Texts(), "and what the mouse does (G20)");
             Assert.AreNotEqual("Click the picture to add text", editor.Session.Tool.Hint);
 
@@ -62,10 +63,31 @@ public sealed class TextOptionRowTests
 
             editor.Click(0.5, 0.1);
             Assert.IsTrue(editor.Session.SelectedLayer is TextLayer && Checked(editor.Button("Text")), "a click on the Meme selects it with Text current");
-            AssertSelectionControls(editor, enabled: true);
+            AssertFontAndColoursAble(editor);
             ShownWindow.Tap(editor.Canvas, Key.Escape);
-            AssertSelectionControls(editor, enabled: false);
+            AssertFontAndColoursAble(editor);
+            Assert.AreEqual("Impact", FontWords(editor), "with none selected, the next Meme's font again");
             Assert.Contains("Click the picture to add text", editor.Texts());
+        });
+    }
+
+    [TestMethod]
+    public async Task WithNoneSelectedAnOpenColourPickerTakesUpAnotherPresetsColour()
+    {
+        using var shown = ShownWindow.Open();
+        using var editor = new ShownEditor(shown);
+        var item = (await shown.OpenStash(shown.Picture("grey.png", 200, 150, (_, _) => TextFieldTests.Grey))).Single();
+        await EditorOverlayTests.Open(shown, item);
+        TrayDesktop.Run(() =>
+        {
+            editor.Choose("More colors");
+            shown.Window.UpdateLayout();
+            var hex = editor.Overlay.GetVisualDescendants().OfType<TextBox>().Single(box => box.IsEffectivelyVisible && AutomationProperties.GetName(box) == ColorPicker.HexName);
+            Assert.AreEqual(ColorChoices.Hex(ColorChoices.Swatches[0]), hex.Text, "the next Meme's white (G21)");
+
+            editor.Choose("Caption bar");
+
+            Assert.AreEqual(ColorChoices.Hex(ColorChoices.Swatches[1]), hex.Text, "the next Caption bar's near-black, which Enter in the hex would give");
         });
     }
 
@@ -309,15 +331,15 @@ public sealed class TextOptionRowTests
     private static Color Ground(ToggleButton entry) =>
         entry.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>().First().Background is ISolidColorBrush { } ground ? ground.Color : Colors.Transparent;
 
-    /// <summary>The controls that need a selected text or caption-bar layer.</summary>
+    /// <summary>The font and colour controls, which show the selected text or caption-bar layer's values, else the next layer's.</summary>
     private static IEnumerable<string> OfTheSelected() =>
         ColorChoices.Swatches.Select(ColorChoices.Hex).Append("Font").Append("More colors").Append("Outline color");
 
-    private static void AssertSelectionControls(ShownEditor editor, bool enabled)
+    private static void AssertFontAndColoursAble(ShownEditor editor)
     {
         foreach (var words in OfTheSelected())
         {
-            Assert.AreEqual(enabled, editor.Button(words).IsEffectivelyEnabled, words);
+            Assert.IsTrue(editor.Button(words).IsEffectivelyEnabled, words);
         }
     }
 

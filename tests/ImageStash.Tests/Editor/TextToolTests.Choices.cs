@@ -40,7 +40,7 @@ public sealed partial class TextToolTests
 
         var next = (TextLayer)session.Layers.Layers[3];
         Assert.AreEqual(("Comic Sans MS", Yellow, Outline.None), (next.Font, next.Fill, next.Outline), "each property as last chosen for a Meme, each on another Meme");
-        Assert.AreEqual(("Comic Sans MS", (Rgba?)Yellow, Outline.None), (text.FontShown, text.FillShown, text.OutlineShown), "F8: the menu marks the selected layer's font");
+        Assert.AreEqual(("Comic Sans MS", Yellow, Outline.None), (text.FontShown, text.FillShown, text.OutlineShown), "F8: the menu marks the selected layer's font");
         var (first, second) = ((TextLayer)session.Layers.Layers[0], (TextLayer)session.Layers.Layers[1]);
         Assert.AreEqual(("Comic Sans MS", White, Outline.Auto, "Comic Sans MS", Yellow, Outline.Auto), (first.Font, first.Fill, first.Outline, second.Font, second.Fill, second.Outline), "each earlier Meme keeps what it took and was given");
         session.Deselect();
@@ -82,6 +82,152 @@ public sealed partial class TextToolTests
 
         var next = (TextLayer)session.Layers.Layers[1];
         Assert.AreEqual(("Impact", Blue, Outline.Auto), (next.Font, next.Fill, next.Outline), "the fill chosen on the opened layer; the font it only carried is no choice");
+    }
+
+    [TestMethod]
+    public async Task AFillAndAFontChosenWithNoneSelectedAreWhatTheNextClickGives()
+    {
+        using var editing = await StillInTheEditor.Open();
+        var session = editing.Session;
+        var text = session.Text();
+
+        text.ChooseFill(Blue);
+        text.Choose("Georgia");
+        Assert.IsTrue(session.Layers.IsEmpty, "a choice with none selected adds nothing");
+        Assert.AreEqual(("Georgia", Blue), (text.FontShown, text.FillShown), "the row shows them as the next Meme's");
+        session.Click(10, 5);
+
+        var meme = (TextLayer)session.SelectedLayer!;
+        Assert.AreEqual((TextPreset.Meme, "Georgia", Blue, Outline.Auto), (meme.Preset, meme.Font, meme.Fill, meme.Outline));
+    }
+
+    [TestMethod]
+    public async Task AChoiceWithNoneSelectedStaysWithItsPresetAndAnotherPresetShowsItsOwnNextValues()
+    {
+        using var editing = await StillInTheEditor.Open();
+        var session = editing.Session;
+        var text = session.Text();
+        text.ChooseFill(Blue);
+
+        text.Choose(TextKind.Label);
+        Assert.AreEqual(("Segoe UI", White, Outline.Auto), (text.FontShown, text.FillShown, text.OutlineShown), "Label's next values, not the Meme's blue");
+        session.Click(30, 24);
+        var label = (TextLayer)session.SelectedLayer!;
+        Assert.AreEqual((TextPreset.Label, White), (label.Preset, label.Fill), "a Label takes Label's");
+        session.SetTypedText("lab");
+        session.Deselect();
+
+        text.Choose(TextKind.Meme);
+        Assert.AreEqual(Blue, text.FillShown, "the Meme's next fill kept");
+    }
+
+    [TestMethod]
+    public async Task ForEachPresetWithNoneSelectedTheRowShowsWhatTheNextClickGives()
+    {
+        using var editing = await StillInTheEditor.Open();
+        var session = editing.Session;
+        var text = session.Text();
+        var own = new Dictionary<TextKind, (string, Rgba, Outline)>
+        {
+            [TextKind.Meme] = ("Impact", White, Outline.Auto),
+            [TextKind.CaptionBar] = ("Segoe UI", NearBlack, Outline.None),
+            [TextKind.Label] = ("Segoe UI", White, Outline.Auto),
+        };
+
+        foreach (var (kind, values) in own)
+        {
+            text.Choose(kind);
+            var shown = (text.FontShown, text.FillShown, text.OutlineShown);
+            Assert.AreEqual(values, shown, $"{kind}: the preset's own (F8, G21)");
+            session.Click(30, 30);
+            Assert.AreEqual(shown, Values(session.SelectedLayer!), $"{kind}: the layer the click adds takes what was shown");
+            session.SetTypedText("x");
+            text.Choose("Comic Sans MS");
+            text.ChooseOutline(Outline.Of(Blue));
+            session.Deselect();
+
+            Assert.AreEqual(("Comic Sans MS", values.Item2, Outline.Of(Blue)), (text.FontShown, text.FillShown, text.OutlineShown), $"{kind}: a choice on a selected layer of the preset replaces them");
+            while (session.CanUndo)
+            {
+                session.Undo();
+            }
+
+            session.Click(30, 30);
+            Assert.AreEqual(("Comic Sans MS", values.Item2, Outline.Of(Blue)), Values(session.SelectedLayer!), $"{kind}: and the next click gives them");
+            session.SetTypedText("y");
+            session.Deselect();
+            while (session.CanUndo)
+            {
+                session.Undo();
+            }
+        }
+
+        static (string, Rgba, Outline) Values(Layer layer) => layer switch
+        {
+            TextLayer text => (text.Font, text.Fill, text.Outline),
+            CaptionBarLayer bar => (bar.Font, bar.Fill, bar.Outline),
+            _ => throw new AssertFailedException($"not a text layer: {layer}"),
+        };
+    }
+
+    [TestMethod]
+    public async Task ThePickersColourAutoAndNoneChosenWithNoneSelectedEachBecomeTheNextTexts()
+    {
+        using var editing = await StillInTheEditor.Open();
+        var session = editing.Session;
+        var text = session.Text();
+        var picked = new Rgba(10, 120, 200, 255);
+
+        text.BeginColor();
+        Assert.IsTrue(text.PreviewFill(Yellow));
+        Assert.IsTrue(text.LetGoFill(picked));
+        Assert.AreEqual(picked, text.FillShown, "the picker's drag let go");
+        Assert.AreEqual(picked, session.Colors.Recent.FirstOrDefault(), "a picked colour becomes a recent one");
+        text.ChooseOutline(Outline.None);
+        Assert.AreEqual(Outline.None, text.OutlineShown, "None");
+        text.ChooseOutline(Outline.Auto);
+        Assert.AreEqual(Outline.Auto, text.OutlineShown, "Auto");
+        text.BeginColor();
+        Assert.IsTrue(text.LetGoOutline(Blue));
+        Assert.AreEqual(Outline.Of(Blue), text.OutlineShown, "the outline picker's drag let go");
+        // The eyedropper and the hex hand the picker's colour to ChooseFill, as a recent colour's click does.
+        text.ChooseFill(Yellow);
+        Assert.IsTrue(session.Layers.IsEmpty);
+
+        session.Click(10, 5);
+        var meme = (TextLayer)session.SelectedLayer!;
+        Assert.AreEqual((Yellow, Outline.Of(Blue)), (meme.Fill, meme.Outline));
+    }
+
+    [TestMethod]
+    public async Task AChoiceWithNoneSelectedWhileASaveRunsIsNotTaken()
+    {
+        using var stash = new TestStash();
+        await stash.OpenCleanly();
+        var still = await stash.ImportFixture("still", "still.png");
+        using var rendering = new SemaphoreSlim(0);
+        using var go = new SemaphoreSlim(0);
+        FinishedPictureRenderer waiting = (original, name, layers, format, work, retry) =>
+        {
+            rendering.Release();
+            go.Wait();
+            return FinishedPicture.Render(original, name, layers, format, work, retry);
+        };
+        using var session = await Open(stash, still, waiting);
+        var text = session.Text();
+        session.Click(2, 1);
+        session.SetTypedText("one");
+        session.Deselect();
+
+        var saving = session.SaveAsNewItem();
+        Assert.IsTrue(await rendering.WaitAsync(TimeSpan.FromSeconds(10)));
+        text.ChooseFill(Blue);
+        text.Choose("Georgia");
+        text.ChooseOutline(Outline.None);
+        go.Release();
+        Assert.AreEqual(EditEnding.Continued, (await saving).Ending);
+
+        Assert.AreEqual(("Impact", White, Outline.Auto), (text.FontShown, text.FillShown, text.OutlineShown));
     }
 
     [TestMethod]

@@ -14,9 +14,9 @@ namespace ImageStash.Editor;
 /// <summary>
 /// The font menu the Text tool's font button opens (F8): Impact, Arial Black, Segoe UI, Comic Sans MS, Georgia,
 /// Consolas, Bahnschrift, Segoe Script, Ink Free and Verdana, in that order, each in its own face and whether or not this
-/// PC has it, the selected layer's checked; the selected layer's font after them, checked, when it is none of the ten;
-/// then All fonts…, which lists every family the Fonts seam names on this PC (F13), each in its face, the selected
-/// layer's checked, in the editor's pane, scrolling, inside the stash window (F4), and stays open as fonts are chosen
+/// PC has it, the row's font (the selected layer's, else the next layer's) checked; that font after them, checked, when
+/// it is none of the ten; then All fonts…, which lists every family the Fonts seam names on this PC (F13), each in its
+/// face, the row's font checked, in the editor's pane, scrolling, inside the stash window (F4), and stays open as fonts are chosen
 /// from it, as the colour picker does, so one after another can be seen on the picture.
 /// </summary>
 internal static class FontMenu

@@ -357,7 +357,7 @@ public sealed partial class EditorOverlayTests
     }
 
     [TestMethod]
-    public async Task ALongNameEndsWithAnEllipsisClearOfCompareAndMoreAtTheMinimumWidthAndAShortOneShowsWholeBesideEditing()
+    public async Task ALongNameEndsWithAnEllipsisClearOfMoreAndOfTheHistoryOnceItShowsAtTheMinimumWidthAndAShortOneShowsWholeBesideEditing()
     {
         using var shown = ShownWindow.Open();
         using var editor = new ShownEditor(shown);
@@ -383,12 +383,23 @@ public sealed partial class EditorOverlayTests
             Assert.IsLessThan(natural.DesiredSize.Width, name.Bounds.Width, "the name is cut, which its CharacterEllipsis shows as … (G21)");
             Assert.AreEqual(longName, ToolTip.GetTip(name), "and its tip holds it whole");
             var editing = Title("editing");
-            var compare = editor.Button("Compare");
             var more = editor.Button("More options");
             Assert.IsLessThanOrEqualTo(LeftOf(editing), RightOf(name), "the name ends before editing");
-            Assert.IsLessThanOrEqualTo(LeftOf(compare), RightOf(editing), "editing ends before Compare");
+            Assert.IsLessThanOrEqualTo(LeftOf(more), RightOf(editing), "editing ends before ⋯ while Undo, Redo and Compare are absent");
             Assert.IsLessThanOrEqualTo(editor.Overlay.Bounds.Width, RightOf(more), "⋯ inside the window at its minimum width (G20)");
-            ShownWindow.Tap(editor.Canvas, Key.Escape);
+
+            // Undo, Redo and Compare appear with the first change, and the name gives way to them.
+            editor.Choose("Draw");
+            editor.Drag((0.2, 0.2), (0.8, 0.8));
+            shown.Window.UpdateLayout();
+            name = Title(longName);
+            editing = Title("editing");
+            var compare = editor.Button("Compare");
+            Assert.IsLessThanOrEqualTo(LeftOf(editing), RightOf(name), "the name still ends before editing");
+            Assert.IsLessThanOrEqualTo(LeftOf(editor.Button("Undo")), RightOf(editing), "editing ends before Undo");
+            Assert.IsLessThanOrEqualTo(LeftOf(more), RightOf(compare), "Compare ends before ⋯");
+            Assert.IsLessThanOrEqualTo(editor.Overlay.Bounds.Width, RightOf(more), "⋯ still inside the window at its minimum width (G20)");
+            editor.Choose("Back");
         });
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => !shown.Editing.IsOpen));
 
@@ -525,7 +536,8 @@ public sealed partial class EditorOverlayTests
             Assert.IsTrue(editor.Overlay.IsEffectivelyVisible);
             var texts = editor.Texts();
             CollectionAssert.IsSubsetOf(new[] { item.Name, "editing", "Click the picture to add text" }, texts, string.Join(" | ", texts));
-            Assert.IsTrue(editor.Shows("Compare") && editor.Shows("More options") && editor.Shows("Back"), "the head");
+            Assert.IsTrue(editor.Shows("More options") && editor.Shows("Back"), "the head");
+            Assert.IsFalse(editor.Shows("Undo") || editor.Shows("Redo") || editor.Shows("Compare"), "nothing to step or compare on a fresh item (G20)");
             CollectionAssert.AreEqual(new[] { "Text", "Crop", "Hide", "Draw" }, editor.Tools(), "the tools built, and nothing inert");
             Assert.IsTrue(editor.Shows("Meme") && editor.Shows("Caption bar") && editor.Shows("Label"), "Text's option row, Text current at open");
             Assert.IsTrue(editor.Shows("Cancel") && editor.Shows("Save"), "the footer");

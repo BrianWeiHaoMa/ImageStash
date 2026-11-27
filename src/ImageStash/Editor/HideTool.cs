@@ -26,14 +26,10 @@ public sealed class HideTool : EditorTool
     public HideKind Kind { get; private set; } = HideKind.Blur;
 
     /// <summary>The style the option row shows: the selected hide's, else <see cref="Kind"/>.</summary>
-    public HideKind KindShown => Session.SelectedLayer is HideLayer hide ? hide.Kind : Kind;
+    public HideKind KindShown => OptionShown(layer => ((HideLayer)layer).Kind, Kind);
 
     /// <summary>Chooses Blur or Black box for the next hide, and for the selected one.</summary>
-    public void Choose(HideKind kind)
-    {
-        Kind = kind;
-        ApplyToSelected(layer => (HideLayer)layer with { Kind = kind });
-    }
+    public void Choose(HideKind kind) => ChooseOption(() => Kind = kind, layer => (HideLayer)layer with { Kind = kind });
 
     public override bool Owns(Layer layer) => layer is HideLayer;
 

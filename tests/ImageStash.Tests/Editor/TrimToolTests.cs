@@ -1,3 +1,7 @@
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using ImageStash.Editor;
 using ImageStash.Layers;
 using ImageStash.Media;
@@ -87,6 +91,39 @@ public sealed class TrimToolTests
         Assert.IsTrue(session.Layers.IsEmpty);
         session.Undo();
         Assert.AreEqual(List(new TrimLayer(new FrameRange(1, 2))), session.Layers, "Reset with no trim made no step of its own");
+    }
+
+    [TestMethod]
+    public async Task ResetShowsOnlyWhileThereIsATrimToReset()
+    {
+        using var clip = await AnimationInTheEditor.Open("animated.gif");
+        var session = clip.Session;
+
+        session.Tool = session.Trim();
+
+        ControlThread.Run(() =>
+        {
+            // The row alone, as the editor holds it: the filmstrip beside it draws frames only a platform can, so the
+            // whole editor is not built here, and the row is refreshed after each change as the editor refreshes it.
+            var row = new TrimOptionRow(session.Trim(), session);
+            var reset = row.GetLogicalDescendants().OfType<Button>().Single(button => AutomationProperties.GetName(button) == TrimOptionRow.Reset);
+            Assert.IsFalse(reset.IsVisible, "no trim");
+
+            session.Trim().DragHandle(RangeEnd.First, 1);
+            row.Refresh();
+            Assert.IsNotNull(session.Layers.Trim);
+            Assert.IsTrue(reset.IsVisible && reset.IsEnabled, "after a trim");
+
+            reset.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            row.Refresh();
+            Assert.IsNull(session.Layers.Trim);
+            Assert.IsFalse(reset.IsVisible, "after Reset");
+
+            session.Undo();
+            row.Refresh();
+            Assert.IsNotNull(session.Layers.Trim);
+            Assert.IsTrue(reset.IsVisible && reset.IsEnabled, "after Undo of that Reset");
+        });
     }
 
     [TestMethod]

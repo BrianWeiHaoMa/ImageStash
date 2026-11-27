@@ -25,7 +25,7 @@ public sealed partial class TextToolTests
     private static readonly Rgba Blue = ColorChoices.Swatches[4];
 
     [TestMethod]
-    public async Task OpensWithTextCurrentOnMemeAndNothingOfALayerShown()
+    public async Task OpensWithTextCurrentOnMemeShowingWhatTheNextMemeTakes()
     {
         using var editing = await StillInTheEditor.Open();
         var session = editing.Session;
@@ -35,9 +35,7 @@ public sealed partial class TextToolTests
         Assert.AreSame(text, session.Tool);
         Assert.AreEqual(TextKind.Meme, text.Kind);
         Assert.AreEqual(TextKind.Meme, text.KindShown);
-        Assert.IsNull(text.FontShown);
-        Assert.IsNull(text.FillShown);
-        Assert.IsNull(text.OutlineShown);
+        Assert.AreEqual(("Impact", White, Outline.Auto), (text.FontShown, text.FillShown, text.OutlineShown));
         Assert.AreEqual("Click the picture to add text", text.Hint);
         Assert.IsFalse(session.Typing);
     }
@@ -645,7 +643,7 @@ public sealed partial class TextToolTests
     }
 
     [TestMethod]
-    public async Task AColourDragWithNoTextSelectedChangesNothingAndRecordsNoRecentColour()
+    public async Task AColourDragWithNoTextSelectedChangesNoLayerAndIsTheNextTextsOnceUsed()
     {
         using var editing = await StillInTheEditor.Open(List(Label("oh no", 8, 10, 10)));
         var session = editing.Session;
@@ -662,7 +660,8 @@ public sealed partial class TextToolTests
 
         Assert.AreEqual(before, session.Layers);
         Assert.IsFalse(session.CanUndo);
-        Assert.IsEmpty(session.Colors.Recent, "a colour no layer took is no colour used (G21)");
+        Assert.AreEqual((dragged, Outline.Of(dragged)), (text.FillShown, text.OutlineShown), "the next text's (G21)");
+        CollectionAssert.AreEqual(new[] { dragged }, session.Colors.Recent.ToArray(), "a colour the next text took is a colour used, once");
     }
 
     [TestMethod]
@@ -710,7 +709,7 @@ public sealed partial class TextToolTests
     }
 
     [TestMethod]
-    public async Task WithNothingSelectedTheOptionsChangeNothingAndThrowNothing()
+    public async Task WithNothingSelectedTheOptionsChangeNoLayerAndANameNoLayerCanCarryChangesNothing()
     {
         using var editing = await StillInTheEditor.Open(List(Label("oh no", 8, 10, 10)));
         var session = editing.Session;
@@ -727,7 +726,9 @@ public sealed partial class TextToolTests
 
         Assert.AreEqual(before, session.Layers);
         Assert.IsFalse(session.CanUndo);
-        Assert.IsEmpty(session.Colors.Recent);
+        CollectionAssert.AreEqual(new[] { new Rgba(1, 2, 3, 255) }, session.Colors.Recent.ToArray(), "the next text's fill, a colour used");
+        session.Deselect();
+        Assert.AreEqual(("Comic Sans MS", new Rgba(1, 2, 3, 255), Outline.None), (text.FontShown, text.FillShown, text.OutlineShown), "the next Meme's; the names no layer can carry left it");
     }
 
     [TestMethod]

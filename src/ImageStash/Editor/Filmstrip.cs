@@ -87,7 +87,8 @@ public sealed class Filmstrip : Control
         Height = LaneHeight + CellsHeight;
         ClipToBounds = true;
         IsVisible = false;
-        Cursor = new Cursor(StandardCursorType.Hand);
+        // Made once the strip is on a window, whose platform makes cursors.
+        AttachedToVisualTree += (_, _) => Cursor ??= new Cursor(StandardCursorType.Hand);
         AutomationProperties.SetName(this, AutomationName);
         // A plain control is left out of UI Automation's control view; in it, the published check finds the strip's bounds.
         AutomationProperties.SetAccessibilityView(this, AccessibilityView.Control);

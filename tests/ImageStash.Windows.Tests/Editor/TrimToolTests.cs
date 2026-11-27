@@ -55,7 +55,8 @@ public sealed class TrimToolTests
             var position = words.Single(text => (text.Text ?? "").EndsWith(" / 0:00.6", StringComparison.Ordinal));
             var kept = words.Single(text => text.Text == "Keeps 0:00.0 – 0:00.6 · 0.6 s of 0.6 s");
             var hint = words.Single(text => text.Text == "Drag the handles; [ and ] set the start and end here");
-            foreach (var control in new Control[] { editor.Button(editor.Shows("Pause") ? "Pause" : "Play"), position, kept, editor.Button("Reset"), hint, editor.Button("Cancel"), editor.Button(EditorOverlay.OutputSize), editor.Button("Save") })
+            Assert.IsFalse(editor.Shows("Reset"), "Reset absent while there is no trim to reset (G22)");
+            foreach (var control in new Control[] { editor.Button(editor.Shows("Pause") ? "Pause" : "Play"), position, kept, hint, editor.Button("Cancel"), editor.Button(EditorOverlay.OutputSize), editor.Button("Save") })
             {
                 TextOptionRowTests.AssertInside(shown, control, $"{(control as TextBlock)?.Text ?? Avalonia.Automation.AutomationProperties.GetName(control)} at the minimum (G20, G21)");
             }
@@ -66,7 +67,12 @@ public sealed class TrimToolTests
 
         TrayDesktop.Run(() => editor.DragOnStrip(editor.Edge(0), editor.Edge(1)));
 
-        TrayDesktop.Run(() => Assert.AreEqual(new LayerList([new TrimLayer(new FrameRange(1, 2))]), editor.Session!.Layers, "the trim on the original's frames (G22)"));
+        TrayDesktop.Run(() =>
+        {
+            Assert.AreEqual(new LayerList([new TrimLayer(new FrameRange(1, 2))]), editor.Session!.Layers, "the trim on the original's frames (G22)");
+            shown.Window.UpdateLayout();
+            TextOptionRowTests.AssertInside(shown, editor.Button("Reset"), "Reset at the minimum once there is a trim to reset (G20, G22)");
+        });
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => editor.Texts().Contains("Keeps 0:00.1 – 0:00.6 · 0.5 s of 0.6 s")));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => editor.Size() != sizeBefore && !editor.Size().EndsWith("…", StringComparison.Ordinal)));
         TrayDesktop.Run(() => StringAssert.StartsWith(editor.Size(), "160 × 120 · ", "the size chip follows the kept frames (G24)"));
@@ -106,7 +112,7 @@ public sealed class TrimToolTests
                 editor.Session.TogglePlaying();
             }
         });
-        var places = new List<(Point Reset, Point Hint)>();
+        var places = new List<(Point? Reset, Point Hint)>();
         // The frames start at 0:00.0, 0:00.1 and 0:00.3: digits a face may draw at several widths.
         foreach (var (frame, at) in new[] { (0, "0:00.0"), (1, "0:00.1"), (2, "0:00.3") })
         {
@@ -115,9 +121,16 @@ public sealed class TrimToolTests
             places.Add(TrayDesktop.Get(() => RowPlaces(shown, editor)));
         }
 
+        Assert.IsTrue(places.All(place => place.Reset is null), "Reset absent while there is no trim to reset (G22)");
         TrayDesktop.Run(() => editor.DragOnStrip(editor.Edge(0), editor.Edge(1)));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => editor.Texts().Contains("Keeps 0:00.1 – 0:00.6 · 0.5 s of 0.6 s")));
-        places.Add(TrayDesktop.Get(() => RowPlaces(shown, editor)));
+        var trimmed = places.Count;
+        foreach (var (frame, at) in new[] { (1, "0:00.1"), (2, "0:00.3") })
+        {
+            TrayDesktop.Run(() => editor.Session!.Seek(frame));
+            await ShownWindow.Eventually(() => TrayDesktop.Get(() => editor.Texts().Contains($"{at} / 0:00.6")));
+            places.Add(TrayDesktop.Get(() => RowPlaces(shown, editor)));
+        }
 
         TrayDesktop.Run(() =>
         {
@@ -128,7 +141,8 @@ public sealed class TrimToolTests
         });
         for (var i = 1; i < places.Count; i++)
         {
-            Assert.AreEqual(places[0], places[i], $"Reset and the hint where they came in, reading {i} (G22)");
+            Assert.AreEqual(places[0].Hint, places[i].Hint, $"the hint where it came in, reading {i} (G22)");
+            Assert.AreEqual(i < trimmed ? null : places[trimmed].Reset, places[i].Reset, $"Reset where it came in once there was a trim, reading {i} (G22)");
         }
     }
 
@@ -284,12 +298,12 @@ public sealed class TrimToolTests
         return path;
     }
 
-    /// <summary>Where Reset and the hint after it stand in the editor, laid out afresh.</summary>
-    private static (Point Reset, Point Hint) RowPlaces(ShownWindow shown, ShownEditor editor)
+    /// <summary>Where Reset, null while it is absent, and the hint after it stand in the editor, laid out afresh.</summary>
+    private static (Point? Reset, Point Hint) RowPlaces(ShownWindow shown, ShownEditor editor)
     {
         shown.Window.UpdateLayout();
         var hint = editor.Overlay.GetVisualDescendants().OfType<TextBlock>().Single(text => text.IsEffectivelyVisible && text.Text == "Drag the handles; [ and ] set the start and end here");
-        return (editor.Button("Reset").TranslatePoint(default, editor.Overlay)!.Value, hint.TranslatePoint(default, editor.Overlay)!.Value);
+        return (editor.Shows("Reset") ? editor.Button("Reset").TranslatePoint(default, editor.Overlay)!.Value : null, hint.TranslatePoint(default, editor.Overlay)!.Value);
     }
 
     /// <summary>The pixels of <paramref name="frame"/> that are white, as the label's letters are.</summary>

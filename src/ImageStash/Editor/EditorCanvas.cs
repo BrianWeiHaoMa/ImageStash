@@ -69,7 +69,8 @@ public sealed class EditorCanvas : Control
         this.failed = failed;
         Focusable = true;
         ClipToBounds = true;
-        Cursor = new Cursor(StandardCursorType.Cross);
+        // Made once the canvas is on a window, whose platform makes cursors.
+        AttachedToVisualTree += (_, _) => Cursor ??= new Cursor(StandardCursorType.Cross);
     }
 
     /// <summary>Raised on the UI thread when <see cref="Fallbacks"/> changes.</summary>

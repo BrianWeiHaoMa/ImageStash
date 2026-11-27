@@ -126,10 +126,13 @@ public sealed class TrimTool : EditorTool
         }
     }
 
+    /// <summary>Whether there is a trim for <see cref="Reset"/> to take away (G22).</summary>
+    public bool CanReset => Session.Layers.Trim is not null;
+
     /// <summary>Keeps every frame again: no trim, as one step.</summary>
     public void Reset()
     {
-        if (Session.Accepts && Session.Layers.Trim is not null)
+        if (Session.Accepts && CanReset)
         {
             Session.ChangeKeepingSelected(Trimmed(Session.Layers, new FrameRange(0, Session.ClipFrames - 1)));
         }

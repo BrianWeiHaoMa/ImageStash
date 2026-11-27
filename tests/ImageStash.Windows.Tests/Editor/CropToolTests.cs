@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.VisualTree;
 using ImageStash.Editor;
 using ImageStash.Layers;
@@ -25,6 +26,31 @@ namespace ImageStash.Windows.Tests.Editor;
 public sealed class CropToolTests
 {
     [TestMethod]
+    public async Task ResetPressedFromTheKeyboardGoesAndLeavesTheEditorsKeysWorking()
+    {
+        using var shown = ShownWindow.Open();
+        using var editor = new ShownEditor(shown);
+        var items = await shown.OpenStash(shown.Picture("checker.png", 256, 192, Checker));
+        await EditorOverlayTests.Open(shown, items[0]);
+        TrayDesktop.Run(() =>
+        {
+            editor.Choose("Crop");
+            editor.Drag(editor.OnCanvas(8.5, 8.5), editor.OnCanvas(40.5, 32.5));
+            shown.Window.UpdateLayout();
+            var reset = editor.Button("Reset");
+            Assert.IsTrue(reset.Focus(NavigationMethod.Tab));
+
+            ShownWindow.Tap(reset, Key.Enter);
+
+            Assert.IsNull(editor.Session!.Layers.Crop, "Reset gave the whole picture back");
+            Assert.IsFalse(editor.Shows("Reset"), "and went, with no crop to reset (G22)");
+            Assert.IsTrue(shown.Focused is Visual focused && editor.Overlay.IsVisualAncestorOf(focused), "focus stays in the editor when the focused Reset goes");
+            ShownWindow.Tap((Control)shown.Focused!, Key.Z, KeyModifiers.Control);
+            Assert.IsNotNull(editor.Session.Layers.Crop, "so Ctrl+Z undoes the Reset (G25)");
+        });
+    }
+
+    [TestMethod]
     public async Task WhileCropIsCurrentTheWholeOriginalShowsTheOutsideDimmedACornerDragChangesTheSizeAndCompareShowsTheOriginalAlone()
     {
         using var shown = ShownWindow.Open();
@@ -34,7 +60,8 @@ public sealed class CropToolTests
         TrayDesktop.Run(() =>
         {
             editor.Choose("Crop");
-            Assert.IsTrue(editor.Texts().Contains("Drag across the part to keep, or drag the edges") && editor.Shows("1:1") && editor.Shows("Reset"), "Crop's row (G20)");
+            Assert.IsTrue(editor.Texts().Contains("Drag across the part to keep, or drag the edges") && editor.Shows("1:1"), "Crop's row (G20)");
+            Assert.IsFalse(editor.Shows("Reset"), "Reset absent while there is no crop to reset (G22)");
         });
         var framed = await RenderedWindow.Of(shown);
         var picture = TrayDesktop.Get(editor.PictureInRendering);

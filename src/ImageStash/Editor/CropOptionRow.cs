@@ -5,8 +5,8 @@ using ImageStash.Look;
 namespace ImageStash.Editor;
 
 /// <summary>
-/// Crop's option row (G20, G22): 1:1, lit while it is on, and Reset. 1:1 is a symbol whose action its digits do not say,
-/// so its tip names it.
+/// Crop's option row (G20, G22): 1:1, lit while it is on, and Reset, shown while there is a crop to reset
+/// (<see cref="ControlPresence"/>). 1:1 is a symbol whose action its digits do not say, so its tip names it.
 /// </summary>
 internal sealed class CropOptionRow : WrapPanel, IOptionRow
 {
@@ -16,6 +16,7 @@ internal sealed class CropOptionRow : WrapPanel, IOptionRow
 
     private readonly CropTool tool;
     private readonly ToggleButton square;
+    private readonly Button reset;
 
     public CropOptionRow(CropTool tool)
     {
@@ -23,7 +24,7 @@ internal sealed class CropOptionRow : WrapPanel, IOptionRow
         EditorOptions.SetSpacing(this);
         square = EditorButtons.Choice("1 : 1", OneToOne, () => tool.ChooseSquare(!tool.Square));
         ToolTipRule.Set(square, SquareTip);
-        var reset = EditorButtons.Labelled(null, Reset);
+        reset = EditorButtons.Labelled(null, Reset);
         reset.Height = EditorButtons.ChoiceHeight;
         reset.Click += (_, _) => tool.Reset();
         Children.AddRange([square, reset]);
@@ -32,5 +33,9 @@ internal sealed class CropOptionRow : WrapPanel, IOptionRow
 
     public EditorTool Tool => tool;
 
-    public void Refresh() => square.IsChecked = tool.Square;
+    public void Refresh()
+    {
+        square.IsChecked = tool.Square;
+        ControlPresence.Show(reset, tool.CanReset, true);
+    }
 }

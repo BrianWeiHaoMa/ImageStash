@@ -389,7 +389,8 @@ internal sealed class ColorPicker : StackPanel
     {
         private Hsv hsv;
 
-        public ValueSquare() => Cursor = new Cursor(StandardCursorType.Cross);
+        // Made once the square is on a window, whose platform makes cursors.
+        public ValueSquare() => AttachedToVisualTree += (_, _) => Cursor ??= new Cursor(StandardCursorType.Cross);
 
         public event Action<double, double>? Moved;
 

@@ -6,19 +6,29 @@ using Avalonia.VisualTree;
 
 namespace ImageStash.Editor;
 
-/// <summary>The editor's pointer and keyboard buttons for the session's existing layer actions.</summary>
+/// <summary>
+/// The editor's pointer and keyboard buttons for the session's existing layer actions: Undo, Redo and Compare in the
+/// head, absent on a fresh item until the edit holds a layer or a change and from then in their places for the rest of
+/// it, Undo and Redo dimmed while they cannot act; and Delete in the place the option row keeps for it, shown only
+/// while a layer is selected (G20, <see cref="ControlPresence"/>).
+/// </summary>
 internal sealed class EditorLayerActions
 {
+    private readonly Button compare;
+    private readonly ShownForTheEdit history = new();
     private (EditorSession? Session, long? ItemId) binding;
     private Button? undo;
     private Button? redo;
     private Button? delete;
 
-    public StackPanel History { get; } = new()
+    /// <param name="compare">Compare, held to show the original, which stands after Redo and shows with the pair.</param>
+    public EditorLayerActions(Button compare)
     {
-        Orientation = Orientation.Horizontal,
-        Margin = new Thickness(0, 0, 6, 0),
-    };
+        this.compare = compare;
+        compare.Margin = new Thickness(6, 0, 0, 0);
+    }
+
+    public StackPanel History { get; } = new() { Orientation = Orientation.Horizontal };
 
     public ContentControl SelectedLayer { get; } = new()
     {
@@ -44,22 +54,31 @@ internal sealed class EditorLayerActions
                 redo = Make("\ue7a6", "Redo", "Redo (Ctrl+Y)", session.Redo);
                 delete = Make("\ue74d", "Delete", "Delete (Del)", session.DeleteSelected);
                 delete.Height = EditorButtons.ChoiceHeight;
-                History.Children.AddRange([undo, redo]);
+                History.Children.AddRange([undo, redo, compare]);
                 SelectedLayer.Content = delete;
             }
         }
 
         if (session is not null)
         {
-            undo!.IsEnabled = session.CanUndoEdit;
-            redo!.IsEnabled = session.CanRedoEdit;
-            delete!.IsEnabled = session.Accepts && session.Selected is not null;
+            var shown = history.In(session, HoldsLayerOrChange(session));
+            ControlPresence.Show(undo!, shown, session.CanUndoEdit);
+            ControlPresence.Show(redo!, shown, session.CanRedoEdit);
+            ControlPresence.Show(compare, shown, true);
+            ControlPresence.Show(delete!, session.Selected is not null, session.Accepts);
         }
 
         return hadFocus && !HasFocus;
     }
 
-    private bool HasFocus => undo is { IsFocused: true } || redo is { IsFocused: true } || delete is { IsFocused: true };
+    // A button gone absent may still hold focus, out of sight; the editor's keys need it back on the canvas.
+    private bool HasFocus => Focused(undo) || Focused(redo) || Focused(delete);
+
+    private static bool Focused(Button? button) => button is { IsFocused: true, IsVisible: true };
+
+    /// <summary>Whether the edit holds a layer, opened with one or added, or a step to undo or redo: Compare has something to show.</summary>
+    private static bool HoldsLayerOrChange(EditorSession session) =>
+        !session.Layers.IsEmpty || !session.Edit.RenderedLayers.IsEmpty || session.CanUndo || session.CanRedo;
 
     private Button Make(string glyph, string name, string tip, Action act)
     {
