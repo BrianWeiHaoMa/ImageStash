@@ -45,6 +45,34 @@ internal sealed class TagChipOrder
         ClearPendingChoices();
     }
 
+    /// <summary>
+    /// A tag renamed to another word (G4, G5): in the unfiltered order, the held row and the typed row, its place takes
+    /// the new name where it stands; a merged tag's place stays, to show grey once it has lost its last item, and the
+    /// destination's own place counts, the destination joining the end of a row that had none.
+    /// </summary>
+    public void Renamed(string from, string to, bool merged)
+    {
+        unfiltered = Renamed(unfiltered, from, to, merged);
+        held = held is null ? null : Renamed(held, from, to, merged);
+        typed = typed is null ? null : Renamed(typed, from, to, merged);
+        if (!merged)
+        {
+            var renamedArrivals = HeldOrder.Renamed(arrivals, tag => tag, from, to, (_, tag) => tag, SameTag);
+            arrivals.Clear();
+            arrivals.AddRange(renamedArrivals);
+        }
+    }
+
+    private static IReadOnlyList<TagCount> Renamed(IReadOnlyList<TagCount> places, string from, string to, bool merged)
+    {
+        if (merged)
+        {
+            return places.Any(place => SameTag.Equals(place.Tag, to)) ? places : [.. places, new TagCount(to, 0)];
+        }
+
+        return HeldOrder.Renamed(places, place => place.Tag, from, to, (place, tag) => place with { Tag = tag }, SameTag);
+    }
+
     public TagCount? LiveTag(string tag) => live.GetValueOrDefault(tag);
 
     public IReadOnlyList<string> Lit(string query) => ItemSearch.LitTags(query, live.Keys);

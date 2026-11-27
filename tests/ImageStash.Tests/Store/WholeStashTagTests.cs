@@ -183,7 +183,7 @@ public sealed class WholeStashTagTests
         Assert.AreEqual("#Cat", refused.Failure?.Subject);
         StringAssert.Contains(refused.Failure?.Reason, containsNull ? "null character" : "invalid Unicode");
         CollectionAssert.AreEqual(new[] { (item.Id, "Cat") }, stash.TagRows());
-        Assert.AreEqual(new TagRename("😺", 1, false), Value(await store.RenameTag("Cat", "😺")));
+        Assert.AreEqual(new TagRename("😺", 1, false), Value(await store.RenameTag("Cat", "😺")) with { Receipt = null });
         CollectionAssert.AreEqual(new[] { (item.Id, "😺") }, stash.TagRows());
     }
 
@@ -220,9 +220,9 @@ public sealed class WholeStashTagTests
         await store.AddTag([b, c], "PÉt");
         await store.AddTag([a], "Keep");
 
-        Assert.AreEqual(new TagRename("Dog", 2, false), Value(await store.RenameTag("cat", "  ##Dog  ")));
+        Assert.AreEqual(new TagRename("Dog", 2, false), Value(await store.RenameTag("cat", "  ##Dog  ")) with { Receipt = null });
         await AssertCounts(store, new TagCount("Dog", 2), new TagCount("PÉt", 2), new TagCount("Keep", 1));
-        Assert.AreEqual(new TagRename("PÉt", 2, true), Value(await store.RenameTag("dog", "pét")));
+        Assert.AreEqual(new TagRename("PÉt", 2, true), Value(await store.RenameTag("dog", "pét")) with { Receipt = null });
 
         var reopened = await Reopen(stash);
         await AssertCounts(reopened, new TagCount("PÉt", 3), new TagCount("Keep", 1));
@@ -241,8 +241,8 @@ public sealed class WholeStashTagTests
         var deleted = (await store.Delete([held.Id])).Single();
         Assert.IsTrue(deleted.Succeeded, deleted.Failure?.ToString());
 
-        Assert.AreEqual(new TagRename("PÉt", 1, false), Value(await store.RenameTag("Cat", "pét")));
-        Assert.AreEqual(new TagRename("PÉt", 0, false), Value(await store.RenameTag("pét", "PÉt")));
+        Assert.AreEqual(new TagRename("PÉt", 1, false), Value(await store.RenameTag("Cat", "pét")) with { Receipt = null });
+        Assert.AreEqual(new TagRename("PÉt", 0, false), Value(await store.RenameTag("pét", "PÉt")) with { Receipt = null });
         await AssertCounts(store, new TagCount("PÉt", 1));
         Assert.IsTrue((await store.UndoDelete([deleted.Value!])).Single().Succeeded);
         await AssertCounts(store, new TagCount("PÉt", 2));
@@ -265,7 +265,7 @@ public sealed class WholeStashTagTests
         File.Move(waiting.FilePath, stash.Outside("waiting elsewhere.png"));
         CollectionAssert.AreEqual(new[] { placed.Id }, (await stash.All()).Select(item => item.Id).ToArray());
 
-        Assert.AreEqual(new TagRename("Dog", 1, false), Value(await store.RenameTag("Cat", "Dog")));
+        Assert.AreEqual(new TagRename("Dog", 1, false), Value(await store.RenameTag("Cat", "Dog")) with { Receipt = null });
         var removal = Value(await store.RemoveTagFromAll("Keep", 1));
 
         Assert.AreEqual(new TagCount("Keep", 1), removal.Count);
@@ -299,7 +299,7 @@ public sealed class WholeStashTagTests
         Assert.IsTrue(deleted.Succeeded, deleted.Failure?.ToString());
 
         var listedTag = existingDestination ?? text;
-        Assert.AreEqual(new TagRename(listedTag, 1, existingDestination is not null), Value(await store.RenameTag("ÄRGER", text)));
+        Assert.AreEqual(new TagRename(listedTag, 1, existingDestination is not null), Value(await store.RenameTag("ÄRGER", text)) with { Receipt = null });
         await AssertCounts(store, new TagCount(listedTag, 1));
         var restored = (await store.UndoDelete([deleted.Value!])).Single();
 
@@ -326,7 +326,7 @@ public sealed class WholeStashTagTests
         Assert.IsTrue(deleted.Succeeded, deleted.Failure?.ToString());
         var before = store.ListingVersion;
 
-        Assert.AreEqual(new TagRename("a\uFFFD", liveHasBoth ? 1 : 0, false), Value(await store.RenameTag("a\uFFFD", "a\uFFFD")));
+        Assert.AreEqual(new TagRename("a\uFFFD", liveHasBoth ? 1 : 0, false), Value(await store.RenameTag("a\uFFFD", "a\uFFFD")) with { Receipt = null });
 
         CollectionAssert.AreEqual(new[] { (live.Id, "a\uFFFD"), (held.Id, "a\uFFFD") }, stash.TagRows());
         Assert.AreNotEqual(before, store.ListingVersion);
@@ -347,7 +347,7 @@ public sealed class WholeStashTagTests
         var deleted = Value((await store.Delete([held.Id])).Single());
         await AssertCounts(store, new TagCount("a\uFFFD", 2), new TagCount("Cat", 1), new TagCount("Keep", 1));
 
-        Assert.AreEqual(new TagRename("a\uFFFD", 1, true), Value(await store.RenameTag("Cat", "A\uFFFD")));
+        Assert.AreEqual(new TagRename("a\uFFFD", 1, true), Value(await store.RenameTag("Cat", "A\uFFFD")) with { Receipt = null });
         await AssertCounts(store, new TagCount("a\uFFFD", 2), new TagCount("Keep", 1));
         Assert.IsTrue((await store.UndoDelete([deleted])).Single().Succeeded);
 
@@ -374,7 +374,7 @@ public sealed class WholeStashTagTests
         CollectionAssert.AreEqual(new[] { "Ärger" }, duplicate.GainedTags.ToArray());
         var deleted = Value((await store.Delete([imported.Id])).Single());
 
-        Assert.AreEqual(new TagRename("ärger", 1, false), Value(await store.RenameTag("Ärger", "ärger")));
+        Assert.AreEqual(new TagRename("ärger", 1, false), Value(await store.RenameTag("Ärger", "ärger")) with { Receipt = null });
         var undone = await store.UndoImport([], [(imported.Id, duplicate.GainedTags)]);
         Assert.IsTrue(undone.Single().Succeeded, TestStash.Failures(undone));
         Assert.IsTrue((await store.UndoDelete([deleted])).Single().Succeeded);

@@ -53,6 +53,7 @@ public sealed class TagField : StackPanel
     public TagField()
     {
         Spacing = 8;
+        Picker.RowRenamed += everyTagList.Renamed;
         box = new TextBox { PlaceholderText = "Type a tag", MinWidth = 160, Height = 32, VerticalContentAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 2) };
         AutomationProperties.SetName(box, "Type a tag");
         // The text box's own Paste (Ctrl+V, Shift+Insert, its menu) would read the clipboard's text (N9, R5); its menu

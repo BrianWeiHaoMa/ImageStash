@@ -4,6 +4,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
+using Avalonia.VisualTree;
 using ImageStash.Store;
 
 namespace ImageStash.Window;
@@ -71,10 +72,18 @@ internal sealed class TagRenameBox : TextBox
         }
     }
 
+    /// <summary>
+    /// Focus moving to another part of the window keeps the typed name, as Enter does, by the window's one rule for a
+    /// field left (<see cref="FieldLeaving"/>, G17). Focus going with no element taking it (another app, the flyout's
+    /// hide, the list closing) ends the draft with nothing written; Esc and Enter have already ended it before the focus
+    /// they give back moves.
+    /// </summary>
     protected override void OnLostFocus(FocusChangedEventArgs e)
     {
         base.OnLostFocus(e);
-        Cancel();
+        var movedInWindow = e.NewFocusedElement is Visual and not TopLevel;
+        var intoBox = e.NewFocusedElement is Visual into && (ReferenceEquals(into, this) || this.IsVisualAncestorOf(into));
+        Finish(movedInWindow && FieldLeaving.Commits(holdsEdit: !ended, intoField: intoBox) ? Text ?? "" : null);
     }
 
     private void Finish(string? text)

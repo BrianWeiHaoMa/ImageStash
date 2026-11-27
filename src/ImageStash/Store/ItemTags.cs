@@ -9,8 +9,11 @@ public sealed record TagCount(string Tag, int Items);
 /// <summary>The count at the write. Only an applied removal carries an Undo receipt.</summary>
 internal sealed record TagRemoval(TagCount Count, ItemFactResult? Receipt);
 
-/// <summary>The resulting spelling, how many listed source carriers changed, and whether the destination was live.</summary>
-internal sealed record TagRename(string Tag, int Items, bool Merged);
+/// <summary>
+/// The resulting spelling, how many listed source carriers changed, and whether the destination was live; a rename to a
+/// different word also carries its Undo receipt, each carrier's tags as they were before it (G17).
+/// </summary>
+internal sealed record TagRename(string Tag, int Items, bool Merged, ItemFactResult? Receipt = null);
 
 /// <summary>
 /// The tag rule, in one place (G17, In use: "Tags are search words"): a tag is one word of the typed text, every leading
@@ -24,6 +27,7 @@ internal static class ItemTags
     public const string RemoveAction = "Remove a tag";
     private const string UndoAddAction = "Undo adding a tag";
     private const string UndoRemoveAction = "Undo removing a tag";
+    private const string UndoRenameAction = "Undo renaming a tag";
 
     private const string CountAction = "Count the tags";
     public const string RemoveFromAllAction = "Remove tag from all items";
@@ -196,12 +200,10 @@ internal static class ItemTags
             var liveDestination = listed.FirstOrDefault(row => SameWord(row.Tag, requested));
             var destination = liveDestination?.Tag ?? Spellings(store, [requested])[requested];
             CorrectSpelling(store, requested, destination, rows);
-            foreach (var carrier in carriers)
-            {
-                ChangeMemberships(store, carrier.Item, [destination], [tag]);
-            }
-
-            var renamed = new TagRename(destination, carriers.Count, liveDestination is not null);
+            var changes = carriers.Select(carrier => ChangeMemberships(store, carrier.Item, [destination], [tag]))
+                .OfType<ItemFactDelta>().ToImmutableArray();
+            var receipt = new ItemFactResult(store, UndoRenameAction, [.. changes.Select(_ => Outcome.Done)], changes);
+            var renamed = new TagRename(destination, carriers.Count, liveDestination is not null, receipt);
             return (Outcome<TagRename>.Of(renamed), true);
         });
     }

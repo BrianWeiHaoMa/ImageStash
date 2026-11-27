@@ -33,6 +33,19 @@ public sealed class OpenTagList
         return rows;
     }
 
+    /// <summary>
+    /// A tag renamed to a new word, not merged (G17): its row keeps its place under the new name, and a tag this list
+    /// emptied stays its to give back under that name; a row already under the new name gives way, so the tag has one row.
+    /// </summary>
+    internal void Renamed(string from, string to)
+    {
+        rows = rows is null ? null : HeldOrder.Renamed(rows, row => row.Tag, from, to, (row, tag) => row with { Tag = tag }, SameTag);
+        if (emptiedHere.Remove(from))
+        {
+            emptiedHere.Add(to);
+        }
+    }
+
     /// <summary>Whether a pick on <paramref name="tag"/> gives it back: a pick in this list took it off its last item, and nothing has given it since.</summary>
     internal bool GivesBack(string tag) => emptiedHere.Contains(tag);
 

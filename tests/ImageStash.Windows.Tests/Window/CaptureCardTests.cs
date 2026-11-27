@@ -22,8 +22,9 @@ namespace ImageStash.Windows.Tests.Window;
 /// the saved file's size and the name; a click on its Undo or × leaving the chat in front with the keystrokes, and Undo
 /// leaving the stash window active when it is in front; a click elsewhere on it opening the window on its item, and the
 /// card going at that click and at its Edit, whether the editor opened, the Edit was refused by name or another edit stayed
-/// as it was left; a real click on the name activating it, the name selected and replaced by real typing, Enter renaming through the store and Esc leaving the
-/// name as recorded, either giving the chat back its keystrokes; the notice held while the field has focus; a rename in
+/// as it was left; a real click on the name activating it, the name selected and replaced by real typing, Enter, or a
+/// click back into the chat, renaming through the store and Esc leaving the name as recorded, each giving the chat back
+/// its keystrokes; the notice held while the field has focus; a rename in
 /// the window shown in the field, the picture bounded and read where its file now is, read again with its size once
 /// another program's rewrite replaced it and once that was undone, and the size shown without the picture while another
 /// program holds the file; every refusal named (G35). These checks show the notification and a
@@ -324,7 +325,7 @@ public sealed class CaptureCardTests
     }
 
     [TestMethod]
-    public async Task EscLeavesTheNameAsRecordedAndAClickOnTheChatEndsTheEditMovingNothing()
+    public async Task EscLeavesTheNameAsRecordedAndAClickOnTheChatKeepsTheTypedNameMovingNothing()
     {
         using var desk = await CaptureDesk.Open(["stash kept.png"]);
         var kept = desk.Items().Single();
@@ -348,7 +349,8 @@ public sealed class CaptureCardTests
         Thread.Sleep(500);
         Assert.AreEqual(desk.Chat.Window, FrontWindow.GetForegroundWindow(), "the user's click wins: nothing moves the foreground after it");
         desk.ChatKeepsTheKeystrokes("after the click on the chat");
-        Assert.AreEqual("stash kept", desk.Items().Single().Name, "nothing committed");
+        await Eventually(() => desk.Items().Single().Name == "zz");
+        Assert.AreEqual("zz", desk.Items().Single().Name, "what was typed is kept, as Enter keeps it (G16, G17)");
     }
 
     [TestMethod]

@@ -81,6 +81,51 @@ public static class ItemSearch
         return remaining.Length > 0 && query.EndsWith(' ') ? remaining + " " : remaining;
     }
 
+    /// <summary>
+    /// A tag renamed (G17): each word of <paramref name="query"/> equal to <paramref name="from"/>, ignoring case and a
+    /// leading <c>#</c>, becomes <paramref name="to"/>, its <c>#</c> kept; a word holding it inside, or any other word,
+    /// stays as typed, and so do the spaces. Also each word replaced, as typed before, by its place among the words.
+    /// </summary>
+    public static (string Query, IReadOnlyDictionary<int, string> Replaced) WithRenamedTag(string query, string from, string to)
+    {
+        var words = query.Split(' ');
+        var replaced = new Dictionary<int, string>();
+        for (var place = 0; place < words.Length; place++)
+        {
+            if (string.Equals(Bare(words[place]), from, StringComparison.OrdinalIgnoreCase))
+            {
+                replaced[place] = words[place];
+                words[place] = (words[place].StartsWith('#') ? "#" : "") + to;
+            }
+        }
+
+        return (string.Join(' ', words), replaced);
+    }
+
+    /// <summary>
+    /// A tag rename undone: each word <see cref="WithRenamedTag"/> replaced in <paramref name="renamed"/>, back as it was
+    /// typed, where its place still holds <paramref name="to"/>; every other word, one the person typed since included,
+    /// stays. A search whose words have since been added or taken away, so no place can be trusted, is left as it is.
+    /// </summary>
+    public static string WithoutRenamedTag(string query, string renamed, IReadOnlyDictionary<int, string> replaced, string to)
+    {
+        var words = query.Split(' ');
+        if (words.Length != renamed.Split(' ').Length)
+        {
+            return query;
+        }
+
+        foreach (var (place, typed) in replaced)
+        {
+            if (place < words.Length && string.Equals(Bare(words[place]), to, StringComparison.OrdinalIgnoreCase))
+            {
+                words[place] = typed;
+            }
+        }
+
+        return string.Join(' ', words);
+    }
+
     private static string[] Typed(string query) => query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
     private static string Bare(string word) => word.StartsWith('#') ? word[1..] : word;

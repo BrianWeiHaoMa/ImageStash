@@ -94,6 +94,7 @@ public sealed class ChipRow : Panel
         this.heldKeys = heldKeys;
         this.paste = paste;
         picker.ConfigureTagManagement(listing, organising, heldKeys, paste);
+        picker.RowRenamed += everyTagList.Renamed;
         // What does not fit is laid beyond the right edge: clipped, it is neither seen nor reached.
         ClipToBounds = true;
         scopes = ScopeFaces.Select(face => (ScopeChip(face.Name, face.Glyph, face.Scope), face.Scope)).ToArray();

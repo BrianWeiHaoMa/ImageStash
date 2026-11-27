@@ -15,7 +15,7 @@ using static ImageStash.Tests.Support.TagMenuControls;
 namespace ImageStash.Tests.Window;
 
 [TestClass]
-public sealed class TagRenameTests
+public sealed partial class TagRenameTests
 {
     [TestMethod]
     [DataRow("chip")]
@@ -73,8 +73,8 @@ public sealed class TagRenameTests
             Assert.IsEmpty(listed.Clipboard.Written);
 
             await listed.Listing.SetQuery("");
-            CollectionAssert.AreEqual(new[] { new TagCount("focus", 1), new TagCount("shared", 0), new TagCount("different", 1) },
-                listed.Listing.Chips.ToArray(), "the unfiltered row keeps the old place and takes the new tag at the end");
+            CollectionAssert.AreEqual(new[] { new TagCount("focus", 1), new TagCount("different", 1) },
+                listed.Listing.Chips.ToArray(), "the renamed place keeps its place under its new name");
         });
     }
 
@@ -289,8 +289,8 @@ public sealed class TagRenameTests
             await listed.WaitForOrganising(() => Press(merge, Key.Enter));
             listed.Keys.Released(Key.Enter);
 
-            Assert.AreEqual($"match {before}", listed.Listing.Query);
-            CollectionAssert.AreEqual(new[] { caption.Id }, listed.Listing.Selection.ToArray());
+            Assert.AreEqual("match Zoë", listed.Listing.Query, "the merged tag's word becomes the destination's");
+            CollectionAssert.AreEqual(new[] { first.Id }, listed.Listing.Selection.ToArray(), "the caption's match left; the item that took its place is selected");
             Assert.AreEqual(2, listed.Listing.Tags.Single(tag => tag.Tag == "Zoë").Items);
             Assert.IsFalse(Chip(row, after).IsEnabled);
             CollectionAssert.AreEquivalent(new[] { "alpha", "Zoë" }, (await Stored(listed, first)).Tags.ToArray());
@@ -467,6 +467,9 @@ public sealed class TagRenameTests
             }
 
             await merged;
+            // The merge offers Undo, which the export waits out as it waits out every standing Undo (State: Move).
+            listed.Stash.Clock.Now += TimeSpan.FromSeconds(30);
+            listed.Notices.Sweep();
             var exported = await export;
             Assert.IsTrue(exported.Succeeded, exported.Failure?.Sentence);
             var imported = await reopened.ImportStash(archive);

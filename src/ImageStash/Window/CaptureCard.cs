@@ -20,12 +20,14 @@ namespace ImageStash.Window;
 /// click on the name, on Edit or Trim, or anywhere else on the card outside its field and buttons activates the
 /// notification, the user's act. The name's puts the
 /// name in edit, selected so typing replaces it, the notice staying while it has focus. Enter renames the item through the
-/// store and the field shows the item as the store then answers it, Esc leaves the name as recorded, and either, focus
-/// going to another window, or the card leaving, gives the activation back to the window that had it, unless the user
-/// has put another one in front. Edit or Trim asks for the editor on the item, a click elsewhere for the stash window on
-/// it, and the card goes, whatever the ask comes to, so it never lies over the window the click brought forward; other
-/// cards stay. From the instant its notice leaves, though the card still fades out, none of its clicks does anything and
-/// its edit ends (G16). A refusal is named above the tray. The item is read again by identity after every change to the stash,
+/// store and the field shows the item as the store then answers it, and so does every other way out of the field but Esc,
+/// which leaves the name as recorded: focus going to another window, or to another card's field, the card's ×, and its
+/// Edit, Trim or a click elsewhere, which ask only once the item has its new name (<see cref="FieldLeaving"/>, G16, G17);
+/// Undo keeps nothing, the item going. Any of them, or the card leaving, gives the activation back to the window that
+/// had it, unless the user has put another one in front. Edit or Trim asks for the editor on the item, a click elsewhere
+/// for the stash window on it, and the card goes, whatever the ask comes to, so it never lies over the window the click
+/// brought forward; other cards stay. From the instant its notice leaves, though the card still fades out, none of its
+/// clicks does anything and its edit ends (G16). A refusal is named above the tray. The item is read again by identity after every change to the stash,
 /// so a rename made in the window shows here too, and a picture changed since, with its size (G6).
 /// </summary>
 public sealed class CaptureCard : Border
@@ -55,6 +57,8 @@ public sealed class CaptureCard : Border
     private Avalonia.Controls.Window? shownIn;
     private IDisposable? activation;
     private bool renamingNow;
+    private Task renamed = Task.CompletedTask;
+    private bool asking;
     private bool readingPicture;
     private bool pictureChanged;
     private bool left;
@@ -81,7 +85,8 @@ public sealed class CaptureCard : Border
         // Tunnelling, so the click on the name takes the activation before the name's own click would edit it.
         Field.AddHandler(PointerPressedEvent, NamePressed, RoutingStrategies.Tunnel);
         Field.Stopped += EditEnded;
-        Field.Committed += typed => _ = Rename(typed);
+        Field.Committed += Keep;
+        Field.Left += Keep;
 
         var column = new StackPanel { Spacing = 2, Width = WordsWidth };
         column.Children.Add(new TextBlock { Text = words.Title, FontSize = 14, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
@@ -100,14 +105,23 @@ public sealed class CaptureCard : Border
         if (notice.UndoLabel is { } label)
         {
             var undo = new Button { Content = label, Focusable = false };
-            undo.Click += (_, _) => _ = notices.Undo(notice);
+            undo.Click += (_, _) =>
+            {
+                // The item is going: what was typed is not kept.
+                Field.StopEditing();
+                _ = notices.Undo(notice);
+            };
             actions.Children.Add(undo);
         }
 
         column.Children.Add(actions);
         ShowLine();
 
-        var close = NoticeCard.CloseButton(() => notices.Close(notice));
+        var close = NoticeCard.CloseButton(() =>
+        {
+            KeepTyped();
+            notices.Close(notice);
+        });
         close.VerticalAlignment = VerticalAlignment.Top;
         var frame = new Border { Child = picture, ClipToBounds = true, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 12, 0) };
         frame.Bind(Border.CornerRadiusProperty, frame.GetResourceObservable(LookKeys.ControlRadius));
@@ -124,7 +138,7 @@ public sealed class CaptureCard : Border
             shownIn = TopLevel.GetTopLevel(this) as Avalonia.Controls.Window;
             if (shownIn is not null)
             {
-                shownIn.Deactivated += FocusWentElsewhere;
+                shownIn.Deactivated += Deactivated;
             }
 
             listing.Changed += StashChanged;
@@ -136,7 +150,7 @@ public sealed class CaptureCard : Border
             Leave();
             if (shownIn is not null)
             {
-                shownIn.Deactivated -= FocusWentElsewhere;
+                shownIn.Deactivated -= Deactivated;
             }
 
             shownIn = null;
@@ -214,19 +228,28 @@ public sealed class CaptureCard : Border
     /// act, so the stash window asked for comes in front from ImageStash's own notification, the ask told so, since the
     /// target is then read as the notification gained focus and kept by that window (G8). The hold ends once the ask has
     /// been handled, with the window then in front, which keeps the activation; an activation the platform refuses still
-    /// asks, told so, since the window's summon brings it forward itself. Then the card goes, whether the editor opened,
-    /// the Edit was refused by name, or the window came forward with another edit as it was left (G16, G1).
+    /// asks, told so, since the window's summon brings it forward itself. A name typed, or a rename still running, is
+    /// stored first, so the ask is made on the item under its new name (G16, G17). Then the card goes, whether the editor
+    /// opened, the Edit was refused by name, or the window came forward with another edit as it was left (G16, G1).
     /// </summary>
     private void AskInFront(Action<StashItem, bool> ask)
     {
-        if (left)
+        if (left || asking)
         {
             return;
         }
 
-        var taken = shownIn is null ? null : quietWindows.TakeActivation(shownIn);
+        asking = true;
+        _ = AskOnceKept(ask, shownIn is null ? null : quietWindows.TakeActivation(shownIn));
+    }
+
+    /// <summary><see cref="AskInFront"/>'s ask, made once what was typed is stored, the activation held until it has been handled.</summary>
+    private async Task AskOnceKept(Action<StashItem, bool> ask, Outcome<IDisposable>? taken)
+    {
         using (taken is { Succeeded: true } ? taken.Value : null)
         {
+            // Asked even when the card's time ended meanwhile: the click was made while it showed.
+            await KeepTyped();
             ask(item, taken is { Succeeded: true });
         }
 
@@ -253,8 +276,33 @@ public sealed class CaptureCard : Border
         EditEnded();
     }
 
-    /// <summary>Focus went to another window: the edit ends as Esc would, with nothing committed.</summary>
-    private void FocusWentElsewhere(object? sender, EventArgs e) => Field.StopEditing();
+    private void Deactivated(object? sender, EventArgs e) => WindowDeactivated();
+
+    /// <summary>Focus went to another window, a click back into the chat or the open shortcut: what was typed is kept.</summary>
+    internal void WindowDeactivated() => _ = KeepTyped();
+
+    /// <summary>
+    /// The field left any way but Esc: what was typed kept as Enter keeps it; then, as for an ask, once the store has
+    /// answered any rename running.
+    /// </summary>
+    private Task KeepTyped()
+    {
+        if (Field.IsEditing)
+        {
+            Field.CommitAsEnter();
+        }
+
+        return renamed;
+    }
+
+    /// <summary>A name typed, kept: renamed through the store unless it is the name as recorded, which changes nothing and says nothing.</summary>
+    private void Keep(string typed)
+    {
+        if (typed != Field.Shown)
+        {
+            renamed = Rename(typed);
+        }
+    }
 
     /// <summary>The edit ended, by Enter, Esc, focus moving on or the card leaving: the notice's time runs on and the activation goes back.</summary>
     private void EditEnded()
@@ -265,17 +313,17 @@ public sealed class CaptureCard : Border
     }
 
     /// <summary>
-    /// Enter: the name exactly as typed, through the store's Rename, which names a refusal above the tray; the field then
-    /// shows the item as the store answers it, read again by identity, never the typed text (R9). The name cannot be
-    /// edited again until the store has answered.
+    /// The name kept exactly as typed, through the store's Rename, which names a refusal above the tray, on leaving as
+    /// after Enter (G35); the field then shows the item as the store answers it, read again by identity, never the typed
+    /// text (R9). The name cannot be edited again until the store has answered.
     /// </summary>
     private async Task Rename(string typed)
     {
         renamingNow = true;
         try
         {
-            var renamed = await renaming.Rename(item, typed);
-            await ShowAsStored(nameReadFailure: renamed.Succeeded);
+            var outcome = await renaming.Rename(item, typed);
+            await ShowAsStored(nameReadFailure: outcome.Succeeded);
         }
         finally
         {

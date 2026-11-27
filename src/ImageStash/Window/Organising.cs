@@ -69,7 +69,12 @@ public sealed class Organising(Listing listing, Notices notices)
     public Task<Outcome> RemoveTag(IReadOnlyList<StashItem> items, string tag) =>
         Change(items, ItemTags.RemoveAction, ItemTags.RemoveAction, (store, targets) => store.RemoveTagWithChanges(targets, tag));
 
-    /// <summary>Renames a tag on its carriers in the issuing stash, with no change to the query or selected items.</summary>
+    /// <summary>
+    /// Renames a tag on its carriers in the issuing stash (G17). A rename to a different word, merging or not, carries
+    /// into the search (<see cref="Listing.TagRenamed"/>) and offers Undo, which gives each carrier back its tags as they
+    /// were and puts back the search words the rename changed; a change of case alone keeps its plain notice, the search
+    /// and the chips' places already following it. The selection is the listing's to keep.
+    /// </summary>
     internal Task<Outcome> RenameTag(StashStore issuer, string tag, string text)
     {
         const string action = ItemTags.RenameAction;
@@ -81,14 +86,22 @@ public sealed class Organising(Listing listing, Notices notices)
         return OneAtATime(action, async () =>
         {
             var renamed = await issuer.RenameTag(tag, text);
+            if (renamed.Value is { Items: > 0, Receipt: { } receipt } result)
+            {
+                var search = await listing.TagRenamed(tag, result.Tag, result.Merged);
+                var words = result.Merged ? $"Merged #{tag} into #{result.Tag}" : $"Renamed #{tag} to #{result.Tag}";
+                notices.Raise(words, "Undo", () => Undo(receipt, () => listing.TagRenameUndone(tag, result.Tag, result.Merged, search)));
+                return renamed;
+            }
+
             await listing.Refresh();
             if (renamed.Failure is { } failure)
             {
                 notices.Raise(failure with { Subject = $"#{tag}" });
             }
-            else if (renamed.Value is { Items: > 0 } result)
+            else if (renamed.Value is { Items: > 0 } recased)
             {
-                notices.Raise(result.Merged ? $"Merged #{tag} into #{result.Tag}" : $"Renamed #{tag} to #{result.Tag}");
+                notices.Raise($"Renamed #{tag} to #{recased.Tag}");
             }
 
             return renamed;
@@ -294,13 +307,17 @@ public sealed class Organising(Listing listing, Notices notices)
 
     private void OfferUndo(string words, ItemFactResult result) => notices.Raise(words, "Undo", () => Undo(result));
 
-    private Task<Outcome> Undo(ItemFactResult result) => OneAtATime(Notices.Undoing, async () =>
+    /// <summary>
+    /// The facts of <paramref name="result"/> reversed, then the listing shown again by <paramref name="relist"/> when
+    /// any fact was reversed, else by a refresh.
+    /// </summary>
+    private Task<Outcome> Undo(ItemFactResult result, Func<Task>? relist = null) => OneAtATime(Notices.Undoing, async () =>
     {
         // A transfer can wait for an offered Undo. The Store checks that this result belongs to its own open stash.
         var reversed = listing.Store is { } store
             ? await store.UndoItemFacts(result)
             : result.RefuseUndo(listing.NotOpenReason ?? "the stash is closed");
-        await listing.Refresh();
+        await (relist is not null && !reversed.Changes.IsEmpty ? relist : listing.Refresh)();
         var failures = Failures(reversed);
         foreach (var failure in failures.Skip(1))
         {

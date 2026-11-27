@@ -116,9 +116,13 @@ public sealed class TagPicker : Popup
     internal bool Contains(Visual target) => ReferenceEquals(target, card) || card.IsVisualAncestorOf(target) ||
         OpenedPopups.Any(popup => popup.IsInsidePopup(target));
 
+    /// <summary>A tag renamed from a row's menu or elsewhere to a new word, from and to: the owner's open list renames its row in place (G17).</summary>
+    internal event Action<string, string>? RowRenamed;
+
     internal void ConfigureTagManagement(Listing listing, Organising organising, PressOnce? heldKeys, ClipboardPaste? paste)
     {
         this.heldKeys = heldKeys;
+        listing.TagRenamedInLists += (from, to) => RowRenamed?.Invoke(from, to);
         attachTagMenu = (button, row) => button.ContextMenu = new TagManagementMenu(button, listing, organising, () =>
             IsOpen && rows.Contains(row) ? new TagCount(row.Entry.Tag, row.Entry.Count) : null, heldKeys, paste, () => RowInView(button));
     }
