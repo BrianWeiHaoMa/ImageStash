@@ -14,12 +14,19 @@ public enum Direction
 
 public sealed partial class Listing
 {
+    /// <summary>
+    /// How many times a key asked to move the focus, whether or not it moved (G7): the grid reveals what the keys reached
+    /// clear of what is drawn over its bottom, and any other change of focus against its viewport alone.
+    /// </summary>
+    internal int KeyMoves { get; private set; }
+
     /// <summary>Selects the destination, or extends to it while holding the range start (G7, G17).</summary>
     public void MoveFocus(Direction direction, IReadOnlyList<GridRow> rows, long? input = null, double viewportHeight = 0,
         bool extendSelection = false)
     {
         lock (gate)
         {
+            KeyMoves++;
             if (MovementDestination(direction, rows, viewportHeight) is not { } target ||
                 (extendSelection && target == Focused))
             {

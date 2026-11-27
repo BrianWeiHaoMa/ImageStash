@@ -210,7 +210,7 @@ public sealed partial class ThumbnailGrid : Control
     {
         var width = double.IsFinite(availableSize.Width) ? availableSize.Width : laidOutWidth;
         LayOut(double.IsFinite(width) ? width : 0);
-        return new Size(Math.Max(0, width), rows.Count == 0 ? 0 : rows[^1].Y + rows[^1].Height);
+        return new Size(Math.Max(0, width), rows.Count == 0 ? 0 : rows[^1].Y + rows[^1].Height + RoomBelow);
     }
 
     protected override Size ArrangeOverride(Size finalSize)
@@ -458,7 +458,7 @@ public sealed partial class ThumbnailGrid : Control
         var reordered = shownRecentReorders != listing.RecentReorders;
         shownFocusPlace = place;
         shownRecentReorders = listing.RecentReorders;
-        if (listing.Focused != shownFocus || movedToTheTop || rangeEndMoved || reordered)
+        if (NoteKeyMoves(listing.Focused != shownFocus || movedToTheTop || rangeEndMoved || reordered))
         {
             shownFocus = listing.Focused;
             Dispatcher.UIThread.Post(BringFocusedIntoView, DispatcherPriority.Background);

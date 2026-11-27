@@ -139,6 +139,8 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
         var waysIn = new WaysInActs(() => _ = paste.Paste(), () => ScreenshotRequested?.Invoke(), () => RecordRequested?.Invoke(), () => StashClipboardImageRequested?.Invoke(), ImportFiles);
         status = new WindowStatus(listing, notices, settings, footerHints, scroller, () => preview.IsOpen || editing.IsOpen, () => search.Text = "", waysIn,
             quietWindows.AnimationEffectsShown);
+        // A row's height bounds how tall the notices over the grid may stand, whether or not the rows' bounds change.
+        ThumbnailSizing.Changed += status.GridRoom.Follow;
         var body = new Panel { Children = { scroller, status.StateView } };
         // Above the preview too, so a failure is still named and a drop still taken while it is open (G35, G11); the drop
         // card above the notices, so an earlier batch's notices never hide what the next drop will add.

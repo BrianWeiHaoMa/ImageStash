@@ -9,7 +9,8 @@ namespace ImageStash.Window;
 /// <summary>
 /// What the stash window says around its grid: the empty stash's ways in, or the no-match state, in the grid's place
 /// (G2, G5); the footer's count, its hints naming what Enter does (G8) and its busy state naming what runs (G35); and the
-/// stack of the window's notices (G16). It owns those views; the window places them and says when each shows again.
+/// stack of the window's notices (G16), with the room the grid leaves below its last row for them (<see cref="GridNoticeRoom"/>).
+/// It owns those views; the window places them and says when each shows again.
 /// </summary>
 public sealed class WindowStatus
 {
@@ -24,6 +25,7 @@ public sealed class WindowStatus
     private GlobalShortcuts? shortcuts;
     private readonly ContentControl stashState;
     private readonly NoticeStack noticeStack;
+    private readonly GridNoticeRoom gridRoom;
     private bool showing;
     private readonly WindowFooter footer;
     private readonly PausedShortcutsLine pausedShortcuts;
@@ -51,6 +53,7 @@ public sealed class WindowStatus
         // The pointer anywhere on the notices holds them all, as above the tray (G16).
         NoticeArea.PointerEntered += (_, _) => noticeStack.Held(over: true);
         NoticeArea.PointerExited += (_, _) => noticeStack.Held(over: false);
+        gridRoom = new GridNoticeRoom(scroller, noticeStack, NoticeArea, covered);
         pausedShortcuts = new PausedShortcutsLine(() => shortcuts?.ResumePaused(), focusable: false);
         footer = new WindowFooter(pausedShortcuts);
     }
@@ -66,6 +69,9 @@ public sealed class WindowStatus
 
     /// <summary>The footer's pieces, as drawn.</summary>
     internal WindowFooter FooterParts => footer;
+
+    /// <summary>The room the grid leaves below its last row for the notices.</summary>
+    internal GridNoticeRoom GridRoom => gridRoom;
 
     /// <summary>The window's notices as cards, with their motion.</summary>
     internal NoticeStack NoticeCards => noticeStack;
@@ -101,6 +107,8 @@ public sealed class WindowStatus
         // An empty scope or no-match state covers an empty grid. Keeping it visible lets the keyboard stay there.
         scroller.IsVisible = state is null || (listing.State == StashState.Open && listing.Items.Count == 0);
         footer.Count.Text = listing.State != StashState.Open ? "" : StashStateView.CountText(listing.Items.Count, listing.Selection.Count);
+        // Back on the grid from the preview or the editor, the room is the notices' again.
+        gridRoom.Follow();
         ShowHints();
     }
 
@@ -123,6 +131,7 @@ public sealed class WindowStatus
     {
         var raised = notices.Shown.Any(notice => noticeStack.CardOf(notice) is null);
         noticeStack.Show();
+        gridRoom.Follow();
         if (raised)
         {
             // The newest notice, at the bottom of the stack, is the one in view.
