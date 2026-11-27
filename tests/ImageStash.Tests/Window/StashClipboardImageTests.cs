@@ -276,8 +276,8 @@ public sealed class StashClipboardImageTests
         var notifications = new Notices(stash.Clock);
         var opening = new Listing(_ => { });
         var clipboard = new RecordingClipboard(stash.Clock) { ImageReading = Image(MediaFixtures.Bytes("transparent.png"), null) };
-        var handoff = new Handoff(opening, notifications, notifications, clipboard, new RecordingTarget(), stash.Clock, TestStash.ShortRetry, TestStash.ShortRetry);
-        var act = new StashClipboardImage(opening, notifications, new CaptureNotification(notifications, opening, handoff, new NoWindowShown(), TestStash.ShortRetry), clipboard, stash.Clock, TestStash.ShortRetry, TestStash.ShortRetry);
+        var handoff = new Handoff(opening, notifications, new NotificationStacks(notifications), clipboard, new RecordingTarget(), stash.Clock, TestStash.ShortRetry, TestStash.ShortRetry);
+        var act = new StashClipboardImage(opening, notifications, new CaptureNotification(new NotificationStacks(notifications), opening, handoff, new NoWindowShown(), TestStash.ShortRetry), clipboard, stash.Clock, TestStash.ShortRetry, TestStash.ShortRetry);
 
         await act.Stash();
         Assert.AreEqual("Can't stash clipboard image (the clipboard): your stash is still opening.", notifications.Shown.Single().Text);

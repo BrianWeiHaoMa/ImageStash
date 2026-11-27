@@ -124,17 +124,17 @@ public sealed class Moving
 
     /// <summary>
     /// What Move waits for beside the window: a screenshot or a recording, Stash clipboard image, a capture card's rename,
-    /// an Open with… copy being classified or adopted, and a notification above the tray whose Undo still stands (State:
-    /// Move, G16, G27).
+    /// an Open with… copy being classified or adopted, and a notification whose Undo still stands, above the tray or in
+    /// any other display's stack, one opened after this call included (State: Move, G16, G27).
     /// </summary>
-    public void WaitForTray(Screenshot screenshot, RecordClip recordClip, StashClipboardImage stashClipboardImage, CaptureNotification captured, OpenWith openWith, Notices notifications)
+    public void WaitForTray(Screenshot screenshot, RecordClip recordClip, StashClipboardImage stashClipboardImage, CaptureNotification captured, OpenWith openWith, NotificationStacks notifications)
     {
         WaitFor(() => screenshot.InProgress ? "the screenshot" : null);
         WaitFor(() => recordClip.InProgress ? "the recording" : null);
         WaitFor(() => stashClipboardImage.InProgress ? "Stash clipboard image" : null);
         WaitFor(() => captured.Renaming.Busy is null ? null : "the rename", heard => captured.Renaming.Changed += heard);
         WaitFor(() => openWith.Running ? "Open with…" : null);
-        WaitFor(() => UndoStanding(notifications, "notification"), heard => notifications.Changed += heard);
+        WaitFor(() => UndoStanding(notifications.All, "notification"), heard => notifications.Changed += heard);
     }
 
     /// <summary>
@@ -346,8 +346,11 @@ public sealed class Moving
     private void Wake() => woken?.TrySetResult();
 
     /// <summary>The notices whose Undo still stands, in words: "the Undo of a notice", "the Undo of 2 notices"; null when none.</summary>
-    private static string? UndoStanding(Notices shown, string kind) =>
-        shown.Shown.Count(shown.OffersUndo) switch
+    private static string? UndoStanding(Notices shown, string kind) => UndoStanding([shown], kind);
+
+    /// <summary>The notices of every stack in <paramref name="stacks"/> whose Undo still stands, in words, as one count.</summary>
+    private static string? UndoStanding(IReadOnlyList<Notices> stacks, string kind) =>
+        stacks.Sum(stack => stack.Shown.Count(stack.OffersUndo)) switch
         {
             0 => null,
             1 => $"the Undo of a {kind}",

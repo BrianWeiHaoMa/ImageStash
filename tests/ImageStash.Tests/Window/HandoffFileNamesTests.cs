@@ -24,7 +24,7 @@ public sealed class HandoffFileNamesTests
         // The still's read waits on its file, which a scanner holds without letting it be read (E3), retrying every
         // 100 ms, so the store has confirmed the item and the write has not begun while the import's Undo and a new
         // import of its name run on the store's thread, back to back behind the confirmation.
-        var handoff = new Handoff(handing.Listing, handing.Notices, handing.Notifications, handing.Clipboard, handing.Target, handing.Stash.Clock, TimeSpan.FromSeconds(10), TestStash.ShortRetry);
+        var handoff = new Handoff(handing.Listing, handing.Notices, handing.Stacks, handing.Clipboard, handing.Target, handing.Stash.Clock, TimeSpan.FromSeconds(10), TestStash.ShortRetry);
         Task<Outcome> copying;
         StashItem replacement;
         using (new FileStream(selected.FilePath, FileMode.Open, FileAccess.Read, FileShare.Delete))

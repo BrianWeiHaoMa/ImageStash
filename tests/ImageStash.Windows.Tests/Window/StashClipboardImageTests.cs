@@ -227,7 +227,7 @@ public sealed class StashClipboardImageTests
     /// its capture card activated through <paramref name="quietWindows"/>, the seam that shows its notification.
     /// </summary>
     internal static StashClipboardImage Act(ShownWindow shown, TimeProvider clock, IQuietWindows? quietWindows = null) => TrayDesktop.Get(() =>
-        new StashClipboardImage(shown.Listing, shown.Notifications, new CaptureNotification(shown.Notifications, shown.Listing, shown.Handoff, quietWindows ?? new NoTrayIcon(), HeldFileRetry.Duration),
+        new StashClipboardImage(shown.Listing, shown.Notifications, new CaptureNotification(new NotificationStacks(shown.Notifications), shown.Listing, shown.Handoff, quietWindows ?? new NoTrayIcon(), HeldFileRetry.Duration),
             new WindowsClipboardAndDrops(), clock, HeldClipboard.Retry, HeldFileRetry.Duration));
 
     /// <summary>The tray entry's act, started on the UI thread as the tray runs it, awaited here.</summary>

@@ -22,11 +22,20 @@ public sealed record CaptureEdit(StashItem Item, bool Trim);
 /// elsewhere on it, <see cref="Edit"/> null; and whether that click brought the notification in front, which the
 /// platform may refuse.
 /// </summary>
-public sealed record CaptureOpening(StashItem Item, CaptureEdit? Edit, bool NotificationInFront);
+public sealed record CaptureOpening(StashItem Item, CaptureEdit? Edit, bool NotificationInFront)
+{
+    /// <summary>
+    /// The display the card stood on when it was another than the primary, kept with the card from its raising, so an
+    /// opening asked once the card has gone still names it; null for a card above the tray (G16).
+    /// </summary>
+    public Display? StoodOn { get; init; }
+}
 
 /// <summary>
-/// The capture notification (G16), every capture's one entry: a notice of the notifications above the tray, so its six
-/// seconds, its hover, its × and its Undo at most once are the notices' own. It is raised only for an item Store has
+/// The capture notification (G16), every capture's one entry, serving the cards of every stack: a notice of the
+/// notifications above the tray, or, for a screenshot or a recording whose region was on another display, of that
+/// display's own stack (<see cref="NotificationStacks"/>), so its time, its hover, its × and its Undo at most once are the
+/// notices' own. It is raised only for an item Store has
 /// committed and placed (R9); a capture that failed before or after its commit is named by its caller as a plain
 /// failure instead. Its words are one rule (<see cref="Title"/>, <see cref="Line"/>, <see cref="Aside"/>): titled by
 /// what was captured, in the stash; one line saying a recording's length, that it is on the clipboard and that Ctrl+V
@@ -39,10 +48,11 @@ public sealed record CaptureOpening(StashItem Item, CaptureEdit? Edit, bool Noti
 /// a recording, asks the window that follows it for the editor on its item, a click elsewhere on it for the window on
 /// that item, and the card goes at either click.
 /// </summary>
-public sealed class CaptureNotification(Notices notifications, Listing listing, Handoff handoff, IQuietWindows quietWindows, TimeSpan heldFileRetry)
+public sealed class CaptureNotification(NotificationStacks stacks, Listing listing, Handoff handoff, IQuietWindows quietWindows, TimeSpan heldFileRetry)
 {
-    // The clipboard follows a card's rename as it follows the window's, through the one handoff (G17, G26).
-    private readonly Renaming renaming = new(listing, notifications, handoff);
+    // The clipboard follows a card's rename as it follows the window's, through the one handoff (G17, G26); its refusals
+    // stand above the tray, as every failure does.
+    private readonly Renaming renaming = new(listing, stacks.Tray, handoff);
 
     private readonly ConditionalWeakTable<Notice, CaptureCardWords> shownWords = [];
 
@@ -129,15 +139,23 @@ public sealed class CaptureNotification(Notices notifications, Listing listing, 
         return string.Join(" ", said);
     }
 
-    public void Raise(StashItem item, CaptureKind kind, bool onClipboard, long? lengthMs)
+    /// <summary>
+    /// The card of <paramref name="item"/>, raised in the stack of <paramref name="on"/>, the display a screenshot's or a
+    /// recording's region was on: above the tray for the primary display or none, as for Stash clipboard image, which is
+    /// taken on no display (G13, G16).
+    /// </summary>
+    public void Raise(StashItem item, CaptureKind kind, bool onClipboard, long? lengthMs, Display? on = null)
     {
         var words = new CaptureCardWords(kind, onClipboard, lengthMs, raisedAsStill: !item.Facts.Animated);
         var trim = kind == CaptureKind.Recording;
+        var stack = stacks.On(on);
+        var stoodOn = ReferenceEquals(stack, stacks.Tray) ? null : on;
         // The notice's words name the item; its card shows the name in its field instead, so a rename shows there.
-        var raised = notifications.Raise(NoticeText(item, kind, onClipboard, lengthMs), "Undo", () => Undo(item.Id),
+        var raised = stack.Raise(NoticeText(item, kind, onClipboard, lengthMs), "Undo", () => Undo(item.Id),
             card: (notice, notices) => new CaptureCard(notice, notices, item, words, listing, renaming, quietWindows, heldFileRetry,
-                () => FieldTookFocus?.Invoke(), (shown, inFront) => Open(new CaptureOpening(shown, new CaptureEdit(shown, trim), inFront)),
-                (shown, inFront) => Open(new CaptureOpening(shown, null, inFront))));
+                () => FieldTookFocus?.Invoke(),
+                (shown, inFront) => Open(new CaptureOpening(shown, new CaptureEdit(shown, trim), inFront) { StoodOn = stoodOn }),
+                (shown, inFront) => Open(new CaptureOpening(shown, null, inFront) { StoodOn = stoodOn })));
         shownWords.AddOrUpdate(raised, words);
         _ = words.Measure(item.FilePath);
     }

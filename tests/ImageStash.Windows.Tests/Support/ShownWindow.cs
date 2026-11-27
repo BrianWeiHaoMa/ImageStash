@@ -605,7 +605,7 @@ public sealed class ShownWindow : IDisposable
             var keeper = new SettingsKeeper(settingsFolder, Store.Settings.Load(settingsFolder, HeldFileRetry.Duration), HeldFileRetry.Duration, SettingsKeeper.Quiet, _ => { });
             var quietWindows = new NoTrayIcon();
             var seams = new PlatformSeams(null!, null!, null!, null!, null!, quietWindows, drags ?? (IClipboardAndDrops)new WindowsClipboardAndDrops(), dialogs ?? (IDialogsAndExplorer)new WindowsDialogsAndExplorer(), null!, platformTarget ?? targets, new WindowsScreen(), fonts ?? new WindowsFonts(), new WindowsBorderDrag(), new WindowsWindowOrder());
-            var handoff = new Handoff(listing, notices, notifications, seams.ClipboardAndDrops, seams.Target, new StoppedClock(), HeldFileRetry.Duration, HeldClipboard.Retry);
+            var handoff = new Handoff(listing, notices, new NotificationStacks(notifications), seams.ClipboardAndDrops, seams.Target, new StoppedClock(), HeldFileRetry.Duration, HeldClipboard.Retry);
             var import = new Import(listing, notices, HeldFileRetry.Duration);
             var editing = new Editing(listing, notices, handoff, FinishedPicture.Render, new ColorChoices(), HeldFileRetry.Duration);
             var openWith = new OpenWith(listing, notifications, editing, seams.DialogsAndExplorer, LocalClock.Instance, action => Dispatcher.UIThread.Post(action));

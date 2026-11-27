@@ -41,6 +41,7 @@ public sealed class CaptureSessionTests
         var (written, inProgress, existed, letGo) = finished.Single();
         Assert.AreEqual(written, outcome.Value, "the file the commit was given");
         Assert.AreEqual("Screenshot 2026-10-16 17.30.07", written.Name, "the release's moment in local time, not the press's (F12)");
+        Assert.AreEqual(Right150, written.Display, "the display its region was on comes back with the file, for its notification (G16)");
         Assert.IsTrue(inProgress, "the commit runs while the capture is in progress");
         Assert.IsTrue(existed, "written whole before the commit");
         Assert.IsTrue(letGo, "no display's pixels kept past the selection");

@@ -12,14 +12,14 @@ namespace ImageStash.Window;
 /// animated item or several items as files only. A use is recorded on each item only after the write or the drop has
 /// completed, never before, and one that fails records nothing (State: Tags, favorite, use). Nothing here says or
 /// implies that anything was delivered (G10). A paste the target cannot take is announced by <see cref="Fallback"/>'s
-/// notification, above the tray in <paramref name="notifications"/> or on the display the stash window stood on, since the
+/// notification, in the stack of <paramref name="notifications"/> above the tray or on the display the stash window stood on, since the
 /// flyout may already be hidden (G8, G16); a paste's clipboard write that fails behind the hidden flyout is named there
 /// too (<c>HandoffPaste.cs</c>). After a Save
 /// or a Rename, the clipboard's copy of the item is replaced when nothing has changed it since (G26), and after a Move
 /// every item's, at its new path. While the listing holds no store, a handoff, a copy and a drag out are refused by name
 /// (G35).
 /// </summary>
-public sealed partial class Handoff(Listing listing, Notices notices, Notices notifications, IClipboardAndDrops clipboard, ITarget targets, TimeProvider clock, TimeSpan heldFileRetry, TimeSpan heldClipboardRetry)
+public sealed partial class Handoff(Listing listing, Notices notices, NotificationStacks notifications, IClipboardAndDrops clipboard, ITarget targets, TimeProvider clock, TimeSpan heldFileRetry, TimeSpan heldClipboardRetry)
 {
     public const string Action = "Copy";
 

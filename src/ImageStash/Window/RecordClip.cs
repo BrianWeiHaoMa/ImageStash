@@ -13,8 +13,8 @@ namespace ImageStash.Window;
 /// its start, Record (F12, F3), through the import commit inside the capture's span, so a kill leaves it absent or
 /// complete (G28), even when its bytes equal an item's and with no tag; then, while Also copy is on, the item on the
 /// clipboard as a copy puts it, recording no use (G8, G10); then the stash listed again, the window's scope, query and
-/// selection kept (G10, G11); the window back as it was; then the capture notification above the tray with the clip's
-/// length, saying it is on the clipboard only when it was put there (G16), in that order (<see cref="CaptureEnd"/>).
+/// selection kept (G10, G11); the window back as it was; then the capture notification on the display the region was
+/// on, with the clip's length, saying it is on the clipboard only when it was put there (G16), in that order (<see cref="CaptureEnd"/>).
 /// While the region waits, the tray's entry reads Start recording; while the recording samples, the icon carries its red
 /// dot and the entry reads Stop recording, through <c>recording</c> (G15, G34). The bar names the record shortcut only while a press of it would act, read as
 /// each recording starts and again at every change of the shortcuts (G33, <see cref="FollowShortcuts"/>). A stash
@@ -171,7 +171,7 @@ public sealed class RecordClip
         // the facts', which call a one-image clip a still (G16).
         if (ended is not null)
         {
-            end.Say(ended, Action, CaptureKind.Recording, lengthMs: recorded.Value!.Clip.DurationMs);
+            end.Say(ended, Action, CaptureKind.Recording, lengthMs: recorded.Value!.Clip.DurationMs, on: recorded.Value.Display);
         }
     }
 }

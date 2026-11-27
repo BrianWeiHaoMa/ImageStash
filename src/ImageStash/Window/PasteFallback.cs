@@ -1,4 +1,3 @@
-using Avalonia;
 using ImageStash.Seams;
 
 namespace ImageStash.Window;
@@ -8,10 +7,10 @@ namespace ImageStash.Window;
 /// the target as the footer names it and saying why, never that anything arrived (G10), and advising its <c>Ctrl+V</c>
 /// only where a window is left to take it. It is raised above the tray with every other notification, unless the stash
 /// window stood on another display when the handoff was asked, where it stands at that display's bottom-right
-/// working-area corner in a stack of that display's own, so a later one on a third display moves none already showing,
-/// and the tray's notifications stay where they are (G16).
+/// working-area corner in that display's own stack (<see cref="NotificationStacks"/>), so a later one on a third display
+/// moves none already showing, and the tray's notifications stay where they are (G16).
 /// </summary>
-public sealed class PasteFallback(Notices notifications)
+public sealed class PasteFallback(NotificationStacks stacks)
 {
     /// <summary>G8's words, the notification's first line: what is on the clipboard, never that anything arrived (G10).</summary>
     public const string Copied = "Copied · press Ctrl+V";
@@ -22,44 +21,18 @@ public sealed class PasteFallback(Notices notifications)
     /// <summary>Why a paste whose Enter was held past the paste's bound was not made: in front, the target would have taken its repeats as Send (N3).</summary>
     public const string EnterHeld = "Enter was still held, and would have reached it";
 
-    private readonly Dictionary<PixelRect, Notices> elsewhere = [];
-
-    /// <summary>
-    /// Raised, on the raising thread, with the notifications standing on a display other than the primary that none has
-    /// stood on before, and that display: drawn in a window of their own, as the tray's are, lasting as theirs do, and one
-    /// history of acts with them, so the next paste's notification takes a failure's place on whichever display (G16).
-    /// </summary>
-    public event Action<Notices, Display>? Opened;
-
     /// <summary>
     /// Raises the notification for a paste into <paramref name="appName"/> not made for <paramref name="reason"/>, once
     /// the clipboard is written (technical G8): on <paramref name="stoodOn"/> when that is not the primary display, else
     /// above the tray.
     /// </summary>
-    public void Raise(string reason, string appName, Display? stoodOn) => On(stoodOn).Raise(Says(reason, appName), heading: Copied);
+    public void Raise(string reason, string appName, Display? stoodOn) => stacks.On(stoodOn).Raise(Says(reason, appName), heading: Copied);
 
     /// <summary>
     /// Names a paste's clipboard write that failed behind the hidden flyout, where the fallback would have stood, so the
     /// person sees it without summoning the window; never as "Copied", since nothing was (G8, G35).
     /// </summary>
-    public void RaiseFailure(Failure failure, Display? stoodOn) => On(stoodOn).Raise(failure);
-
-    /// <summary>The notifications above the tray, or, when <paramref name="stoodOn"/> is another display, that display's own stack.</summary>
-    private Notices On(Display? stoodOn)
-    {
-        if (stoodOn is not { IsPrimary: false } display)
-        {
-            return notifications;
-        }
-
-        if (!elsewhere.TryGetValue(display.Bounds, out var stack))
-        {
-            stack = elsewhere[display.Bounds] = notifications.Beside();
-            Opened?.Invoke(stack, display);
-        }
-
-        return stack;
-    }
+    public void RaiseFailure(Failure failure, Display? stoodOn) => stacks.On(stoodOn).Raise(failure);
 
     /// <summary>
     /// Why, in a person's words, one sentence for each reason: rights that could not be read are never called higher, since

@@ -10,8 +10,8 @@ namespace ImageStash.Window;
 /// with the auto name of the release (F12, F3), through the import commit inside the capture's span, so a kill leaves it
 /// absent or complete (G28), even when its bytes equal an item's and with no tag; then, while Also copy is on, the item
 /// on the clipboard as a copy puts it, recording no use (G8, G10); then the stash listed again, the window's scope, query
-/// and selection kept (G10, G11); the window back as it was; then the capture notification above the tray, saying it is
-/// on the clipboard only when it was put there (G16), in that order (<see cref="CaptureEnd"/>). A stash still opening or
+/// and selection kept (G10, G11); the window back as it was; then the capture notification on the display the region
+/// was on, saying it is on the clipboard only when it was put there (G16), in that order (<see cref="CaptureEnd"/>). A stash still opening or
 /// that did not open is refused before anything is grabbed or hidden; a press while the overlay is up does nothing, the overlay being the busy state, and one
 /// after the release, while the last screenshot is still being saved, is refused by name; a cancel says nothing (E3);
 /// every other refusal and failure is named above the tray, never only in the window, which may be hidden, and nothing
@@ -99,7 +99,7 @@ public sealed class Screenshot(Listing listing, Notices notifications, CaptureNo
         // Null when cancelled: Esc, or a click without a drag (G14, E3).
         if (ended is not null)
         {
-            end.Say(ended, Action, CaptureKind.Screenshot, lengthMs: null);
+            end.Say(ended, Action, CaptureKind.Screenshot, lengthMs: null, on: taken.Value!.Display);
         }
     }
 }

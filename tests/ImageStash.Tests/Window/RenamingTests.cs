@@ -153,7 +153,7 @@ public sealed class RenamingTests
     {
         var notices = new Notices(TimeProvider.System);
         var listing = new Listing(_ => { });
-        var renaming = new Renaming(listing, notices, new Handoff(listing, notices, notices, new RecordingClipboard(TimeProvider.System), new RecordingTarget(), TimeProvider.System, TestStash.ShortRetry, TestStash.ShortRetry));
+        var renaming = new Renaming(listing, notices, new Handoff(listing, notices, new NotificationStacks(notices), new RecordingClipboard(TimeProvider.System), new RecordingTarget(), TimeProvider.System, TestStash.ShortRetry, TestStash.ShortRetry));
 
         var opening = await renaming.Rename(TestItems.Sized(1, 10, 10), "dog");
         Assert.AreEqual(opening.Failure?.Sentence, notices.Shown.Single().Text, "named in a notice");

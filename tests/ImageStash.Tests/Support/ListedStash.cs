@@ -47,7 +47,8 @@ public sealed class ListedStash : IDisposable
         Deletion = new Deletion(Listing, Notices);
         Organising = new Organising(Listing, Notices);
         Notifications = new Notices(stash.Clock);
-        Handoff = new Handoff(Listing, Notices, Notifications, Clipboard, Target, stash.Clock, TestStash.ShortRetry, TestStash.ShortRetry);
+        Stacks = new NotificationStacks(Notifications);
+        Handoff = new Handoff(Listing, Notices, Stacks, Clipboard, Target, stash.Clock, TestStash.ShortRetry, TestStash.ShortRetry);
         FooterHints = new FooterHints(Listing, PasteTarget, Handoff, stash.Clock);
         Renaming = new Renaming(Listing, Notices, Handoff);
         Editing = new Editing(Listing, Notices, Handoff, (original, name, layers, format, work, retry) => Renderer(original, name, layers, format, work, retry), new ColorChoices(), editRetry ?? TestStash.ShortRetry);
@@ -74,7 +75,7 @@ public sealed class ListedStash : IDisposable
         TagKey = new TagKey(Listing, () => PreviewOpen, () => PreviewTagsFocused++, () => TagFieldItems.Count > 0, items => TagFieldItems = items);
         PreviewStepping = new PreviewStepping(Listing, () => PreviewOpen ? PreviewItem : null, item => PreviewItem = item);
         PreviewStepClicks = new PreviewStepClicks(PreviewStepping, () => PreviewOpen ? PreviewItem : null, () => PreviewClosing, Editing);
-        CaptureNotification = new CaptureNotification(Notifications, Listing, Handoff, new NoWindowShown(), TestStash.ShortRetry);
+        CaptureNotification = new CaptureNotification(Stacks, Listing, Handoff, new NoWindowShown(), TestStash.ShortRetry);
         // The summon as the window's activation treats the target: its own showing keeps it, the tray's reads the window it gained focus from.
         _ = new NotificationOpening(CaptureNotification, PasteTarget, Target, keepsTarget =>
         {
@@ -117,7 +118,7 @@ public sealed class ListedStash : IDisposable
             return Stash.OpenAt(folder);
         }, Turns.Next);
         Moving.WaitForWindow(Paste, Import, Handoff, Deletion, Renaming, Organising, Editing, ItemMenu, Notices);
-        Moving.WaitForTray(Screenshot, RecordClip, StashClipboardImage, CaptureNotification, OpenWith, Notifications);
+        Moving.WaitForTray(Screenshot, RecordClip, StashClipboardImage, CaptureNotification, OpenWith, Stacks);
         var menu = tray?.Invoke(this);
         var notifications = told?.Invoke(this);
         Shortcuts = new GlobalShortcuts(Settings,
@@ -216,6 +217,9 @@ public sealed class ListedStash : IDisposable
 
     /// <summary>The notifications above the tray, which Stash clipboard image raises.</summary>
     public Notices Notifications { get; }
+
+    /// <summary>Which stack a notification stands in, the handoff's, the capture cards' and Move's wait's, as the app wires it.</summary>
+    public NotificationStacks Stacks { get; }
 
     /// <summary>The capture notification's entry over those notifications; its card is drawn only by a window, which these checks never show.</summary>
     public CaptureNotification CaptureNotification { get; }

@@ -30,7 +30,7 @@ public static class MovingStash
     {
         var listing = new Listing(_ => { });
         var notices = new Notices(TimeProvider.System);
-        var handoff = new Handoff(listing, notices, notices, new RecordingClipboard(TimeProvider.System), new RecordingTarget(), TimeProvider.System, TestStash.ShortRetry, TestStash.ShortRetry);
+        var handoff = new Handoff(listing, notices, new NotificationStacks(notices), new RecordingClipboard(TimeProvider.System), new RecordingTarget(), TimeProvider.System, TestStash.ShortRetry, TestStash.ShortRetry);
         return new Moving(listing, notices, keeper, dialogs, handoff, _ => throw new InvalidOperationException("No stash opens here."), () => Task.CompletedTask);
     }
 
@@ -42,7 +42,7 @@ public static class MovingStash
     {
         var listing = new Listing(_ => { });
         var notices = new Notices(TimeProvider.System);
-        var handoff = new Handoff(listing, notices, notices, new RecordingClipboard(TimeProvider.System), new RecordingTarget(), TimeProvider.System, TestStash.ShortRetry, TestStash.ShortRetry);
+        var handoff = new Handoff(listing, notices, new NotificationStacks(notices), new RecordingClipboard(TimeProvider.System), new RecordingTarget(), TimeProvider.System, TestStash.ShortRetry, TestStash.ShortRetry);
         var editing = new Editing(listing, notices, handoff, ImageStash.Media.FinishedPicture.Render, new ImageStash.Editor.ColorChoices(), TestStash.ShortRetry);
         var openWith = new OpenWith(listing, notices, editing, dialogs, TimeProvider.System, action => action());
         return new Transferring(listing, notices, keeper, dialogs, new TestRecycleBin(Path.GetTempPath()), handoff, openWith, moving,

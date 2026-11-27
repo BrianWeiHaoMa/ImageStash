@@ -79,7 +79,7 @@ public sealed class StashClipboardImage(Listing listing, Notices notifications, 
         switch (saved)
         {
             case { Result: ImportResultKind.Added, Item: { } item }:
-                captured.Raise(item, CaptureKind.StashedClipboardImage, onClipboard: false, lengthMs: null);
+                captured.Raise(item, CaptureKind.StashedClipboardImage, onClipboard: false, lengthMs: null, on: null);
                 break;
             case { Result: ImportResultKind.Unreadable }:
                 notifications.Raise(Failure.Refusal(Action, saved.Name, MediaDecoder.UnreadableReason));

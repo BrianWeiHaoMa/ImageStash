@@ -511,7 +511,7 @@ public sealed class ItemMenuTests
             Notices = new Notices(stash.Clock);
             Listing = new Listing(failure => Assert.Fail(failure.Sentence));
             Clipboard = new RecordingClipboard(stash.Clock);
-            var handoff = new Handoff(Listing, Notices, new Notices(stash.Clock), Clipboard, Target, stash.Clock, TestStash.ShortRetry, TestStash.ShortRetry);
+            var handoff = new Handoff(Listing, Notices, new NotificationStacks(new Notices(stash.Clock)), Clipboard, Target, stash.Clock, TestStash.ShortRetry, TestStash.ShortRetry);
             var editing = new Editing(Listing, Notices, handoff, FinishedPicture.Render, new ColorChoices(), TestStash.ShortRetry);
             OpenWith = new OpenWith(Listing, new Notices(stash.Clock), editing, Dialogs, new SteppedClock(), action => action());
             ItemMenu = new ItemMenu(Listing, Notices, handoff, new Organising(Listing, Notices), new Deletion(Listing, Notices), editing, OpenWith, Dialogs, TestStash.ShortRetry);

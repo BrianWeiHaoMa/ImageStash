@@ -283,7 +283,7 @@ public sealed class OpenWithTests
     {
         var quiet = new WindowsQuietWindows(tray);
         var notification = new Notification(shown.Notifications, quiet, new WindowsScreen(), _ => { });
-        shown.Window.Follow(notification, new CaptureNotification(shown.Notifications, shown.Listing, shown.Handoff, quiet, HeldFileRetry.Duration));
+        shown.Window.Follow(notification, new CaptureNotification(new NotificationStacks(shown.Notifications), shown.Listing, shown.Handoff, quiet, HeldFileRetry.Duration));
         return notification;
     });
 

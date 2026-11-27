@@ -167,7 +167,7 @@ public sealed class RecordClipTests
     {
         using var recording = await ClipRecording.Open();
         var opening = new Listing(_ => { });
-        var act = new RecordClip(opening, recording.Notifications, new CaptureNotification(recording.Notifications, opening, recording.Handoff, new NoWindowShown(), TestStash.ShortRetry),
+        var act = new RecordClip(opening, recording.Notifications, new CaptureNotification(new NotificationStacks(recording.Notifications), opening, recording.Handoff, new NoWindowShown(), TestStash.ShortRetry),
             recording.Handoff, recording.Capture, recording.Settings, recording.Hiding, null!, _ => { }, TestStash.ShortRetry);
 
         await act.StartOrStop();

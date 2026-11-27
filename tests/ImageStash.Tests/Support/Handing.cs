@@ -23,8 +23,9 @@ public sealed class Handing : IDisposable
         Import = new Import(Listing, Notices, TestStash.ShortRetry);
         Clipboard = new RecordingClipboard(stash.Clock);
         Notifications = new Notices(stash.Clock);
+        Stacks = new NotificationStacks(Notifications);
         Target = new RecordingTarget(Steps);
-        Handoff = new Handoff(Listing, Notices, Notifications, Clipboard, Target, handoffClock ?? stash.Clock, TestStash.ShortRetry, TestStash.ShortRetry);
+        Handoff = new Handoff(Listing, Notices, Stacks, Clipboard, Target, handoffClock ?? stash.Clock, TestStash.ShortRetry, TestStash.ShortRetry);
     }
 
     public TestStash Stash { get; }
@@ -45,6 +46,9 @@ public sealed class Handing : IDisposable
 
     /// <summary>The notifications above the tray the handoff raises.</summary>
     public Notices Notifications { get; }
+
+    /// <summary>Which stack a notification stands in: <see cref="Notifications"/> above the tray, or another display's own.</summary>
+    public NotificationStacks Stacks { get; }
 
     public RecordingTarget Target { get; }
 

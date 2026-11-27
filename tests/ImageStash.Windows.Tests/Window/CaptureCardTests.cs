@@ -86,7 +86,7 @@ public sealed class CaptureCardTests
         using var shown = ShownWindow.Open();
         var item = (await shown.OpenStash(shown.Picture("stash pressed.png"))).Single();
         var notifications = new Notices(new StoppedClock());
-        var capture = TrayDesktop.Get(() => new CaptureNotification(notifications, shown.Listing, shown.Handoff, new RefusedActivation(), HeldFileRetry.Duration));
+        var capture = TrayDesktop.Get(() => new CaptureNotification(new NotificationStacks(notifications), shown.Listing, shown.Handoff, new RefusedActivation(), HeldFileRetry.Duration));
         var asked = new List<long>();
         var host = TrayDesktop.Get(() =>
         {

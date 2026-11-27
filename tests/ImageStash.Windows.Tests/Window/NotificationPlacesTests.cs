@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.VisualTree;
 using ImageStash.Seams;
 using ImageStash.Window;
 using ImageStash.Windows.Seams;
@@ -14,6 +15,8 @@ namespace ImageStash.Windows.Tests.Window;
 /// working-area corner, both at once; each window shown without taking the foreground, topmost, without a taskbar
 /// button, rounded and left out of screen captures (G15, S4). The other display is stood in for by the left third of the
 /// primary one, so the check runs on a PC with one display; two real displays of different scaling are a person's check.
+/// A screenshot's card on another display stands at that display's corner the same way, and its field takes focus
+/// without hiding the flyout.
 /// </summary>
 [TestClass]
 public sealed class NotificationPlacesTests
@@ -38,13 +41,14 @@ public sealed class NotificationPlacesTests
             primary.Scaling,
             IsPrimary: false);
         var notifications = new Notices(TimeProvider.System);
-        var fallback = new PasteFallback(notifications);
+        var stacks = new NotificationStacks(notifications);
+        var fallback = new PasteFallback(stacks);
         var quiet = new TrayIconMidScreen(new WindowsQuietWindows(tray));
         var aboveTray = TrayDesktop.Get(() => new Notification(notifications, quiet, new WindowsScreen(), _ => { }));
         Notification? elsewhere = null;
         Notices? standing = null;
         // As the app draws each other display's notifications.
-        fallback.Opened += (stack, display) => (standing, elsewhere) = (stack, new Notification(stack, quiet, new WindowsScreen(), _ => { }, () => display));
+        stacks.Opened += (stack, display) => (standing, elsewhere) = (stack, new Notification(stack, quiet, new WindowsScreen(), _ => { }, () => display));
         chat.ClickTitleBar();
 
         TrayDesktop.Run(() =>
@@ -84,6 +88,43 @@ public sealed class NotificationPlacesTests
         Assert.AreEqual(tray1.Outer, Read(aboveTray).Outer, "and the capture's stays where it was");
         TrayDesktop.Run(() => notifications.Close(notifications.Shown.Single()));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => aboveTray.Shown is null));
+    }
+
+    [TestMethod]
+    public async Task AScreenshotsCardOnAnotherDisplayStandsAtItsCornerAndAClickIntoItsFieldKeepsTheFlyout()
+    {
+        using var desk = await CaptureDesk.Open(["corner card.png"]);
+        var primary = DisplayPlaces.Primary();
+        var other = new Display(
+            new PixelRect(primary.Bounds.X, primary.Bounds.Y, primary.Bounds.Width / 3, primary.Bounds.Height),
+            new PixelRect(primary.WorkingArea.X, primary.WorkingArea.Y, primary.WorkingArea.Width / 3, primary.WorkingArea.Height),
+            primary.Scaling,
+            IsPrimary: false);
+        await desk.FlyoutInFront();
+
+        var item = desk.Items().Single();
+        TrayDesktop.Run(() => desk.Capture.Raise(item, CaptureKind.Screenshot, onClipboard: false, lengthMs: null, on: other));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => desk.Elsewhere.SingleOrDefault()?.Shown is { IsVisible: true }));
+        Thread.Sleep(500);
+        var elsewhere = desk.Elsewhere.Single();
+        var shown = Read(elsewhere);
+
+        Assert.IsNull(TrayDesktop.Get(() => desk.Notification.Shown), "nothing above the tray");
+        Assert.IsFalse(shown.Active, "shown without the foreground (G16)");
+        Assert.IsTrue(GetWindowDisplayAffinity(shown.Handle, out var affinity) && affinity == WdaExcludeFromCapture, "left out of captures (G15, S4)");
+        Assert.IsTrue(other.WorkingArea.Contains(shown.Outer), $"{shown.Outer} wholly inside the other display's working area {other.WorkingArea}");
+        var gap = DisplayPlaces.Scaled(other, (int)Summon.IconGap);
+        Assert.IsLessThanOrEqualTo(2, Math.Abs(other.WorkingArea.Right - gap - shown.Outer.Right), "at its right edge");
+        Assert.IsLessThanOrEqualTo(2, Math.Abs(other.WorkingArea.Bottom - gap - shown.Outer.Bottom), "at its bottom edge");
+
+        var card = TrayDesktop.Get(() => elsewhere.Shown!.GetVisualDescendants().OfType<CaptureCard>().Single());
+        TestMouse.Click(TestMouse.Centre(TrayDesktop.Get(() => CaptureDesk.NameButton(card))));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => card.Field.IsEditing && CaptureDesk.NameBox(card).IsFocused));
+        Thread.Sleep(300);
+
+        Assert.IsTrue(TrayDesktop.Get(() => desk.Shown.Window.IsVisible), "the field's focus is ImageStash's: the flyout stays (G2, G16)");
+        TrayDesktop.Run(() => desk.Stacks.All[1].Close(desk.Stacks.All[1].Shown.Single()));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => elsewhere.Shown is null));
     }
 
     private static (nint Handle, bool Active, bool InTaskbar, uint Extended, PixelRect Outer) Read(Notification notification) => TrayDesktop.Get(() =>

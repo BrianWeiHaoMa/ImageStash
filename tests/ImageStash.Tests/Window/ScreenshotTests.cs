@@ -245,7 +245,7 @@ public sealed class ScreenshotTests
     {
         using var taking = await Taking();
         var opening = new Listing(_ => { });
-        var act = new Screenshot(opening, taking.Notifications, new CaptureNotification(taking.Notifications, opening, taking.Handoff, new NoWindowShown(), TestStash.ShortRetry),
+        var act = new Screenshot(opening, taking.Notifications, new CaptureNotification(new NotificationStacks(taking.Notifications), opening, taking.Handoff, new NoWindowShown(), TestStash.ShortRetry),
             taking.Handoff, taking.Capture, taking.Settings, taking.Hiding, null!, TestStash.ShortRetry);
 
         await act.Take();

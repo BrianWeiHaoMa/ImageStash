@@ -54,7 +54,7 @@ public sealed class CaptureCardTests
 
             if (click == "a click elsewhere")
             {
-                card.RaiseEvent(Press(card));
+                card.RaiseEvent(CaptureCardPresses.Body(card));
             }
             else
             {
@@ -222,14 +222,6 @@ public sealed class CaptureCardTests
         card.GetLogicalDescendants().OfType<Button>()
             .Single(button => Equals(button.Content, label) || Equals(Avalonia.Automation.AutomationProperties.GetName(button), label))
             .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-
-    /// <summary>A left press on the card's body, outside its field and buttons.</summary>
-    private static Avalonia.Input.PointerPressedEventArgs Press(CaptureCard card)
-    {
-        var pointer = new Avalonia.Input.Pointer(Avalonia.Input.Pointer.GetNextFreeId(), Avalonia.Input.PointerType.Mouse, true);
-        var properties = new Avalonia.Input.PointerPointProperties(Avalonia.Input.RawInputModifiers.LeftMouseButton, Avalonia.Input.PointerUpdateKind.LeftButtonPressed);
-        return new Avalonia.Input.PointerPressedEventArgs(card, pointer, card, default, 0, properties, Avalonia.Input.KeyModifiers.None, 1);
-    }
 
     private static void OnControls(Func<Task> act) => ControlThread.Run(() => ControlThread.FinishOnDispatcher(act));
 

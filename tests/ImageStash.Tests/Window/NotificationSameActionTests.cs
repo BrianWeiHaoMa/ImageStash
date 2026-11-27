@@ -265,7 +265,7 @@ public sealed class NotificationSameActionTests
     {
         using var handing = await Handing.Open("photo.jpg");
         Notices? elsewhere = null;
-        handing.Handoff.Fallback.Opened += (stack, _) => elsewhere = stack;
+        handing.Stacks.Opened += (stack, _) => elsewhere = stack;
 
         var outcome = await FailPaste(handing, otherDisplay ? Right : null, clipboardFails);
 
@@ -298,7 +298,7 @@ public sealed class NotificationSameActionTests
     {
         using var handing = await Handing.Open("photo.jpg");
         Notices? elsewhere = null;
-        handing.Handoff.Fallback.Opened += (stack, _) => elsewhere = stack;
+        handing.Stacks.Opened += (stack, _) => elsewhere = stack;
 
         var first = await FailPaste(handing, elsewhereFirst ? Right : null, clipboardFails: !elsewhereFirst);
         var previousStack = elsewhereFirst ? elsewhere : handing.Notifications;

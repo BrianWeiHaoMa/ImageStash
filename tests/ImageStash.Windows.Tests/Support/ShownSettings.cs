@@ -118,7 +118,7 @@ public static class ShownSettings
         {
             var listing = new Listing(_ => { });
             var notices = new Notices(TimeProvider.System);
-            var handoff = new Handoff(listing, notices, notices, null!, null!, TimeProvider.System, TimeSpan.Zero, TimeSpan.Zero);
+            var handoff = new Handoff(listing, notices, new NotificationStacks(notices), null!, null!, TimeProvider.System, TimeSpan.Zero, TimeSpan.Zero);
             return new Moving(listing, notices, Keeper, Dialogs, handoff, _ => throw new InvalidOperationException("No stash opens here."), () => Task.CompletedTask);
         }
 
@@ -127,7 +127,7 @@ public static class ShownSettings
         {
             var listing = new Listing(_ => { });
             var notices = new Notices(TimeProvider.System);
-            var handoff = new Handoff(listing, notices, notices, null!, null!, TimeProvider.System, TimeSpan.Zero, TimeSpan.Zero);
+            var handoff = new Handoff(listing, notices, new NotificationStacks(notices), null!, null!, TimeProvider.System, TimeSpan.Zero, TimeSpan.Zero);
             var editing = new Editing(listing, notices, handoff, ImageStash.Media.FinishedPicture.Render, new ImageStash.Editor.ColorChoices(), TimeSpan.Zero);
             var openWith = new OpenWith(listing, notices, editing, Dialogs, TimeProvider.System, action => action());
             return new Transferring(listing, notices, Keeper, Dialogs, null!, handoff, openWith, moving,

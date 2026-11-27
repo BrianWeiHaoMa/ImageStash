@@ -324,7 +324,7 @@ public sealed class PasteFallbackTests
     private static List<(Notices Stack, Display Display)> Opened(Handing handing)
     {
         var opened = new List<(Notices, Display)>();
-        handing.Handoff.Fallback.Opened += (stack, display) => opened.Add((stack, display));
+        handing.Stacks.Opened += (stack, display) => opened.Add((stack, display));
         return opened;
     }
 

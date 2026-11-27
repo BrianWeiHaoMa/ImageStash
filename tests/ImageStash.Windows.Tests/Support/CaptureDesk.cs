@@ -60,6 +60,12 @@ public sealed class CaptureDesk : IDisposable
 
     public Notification Notification { get; }
 
+    /// <summary>Which stack a notification stands in, the capture notification's, each other display's drawn and followed as the app does.</summary>
+    public required NotificationStacks Stacks { get; init; }
+
+    /// <summary>The windows of the stacks opened for other displays, in the order opened.</summary>
+    public required List<Notification> Elsewhere { get; init; }
+
     public CaptureNotification Capture { get; }
 
     public TargetApp Chat { get; }
@@ -96,17 +102,26 @@ public sealed class CaptureDesk : IDisposable
         IQuietWindows quiet = midScreen ? new TrayIconMidScreen(real) : real;
         var clock = new StoppedClock();
         var notifications = new Notices(clock);
+        var stacks = new NotificationStacks(notifications);
+        var elsewhere = new List<Notification>();
         var (notification, capture) = TrayDesktop.Get(() =>
         {
             var notification = new Notification(notifications, quiet, new WindowsScreen(), _ => { });
-            var capture = new CaptureNotification(notifications, shown.Listing, shown.Handoff, activations ?? quiet, heldFileRetry ?? HeldFileRetry.Duration);
+            var capture = new CaptureNotification(stacks, shown.Listing, shown.Handoff, activations ?? quiet, heldFileRetry ?? HeldFileRetry.Duration);
             shown.Window.Follow(notification, capture);
+            // As the app draws and follows each other display's stack.
+            stacks.Opened += (stack, display) =>
+            {
+                var standing = new Notification(stack, quiet, new WindowsScreen(), _ => { }, () => display);
+                shown.Window.FollowNotification(standing);
+                elsewhere.Add(standing);
+            };
             shown.Window.Hide();
             return (notification, capture);
         });
         var chat = TargetApp.Start("ImageStash check chat", DisplayPlaces.At(DisplayPlaces.Primary(), 100, 100));
         chat.ClickTitleBar();
-        return new CaptureDesk(pointer, shown, tray, clock, notifications, notification, capture, chat);
+        return new CaptureDesk(pointer, shown, tray, clock, notifications, notification, capture, chat) { Stacks = stacks, Elsewhere = elsewhere };
     }
 
     public List<StashItem> Items() => TrayDesktop.Get(() => Shown.Listing.Store!.All()).GetAwaiter().GetResult().Value!.OrderBy(item => item.Id).ToList();
@@ -347,13 +362,20 @@ public sealed class CaptureDesk : IDisposable
                 window.Close();
             }
 
-            foreach (var notice in Notifications.Shown.ToList())
+            foreach (var stack in Stacks.All)
             {
-                Notifications.Close(notice);
+                foreach (var notice in stack.Shown.ToList())
+                {
+                    stack.Close(notice);
+                }
             }
 
             // Closing the notices starts their fades. End them so no notification covers the next check.
             Notification.Stack.Finish();
+            foreach (var standing in Elsewhere)
+            {
+                standing.Stack.Finish();
+            }
         });
         Chat.Dispose();
         Shown.Dispose();

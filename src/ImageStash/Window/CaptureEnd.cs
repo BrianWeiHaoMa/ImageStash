@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using ImageStash.Media;
+using ImageStash.Seams;
 using ImageStash.Store;
 
 namespace ImageStash.Window;
@@ -16,9 +17,9 @@ public sealed record EndedCapture(ImportedFile Saved, bool Copied);
 /// equal an item's and with no tag (G11, G12, G28); then, while Also copy is on, that item on the clipboard as a copy
 /// puts it, recording no use (G8, G10), as soon as it is committed and its file is in place, so the write waits neither
 /// for the stash to be listed again nor for the window to come back (R9); then the stash listed again, the window's
-/// scope, search and selection kept. Once the caller has put the window back (G3): the capture notification, saying it is
-/// on the clipboard only when this capture's write succeeded (G16, R9), or the failure named above the tray, never only
-/// in the window, which may be hidden (G35).
+/// scope, search and selection kept. Once the caller has put the window back (G3): the capture notification on the
+/// display the region was on, saying it is on the clipboard only when this capture's write succeeded (G16, R9), or the
+/// failure named above the tray, never only in the window, which may be hidden (G35).
 /// </summary>
 public sealed class CaptureEnd(Listing listing, Notices notifications, CaptureNotification captured, Handoff handoff, SettingsKeeper settings, TopLevel owner, TimeSpan heldFileRetry)
 {
@@ -42,16 +43,17 @@ public sealed class CaptureEnd(Listing listing, Notices notifications, CaptureNo
     }
 
     /// <summary>
-    /// What <paramref name="ended"/> saved said above the tray, as <paramref name="action"/>: the capture notification of
-    /// <paramref name="kind"/>, with a clip's <paramref name="lengthMs"/>, for an item added; otherwise the failure.
+    /// What <paramref name="ended"/> saved said, as <paramref name="action"/>: the capture notification of
+    /// <paramref name="kind"/>, with a clip's <paramref name="lengthMs"/>, for an item added, on <paramref name="on"/>,
+    /// the display the region was on (G16); otherwise the failure, above the tray whatever display the region was on.
     /// </summary>
-    public void Say(EndedCapture ended, string action, CaptureKind kind, long? lengthMs)
+    public void Say(EndedCapture ended, string action, CaptureKind kind, long? lengthMs, Display on)
     {
         var saved = ended.Saved;
         switch (saved)
         {
             case { Result: ImportResultKind.Added, Item: { } item }:
-                captured.Raise(item, kind, ended.Copied, lengthMs);
+                captured.Raise(item, kind, ended.Copied, lengthMs, on);
                 break;
             case { Result: ImportResultKind.Unreadable }:
                 notifications.Raise(new Failure(action, saved.Name, MediaDecoder.UnreadableReason));

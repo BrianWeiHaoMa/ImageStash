@@ -5,14 +5,20 @@ using ImageStash.Store;
 
 namespace ImageStash.Capture;
 
-/// <summary>A screenshot written whole at a <c>.work\</c> path Store allocated, under its auto name (F12), once its caller's commit has run.</summary>
-public sealed record CapturedFile(string WorkPath, string Name);
+/// <summary>
+/// A screenshot written whole at a <c>.work\</c> path Store allocated, under its auto name (F12), once its caller's commit
+/// has run, with the display its region was on.
+/// </summary>
+public sealed record CapturedFile(string WorkPath, string Name, Display Display);
 
 /// <summary>What a recording is asked for at its press: its maximum length (G32) and whether the pointer is drawn in (G15).</summary>
 public sealed record RecordingOptions(TimeSpan Cap, bool Pointer);
 
-/// <summary>A recording's clip, finished whole at a <c>.work\</c> path Store allocated, under the auto name taken at its start, Record (F12).</summary>
-public sealed record RecordedClip(string WorkPath, string Name, GifClip Clip);
+/// <summary>
+/// A recording's clip, finished whole at a <c>.work\</c> path Store allocated, under the auto name taken at its start,
+/// Record (F12), with the display its region was on.
+/// </summary>
+public sealed record RecordedClip(string WorkPath, string Name, GifClip Clip, Display Display);
 
 /// <summary>
 /// Where a recording stands, as the tray shows it (G15, G34): its region waiting to be recorded; sampling; or neither,
@@ -109,7 +115,7 @@ public sealed class CaptureSession(IScreen screen, IRegionSelection selection, I
                 return selected.Failure;
             }
 
-            if (selected.Value is not (var name, var picture))
+            if (selected.Value is not (var name, var picture, var display))
             {
                 return Outcome<CapturedFile?>.Of(null);
             }
@@ -126,7 +132,7 @@ public sealed class CaptureSession(IScreen screen, IRegionSelection selection, I
                 return written.Failure;
             }
 
-            var file = new CapturedFile(written.Value!, name);
+            var file = new CapturedFile(written.Value!, name, display);
             await finish(file);
             return Outcome<CapturedFile?>.Of(file);
         }
@@ -331,7 +337,7 @@ public sealed class CaptureSession(IScreen screen, IRegionSelection selection, I
             var ended = await running.Ended;
             if (!cancelled && ended.Succeeded && ended.Value is { } clip)
             {
-                var recorded = new RecordedClip(workPath, name, clip);
+                var recorded = new RecordedClip(workPath, name, clip, region.Display);
                 await finish(recorded);
                 return Outcome<RecordedClip?>.Of(recorded);
             }
@@ -385,10 +391,10 @@ public sealed class CaptureSession(IScreen screen, IRegionSelection selection, I
 
     /// <summary>
     /// The grabs, the selection over them and the region's pixels cut from them: the auto name at the release's moment
-    /// with those pixels, or null when cancelled. The grabs are let go when this returns, before the write and the
-    /// commit, so nothing keeps a display's pixels past the selection.
+    /// with those pixels and the display they were on, or null when cancelled. The grabs are let go when this returns,
+    /// before the write and the commit, so nothing keeps a display's pixels past the selection.
     /// </summary>
-    private async Task<Outcome<(string Name, MediaFrame Picture)?>> SelectOverFrozenGrabs()
+    private async Task<Outcome<(string Name, MediaFrame Picture, Display Display)?>> SelectOverFrozenGrabs()
     {
         var selected = await SelectOverGrabs(CaptureMode.Screenshot, Action);
         if (!selected.Succeeded)
@@ -398,7 +404,7 @@ public sealed class CaptureSession(IScreen screen, IRegionSelection selection, I
 
         if (selected.Value is not var (region, grabs))
         {
-            return Outcome<(string, MediaFrame)?>.Of(null);
+            return Outcome<(string, MediaFrame, Display)?>.Of(null);
         }
 
         // F12: the moment of the release, read as the selection returns, not the press's nor the write's.
@@ -406,7 +412,7 @@ public sealed class CaptureSession(IScreen screen, IRegionSelection selection, I
         var grab = grabs.Single(g => g.Display == region.Display);
         try
         {
-            return Outcome<(string, MediaFrame)?>.Of((name, Cut(grab, region.Rectangle)));
+            return Outcome<(string, MediaFrame, Display)?>.Of((name, Cut(grab, region.Rectangle), region.Display));
         }
         catch (OutOfMemoryException)
         {

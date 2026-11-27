@@ -248,7 +248,7 @@ public sealed class NoticeMotionTests
         using var shown = new ShownNotifications();
         var (notice, card) = TrayDesktop.Get(() =>
         {
-            var capture = new CaptureNotification(shown.Notices, stash.Listing, stash.Handoff, shown.Quiet, HeldFileRetry.Duration);
+            var capture = new CaptureNotification(new NotificationStacks(shown.Notices), stash.Listing, stash.Handoff, shown.Quiet, HeldFileRetry.Duration);
             capture.Raise(item, CaptureKind.Screenshot, onClipboard: false, lengthMs: null);
             var notice = shown.Notices.Shown.Single();
             shown.Advance(NoticeMotion.Entrance);

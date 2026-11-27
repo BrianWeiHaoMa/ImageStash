@@ -80,6 +80,7 @@ public sealed class RecordingSessionTests
         var (clip, inProgress, sampling, calls, letGo) = finished.Single();
         Assert.AreEqual(clip, saved.Value, "the clip the commit was given");
         Assert.AreEqual("Recording 2026-10-20 17.31.03", clip.Name, "Record's moment in local time, not the press's, the release's nor Stop's (F12)");
+        Assert.AreEqual(RecordingScreen.Primary, clip.Display, "the display its region was on comes back with the clip, for its notification (G16)");
         Assert.IsTrue(recording.Stash.Folder.IsWorkFile(clip.WorkPath) && clip.WorkPath.EndsWith(".gif", StringComparison.Ordinal), clip.WorkPath);
         WrittenClips.AreAsRead(new GifClip(clip.WorkPath, 1, 7000, null), clip.Clip, "one frame lasting from Record until Stop, the wait not counted in");
         Assert.IsTrue(File.Exists(clip.WorkPath), "written whole before the commit");

@@ -23,9 +23,10 @@ public sealed class NotificationLifeTests
     public void APasteFallbacksLongSentenceLastsAsItsWordsNeedAboveTheTrayAndOnAnotherDisplay()
     {
         var tray = new Notices(clock);
-        var fallback = new PasteFallback(tray);
+        var stacks = new NotificationStacks(tray);
+        var fallback = new PasteFallback(stacks);
         Notices? elsewhere = null;
-        fallback.Opened += (stack, _) => elsewhere = stack;
+        stacks.Opened += (stack, _) => elsewhere = stack;
         fallback.Raise(PasteTargetReasons.RightsUnreadable, "Slack", stoodOn: null);
         fallback.Raise(PasteTargetReasons.RightsUnreadable, "Slack", Right);
         var above = tray.Shown.Single();
