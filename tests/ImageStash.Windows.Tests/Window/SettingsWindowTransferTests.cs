@@ -35,7 +35,7 @@ public sealed class SettingsWindowTransferTests
             TransferredStash.CloseNotices(shown);
             // A notice whose Undo still stands, as a Delete's does: the Move waits for it (State: Move).
             var standing = TrayDesktop.Get(() => shown.Notices.Raise("Deleted “move check”.", "Undo", () => Task.FromResult(Outcome.Done)));
-            var opened = window = TrayDesktop.Get(() => SettingsWindow.Open(null, () => settings.Page(moving: shown.Moving)));
+            var opened = window = TrayDesktop.Get(() => SettingsWindow.Open(settings.TitleBars, null, () => settings.Page(moving: shown.Moving)));
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => opened.IsVisible));
 
             TrayDesktop.Run(() =>
@@ -94,7 +94,7 @@ public sealed class SettingsWindowTransferTests
             var saved = settings.Dialogs.Saves = Path.Combine(Path.GetDirectoryName(archive)!, "before replacing.zip");
             var transferring = TrayDesktop.Get(() => new Transferring(shown.Listing, shown.Notices, shown.Settings, settings.Dialogs, new WindowsRecycleBin(), shown.Handoff,
                 shown.OpenWith, shown.Moving, _ => Outcome.Done, TimeProvider.System, HeldFileRetry.Duration));
-            var opened = window = TrayDesktop.Get(() => SettingsWindow.Open(null, () => settings.Page(moving: shown.Moving, transferring: transferring)));
+            var opened = window = TrayDesktop.Get(() => SettingsWindow.Open(settings.TitleBars, null, () => settings.Page(moving: shown.Moving, transferring: transferring)));
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => opened.IsVisible));
             var windows = ProcessWindows.Visible();
 

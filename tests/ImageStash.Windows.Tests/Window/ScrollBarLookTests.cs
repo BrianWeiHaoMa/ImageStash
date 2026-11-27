@@ -173,12 +173,12 @@ public sealed class ScrollBarLookTests
         var window = TrayDesktop.Get(() =>
         {
             Application.Current!.RequestedThemeVariant = theme == "Light" ? ThemeVariant.Light : ThemeVariant.Dark;
-            return SettingsWindow.Open(null, () => settings.Page());
+            return SettingsWindow.Open(settings.TitleBars, null, () => settings.Page());
         });
         try
         {
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => window.IsVisible && window.FrameSize is not null && InsideWorkingArea(window)));
-            // The page places itself once more at its default size at this priority (SettingsWindow.ShowCentred): shrunk
+            // The page places itself once more at its default size at this priority (SettingsWindow.ShowPlaced): shrunk
             // before then, it grows back and moves after the thumb is found, and the pointer misses the bar.
             await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
             TrayDesktop.Run(() =>

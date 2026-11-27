@@ -56,7 +56,7 @@ public sealed class SettingsWindowTests
                 shown.Window.SettingsRequested += () =>
                 {
                     var was = open;
-                    open = SettingsWindow.Open(was, () => settings.Page(), settings.Shortcuts.FirstUnavailable);
+                    open = SettingsWindow.Open(settings.TitleBars, was, () => settings.Page(), settings.Shortcuts.FirstUnavailable, shown.Window.Outer);
                     if (!ReferenceEquals(was, open))
                     {
                         shown.Window.Follow(open);
@@ -113,7 +113,7 @@ public sealed class SettingsWindowTests
         using var other = FrontWindow.Show(DisplayPlaces.At(DisplayPlaces.Primary(), 0, 400));
         try
         {
-            TrayDesktop.Run(() => tray.Show([new TrayMenuEntry("Settings", () => open = SettingsWindow.Open(open, () => settings.Page()), MenuClosed: () => open?.KeepForward()), new TrayMenuEntry("Quit ImageStash", () => { })], "ImageStash menu's Settings check", () => { }));
+            TrayDesktop.Run(() => tray.Show([new TrayMenuEntry("Settings", () => open = SettingsWindow.Open(settings.TitleBars, open, () => settings.Page()), MenuClosed: () => open?.KeepForward()), new TrayMenuEntry("Quit ImageStash", () => { })], "ImageStash menu's Settings check", () => { }));
             // Explorer registers the icon while the UI thread keeps pumping.
             await Task.Delay(1000);
             other.ClickToFront();
@@ -160,7 +160,7 @@ public sealed class SettingsWindowTests
             flyout.SettingsRequested += () =>
             {
                 var was = open;
-                open = SettingsWindow.Open(was, () => settings.Page());
+                open = SettingsWindow.Open(settings.TitleBars, was, () => settings.Page(), null, flyout.Outer);
                 if (!ReferenceEquals(was, open))
                 {
                     flyout.Follow(open);
@@ -204,9 +204,9 @@ public sealed class SettingsWindowTests
         var before = ProcessWindows.Visible();
         try
         {
-            var first = open = TrayDesktop.Get(() => SettingsWindow.Open(open, () => settings.Page()));
+            var first = open = TrayDesktop.Get(() => SettingsWindow.Open(settings.TitleBars, open, () => settings.Page()));
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => first.IsVisible && first.FrameSize is not null && InsideWorkingArea(first)));
-            // The page places itself once more, its frame then known, at this priority (SettingsWindow.ShowCentred): on a
+            // The page places itself once more, its frame then known, at this priority (SettingsWindow.ShowPlaced): on a
             // working area taller than the page, it is inside it before then, centred as if it had no frame.
             await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
 
@@ -235,7 +235,7 @@ public sealed class SettingsWindowTests
             TestMouse.Click(TestMouse.Centre(TrayDesktop.Get(() => Heading(first, "Screenshots and recordings"))));
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => first.IsActive));
             TrayDesktop.Run(() => first.WindowState = WindowState.Minimized);
-            var second = open = TrayDesktop.Get(() => SettingsWindow.Open(open, () => settings.Page()));
+            var second = open = TrayDesktop.Get(() => SettingsWindow.Open(settings.TitleBars, open, () => settings.Page()));
 
             Assert.AreSame(first, second, "asked again, the open page (F4)");
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => first.WindowState == WindowState.Normal && first.IsActive));
@@ -253,7 +253,7 @@ public sealed class SettingsWindowTests
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => first.HasClosed));
             Assert.AreEqual(before, ProcessWindows.Visible(), "Esc closed it");
 
-            var third = open = TrayDesktop.Get(() => SettingsWindow.Open(open, () => settings.Page()));
+            var third = open = TrayDesktop.Get(() => SettingsWindow.Open(settings.TitleBars, open, () => settings.Page()));
             Assert.AreNotSame(first, third, "after Esc, a fresh page");
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => third.IsVisible && InsideWorkingArea(third)));
         }
@@ -269,7 +269,7 @@ public sealed class SettingsWindowTests
         // A file that cannot be read, so the start's failure stands at the top beside a refused write.
         using var settings = new SettingsFolder("""{"version":1,"theme":""");
         TrayDesktop.UseProductTheme();
-        var window = TrayDesktop.Get(() => SettingsWindow.Open(null, () => settings.Page()));
+        var window = TrayDesktop.Get(() => SettingsWindow.Open(settings.TitleBars, null, () => settings.Page()));
         try
         {
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => window.IsVisible && window.FrameSize is not null && InsideWorkingArea(window)));
@@ -329,7 +329,7 @@ public sealed class SettingsWindowTests
     {
         using var settings = new SettingsFolder();
         TrayDesktop.UseProductTheme();
-        var window = TrayDesktop.Get(() => SettingsWindow.Open(null, () => settings.Page()));
+        var window = TrayDesktop.Get(() => SettingsWindow.Open(settings.TitleBars, null, () => settings.Page()));
         try
         {
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => window.IsVisible));
@@ -369,7 +369,7 @@ public sealed class SettingsWindowTests
     {
         using var settings = new SettingsFolder("""{"version":1,"recordingMaxSeconds":45}""");
         TrayDesktop.UseProductTheme();
-        var window = TrayDesktop.Get(() => SettingsWindow.Open(null, () => settings.Page()));
+        var window = TrayDesktop.Get(() => SettingsWindow.Open(settings.TitleBars, null, () => settings.Page()));
         try
         {
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => window.IsVisible));
@@ -397,7 +397,7 @@ public sealed class SettingsWindowTests
     {
         using var settings = new SettingsFolder("""{"version":1,"theme":""");
         TrayDesktop.UseProductTheme();
-        var window = TrayDesktop.Get(() => SettingsWindow.Open(null, () => settings.Page()));
+        var window = TrayDesktop.Get(() => SettingsWindow.Open(settings.TitleBars, null, () => settings.Page()));
         try
         {
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => window.IsVisible));
@@ -418,7 +418,7 @@ public sealed class SettingsWindowTests
     {
         using var settings = new SettingsFolder();
         TrayDesktop.UseProductTheme();
-        var window = TrayDesktop.Get(() => SettingsWindow.Open(null, () => settings.Page()));
+        var window = TrayDesktop.Get(() => SettingsWindow.Open(settings.TitleBars, null, () => settings.Page()));
         try
         {
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => window.IsVisible));
@@ -442,7 +442,7 @@ public sealed class SettingsWindowTests
     {
         using var settings = new SettingsFolder();
         using var desk = await CaptureDesk.Open();
-        var window = TrayDesktop.Get(() => SettingsWindow.Open(null, () => settings.Page()));
+        var window = TrayDesktop.Get(() => SettingsWindow.Open(settings.TitleBars, null, () => settings.Page()));
         try
         {
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => window.IsVisible));
@@ -468,7 +468,7 @@ public sealed class SettingsWindowTests
         TrayDesktop.Run(settings.Shortcuts.Start);
         Assert.IsEmpty(settings.Named, "all four registered; another program, or a running ImageStash, holds none");
         var open = Shortcut.Parse("Ctrl+Alt+Space").Value!;
-        var window = TrayDesktop.Get(() => SettingsWindow.Open(null, () => settings.Page()));
+        var window = TrayDesktop.Get(() => SettingsWindow.Open(settings.TitleBars, null, () => settings.Page()));
         try
         {
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => window.IsVisible && window.IsActive));

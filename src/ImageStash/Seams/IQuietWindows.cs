@@ -44,6 +44,15 @@ public interface IQuietWindows
     void RoundCorners(Avalonia.Controls.Window window);
 
     /// <summary>
+    /// Asks that <paramref name="window"/>, a window of ImageStash's own framed with the platform's title bar (the pinned
+    /// stash window, the Settings page), draw its title there without the icon before it, the title and the icon on the
+    /// taskbar button and in the task switcher staying. Only a preference: a platform or a version that will not leaves
+    /// the icon drawn, and that is no failure. Called on the UI thread each time the window's frame becomes the titled
+    /// one, since a change of frame may draw the title bar afresh.
+    /// </summary>
+    void PlainTitleBar(Avalonia.Controls.Window window);
+
+    /// <summary>
     /// The tray icon's rectangle on the desktop in physical pixels, read afresh at every call, since the taskbar can
     /// move between calls; null when the platform cannot say where the icon is.
     /// </summary>

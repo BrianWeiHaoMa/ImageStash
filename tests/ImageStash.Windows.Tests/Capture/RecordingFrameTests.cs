@@ -539,6 +539,8 @@ public sealed class RecordingFrameTests
 
         public void RoundCorners(Avalonia.Controls.Window window) => real.RoundCorners(window);
 
+        public void PlainTitleBar(Avalonia.Controls.Window window) => real.PlainTitleBar(window);
+
         public PixelRect? TrayIconRectangle() => real.TrayIconRectangle();
 
         public PixelPoint? PointerPosition() => real.PointerPosition();

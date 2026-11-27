@@ -80,6 +80,8 @@ public sealed class WindowActivation
         // window's own shortcut summon, pin or unpin causes is not such a gain, and any later one is.
         window.Activated += (_, _) =>
         {
+            // Activated, the flyout stands above its Settings page again, whatever caused it.
+            chrome.WindowActivated();
             focusLeftDuringEdit = false;
             // Focus is back: a hide waiting on a held button has nothing left to wait for (G2).
             focusLoss.Stop();
@@ -172,12 +174,20 @@ public sealed class WindowActivation
 
     /// <summary>
     /// The Settings page, once opened: focus with it has not gone to another app, so the flyout stays, as it does for a
-    /// notification's field, and judges again where focus went when the page loses it (G2).
+    /// notification's field, and judges again where focus went when the page loses it (G2); and each time the page is the
+    /// active window, the flyout gives way to it, until the flyout is activated or the page closes (<see cref="FlyoutTopmost"/>).
     /// </summary>
     public void SettingsPageOpened(SettingsWindow page)
     {
         settingsPage = page;
         page.Deactivated += (_, _) => Dispatcher.UIThread.Post(HideIfFocusLeft, DispatcherPriority.Background);
+        page.Activated += (_, _) => chrome.GiveWayTo(page);
+        page.Closed += (_, _) => chrome.PageClosed();
+        // Shown and activated before it was handed here, the page's first activation has already passed.
+        if (page.IsActive)
+        {
+            chrome.GiveWayTo(page);
+        }
     }
 
     /// <summary>
@@ -207,7 +217,7 @@ public sealed class WindowActivation
 
     /// <summary>The display holding most of the window while it shows, where a paste it cannot make is said (G16); null while it is hidden.</summary>
     private Display? StandsOn() => window.IsVisible
-        ? Summon.StandsOn(new PixelRect(window.Position, PixelSize.FromSize(window.FrameSize ?? window.ClientSize, window.RenderScaling)), Summon.DisplaysOf(window.Screens))
+        ? Summon.StandsOn(chrome.Outer(), Summon.DisplaysOf(window.Screens))
         : null;
 
     /// <summary>

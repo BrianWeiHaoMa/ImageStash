@@ -32,7 +32,7 @@ public sealed class ShortcutNotificationTests
         var notifications = new Notices(new StoppedClock());
         var notification = TrayDesktop.Get(() => new Notification(notifications, new WindowsQuietWindows(tray), new WindowsScreen(), _ => { }));
         SettingsWindow? page = null;
-        var told = new ShortcutNotifications(notifications, act => page = SettingsWindow.Open(page, () => settings.Page(), act));
+        var told = new ShortcutNotifications(notifications, act => page = SettingsWindow.Open(settings.TitleBars, page, () => settings.Page(), act));
         chat.ClickTitleBar();
         using (var openHolder = OtherProgramHoldingAHotKey.Start(Open))
         using (var screenshotHolder = OtherProgramHoldingAHotKey.Start(TakeScreenshot))

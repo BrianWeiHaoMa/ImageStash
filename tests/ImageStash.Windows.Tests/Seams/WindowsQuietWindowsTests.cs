@@ -12,7 +12,8 @@ namespace ImageStash.Windows.Tests.Seams;
 /// The real notification area and pointer supply fresh physical placement hints, or no hint; a quiet window is
 /// activated by a field's take and by nothing else, whichever window is in front (G16); a quiet window shown only in
 /// parts is there only in them, and what lies beneath takes the rest (G15); the pointer's primary button reads held from
-/// its press to its release, and the other button never (G2).
+/// its press to its release, and the other button never (G2); a framed window asked for a plain title bar keeps its own
+/// icon, title and system menu (F13).
 /// </summary>
 [TestClass]
 public sealed class WindowsQuietWindowsTests
@@ -390,6 +391,69 @@ public sealed class WindowsQuietWindowsTests
             });
         }
     }
+
+    [TestMethod]
+    public async Task AFramedWindowAskedForAPlainTitleBarKeepsItsOwnIconItsTitleAndItsSystemMenu()
+    {
+        using var tray = new WindowsTray();
+        var quiet = new WindowsQuietWindows(tray);
+        var framed = TrayDesktop.Get(() =>
+        {
+            var window = new Avalonia.Controls.Window
+            {
+                Title = "ImageStash settings",
+                Width = 400,
+                Height = 240,
+                Position = DisplayPlaces.At(DisplayPlaces.Primary(), 200, 100),
+                WindowDecorations = WindowDecorations.Full,
+                Content = new Border { Background = Avalonia.Media.Brushes.White },
+            };
+            window.Show();
+            return window;
+        });
+        try
+        {
+            await Task.Delay(300);
+            var handle = TrayDesktop.Get(() => framed.TryGetPlatformHandle()!.Handle);
+            var before = Icons(handle);
+
+            TrayDesktop.Run(() => quiet.PlainTitleBar(framed));
+            await Task.Delay(300);
+
+            // Whether the title bar then draws no icon before the title is a look on screen: Windows reports no read-back.
+            Assert.AreEqual(before, Icons(handle), "the window's own icon, which the taskbar button and the task switcher show, stays");
+            Assert.AreNotEqual(0L, (long)GetWindowLongPtrW(handle, GwlStyle) & WsSysMenu, "the system menu stays, on Alt+Space and a right-click of the title bar");
+            Assert.AreEqual("ImageStash settings", FrontWindow.NativeText(handle), "the title stays");
+        }
+        finally
+        {
+            TrayDesktop.Run(framed.Close);
+        }
+    }
+
+    /// <summary>The icons Windows holds for <paramref name="window"/>: its own, small and big, and its class's.</summary>
+    private static (nint Small, nint Big, nint ClassSmall, nint ClassBig) Icons(nint window) => (
+        SendMessageW(window, WmGetIcon, IconSmall, 0),
+        SendMessageW(window, WmGetIcon, IconBig, 0),
+        GetClassLongPtrW(window, GclpHIconSmall),
+        GetClassLongPtrW(window, GclpHIcon));
+
+    private const uint WmGetIcon = 0x007F;
+    private const nint IconSmall = 0;
+    private const nint IconBig = 1;
+    private const int GclpHIcon = -14;
+    private const int GclpHIconSmall = -34;
+    private const int GwlStyle = -16;
+    private const long WsSysMenu = 0x00080000;
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    private static extern nint SendMessageW(nint window, uint message, nint wParam, nint lParam);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    private static extern nint GetClassLongPtrW(nint window, int index);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    private static extern nint GetWindowLongPtrW(nint window, int index);
 
     /// <summary>A small topmost window without decorations or a taskbar button at (700, 100), as a notification is made.</summary>
     private static Avalonia.Controls.Window QuietWindow(Control content) => new()

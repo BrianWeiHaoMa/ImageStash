@@ -12,7 +12,7 @@ namespace ImageStash.Windows.Seams;
 /// click into a field taking the activation, which the window then holds until it is given back, so any other click on
 /// one moves no activation and no focus, whatever window is in front (G16); a window shown only in parts through its
 /// window region, which Windows neither draws nor hit-tests outside (G15); its corners rounded as Windows 11 rounds its
-/// own windows; the tray icon's rectangle, which the shell
+/// own windows, and its title bar drawn without the icon; the tray icon's rectangle, which the shell
 /// reports for the icon's identity (S16), read afresh at every call; the pointer's position, in physical pixels
 /// because Avalonia makes the process per-monitor DPI aware (S10); and whether its primary button is held.
 /// </summary>
@@ -28,6 +28,10 @@ public sealed class WindowsQuietWindows(WindowsTray tray) : IQuietWindows
     private const int GwlExStyle = -20;
     private const long WsExNoActivate = 0x08000000;
     private const uint WmDestroy = 0x0002;
+    private const int WtaNonClient = 1;
+    private const uint WtncaNoDrawIcon = 0x00000002;
+    private const uint RdwInvalidate = 0x0001;
+    private const uint RdwFrame = 0x0400;
     private const uint WmMouseActivate = 0x0021;
     private const nint MaNoActivate = 3;
     private const int WhCbt = 5;
@@ -206,6 +210,27 @@ public sealed class WindowsQuietWindows(WindowsTray tray) : IQuietWindows
     /// </summary>
     public void RoundCorners(Avalonia.Controls.Window window) => Win32Properties.SetWindowCornerPreference(window, Win32Properties.WindowCornerPreference.Round);
 
+    /// <summary>
+    /// The caption's icon left out through the window's theme attribute WTNCA_NODRAWICON alone, "Prevents the system icon
+    /// from being drawn" (WTNCA, Microsoft Learn), never WTNCA_NOSYSMENU, so the system menu stays on Alt+Space and a
+    /// right-click of the title bar; the window's icon, which the taskbar button and the task switcher show, is left as
+    /// it was. The frame is then drawn again, since the attribute may come after Windows drew it. A refusal (an HRESULT
+    /// other than S_OK) leaves the icon drawn, which is no failure, as the interface says.
+    /// </summary>
+    public void PlainTitleBar(Avalonia.Controls.Window window)
+    {
+        if (window.TryGetPlatformHandle() is not { Handle: var handle } || handle == 0)
+        {
+            return;
+        }
+
+        var options = new ThemeOptions { Flags = WtncaNoDrawIcon, Mask = WtncaNoDrawIcon };
+        if (SetWindowThemeAttribute(handle, WtaNonClient, ref options, (uint)Marshal.SizeOf<ThemeOptions>()) == 0)
+        {
+            RedrawWindow(handle, 0, 0, RdwInvalidate | RdwFrame);
+        }
+    }
+
     public PixelRect? TrayIconRectangle()
     {
         try
@@ -377,4 +402,19 @@ public sealed class WindowsQuietWindows(WindowsTray tray) : IQuietWindows
 
     [DllImport("user32.dll", ExactSpelling = true)]
     private static extern int SetWindowRgn(nint window, nint region, [MarshalAs(UnmanagedType.Bool)] bool redraw);
+
+    /// <summary>WTA_OPTIONS: in <see cref="Flags"/> the WTNCA flags, in <see cref="Mask"/> which of them to add or remove.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ThemeOptions
+    {
+        public uint Flags;
+        public uint Mask;
+    }
+
+    [DllImport("uxtheme.dll", ExactSpelling = true)]
+    private static extern int SetWindowThemeAttribute(nint window, int attribute, ref ThemeOptions options, uint size);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool RedrawWindow(nint window, nint update, nint region, uint flags);
 }

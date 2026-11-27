@@ -31,7 +31,7 @@ public sealed class SettingsWindowShortcutResetTests
         TrayDesktop.UseProductTheme();
         TrayDesktop.Run(settings.Shortcuts.Start);
         Assert.IsEmpty(settings.Named, "all four registered; another program, or a running ImageStash, holds none");
-        var window = TrayDesktop.Get(() => SettingsWindow.Open(null, () => settings.Page()));
+        var window = TrayDesktop.Get(() => SettingsWindow.Open(settings.TitleBars, null, () => settings.Page()));
         try
         {
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => window.IsVisible && window.FrameSize is not null));
@@ -70,7 +70,7 @@ public sealed class SettingsWindowShortcutResetTests
         TrayDesktop.UseProductTheme();
         TrayDesktop.Run(settings.Shortcuts.Start);
         Assert.IsEmpty(settings.Named, "all four registered; another program, or a running ImageStash, holds none");
-        var window = TrayDesktop.Get(() => SettingsWindow.Open(null, () => settings.Page()));
+        var window = TrayDesktop.Get(() => SettingsWindow.Open(settings.TitleBars, null, () => settings.Page()));
         try
         {
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => window.IsVisible && window.FrameSize is not null));

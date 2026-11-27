@@ -239,6 +239,8 @@ public sealed class TrayIconMidScreen(WindowsQuietWindows real, bool? animationE
 
     public void RoundCorners(Avalonia.Controls.Window window) => real.RoundCorners(window);
 
+    public void PlainTitleBar(Avalonia.Controls.Window window) => real.PlainTitleBar(window);
+
     public PixelRect? TrayIconRectangle() => Icon;
 
     public PixelPoint? PointerPosition() => real.PointerPosition();
@@ -284,6 +286,11 @@ public sealed class NoTrayIcon : IQuietWindows
     public List<Avalonia.Controls.Window> Rounded { get; } = [];
 
     public void RoundCorners(Avalonia.Controls.Window window) => Rounded.Add(window);
+
+    /// <summary>The windows whose title bar was asked to draw no icon, in order, each time it was asked: they keep the icon, as <see cref="Rounded"/> keep their corners.</summary>
+    public List<Avalonia.Controls.Window> PlainTitled { get; } = [];
+
+    public void PlainTitleBar(Avalonia.Controls.Window window) => PlainTitled.Add(window);
 
     public PixelRect? TrayIconRectangle() => null;
 

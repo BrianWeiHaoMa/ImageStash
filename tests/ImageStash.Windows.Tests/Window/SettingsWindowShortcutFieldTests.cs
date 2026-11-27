@@ -35,7 +35,7 @@ public sealed class SettingsWindowShortcutFieldTests
         var open = Shortcut.Parse("Ctrl+Alt+Space").Value!;
         var held = Shortcut.Parse("Ctrl+Shift+F9").Value!;
         var free = Shortcut.Parse("Ctrl+Shift+F8").Value!;
-        var window = TrayDesktop.Get(() => SettingsWindow.Open(null, () => settings.Page()));
+        var window = TrayDesktop.Get(() => SettingsWindow.Open(settings.TitleBars, null, () => settings.Page()));
         try
         {
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => window.IsVisible && window.FrameSize is not null && InsideWorkingArea(window)));
@@ -179,7 +179,7 @@ public sealed class SettingsWindowShortcutFieldTests
         {
             var unavailable = TrayDesktop.Get(() => settings.Shortcuts.UnavailableReason(ShortcutAct.Open));
             Assert.AreEqual(new ShortcutProblem(ShortcutAct.Open, "Ctrl+Alt+Space", ShortcutReason.Of(ShortcutRefusal.HeldByAnotherProgram)), unavailable);
-            window = TrayDesktop.Get(() => SettingsWindow.Open(null, () => settings.Page(), settings.Shortcuts.FirstUnavailable));
+            window = TrayDesktop.Get(() => SettingsWindow.Open(settings.TitleBars, null, () => settings.Page(), settings.Shortcuts.FirstUnavailable));
             var field = TrayDesktop.Get(() => Control(window, SettingsPage.OpenTitle));
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => window.IsActive && field.IsFocused));
 

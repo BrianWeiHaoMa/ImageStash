@@ -6,12 +6,14 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ImageStash.Look;
+using ImageStash.Seams;
 using ImageStash.Store;
 
 namespace ImageStash.Window;
 
 /// <summary>
-/// Settings, F4's one separate page: a normal window titled "ImageStash settings" that draws its
+/// Settings, F4's one separate page: a normal window titled "ImageStash settings", its title bar drawn without the
+/// icon, that draws its
 /// <see cref="SettingsPage"/> as one scrolling page of grouped rows (L2), each control named by its row's
 /// title, a shortcut row's Reset beside its field (<see cref="ShortcutResetButton"/>), a failed act's sentence under
 /// its row, and the start's read failure, a refused write and the paused shortcuts line at the top (G33, G35); while
@@ -20,8 +22,9 @@ namespace ImageStash.Window;
 /// <see cref="ImportOfferPanel"/>); and at its foot, the running build as one quiet line of text that can be selected and
 /// copied (<see cref="SettingsPage.VersionLine"/>). One
 /// is open at a time, brought forward when asked again (<see cref="Open"/>), on the row of a shortcut that is
-/// unavailable when asked so (G33); it opens centred on the primary display, wholly inside its working area at any
-/// scaling (E1), its size and place not remembered; Esc and Close close it, and it is then gone, Esc ending a shortcut
+/// unavailable when asked so (G33); asked from the stash window, it opens on the display that window stands on, beside
+/// it where there is room, else centred there, and asked otherwise, centred on the primary display, wholly inside the
+/// display's working area at any scaling (E1), its size and place not remembered; Esc and Close close it, and it is then gone, Esc ending a shortcut
 /// field's recording first. A recording also ends when the window is deactivated or closed, so ImageStash's shortcuts
 /// are never left released. It is never hidden for a capture: a recorded region holds it like any other window (G3,
 /// G15).
@@ -61,6 +64,9 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
     private readonly TextBlock writeFailureWords = new() { TextWrapping = TextWrapping.Wrap };
     private bool refreshing;
     private bool closed;
+
+    /// <summary>The stash window's rectangle the page was asked from, which it opens beside; null when asked otherwise.</summary>
+    private PixelRect? asker;
 
     public SettingsWindow(SettingsPage page)
     {
@@ -149,11 +155,13 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
     public bool HasClosed => closed;
 
     /// <summary>
-    /// The one Settings window (F4): <paramref name="open"/> brought forward when it is still open, else a new window on
-    /// a new <paramref name="page"/>, shown centred on the primary display and wholly inside its working area (E1); with
-    /// <paramref name="row"/>, on that shortcut's field, whose row shows why it is unavailable (G33).
+    /// The one Settings window (F4): <paramref name="open"/> brought forward where it is when it is still open (G32),
+    /// else a new window on a new <paramref name="page"/>, its title bar asked of <paramref name="quietWindows"/> to draw
+    /// no icon, shown where <see cref="Summon.SettingsPlace"/> puts it: beside the stash window standing at
+    /// <paramref name="asker"/> when asked from it, else centred on the primary display, wholly inside the working area
+    /// (E1); with <paramref name="row"/>, on that shortcut's field, whose row shows why it is unavailable (G33).
     /// </summary>
-    public static SettingsWindow Open(SettingsWindow? open, Func<SettingsPage> page, ShortcutAct? row = null)
+    public static SettingsWindow Open(IQuietWindows quietWindows, SettingsWindow? open, Func<SettingsPage> page, ShortcutAct? row = null, PixelRect? asker = null)
     {
         SettingsWindow window;
         if (open is { HasClosed: false })
@@ -168,8 +176,10 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
         }
         else
         {
-            window = new SettingsWindow(page());
-            window.ShowCentred();
+            window = new SettingsWindow(page()) { asker = asker };
+            // Before it first shows, so its title bar is never drawn with the icon.
+            quietWindows.PlainTitleBar(window);
+            window.ShowPlaced();
         }
 
         if (row is { } act)
@@ -210,7 +220,7 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
     /// Placed before it shows, then once more after the pending layout, because the frame round the client (its title
     /// bar and borders) is known only once shown, and the whole window, frame included, must lie inside the working area.
     /// </summary>
-    private void ShowCentred()
+    private void ShowPlaced()
     {
         Place(default);
         Show();
@@ -218,13 +228,13 @@ public sealed class SettingsWindow : Avalonia.Controls.Window
     }
 
     /// <summary>
-    /// The whole window centred on the primary display at its default size, as a pinned window with no remembered place
-    /// is, sized by that display's scaling and shrunk to its working area, the page scrolling within.
+    /// The whole window at its default size where <see cref="Summon.SettingsPlace"/> puts it, beside the window it was
+    /// asked from or centred, sized by that display's scaling and shrunk to its working area, the page scrolling within.
     /// </summary>
     private void Place(Size frame)
     {
         var displays = Summon.DisplaysOf(Screens);
-        var outer = Summon.Pinned(null, displays, new WindowSize(DefaultSize.Width + frame.Width, DefaultSize.Height + frame.Height));
+        var outer = Summon.SettingsPlace(asker, displays, new WindowSize(DefaultSize.Width + frame.Width, DefaultSize.Height + frame.Height));
         var scaling = Summon.DisplayAt(outer.Center, displays).Scaling;
         var width = Math.Max(1, outer.Width / scaling - frame.Width);
         var height = Math.Max(1, outer.Height / scaling - frame.Height);

@@ -157,6 +157,8 @@ public sealed class ShortcutSummonTests
 
         public void RoundCorners(Avalonia.Controls.Window window) => throw new NotSupportedException("The press shows no notification or bar.");
 
+        public void PlainTitleBar(Avalonia.Controls.Window window) => throw new NotSupportedException("The press frames no window.");
+
         public PixelRect? TrayIconRectangle() => null;
 
         public PixelPoint? PointerPosition()

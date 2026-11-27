@@ -117,6 +117,38 @@ public static class Summon
     /// </summary>
     public static Display StandsOn(PixelRect window, IReadOnlyList<Display> displays) => Holding(window, displays) ?? DisplayAt(window.Center, displays);
 
+    /// <summary>The space between the Settings page and the stash window it opens beside, in device-independent units.</summary>
+    public const double PageGap = 12;
+
+    /// <summary>
+    /// The Settings page opened afresh, <paramref name="size"/> its whole window: asked from the stash window standing at
+    /// <paramref name="asker"/>, on the display that window stands on (<see cref="StandsOn"/>), sized by that display's
+    /// scaling and wholly inside its working area, beside the window, right of it else left of it, <see cref="PageGap"/>
+    /// apart or as near as the side allows, its top level with the window's where the area allows, so the two do not
+    /// overlap; centred on that display where neither side has room.
+    /// Asked with no window (the tray menu, a notification), centred on the primary display.
+    /// </summary>
+    public static PixelRect SettingsPlace(PixelRect? asker, IReadOnlyList<Display> displays, WindowSize size)
+    {
+        if (asker is not { } window)
+        {
+            return Centred(Primary(displays), size);
+        }
+
+        var display = StandsOn(window, displays);
+        // Sized as when centred, so the page is the same size beside the window or over it.
+        var (width, height) = SizeOn(display, size);
+        var gap = (int)Math.Round(PageGap * display.Scaling);
+        var area = display.WorkingArea;
+        // Beside it wherever the side holds the page, the gap narrowed to the room there is: never over it while it fits.
+        var x = window.Right >= area.X && area.Right - window.Right >= width ? Math.Min(window.Right + gap, area.Right - width)
+            : window.X <= area.Right && window.X - area.X >= width ? Math.Max(window.X - gap - width, area.X)
+            : (int?)null;
+        return x is { } beside
+            ? Inside(area, new PixelRect(beside, window.Y, width, height))
+            : Centred(display, size);
+    }
+
     /// <summary>The display holding most of <paramref name="rect"/>, as Windows scales a window by; null when it lies on none.</summary>
     private static Display? Holding(PixelRect rect, IReadOnlyList<Display> displays)
     {

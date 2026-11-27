@@ -671,6 +671,8 @@ public sealed class NoWindowShown : IQuietWindows
 
     public void RoundCorners(Avalonia.Controls.Window window) => throw new NotSupportedException("The portable checks show no window.");
 
+    public void PlainTitleBar(Avalonia.Controls.Window window) => throw new NotSupportedException("The portable checks show no window.");
+
     public Avalonia.PixelRect? TrayIconRectangle() => null;
 
     public Avalonia.PixelPoint? PointerPosition() => null;

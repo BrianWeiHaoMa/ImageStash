@@ -109,7 +109,7 @@ public sealed class PausedShortcutsWindowTests
         {
             settings.Shortcuts.Start();
             settings.Shortcuts.TogglePause();
-            return SettingsWindow.Open(null, () => settings.Page());
+            return SettingsWindow.Open(settings.TitleBars, null, () => settings.Page());
         });
         try
         {

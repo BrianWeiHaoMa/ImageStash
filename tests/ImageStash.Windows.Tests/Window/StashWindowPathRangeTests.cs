@@ -373,7 +373,7 @@ public sealed class StashWindowPathRangeTests
         {
             TrayDesktop.Run(() => shown.Window.SettingsRequested += () =>
             {
-                open = SettingsWindow.Open(open, () => settings.Page());
+                open = SettingsWindow.Open(settings.TitleBars, open, () => settings.Page());
                 shown.Window.Follow(open);
             });
             KeyFrom(shown, grid, Key.OemComma, KeyModifiers.Control);

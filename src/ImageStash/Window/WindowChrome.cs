@@ -8,8 +8,9 @@ namespace ImageStash.Window;
 
 /// <summary>
 /// The stash window's frame in its two states and where it is placed (G1, G2): the flyout, with no frame of its own but
-/// the edge it draws (<see cref="FlyoutEdge"/>), above other windows and without a taskbar button; the pinned window,
-/// with a title bar and a taskbar button, at the position the user last gave it, or the first pin gave it where the flyout
+/// the edge it draws (<see cref="FlyoutEdge"/>), above other windows but its own Settings page while that is active
+/// (<see cref="FlyoutTopmost"/>), and without a taskbar button; the pinned window, with a title bar drawn without the
+/// icon and a taskbar button, at the position the user last gave it, or the first pin gave it where the flyout
 /// stood. Each is resized by dragging its border, and each size is remembered apart from the other's: the flyout's for
 /// every later flyout, the pinned window's for every later pin. In either state never smaller than the window's minimum,
 /// at which the editor fits whole (G20, G21). Only a resize or move the user makes is remembered, and the first pin's
@@ -22,6 +23,8 @@ public sealed class WindowChrome
     private readonly SettingsKeeper settings;
     private readonly WindowPin pin;
     private readonly FlyoutEdge edge;
+    private readonly IQuietWindows quietWindows;
+    private readonly FlyoutTopmost topmost = new();
     private bool pinned;
     private bool placing;
 
@@ -30,6 +33,7 @@ public sealed class WindowChrome
         this.window = window;
         this.settings = settings;
         this.pin = pin;
+        this.quietWindows = quietWindows;
         edge = new FlyoutEdge(window.BeginResizeDrag);
         // Rounded as Windows 11 rounds its windows, in either state, the flyout's edge following the same corner (F10).
         quietWindows.RoundCorners(window);
@@ -87,7 +91,7 @@ public sealed class WindowChrome
     public void Pin()
     {
         // Read before the frame changes: the flyout has no frame, so the window Windows reports is the flyout seen.
-        var flyout = new PixelRect(window.Position, PixelSize.FromSize(window.FrameSize ?? window.ClientSize, window.RenderScaling));
+        var flyout = Outer();
         var place = Summon.Pinned(settings.Current.PinnedPosition, Displays(), PinnedSize(), flyout);
         Apply(pinnedNow: true);
         PlaceSettled(place);
@@ -127,16 +131,59 @@ public sealed class WindowChrome
         // The flyout has no frame: a resizing one would add borders Windows does not draw, so the window it reports would
         // not be the flyout a person sees, and a band along its top. Its edge and grips are its own, over its content.
         window.WindowDecorations = pinned ? WindowDecorations.Full : WindowDecorations.None;
+        if (pinned)
+        {
+            // Asked at every change to the titled frame, which Windows may draw afresh: the first pinned show, Pin, and
+            // Pin again after Unpin.
+            quietWindows.PlainTitleBar(window);
+        }
+
         window.CanResize = true;
         edge.Shown = !pinned;
         window.CanMinimize = pinned;
         window.CanMaximize = pinned;
         window.ShowInTaskbar = pinned;
-        // Above other windows like the system's own tray flyouts, so it shows even when Windows refuses it the foreground.
-        window.Topmost = !pinned;
+        topmost.Framed(pinned);
+        window.Topmost = topmost.Topmost;
         pin.Show(pinned);
         placing = false;
     }
+
+    /// <summary>
+    /// ImageStash's Settings page, <paramref name="page"/>, became the active window: the flyout no longer stands above
+    /// it. Windows puts a window leaving the topmost ones above every window that is not, the page included, so the page
+    /// is put back on top of the flyout, neither activated.
+    /// </summary>
+    public void GiveWayTo(Avalonia.Controls.Window page)
+    {
+        var wasAbove = window.Topmost;
+        topmost.PageActivated();
+        window.Topmost = topmost.Topmost;
+        if (wasAbove && !window.Topmost && window.IsVisible && page.IsVisible)
+        {
+            // Avalonia applies a change of Topmost through SetWindowPos without activating; set and cleared, the page
+            // goes on top of every window that is not topmost, the flyout now among them.
+            page.Topmost = true;
+            page.Topmost = false;
+        }
+    }
+
+    /// <summary>The stash window itself became the active window: the flyout above every other window again.</summary>
+    public void WindowActivated()
+    {
+        topmost.WindowActivated();
+        window.Topmost = topmost.Topmost;
+    }
+
+    /// <summary>The Settings page closed: the flyout above every other window again.</summary>
+    public void PageClosed()
+    {
+        topmost.PageClosed();
+        window.Topmost = topmost.Topmost;
+    }
+
+    /// <summary>The whole window, frame included, on the desktop in physical pixels.</summary>
+    public PixelRect Outer() => new(window.Position, PixelSize.FromSize(window.FrameSize ?? window.ClientSize, window.RenderScaling));
 
     /// <summary>Shows the window placed on <paramref name="place"/>, without activating it.</summary>
     public void ShowAt(PixelRect place)

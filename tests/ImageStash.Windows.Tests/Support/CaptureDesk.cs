@@ -449,6 +449,8 @@ public sealed class RefusedActivation : IQuietWindows
 
     public void RoundCorners(Avalonia.Controls.Window window) => throw new NotSupportedException("The notification is rounded by the real seam.");
 
+    public void PlainTitleBar(Avalonia.Controls.Window window) => throw new NotSupportedException("The notification has no title bar.");
+
     public PixelRect? TrayIconRectangle() => null;
 
     public PixelPoint? PointerPosition() => null;

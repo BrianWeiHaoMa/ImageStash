@@ -882,7 +882,7 @@ public sealed class TagFieldTests
                 shown.Window.SettingsRequested += () =>
                 {
                     var previous = settings;
-                    settings = SettingsWindow.Open(previous, () => new SettingsPage(shown.Settings,
+                    settings = SettingsWindow.Open(shown.QuietWindows, previous, () => new SettingsPage(shown.Settings,
                         new SettingsLoad(shown.Settings.Current, null, true), shortcuts, new Locations(stash, settingsFolder),
                         new PresetStartWithWindows(), dialogs, shown.Moving, transferring, shown.Window.ThumbnailSizing, _ => { }, "ImageStash.Windows.exe"));
                     if (!ReferenceEquals(previous, settings)) shown.Window.Follow(settings);

@@ -164,7 +164,7 @@ public sealed class ThumbnailSizePickerTests
                 shown.Picture("size b.png", 40, 41, (_, _) => SKColors.Green),
                 shown.Picture("size c.png", 40, 42, (_, _) => SKColors.Blue));
             TransferredStash.CloseNotices(shown);
-            var page = TrayDesktop.Get(() => SettingsWindow.Open(null, () => settings.Page(moving: moving ? shown.Moving : null, thumbnails: shown.Window.ThumbnailSizing)));
+            var page = TrayDesktop.Get(() => SettingsWindow.Open(settings.TitleBars, null, () => settings.Page(moving: moving ? shown.Moving : null, thumbnails: shown.Window.ThumbnailSizing)));
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => page.IsVisible));
             await GridAtFor(shown, ThumbnailSize.Medium);
             return new Desk(settings, dialogs, shown, page);

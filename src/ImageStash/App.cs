@@ -163,7 +163,7 @@ public sealed class App : Application
         // The bar names the record shortcut while it would act (G33); the shortcuts are made before the window.
         recordClip.FollowShortcuts(shortcuts!);
         window.RecordRequested += RecordClip;
-        window.SettingsRequested += OpenSettings;
+        window.SettingsRequested += OpenSettingsFromWindow;
         window.StashClipboardImageRequested += StashFromTray;
         moving.WaitForTray(screenshot, recordClip, stashClipboardImage, captured, openWith, notifications);
         return listing;
@@ -292,14 +292,24 @@ public sealed class App : Application
     private void RecordClip() => _ = recordClip?.StartOrStop();
 
     /// <summary>
-    /// The tray menu's Settings and the stash window's button: the one page, brought forward while open, else opened afresh
+    /// The tray menu's Settings: the one page, brought forward where it is while open, else opened afresh, centred on the primary display,
     /// over the settings in effect, their one keeper and the shortcuts, Theme and Look applied to every window at once (F4, F10, G32,
     /// G34), the window following it (G2); on the row of the first shortcut that is unavailable, while one is (G33).
     /// </summary>
     private void OpenSettings() => OpenSettingsOn(shortcuts?.FirstUnavailable);
 
-    /// <summary>The page as <see cref="OpenSettings"/> opens it, on <paramref name="row"/>'s shortcut field when one is given: a notification's Choose another (G33).</summary>
-    private void OpenSettingsOn(ShortcutAct? row)
+    /// <summary>
+    /// The stash window's button and <c>Ctrl+,</c>: the page as <see cref="OpenSettings"/> opens it, but a new one on the
+    /// display the stash window stands on, beside it where there is room (<see cref="Summon.SettingsPlace"/>).
+    /// </summary>
+    private void OpenSettingsFromWindow() => OpenSettingsOn(shortcuts?.FirstUnavailable, window?.Outer);
+
+    /// <summary>
+    /// The page as <see cref="OpenSettings"/> opens it, on <paramref name="row"/>'s shortcut field when one is given: a
+    /// notification's Choose another (G33); a new one beside the stash window standing at <paramref name="asker"/> when it
+    /// asked, else centred on the primary display, whether or not a stash window shows.
+    /// </summary>
+    private void OpenSettingsOn(ShortcutAct? row, PixelRect? asker = null)
     {
         if (keeper is not { } settings || settingsLoad is not { } load || shortcuts is not { } bound || moving is not { } move || transferring is not { } transfer || window is not { } stash)
         {
@@ -307,9 +317,9 @@ public sealed class App : Application
         }
 
         var open = settingsWindow;
-        settingsWindow = SettingsWindow.Open(open, () => new SettingsPage(settings, load, bound, seams.Locations, seams.StartWithWindows, seams.DialogsAndExplorer,
+        settingsWindow = SettingsWindow.Open(seams.QuietWindows, open, () => new SettingsPage(settings, load, bound, seams.Locations, seams.StartWithWindows, seams.DialogsAndExplorer,
             move, transfer, stash.ThumbnailSizing, ApplyTheme, Environment.ProcessPath!),
-            row);
+            row, asker);
         if (!ReferenceEquals(open, settingsWindow))
         {
             window?.Follow(settingsWindow);

@@ -8,7 +8,8 @@ namespace ImageStash.Tests.Window;
 /// <summary>
 /// G1's placement from the tray and from the shortcut, in physical pixels on displays of any scaling (E1): above the
 /// icon, or beside the caret, else at the pointer, wholly on its display, the remembered size kept; the pinned window where it was left; G2's
-/// hide rules for focus loss, the paste and Esc, and what a hide does to an open preview (G1); G16's notification above the tray on the primary display; the window
+/// hide rules for focus loss, the paste and Esc, and what a hide does to an open preview (G1); G16's notification above the tray on the primary display; the
+/// Settings page beside the stash window it was asked from, on that window's display, else centred on the primary (G32); the window
 /// never placed below its minimum size, which yields only to a display too small for it (G20, G21).
 /// </summary>
 [TestClass]
@@ -400,6 +401,80 @@ public sealed class SummonTests
     {
         Assert.IsFalse(Summon.HideClosesPreview(pinnedAfter: false, capturePutsBack: true, editOpen: false, fieldHoldsTypedText: false), "a capture puts back only what it hid (G3)");
         Assert.IsFalse(Summon.HideClosesPreview(pinnedAfter: false, capturePutsBack: false, editOpen: true, fieldHoldsTypedText: false), "Save returns to the preview Edit was started from (G26)");
+    }
+
+    /// <summary>The Settings page's whole window at its default size with a title bar and borders (L2).</summary>
+    private static readonly WindowSize Page = new(636, 799);
+
+    [TestMethod]
+    public void SettingsAskedFromAFlyoutOnAScaledSecondDisplayOpensBesideItThereSizedByThatDisplay()
+    {
+        var flyout = new PixelRect(2000, 100, 690, 960);
+
+        var page = Summon.SettingsPlace(flyout, Two, Page);
+
+        Assert.AreEqual(new PixelSize(954, 1198), page.Size, "sized by the scaling of the flyout's display");
+        Assert.IsTrue(Right150.WorkingArea.Contains(page), $"wholly inside that display's working area: {page}");
+        Assert.IsFalse(page.Intersects(flyout), $"beside the flyout, not over it: {page} and {flyout}");
+        Assert.AreEqual(flyout.Y, page.Y, "level with the flyout's top");
+    }
+
+    [TestMethod]
+    public void SettingsAskedFromAFlyoutAcrossTwoDisplaysOpensOnTheOneHoldingMostOfIt()
+    {
+        var mostlyRight = new PixelRect(1700, 100, 690, 960);
+        var mostlyPrimary = new PixelRect(1400, 100, 690, 960);
+
+        var onRight = Summon.SettingsPlace(mostlyRight, Two, Page);
+        var onPrimary = Summon.SettingsPlace(mostlyPrimary, Two, Page);
+
+        Assert.AreSame(Right150, Summon.StandsOn(mostlyRight, Two));
+        Assert.IsTrue(Right150.WorkingArea.Contains(onRight), onRight.ToString());
+        Assert.AreEqual(new PixelSize(954, 1198), onRight.Size);
+        Assert.IsFalse(onRight.Intersects(mostlyRight), onRight.ToString());
+        Assert.IsTrue(Primary.WorkingArea.Contains(onPrimary), onPrimary.ToString());
+        Assert.AreEqual(new PixelSize(636, 799), onPrimary.Size);
+        Assert.IsFalse(onPrimary.Intersects(mostlyPrimary), onPrimary.ToString());
+    }
+
+    [TestMethod]
+    public void SettingsGoesLeftOfAFlyoutAtTheDisplaysRightEdge()
+    {
+        var flyout = new PixelRect(1400, 300, 460, 640);
+
+        var page = Summon.SettingsPlace(flyout, Two, Page);
+
+        Assert.AreEqual(new PixelRect(1400 - 12 - 636, 233, 636, 799), page, "left of it, level with its top as far as the working area allows");
+        Assert.IsTrue(Primary.WorkingArea.Contains(page), page.ToString());
+    }
+
+    [TestMethod]
+    public void WhereThePageFitsBesideTheFlyoutOnlyWithLessThanTheGapItStillGoesBesideIt()
+    {
+        var flyout = new PixelRect(180, 56, 460, 640);
+
+        var page = Summon.SettingsPlace(flyout, [Small], Page);
+
+        Assert.AreEqual(new PixelRect(1280 - 636, 0, 636, 752), page, "right of it, the gap narrowed to the room there is");
+        Assert.IsFalse(page.Intersects(flyout), page.ToString());
+    }
+
+    [TestMethod]
+    public void WhereNeitherSideHasRoomSettingsIsCentredOnTheFlyoutsDisplay()
+    {
+        var flyout = new PixelRect(410, 56, 460, 640);
+
+        var page = Summon.SettingsPlace(flyout, [Small], Page);
+
+        Assert.AreEqual(new PixelRect((1280 - 636) / 2, 0, 636, 752), page, "over the flyout, shrunk to the working area, wholly on the display");
+    }
+
+    [TestMethod]
+    public void SettingsAskedWithNoStashWindowOpensCentredOnThePrimaryDisplay()
+    {
+        var page = Summon.SettingsPlace(null, Two, Page);
+
+        Assert.AreEqual(new PixelRect((1920 - 636) / 2, (1032 - 799) / 2, 636, 799), page, "the tray menu's and a notification's Choose another, wherever a stash window stands");
     }
 
     [TestMethod]

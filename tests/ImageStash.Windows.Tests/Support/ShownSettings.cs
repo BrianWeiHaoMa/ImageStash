@@ -86,6 +86,9 @@ public static class ShownSettings
 
         public SettingsKeeper Keeper { get; }
 
+        /// <summary>The Quiet windows a page opened over this folder asks to draw its title bar without the icon: each request recorded, none applied.</summary>
+        public NoTrayIcon TitleBars { get; } = new();
+
         public GlobalShortcuts Shortcuts { get; }
 
         /// <summary>Each shortcut named unavailable, on the UI thread.</summary>

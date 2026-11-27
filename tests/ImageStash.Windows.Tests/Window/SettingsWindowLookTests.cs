@@ -29,7 +29,7 @@ public sealed class SettingsWindowLookTests
         using var settings = new SettingsFolder();
         using var shown = ShownWindow.Open();
         var requested = TrayDesktop.Get(() => Application.Current!.RequestedThemeVariant);
-        var window = TrayDesktop.Get(() => SettingsWindow.Open(null, () => settings.Page(theme => Application.Current!.RequestedThemeVariant = App.ThemeVariantOf(theme))));
+        var window = TrayDesktop.Get(() => SettingsWindow.Open(settings.TitleBars, null, () => settings.Page(theme => Application.Current!.RequestedThemeVariant = App.ThemeVariantOf(theme))));
         try
         {
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => window.IsVisible));
@@ -69,7 +69,7 @@ public sealed class SettingsWindowLookTests
         var notifications = new Notices(new StoppedClock());
         var notification = TrayDesktop.Get(() => new Notification(notifications, new WindowsQuietWindows(tray), new WindowsScreen(), _ => { }));
         var requested = TrayDesktop.Get(() => Application.Current!.RequestedThemeVariant);
-        var window = TrayDesktop.Get(() => SettingsWindow.Open(null, () => settings.Page()));
+        var window = TrayDesktop.Get(() => SettingsWindow.Open(settings.TitleBars, null, () => settings.Page()));
         try
         {
             TrayDesktop.Run(() =>
@@ -114,7 +114,7 @@ public sealed class SettingsWindowLookTests
     {
         using var settings = new SettingsFolder();
         TrayDesktop.UseProductTheme();
-        var window = TrayDesktop.Get(() => SettingsWindow.Open(null, () => settings.Page()));
+        var window = TrayDesktop.Get(() => SettingsWindow.Open(settings.TitleBars, null, () => settings.Page()));
         try
         {
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => window.IsVisible));
@@ -144,7 +144,7 @@ public sealed class SettingsWindowLookTests
     {
         using var settings = new SettingsFolder();
         TrayDesktop.UseProductTheme();
-        var window = TrayDesktop.Get(() => SettingsWindow.Open(null, () => settings.Page()));
+        var window = TrayDesktop.Get(() => SettingsWindow.Open(settings.TitleBars, null, () => settings.Page()));
         try
         {
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => window.IsVisible));
@@ -172,7 +172,7 @@ public sealed class SettingsWindowLookTests
     {
         using var settings = new SettingsFolder();
         TrayDesktop.UseProductTheme();
-        var window = TrayDesktop.Get(() => SettingsWindow.Open(null, () => settings.Page()));
+        var window = TrayDesktop.Get(() => SettingsWindow.Open(settings.TitleBars, null, () => settings.Page()));
         try
         {
             await ShownWindow.Eventually(() => TrayDesktop.Get(() => window.IsVisible));

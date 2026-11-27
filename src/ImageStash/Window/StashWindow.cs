@@ -208,6 +208,9 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
     /// <summary>The Settings button clicked; the page is the app's, one whichever way it is asked for (F4, G32).</summary>
     public event Action? SettingsRequested;
 
+    /// <summary>The whole window, frame included, in physical pixels while it shows, which a page it asks for opens beside; null while hidden.</summary>
+    public PixelRect? Outer => IsVisible ? chrome.Outer() : null;
+
     /// <summary>
     /// The summon from the tray, Open ImageStash and a second launch (G1, G3, G34): the paste target read as the window
     /// that had focus just before, which after a click on the tray icon is the taskbar, so none (G8); the content as the
