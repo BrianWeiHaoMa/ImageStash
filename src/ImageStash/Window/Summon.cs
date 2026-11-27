@@ -91,24 +91,80 @@ public static class Summon
     /// A notification (G16): above the tray icon when its rectangle lies on the primary display, else above that
     /// display's bottom-right working-area corner, and always wholly inside the primary display's working area; one
     /// <paramref name="on"/> another display (a paste that could not be made, asked while the stash window stood there,
-    /// G8) above that display's bottom-right working-area corner instead, sized by its scaling, wholly inside its working
-    /// area as <paramref name="displays"/> report it now.
+    /// G8, or a capture whose region was there) above that display's bottom-right working-area corner instead, sized by
+    /// its scaling, wholly inside its working area as <paramref name="displays"/> report it now, or as the primary's when
+    /// that display is no longer among them. While the stash window stands at <paramref name="clearOf"/> over that place,
+    /// clear of it instead (<see cref="ClearOf"/>), on the side of it the window <paramref name="standing"/> there already
+    /// takes where that side still holds it.
     /// </summary>
-    public static PixelRect NotificationPlace(PixelRect? icon, IReadOnlyList<Display> displays, WindowSize size, Display? on = null)
+    public static PixelRect NotificationPlace(PixelRect? icon, IReadOnlyList<Display> displays, WindowSize size, Display? on = null, PixelRect? clearOf = null, PixelRect? standing = null)
     {
         var primary = Primary(displays);
-        // Found again by its bounds: a taskbar or scaling changed there since keeps the notification inside it.
-        var display = on is { IsPrimary: false } ? displays.FirstOrDefault(d => d.Bounds == on.Bounds && !d.IsPrimary) ?? on : primary;
+        // Found again by its bounds: a taskbar or scaling changed there since keeps the notification inside it; a display
+        // gone counts as none, so a window placed again never goes back to where no display is (G1).
+        var display = on is { IsPrimary: false } ? StillShown(on, displays) ?? primary : primary;
         // Sized to its words alone: a notification never holds the editor, so the window's minimum is not its own.
-        var (width, height) = Scaled(display, size);
-        if (display == primary && icon is { } at && primary.Bounds.Contains(at.Center))
+        var scaled = Scaled(display, size);
+        var usual = display == primary && icon is { } at && primary.Bounds.Contains(at.Center)
+            ? AboveIcon(at, primary, scaled)
+            : AboveCorner(display, scaled);
+        return clearOf is { } window ? ClearOf(usual, window, display, standing) : usual;
+    }
+
+    /// <summary>
+    /// The flyout a click on a notification opens (G1, G16): above the tray icon as from the tray, or, from a notification
+    /// that stood <paramref name="stoodOn"/> another display still among <paramref name="displays"/>, above that display's
+    /// bottom-right working-area corner, where the notification stood, at <paramref name="size"/> sized by its scaling
+    /// and wholly inside its working area; a display no longer shown counts as none.
+    /// </summary>
+    public static PixelRect FromNotification(PixelRect? icon, IReadOnlyList<Display> displays, WindowSize size, Display? stoodOn) =>
+        stoodOn is { IsPrimary: false } && StillShown(stoodOn, displays) is { } display
+            ? AboveCorner(display, SizeOn(display, size))
+            : AboveTrayIcon(icon, displays, size);
+
+    /// <summary>
+    /// A notifications window's <paramref name="usual"/> place on <paramref name="display"/>, while the stash window stands
+    /// at <paramref name="window"/> (G16): kept where it does not meet the window; else <see cref="IconGap"/> above the
+    /// window, right-aligned to it, else left of it, else right of it, bottom-aligned to it, each moved the least distance
+    /// that puts it wholly inside the display's working area, the first that then does not meet the window; where none
+    /// is clear, the usual place, over it, at its own size. The side <paramref name="standing"/> already takes, clear of
+    /// the window, is tried first, so a stack that grows or shrinks beside the same window does not jump to another side.
+    /// </summary>
+    private static PixelRect ClearOf(PixelRect usual, PixelRect window, Display display, PixelRect? standing)
+    {
+        if (!usual.Intersects(window))
         {
-            return AboveIcon(at, primary, (width, height));
+            return usual;
         }
 
         var gap = (int)Math.Round(IconGap * display.Scaling);
         var area = display.WorkingArea;
-        return Inside(area, new PixelRect(area.Right - gap - width, area.Bottom - gap - height, width, height));
+        var (width, height) = (usual.Width, usual.Height);
+        PixelRect[] beside =
+        [
+            new(window.Right - width, window.Y - gap - height, width, height),
+            new(window.X - gap - width, window.Bottom - height, width, height),
+            new(window.Right + gap, window.Bottom - height, width, height),
+        ];
+        var side = standing is not { } now || now.Intersects(window) ? -1
+            : now.Bottom <= window.Y ? 0
+            : now.Right <= window.X ? 1
+            : now.X >= window.Right ? 2
+            : -1;
+        var tried = side < 0 ? beside : beside.Skip(side).Take(1).Concat(beside.Where((_, i) => i != side));
+        return tried.Select(place => Inside(area, place)).FirstOrDefault(place => !place.Intersects(window), usual);
+    }
+
+    /// <summary>The display among <paramref name="displays"/> that is still <paramref name="other"/>, found by its bounds; null when none is.</summary>
+    private static Display? StillShown(Display other, IReadOnlyList<Display> displays) =>
+        displays.FirstOrDefault(d => d.Bounds == other.Bounds && !d.IsPrimary);
+
+    /// <summary><paramref name="size"/> above <paramref name="display"/>'s bottom-right working-area corner, <see cref="IconGap"/> from its edges, wholly inside it.</summary>
+    private static PixelRect AboveCorner(Display display, (int Width, int Height) size)
+    {
+        var gap = (int)Math.Round(IconGap * display.Scaling);
+        var area = display.WorkingArea;
+        return Inside(area, new PixelRect(area.Right - gap - size.Width, area.Bottom - gap - size.Height, size.Width, size.Height));
     }
 
     /// <summary>

@@ -719,20 +719,25 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
     }
 
     /// <summary>
-    /// The summon a click on a notification makes (G16): as from the tray; when that click brought the notification in
-    /// front, the window comes in front from it as its own showing, keeping the target the click read (G8).
+    /// The summon a click on a notification makes (G16): as from the tray, the flyout above the tray icon, or, for a card
+    /// that stood on <paramref name="stoodOn"/> another display, above that display's bottom-right corner (G1); when that
+    /// click brought the notification in front, the window comes in front from it as its own showing, keeping the target
+    /// the click read (G8).
     /// </summary>
-    private void SummonFromNotification(bool keepsTarget)
+    private void SummonFromNotification(bool keepsTarget, Display? stoodOn)
     {
+        // One place for both paths, so a click Windows refused the front opens where an accepted one does.
+        PixelRect Place() => Summon.FromNotification(quietWindows.TrayIconRectangle(), chrome.Displays(), settings.Current.FlyoutSize.UsableOr(WindowSize.FlyoutDefault), stoodOn);
+        CaptureHiding.Forget();
         if (!keepsTarget)
         {
-            SummonFromTray();
+            activation.ReadTargetAtSummon();
+            SummonFlyoutAt(Place);
             return;
         }
 
-        CaptureHiding.Forget();
         activation.NotificationClickRead();
-        activation.WithOwnActivation(() => SummonFlyoutAt(AboveTrayIcon));
+        activation.WithOwnActivation(() => SummonFlyoutAt(Place));
     }
 
     /// <summary>

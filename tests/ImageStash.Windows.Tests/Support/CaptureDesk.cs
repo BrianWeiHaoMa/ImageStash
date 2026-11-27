@@ -106,13 +106,16 @@ public sealed class CaptureDesk : IDisposable
         var elsewhere = new List<Notification>();
         var (notification, capture) = TrayDesktop.Get(() =>
         {
-            var notification = new Notification(notifications, quiet, new WindowsScreen(), _ => { });
+            // As the app places every notifications window clear of the stash window.
+            var places = new NotificationPlaces();
+            var notification = new Notification(notifications, quiet, new WindowsScreen(), _ => { }, places: places);
             var capture = new CaptureNotification(stacks, shown.Listing, shown.Handoff, activations ?? quiet, heldFileRetry ?? HeldFileRetry.Duration);
             shown.Window.Follow(notification, capture);
+            places.Follow(shown.Window);
             // As the app draws and follows each other display's stack.
             stacks.Opened += (stack, display) =>
             {
-                var standing = new Notification(stack, quiet, new WindowsScreen(), _ => { }, () => display);
+                var standing = new Notification(stack, quiet, new WindowsScreen(), _ => { }, () => display, places);
                 shown.Window.FollowNotification(standing);
                 elsewhere.Add(standing);
             };

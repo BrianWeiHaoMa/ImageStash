@@ -183,7 +183,10 @@ public sealed class WindowChrome
     }
 
     /// <summary>The whole window, frame included, on the desktop in physical pixels.</summary>
-    public PixelRect Outer() => new(window.Position, PixelSize.FromSize(window.FrameSize ?? window.ClientSize, window.RenderScaling));
+    public PixelRect Outer() => OuterOf(window);
+
+    /// <summary>The whole of <paramref name="shown"/>, frame included, on the desktop in physical pixels.</summary>
+    public static PixelRect OuterOf(Avalonia.Controls.Window shown) => new(shown.Position, PixelSize.FromSize(shown.FrameSize ?? shown.ClientSize, shown.RenderScaling));
 
     /// <summary>Shows the window placed on <paramref name="place"/>, without activating it.</summary>
     public void ShowAt(PixelRect place)

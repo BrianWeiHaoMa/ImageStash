@@ -77,8 +77,9 @@ public sealed class ListedStash : IDisposable
         PreviewStepClicks = new PreviewStepClicks(PreviewStepping, () => PreviewOpen ? PreviewItem : null, () => PreviewClosing, Editing);
         CaptureNotification = new CaptureNotification(Stacks, Listing, Handoff, new NoWindowShown(), TestStash.ShortRetry);
         // The summon as the window's activation treats the target: its own showing keeps it, the tray's reads the window it gained focus from.
-        _ = new NotificationOpening(CaptureNotification, PasteTarget, Target, keepsTarget =>
+        _ = new NotificationOpening(CaptureNotification, PasteTarget, Target, (keepsTarget, stoodOn) =>
         {
+            SummonedFromNotification?.Invoke(keepsTarget, stoodOn);
             if (keepsTarget)
             {
                 PasteTarget.Keep();
@@ -469,6 +470,9 @@ public sealed class ListedStash : IDisposable
 
     /// <summary>A summon as the window makes it, the hidden flyout shown afresh, or with <paramref name="pinned"/> the pinned window brought forward (G1).</summary>
     public Task Summon(bool pinned = false) => Listing.Summoned(flyout: !pinned);
+
+    /// <summary>A card's opening summoned the window: whether it keeps the target, and the display the card stood on (<see cref="PlacedNotifications"/>).</summary>
+    public event Action<bool, Display?>? SummonedFromNotification;
 
     public RecordingScreen Screen { get; } = new();
 

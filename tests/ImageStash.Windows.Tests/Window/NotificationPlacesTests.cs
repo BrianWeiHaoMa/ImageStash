@@ -16,7 +16,9 @@ namespace ImageStash.Windows.Tests.Window;
 /// button, rounded and left out of screen captures (G15, S4). The other display is stood in for by the left third of the
 /// primary one, so the check runs on a PC with one display; two real displays of different scaling are a person's check.
 /// A screenshot's card on another display stands at that display's corner the same way, and its field takes focus
-/// without hiding the flyout.
+/// without hiding the flyout. Every notifications window stands clear of the stash window over its place: of the flyout
+/// summoned from the tray, of the pinned window moved over it, and, on a PC with a second display, of the flyout a card
+/// there opens on that display.
 /// </summary>
 [TestClass]
 public sealed class NotificationPlacesTests
@@ -123,8 +125,99 @@ public sealed class NotificationPlacesTests
         Thread.Sleep(300);
 
         Assert.IsTrue(TrayDesktop.Get(() => desk.Shown.Window.IsVisible), "the field's focus is ImageStash's: the flyout stays (G2, G16)");
-        TrayDesktop.Run(() => desk.Stacks.All[1].Close(desk.Stacks.All[1].Shown.Single()));
-        await ShownWindow.Eventually(() => TrayDesktop.Get(() => elsewhere.Shown is null));
+        // The desk closes the card and ends its fade, which its stopped clock would never finish.
+    }
+
+    [TestMethod]
+    public async Task ACardAboveTheTrayStandsClearOfTheFlyoutSummonedFromTheTrayOverIt()
+    {
+        // The card above the stand-in icon by the display's middle, over which the flyout, with no tray icon to stand above,
+        // is centred.
+        using var desk = await CaptureDesk.Open(["clear of the flyout.png"], midScreen: true);
+        await desk.Raise(desk.Items().Single(), CaptureKind.Screenshot);
+        var before = TrayDesktop.Get(() => CaptureDesk.Outer(desk.Notification.Shown!));
+        var flyout = desk.Shown.Window;
+
+        TrayDesktop.Run(flyout.SummonFromTray);
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => flyout.IsVisible));
+        Thread.Sleep(500);
+
+        TrayDesktop.Run(() =>
+        {
+            var (window, card) = (CaptureDesk.Outer(flyout), CaptureDesk.Outer(desk.Notification.Shown!));
+            Assert.IsTrue(window.Intersects(before), $"the flyout at {window} over the card's place {before}");
+            Assert.IsFalse(window.Intersects(card), $"the card at {card} clear of the flyout at {window} (G16)");
+            Assert.IsTrue(DisplayPlaces.Primary().WorkingArea.Contains(card), $"{card} wholly on screen");
+            Assert.AreEqual(before.Size, card.Size, "at its own size");
+        });
+        // The desk closes the card and ends its fade, which its stopped clock would never finish.
+    }
+
+    [TestMethod]
+    public async Task APinnedWindowMovedOverAShowingCardMovesTheCardOffIt()
+    {
+        using var desk = await CaptureDesk.Open(["moved over.png"]);
+        var window = desk.Shown.Window;
+        TrayDesktop.Run(window.SummonPinned);
+        await desk.FlyoutInFront();
+        await desk.Raise(desk.Items().Single(), CaptureKind.Screenshot);
+        var before = TrayDesktop.Get(() => CaptureDesk.Outer(desk.Notification.Shown!));
+
+        // Moved as a drag of its title bar moves it, its bottom-right corner over the card's.
+        TrayDesktop.Run(() =>
+        {
+            var outer = CaptureDesk.Outer(window);
+            window.Position = new PixelPoint(before.Right - outer.Width, before.Bottom - outer.Height);
+        });
+        Thread.Sleep(500);
+
+        TrayDesktop.Run(() =>
+        {
+            var (pinned, card) = (CaptureDesk.Outer(window), CaptureDesk.Outer(desk.Notification.Shown!));
+            Assert.IsTrue(pinned.Intersects(before), $"the pinned window at {pinned} over the card's place {before}");
+            Assert.IsFalse(pinned.Intersects(card), $"the card at {card} placed again, clear of the pinned window at {pinned} (G16)");
+            Assert.IsTrue(DisplayPlaces.Primary().WorkingArea.Contains(card), $"{card} wholly on screen");
+        });
+    }
+
+    [TestMethod]
+    public async Task ACardsClickOnASecondDisplayOpensTheFlyoutThereAndTheOtherCardThereStandsClearOfIt()
+    {
+        var second = new WindowsScreen().Displays().FirstOrDefault(display => !display.IsPrimary);
+        if (second is null)
+        {
+            Assert.Inconclusive("This PC has one display; a card's window opening on a second display needs a second.");
+        }
+
+        using var desk = await CaptureDesk.Open(["second older.png", "second newer.png"]);
+        var (older, newer) = (desk.Items()[0], desk.Items()[1]);
+        TrayDesktop.Run(() =>
+        {
+            desk.Capture.Raise(older, CaptureKind.Screenshot, onClipboard: false, lengthMs: null, on: second);
+            desk.Capture.Raise(newer, CaptureKind.Screenshot, onClipboard: false, lengthMs: null, on: second);
+        });
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => desk.Elsewhere.SingleOrDefault()?.Shown is { IsVisible: true }));
+        Thread.Sleep(500);
+        var elsewhere = desk.Elsewhere.Single();
+        var clicked = TrayDesktop.Get(() => elsewhere.Shown!.GetVisualDescendants().OfType<CaptureCard>().Last());
+
+        TestMouse.Click(TestMouse.Centre(TrayDesktop.Get(() => clicked.GetVisualDescendants().OfType<Image>().Single())));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => desk.Shown.Window.IsVisible && desk.Shown.Listing.Focused == newer.Id));
+        Thread.Sleep(800);
+
+        TrayDesktop.Run(() =>
+        {
+            var flyout = CaptureDesk.Outer(desk.Shown.Window);
+            var card = CaptureDesk.Outer(elsewhere.Shown!);
+            var (gap, area) = (DisplayPlaces.Scaled(second, (int)Summon.IconGap), second.WorkingArea);
+            Assert.IsTrue(area.Contains(flyout), $"the flyout at {flyout} wholly on the second display's working area {area} (G1)");
+            // Above its bottom-right corner, or held to its edge where the display is too small for the gap.
+            Assert.IsTrue(Math.Abs(area.Right - gap - flyout.Right) <= 2 || flyout.X == area.X, $"{flyout} at the corner's right edge");
+            Assert.IsTrue(Math.Abs(area.Bottom - gap - flyout.Bottom) <= 2 || flyout.Y == area.Y, $"{flyout} at the corner's bottom edge");
+            Assert.IsTrue(area.Contains(card), $"{card} on the second display");
+            var room = flyout.Y - area.Y >= card.Height + gap || flyout.X - area.X >= card.Width + gap || area.Right - flyout.Right >= card.Width + gap;
+            Assert.IsTrue(!room || !flyout.Intersects(card), $"the other card at {card} clear of the flyout where the display has room (G16)");
+        });
     }
 
     private static (nint Handle, bool Active, bool InTaskbar, uint Extended, PixelRect Outer) Read(Notification notification) => TrayDesktop.Get(() =>

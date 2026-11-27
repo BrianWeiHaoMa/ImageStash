@@ -30,20 +30,26 @@ public sealed class Notification
     private readonly IQuietWindows quietWindows;
     private readonly IScreen screen;
     private readonly Action<Failure> named;
-    private readonly Func<Display?>? on;
+    private readonly NotificationPlaces places;
+    private readonly NotificationPlaces.Placed placing;
     private readonly DispatcherTimer sweep;
     private readonly NoticeStack stack;
     private Avalonia.Controls.Window? window;
     private ScrollViewer? scroller;
 
     /// <param name="on">The display its notifications stand on, read at each placing; null, or none given, for above the tray.</param>
-    public Notification(Notices notifications, IQuietWindows quietWindows, IScreen screen, Action<Failure> named, Func<Display?>? on = null)
+    /// <param name="places">
+    /// Where every notifications window stands, told where the stash window stands; none given, one of its own, which
+    /// knows no stash window.
+    /// </param>
+    public Notification(Notices notifications, IQuietWindows quietWindows, IScreen screen, Action<Failure> named, Func<Display?>? on = null, NotificationPlaces? places = null)
     {
         this.notifications = notifications;
         this.quietWindows = quietWindows;
         this.screen = screen;
         this.named = named;
-        this.on = on;
+        this.places = places ?? new NotificationPlaces();
+        placing = this.places.Track(() => window is { } shown ? Room(shown) : null, on, MoveTo);
         stack = new NoticeStack(notifications, notice => (notice.Card ?? NoticeCard.For)(notice, notifications), quietWindows.AnimationEffectsShown, inWindow: false);
         stack.View.Margin = new Thickness(NoticeStack.Gap);
         stack.RoomChanged += RoomChanged;
@@ -143,7 +149,13 @@ public sealed class Notification
         quietWindows.RoundCorners(hidden);
         quietWindows.ShowWithoutActivating(hidden);
         // Placed again once shown, as the stash window is: only now does it size itself by its display's scaling.
-        Dispatcher.UIThread.Post(() => Place(hidden, stack.View), DispatcherPriority.Background);
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (ReferenceEquals(hidden, window))
+            {
+                places.Place(placing);
+            }
+        }, DispatcherPriority.Background);
         sweep.Start();
     }
 
@@ -164,7 +176,7 @@ public sealed class Notification
             return;
         }
 
-        Place(window, stack.View);
+        places.Place(placing);
         // More than the working area holds: the newest stays in sight at the bottom, the oldest scroll away (G16).
         Dispatcher.UIThread.Post(scroller.ScrollToEnd, DispatcherPriority.Background);
     }
@@ -200,17 +212,22 @@ public sealed class Notification
         return (window, scroller);
     }
 
-    /// <summary>Puts the window, at the size its cards ask for, above the tray icon on the primary display, or on its own display (G16).</summary>
-    private void Place(Avalonia.Controls.Window shown, StackPanel content)
+    /// <summary>The size the cards ask for, the displays as the window sees them, and the tray icon.</summary>
+    private StackRoom Room(Avalonia.Controls.Window shown)
     {
-        if (!ReferenceEquals(shown, window))
+        stack.View.Measure(Size.Infinity);
+        var wanted = stack.View.DesiredSize;
+        return new StackRoom(new Store.WindowSize(wanted.Width, wanted.Height), Summon.DisplaysOf(shown.Screens), quietWindows.TrayIconRectangle());
+    }
+
+    /// <summary>Puts the window at <paramref name="place"/>, above the tray icon, on its own display, or clear of the stash window (G16).</summary>
+    private void MoveTo(PixelRect place)
+    {
+        if (window is not { } shown)
         {
             return;
         }
 
-        content.Measure(Size.Infinity);
-        var wanted = content.DesiredSize;
-        var place = Summon.NotificationPlace(quietWindows.TrayIconRectangle(), Summon.DisplaysOf(shown.Screens), new Store.WindowSize(wanted.Width, wanted.Height), on?.Invoke());
         if (shown.IsVisible)
         {
             // Never past its old place or its new one, both on its display: moved first at its old size, a window

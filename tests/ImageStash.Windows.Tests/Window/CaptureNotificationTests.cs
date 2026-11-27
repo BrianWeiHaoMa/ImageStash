@@ -418,7 +418,7 @@ public sealed class CaptureNotificationTests
         TrayDesktop.Run(flyout.SummonFromTray);
         await Eventually(() => FrontWindow.GetForegroundWindow() == handle && TrayDesktop.Get(() => flyout.IsActive));
         Thread.Sleep(500);
-        TrayDesktop.Run(() => Assert.IsTrue(Outer(flyout).Intersects(Outer(desk.Notification.Shown!)), $"both above the tray: the flyout at {Outer(flyout)}, the cards' window at {Outer(desk.Notification.Shown!)}"));
+        TrayDesktop.Run(() => Assert.IsFalse(Outer(flyout).Intersects(Outer(desk.Notification.Shown!)), $"the cards stand clear of the flyout over their place: the flyout at {Outer(flyout)}, the cards' window at {Outer(desk.Notification.Shown!)}"));
         foreach (var (card, which) in new[] { (olderCard, "the older"), (newerCard, "the newer") })
         {
             Assert.AreEqual(desk.NotificationHandle, FrontWindow.Under(Centre(TrayDesktop.Get(() => EditButton(card)))), $"{which} card's Edit above the flyout (G16)");
@@ -433,7 +433,7 @@ public sealed class CaptureNotificationTests
         // The older card fades over the look's exit and gives up its room once the pointer leaves.
         await desk.FinishNoticeExit(olderCard);
         CollectionAssert.AreEqual(new[] { newerCard }, desk.Cards(), "the older card gone at its Edit, the newer staying (G16)");
-        TrayDesktop.Run(() => Assert.IsTrue(Outer(flyout).Intersects(Outer(desk.Notification.Shown!)), $"both above the tray: the flyout at {Outer(flyout)}, the card's window at {Outer(desk.Notification.Shown!)}"));
+        TrayDesktop.Run(() => Assert.IsFalse(Outer(flyout).Intersects(Outer(desk.Notification.Shown!)), $"the card stands clear of the flyout over its place: the flyout at {Outer(flyout)}, the card's window at {Outer(desk.Notification.Shown!)}"));
         Assert.AreEqual(desk.NotificationHandle, FrontWindow.Under(Centre(TrayDesktop.Get(() => UndoButton(newerCard)))), "the newer card's Undo above the flyout the older's Edit opened (G16)");
         Assert.AreEqual(handle, FrontWindow.GetForegroundWindow(), "the flyout in front with the edit");
 

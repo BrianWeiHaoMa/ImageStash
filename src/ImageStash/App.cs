@@ -127,7 +127,8 @@ public sealed class App : Application
     /// editor it opens over its items, rendering a Save through Media (G20, G26), and the settings it remembers its
     /// sizes in (G2); and the notifications above the tray, which a paste the target cannot take raises (G8, G16), or on
     /// the display the stash window stood on when that is another, as a screenshot's or a recording's card stands on the
-    /// display its region was on, each other display's stack drawn and followed as the tray's is, as
+    /// display its region was on, each other display's stack drawn and followed as the tray's is, every one standing clear
+    /// of the stash window while it shows over their place, as
     /// do Stash clipboard image and its capture notification, which open no window (G13), and Open with…'s adoption of
     /// a copy another program rewrote (G27); a notification the platform will not keep out of captures is named in the
     /// tooltip (G35); and Take a screenshot and Record a clip, over one capture session on the screen, the overlay and
@@ -140,7 +141,9 @@ public sealed class App : Application
     private Listing CreateWindow(Notices notices, Notices notifications, SettingsKeeper keeper, TrayMenu trayMenu)
     {
         var listing = new Listing(failure => notices.Raise(failure));
-        var notification = new Notification(notifications, seams.QuietWindows, seams.Screen, trayMenu.Name);
+        // Where every notifications window stands, clear of the stash window while it shows over their place (G16).
+        var places = new NotificationPlaces();
+        var notification = new Notification(notifications, seams.QuietWindows, seams.Screen, trayMenu.Name, places: places);
         // The one home of which stack a notification stands in, the paste fallback's and the captures' (G16).
         var stacks = new NotificationStacks(notifications);
         var handoff = new Handoff(listing, notices, stacks, seams.ClipboardAndDrops, seams.Target, LocalClock.Instance, HeldFileRetry.Duration, HeldClipboard.Retry);
@@ -155,10 +158,11 @@ public sealed class App : Application
             LocalClock.Instance, HeldFileRetry.Duration);
         window = new StashWindow(listing, notices, keeper, new Import(listing, notices, HeldFileRetry.Duration), handoff, editing, openWith, moving, seams);
         window.Follow(notification, captured);
+        places.Follow(window);
         // Each other display's stack, drawn and followed as the tray's is, before its first notification shows; the one
         // card service and its opening were followed once above, for every stack.
         stacks.Opened += (standing, display) =>
-            window.FollowNotification(new Notification(standing, seams.QuietWindows, seams.Screen, trayMenu.Name, () => display));
+            window.FollowNotification(new Notification(standing, seams.QuietWindows, seams.Screen, trayMenu.Name, () => display, places));
         var capture = new CaptureSession(seams.Screen, new RegionOverlay(), new RecordingFrame(seams.QuietWindows, seams.Screen, trayMenu.Name, LocalClock.Instance),
             GifEncoder.Opener(HeldFileRetry.Duration), LocalClock.Instance, failure => notifications.Raise(failure));
         screenshot = new Screenshot(listing, notifications, captured, handoff, capture, keeper, window.CaptureHiding, window, HeldFileRetry.Duration);
