@@ -68,6 +68,8 @@ public sealed class TagPicker : Popup
     private Button? keyboardEntry;
     private double widestName;
     private double widestCount;
+    private TagManagementMenu? renaming;
+    private IDisposable? windowPresses;
 
     /// <summary>The window the list shows in while it is open, whose scaling its width follows; null otherwise.</summary>
     private TopLevel? openIn;
@@ -123,8 +125,41 @@ public sealed class TagPicker : Popup
     {
         this.heldKeys = heldKeys;
         listing.TagRenamedInLists += (from, to) => RowRenamed?.Invoke(from, to);
-        attachTagMenu = (button, row) => button.ContextMenu = new TagManagementMenu(button, listing, organising, () =>
-            IsOpen && rows.Contains(row) ? new TagCount(row.Entry.Tag, row.Entry.Count) : null, heldKeys, paste, () => RowInView(button));
+        attachTagMenu = (button, row) =>
+        {
+            var menu = new TagManagementMenu(button, listing, organising, () =>
+                IsOpen && rows.Contains(row) ? new TagCount(row.Entry.Tag, row.Entry.Count) : null, heldKeys, paste, () => RowInView(button));
+            menu.RenameBegan += began => renaming = began;
+            button.ContextMenu = menu;
+        };
+    }
+
+    /// <summary>
+    /// A press elsewhere in the window keeps a rename typed in a row, as Enter would (G17), before the list closes for
+    /// it: its rows leave as it closes, which ends a draft unwritten, and the list shows in a window of its own, whose
+    /// focus the element pressed never takes. This handler tunnels from the window's root, so it runs before Avalonia's
+    /// light dismiss, which the window's dismiss layer hears as the press reaches it. A hide or another app closes the
+    /// list with no press here. A press on the window's frame closes it with no routed press, and keeps nothing.
+    /// </summary>
+    private void PressedInWindow(object? sender, PointerPressedEventArgs e)
+    {
+        if (IsOpen && e.Source is Visual pressed && !Contains(pressed) && renaming is { } menu)
+        {
+            renaming = null;
+            menu.KeepRename();
+        }
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == IsOpenProperty && !change.GetNewValue<bool>())
+        {
+            // Closed by any way: a row's draft has ended with its row, and no later press keeps it.
+            windowPresses?.Dispose();
+            windowPresses = null;
+            renaming = null;
+        }
     }
 
     private bool RowInView(Button button) => button.IsEffectivelyVisible && button.TranslatePoint(default, list) is { } at
@@ -165,6 +200,10 @@ public sealed class TagPicker : Popup
         }
 
         Show(entries);
+        windowPresses?.Dispose();
+        // The window's root: the top level the anchor shows in.
+        windowPresses = anchor.GetSelfAndVisualAncestors().OfType<Interactive>().Last()
+            .AddDisposableHandler(PointerPressedEvent, PressedInWindow, RoutingStrategies.Tunnel, handledEventsToo: true);
         SetCurrentValue(IsOpenProperty, true);
         // The list shows in a window of its own beside its anchor, which may lie on another display than the opener's
         // window, at another scaling: its width follows that window's.

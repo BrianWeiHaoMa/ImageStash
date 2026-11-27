@@ -126,6 +126,12 @@ internal sealed class TagManagementMenu : ContextMenu
 
     internal void CancelRename() => renameBox?.Cancel();
 
+    /// <summary>Ends a rename begun from this menu, if one goes on, keeping its name as Enter does (G17).</summary>
+    internal void KeepRename() => renameBox?.Keep();
+
+    /// <summary>A rename begun from this menu, its box now holding the draft.</summary>
+    internal event Action<TagManagementMenu>? RenameBegan;
+
     private void BeginRename(StashStore store, string tag, IInputElement? returnTo)
     {
         var content = anchor.Content;
@@ -152,6 +158,10 @@ internal sealed class TagManagementMenu : ContextMenu
         }
 
         box.SelectAll();
+        if (renameBox == box)
+        {
+            RenameBegan?.Invoke(this);
+        }
 
         void CheckLayout(object? sender, EventArgs e) => CheckOrigin();
 

@@ -36,6 +36,9 @@ internal sealed class TagRenameBox : TextBox
 
     public void Cancel() => Finish(null);
 
+    /// <summary>Ends the draft as Enter does: the list of every tag it sits in closing for a press elsewhere in the window (G17).</summary>
+    public void Keep() => Finish(Text ?? "");
+
     protected override void OnKeyDown(KeyEventArgs e)
     {
         if (e.Key is Key.Enter or Key.Escape)
@@ -76,7 +79,8 @@ internal sealed class TagRenameBox : TextBox
     /// Focus moving to another part of the window keeps the typed name, as Enter does, by the window's one rule for a
     /// field left (<see cref="FieldLeaving"/>, G17). Focus going with no element taking it (another app, the flyout's
     /// hide, the list closing) ends the draft with nothing written; Esc and Enter have already ended it before the focus
-    /// they give back moves.
+    /// they give back moves, and a press elsewhere in the window has kept it before closing the list
+    /// (<see cref="TagPicker"/>).
     /// </summary>
     protected override void OnLostFocus(FocusChangedEventArgs e)
     {

@@ -141,6 +141,37 @@ public sealed class TagRenameWindowTests
         TrayDesktop.Run(() => Assert.IsFalse(shown.Search.IsFocused, "focus stays where the click put it, not given back to the search box it came from"));
     }
 
+    [TestMethod]
+    public async Task AClickElsewhereInTheWindowKeepsANameTypedInTheChipRowsListOfEveryTagAndAHideKeepsNothing()
+    {
+        using var pointer = TestMouse.PutBackAfterwards();
+        using var shown = Open();
+        var carrier = (await shown.OpenStash(shown.Picture("carrier.png"))).Single();
+        const string tag = "zz-elsewhere";
+        var others = Enumerable.Range(1, 60).Select(i => $"scroll-tag-{i:00}").ToArray();
+        await shown.Tag([carrier], string.Join(' ', others.Append(tag)));
+        await shown.ClickSearchInFront();
+
+        var picker = await OpenPicker(shown, carrier, "chip picker", tag);
+        var hidden = await OpenRename(await FindAnchor(shown, picker, tag), tag);
+        await TypeDraft(hidden, Draft);
+        TrayDesktop.Run(() => shown.Window.Hide());
+        await RenameClosed(hidden);
+        TrayDesktop.Run(shown.Window.SummonPinned);
+        await shown.ClickSearchInFront();
+        picker = await OpenPicker(shown, carrier, "chip picker", tag);
+        var editor = await OpenRename(await FindAnchor(shown, picker, tag), tag);
+        CollectionAssert.AreEquivalent(others.Append(tag).ToArray(), shown.TagsOf(carrier.Id), "the hide closed the list with nothing written");
+        await TypeDraft(editor, Renamed);
+        TestMouse.Click(TrayDesktop.Get(() => shown.TileOnScreen(carrier.Id)));
+        await RenameClosed(editor);
+        await Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Tags.Any(count => count.Tag == Renamed)));
+
+        CollectionAssert.AreEquivalent(others.Append(Renamed).ToArray(), shown.TagsOf(carrier.Id),
+            "a click on a tile closes the list and renames, as Enter does (G17)");
+        TrayDesktop.Run(() => Assert.IsFalse(picker.IsOpen, "the click closed the list"));
+    }
+
     private static async Task PickAfterCancel(ShownWindow shown, StashItem match, string origin, TagPicker? picker,
         string tag, bool itemPick)
     {
