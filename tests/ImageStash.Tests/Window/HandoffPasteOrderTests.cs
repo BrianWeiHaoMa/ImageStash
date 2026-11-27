@@ -311,7 +311,7 @@ public sealed class HandoffPasteOrderTests
         Assert.IsTrue((await listed.PasteIntoTarget(listed.Listing.SelectedItems)).Succeeded);
         await listed.Summon();
 
-        Assert.AreEqual(Scope.Recent, listed.Listing.Scope, "G1, Q003: Recent after a paste");
+        Assert.AreEqual(Scope.Recent, listed.Listing.Scope, "G1: Recent after a paste");
         Assert.AreEqual("", listed.Listing.Query, "the search empty");
         CollectionAssert.AreEqual(new[] { item.Id, older.Id }, listed.Listing.Items.Select(shown => shown.Id).ToList(), "the pasted item first, its use recorded before Recent was read (G4)");
         CollectionAssert.AreEqual(new[] { item.Id }, listed.Listing.Selection.ToList(), "it alone selected");
