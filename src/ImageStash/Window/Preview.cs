@@ -168,7 +168,7 @@ public sealed class Preview : Border
         tags.Cancelled += () => picture.Focus(NavigationMethod.Tab);
         tags.Removed += tag => _ = Act(ItemTags.RemoveAction, item => organising.RemoveTag([item], tag));
         // A pick in the list of every tag gives the tag or takes it off, as Add tag ▸ does (G17).
-        tags.Picked += tag => _ = Act(Organising.TagAct, item => organising.ToggleTag([item], tag));
+        tags.Picked += tag => _ = Act(Organising.TagAct, item => tags.Field.Pick(organising, [item], tag));
         tags.Field.CatalogueRequested += () => _ = Refresh();
 
         handOff = new Button { Classes = { "accent" }, HorizontalAlignment = HorizontalAlignment.Left };

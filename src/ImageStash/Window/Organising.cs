@@ -144,9 +144,34 @@ public sealed class Organising(Listing listing, Notices notices)
     /// taken off them all; else every item is given it. Each click reads the current memberships.
     /// An item gone meanwhile is handed on and refused by name.
     /// </summary>
-    public Task<Outcome> ToggleTag(IReadOnlyList<StashItem> items, string tag) =>
-        Change(items, TagAct, ItemTags.AllCarry(items, tag) ? ItemTags.RemoveAction : ItemTags.AddAction,
-            (store, targets) => store.ToggleExistingTag(targets, tag));
+    public Task<Outcome> ToggleTag(IReadOnlyList<StashItem> items, string tag) => PickTag(items, tag, whileAnyCarries: false);
+
+    /// <summary>
+    /// A click on <paramref name="tag"/> in an open list of tags (G17), decided at the write's turn from the store as it
+    /// holds the items then: taken off them while every one carries it, or with <paramref name="whileAnyCarries"/>
+    /// (Remove tag ▸) while any does; else given to every item. A tag no item carries is refused, unless
+    /// <paramref name="list"/> is the open list whose own click took it off its last item, which gives it back; a click
+    /// there that takes a tag off its last item is told to that list at once, so even the next click queued behind it
+    /// gives it back.
+    /// </summary>
+    internal Task<Outcome> PickTag(IReadOnlyList<StashItem> items, string tag, bool whileAnyCarries, OpenTagList? list = null) =>
+        Change(items, TagAct, (whileAnyCarries ? ItemTags.AnyCarry(items, tag) : ItemTags.AllCarry(items, tag)) ? ItemTags.RemoveAction : ItemTags.AddAction,
+            async (store, targets) =>
+            {
+                if (list?.GivesBack(tag) == true)
+                {
+                    return await store.AddTagWithChanges(targets, tag);
+                }
+
+                var result = await store.ToggleExistingTag(targets, tag, whileAnyCarries);
+                if (list is not null && result.Outcomes.Any(outcome => outcome.Succeeded) && (await store.TagCounts()).Value is { } counts
+                    && !counts.Any(count => StringComparer.OrdinalIgnoreCase.Equals(count.Tag, tag)))
+                {
+                    list.LostLastItem(tag);
+                }
+
+                return result;
+            });
 
     /// <summary>
     /// The requested items still in the stash, as of the latest read.

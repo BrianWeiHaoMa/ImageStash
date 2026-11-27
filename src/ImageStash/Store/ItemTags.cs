@@ -57,19 +57,30 @@ internal static class ItemTags
     public static bool AllCarry(IReadOnlyList<StashItem> items, string tag) =>
         items.Count > 0 && items.All(item => item.Tags.Contains(tag, StringComparer.OrdinalIgnoreCase));
 
-    public static ItemFactResult ToggleExisting(StoreContext store, IReadOnlyList<StashItem> items, string tag)
+    /// <summary>Whether any item carries the tag, as Remove tag ▸ lists it and its click decides (G17).</summary>
+    public static bool AnyCarry(IReadOnlyList<StashItem> items, string tag) =>
+        items.Any(item => item.Tags.Contains(tag, StringComparer.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Takes the tag off the items while every one carries it, or with <paramref name="whileAnyCarries"/> while any does
+    /// (Remove tag ▸, G17), as the store holds them at the write; else gives it to each, while it still has a carrier.
+    /// </summary>
+    public static ItemFactResult ToggleExisting(StoreContext store, IReadOnlyList<StashItem> items, string tag, bool whileAnyCarries = false)
     {
+        bool Removing(IReadOnlyList<StashItem> carriers) =>
+            whileAnyCarries ? AnyCarry(carriers, tag) : AllCarry(carriers, tag);
+
         // Read at the write's turn. In particular, an earlier duplicate import can still be comparing its files.
         var current = ToggleTargets(store, items);
         if (current.Failure is { } failure)
         {
-            var removing = AllCarry(items, tag);
+            var removing = Removing(items);
             var refusal = failure with { Action = removing ? RemoveAction : AddAction, Subject = $"#{tag}" };
             return new ItemFactResult(store, removing ? UndoRemoveAction : UndoAddAction,
                 [.. items.Select(_ => Outcome.Fail(refusal))], []);
         }
 
-        return AllCarry(current.Value!, tag) ? Remove(store, items, tag) : AddExisting(store, items, tag);
+        return Removing(current.Value!) ? Remove(store, items, tag) : AddExisting(store, items, tag);
     }
 
     private static Outcome<IReadOnlyList<StashItem>> ToggleTargets(StoreContext store, IReadOnlyList<StashItem> items)

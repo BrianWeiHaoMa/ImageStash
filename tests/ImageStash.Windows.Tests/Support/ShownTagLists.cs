@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -82,7 +83,11 @@ public static class ShownTagLists
 
     public static List<string> Marked(MenuItem list) => list.Items.OfType<MenuItem>().Where(item => item.IsChecked).Select(Label).ToList();
 
-    public static string Label(MenuItem item) => ((string)item.Header!).Replace("__", "_");
+    /// <summary>An entry's words: a tag's entry is named by its tag alone, its count beside it; any other shows its words as its header.</summary>
+    public static string Label(MenuItem item) => item.Header is string header ? header.Replace("__", "_") : AutomationProperties.GetName(item)!;
+
+    /// <summary>The number a tag's entry shows: the items in the stash that carry its tag (G17).</summary>
+    public static string Count(MenuItem item) => ((Grid)item.Header!).Children.OfType<TextBlock>().Last().Text!;
 
     /// <summary>Whether the entry lies whole inside the list's scrolled view.</summary>
     public static bool InView(ScrollViewer scroller, Control entry) =>

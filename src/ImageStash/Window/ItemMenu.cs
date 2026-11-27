@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -54,9 +55,9 @@ public enum ItemMenuAction
 
 /// <summary>
 /// An entry of the item menu as it shows: its words, its key, its icon, whether a separator comes before it, and on an
-/// entry of a tag list, its tag and whether it is marked.
+/// entry of a tag list, its tag, whether it is marked and the number of items in the stash that carry it.
 /// </summary>
-public sealed record ItemMenuEntry(ItemMenuAction Action, string Label, KeyGesture? Gesture, string Glyph, bool AfterSeparator = false, string? Tag = null, bool Marked = false);
+public sealed record ItemMenuEntry(ItemMenuAction Action, string Label, KeyGesture? Gesture, string Glyph, bool AfterSeparator = false, string? Tag = null, bool Marked = false, int? Count = null);
 
 /// <summary>
 /// The item menu a right-click on a tile opens (G8, G9, G17, G18, G19, G20, G26): the handoff first, which with a paste target is
@@ -174,7 +175,7 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
             MenuKeys.TrackWindowKeys(menu, held, () => pasteHide = hide.ForEnterPress());
         }
 
-        var lists = new ShownTagLists(listing, notices, organising, items, typeATag);
+        var lists = new ShownTagLists(new ItemMenuTagLists(listing, notices, organising, items), items, typeATag);
         foreach (var entry in Entries(items, pasteTarget))
         {
             var item = Add(menu, entry);
@@ -218,7 +219,7 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
 
         lists.AddTag?.Classes.Add(TagListHeight.ItemMenuList);
         lists.RemoveTag?.Classes.Add(TagListHeight.ItemMenuList);
-        lists.Fill(TagLists.AddTagEntries([], items), TagLists.RemoveTagEntries(items));
+        lists.Show();
         var lastTags = listing.Tags;
         void RefreshTagLists()
         {
@@ -422,17 +423,31 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
         return resolved;
     }
 
-    private static MenuItem MenuEntry(ItemMenuEntry entry) => new()
+    private static MenuItem MenuEntry(ItemMenuEntry entry)
     {
+        var item = new MenuItem
+        {
+            Header = HeaderOf(entry),
+            InputGesture = entry.Gesture,
+            Icon = new TextBlock { Text = entry.Glyph, FontFamily = new FontFamily("Segoe Fluent Icons"), FontSize = 16, VerticalAlignment = VerticalAlignment.Center },
+            // A tag list's entry shows its mark and leaves the menu open for the next (G17); every other entry closes it.
+            ToggleType = entry.Tag is null ? MenuItemToggleType.None : MenuItemToggleType.CheckBox,
+            IsChecked = entry.Marked,
+            StaysOpenOnClick = entry.Tag is not null,
+        };
+        if (entry.Count is not null)
+        {
+            // Found by its words alone, as scripts find a tag's entry, its number aside.
+            AutomationProperties.SetName(item, entry.Label);
+        }
+
+        return item;
+    }
+
+    /// <summary>An entry's header, made anew for each entry it shows on: a tag's words with its count beside them, or the entry's words.</summary>
+    private static object HeaderOf(ItemMenuEntry entry) =>
         // A header's underscore marks an access key; doubled, it shows as typed, as a tag or an app's name may hold one.
-        Header = entry.Label.Replace("_", "__"),
-        InputGesture = entry.Gesture,
-        Icon = new TextBlock { Text = entry.Glyph, FontFamily = new FontFamily("Segoe Fluent Icons"), FontSize = 16, VerticalAlignment = VerticalAlignment.Center },
-        // A tag list's entry shows its mark and leaves the menu open for the next (G17); every other entry closes it.
-        ToggleType = entry.Tag is null ? MenuItemToggleType.None : MenuItemToggleType.CheckBox,
-        IsChecked = entry.Marked,
-        StaysOpenOnClick = entry.Tag is not null,
-    };
+        entry.Count is null ? entry.Label.Replace("_", "__") : TagCountText.Beside(entry.Label, entry.Count.Value);
 
     /// <summary>Adds <paramref name="entry"/> to <paramref name="menu"/>, after a separator when it comes after one; the entry it shows as.</summary>
     private static MenuItem Add(ItemsControl menu, ItemMenuEntry entry)
@@ -454,122 +469,76 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
     }
 
     /// <summary>
-    /// One open menu's Add tag ▸ and Remove tag ▸ (G17), on the items the menu was opened on. Add tag ▸ shows Type a tag…
-    /// alone until every tag is read from the store as the menu opens, so a tag no item carries any more is never offered
-    /// and one just added is. After each click on a list's entry the lists show the items as the store now holds them:
-    /// every mark follows its answer, never the menu's own flip of it; Remove tag ▸ shows while they carry a tag, listing
-    /// what they carry, and hides with its list once they carry none, so nothing in the menu is inert. Add tag ▸ keeps
-    /// its entries and their order while open, so none moves under the pointer and a tag it took off its last item stays,
-    /// unmarked, for a second click to give back; the next opening reads them anew. A read that fails is named (G35).
+    /// One open menu's Add tag ▸ and Remove tag ▸ as menu entries, showing what <see cref="ItemMenuTagLists"/> holds:
+    /// a list whose entries keep their tags is brought up to date in place, so no entry under the pointer is replaced,
+    /// and Remove tag ▸ shows while it has an entry.
     /// </summary>
-    private sealed class ShownTagLists(Listing listing, Notices notices, Organising organising, IReadOnlyList<StashItem> items, Action<IReadOnlyList<StashItem>> typeATag)
+    private sealed class ShownTagLists(ItemMenuTagLists lists, IReadOnlyList<StashItem> items, Action<IReadOnlyList<StashItem>> typeATag)
     {
-        private int reads;
-
         public MenuItem? AddTag { get; set; }
 
         public MenuItem? RemoveTag { get; set; }
 
-        /// <summary>Gives Add tag ▸ and Remove tag ▸ these entries.</summary>
-        public void Fill(IReadOnlyList<ItemMenuEntry> add, IReadOnlyList<ItemMenuEntry> remove)
+        /// <summary>Shows what the lists hold now.</summary>
+        public void Show()
         {
-            Fill(AddTag, add);
-            Fill(RemoveTag, remove);
+            Show(AddTag, lists.AddTag);
+            if (RemoveTag is not null)
+            {
+                Show(RemoveTag, lists.RemoveTag);
+                RemoveTag.IsVisible = lists.RemoveTag.Count > 0;
+            }
         }
 
-        /// <summary>Reads the stash's tags and the items as the store holds them now, and shows them; the latest read alone applies.</summary>
+        /// <summary>Reads the stash's tags and the items as the store holds them now, and shows them.</summary>
         public async Task Read()
         {
-            if (listing.Store is not { } store)
+            if (await lists.Read())
             {
-                return;
-            }
-
-            var read = ++reads;
-            var counts = await store.TagCounts();
-            var present = await organising.Present(items);
-            if (read != reads || !ReferenceEquals(listing.Store, store))
-            {
-                return;
-            }
-
-            if (!counts.Succeeded)
-            {
-                notices.Raise(counts.Failure);
-                return;
-            }
-
-            if (AddTag is { } add)
-            {
-                var entries = TagLists.AddTagEntries(counts.Value!, present);
-                if (!entries.Select(entry => entry.Tag).SequenceEqual(Shown(add).Select(entry => entry.Tag)))
-                {
-                    Fill(add, entries);
-                }
-                else
-                {
-                    Mark(add, present);
-                }
-            }
-
-            if (RemoveTag is null)
-            {
-                return;
-            }
-
-            var remove = TagLists.RemoveTagEntries(present);
-            if (remove.Count == 0)
-            {
-                RemoveTag.IsSubMenuOpen = false;
-                RemoveTag.IsVisible = false;
-                return;
-            }
-
-            RemoveTag.IsVisible = true;
-            if (!remove.Select(entry => entry.Tag).SequenceEqual(Shown(RemoveTag).Select(entry => entry.Tag)))
-            {
-                Fill(RemoveTag, remove);
-            }
-            else
-            {
-                Mark(RemoveTag, present);
+                Show();
             }
         }
 
         private static IEnumerable<ItemMenuEntry> Shown(MenuItem list) => list.Items.OfType<MenuItem>().Select(item => item.Tag).OfType<ItemMenuEntry>();
 
-        private static void Mark(MenuItem? list, IReadOnlyList<StashItem> present)
-        {
-            foreach (var item in list?.Items.OfType<MenuItem>() ?? [])
-            {
-                if (item.Tag is ItemMenuEntry { Tag: { } tag } entry)
-                {
-                    var marked = entry with { Marked = ItemTags.AllCarry(present, tag) };
-                    item.Tag = marked;
-                    item.IsChecked = marked.Marked;
-                }
-            }
-        }
-
-        private void Fill(MenuItem? list, IReadOnlyList<ItemMenuEntry> entries)
+        private void Show(MenuItem? list, IReadOnlyList<ItemMenuEntry> entries)
         {
             if (list is null)
             {
                 return;
             }
 
-            list.Items.Clear();
-            foreach (var entry in entries)
+            var shown = Shown(list).ToList();
+            if (shown.Count > entries.Count || !shown.Select(entry => entry.Tag).SequenceEqual(entries.Take(shown.Count).Select(entry => entry.Tag), StringComparer.OrdinalIgnoreCase))
+            {
+                list.Items.Clear();
+                shown.Clear();
+            }
+
+            var places = list.Items.OfType<MenuItem>().ToList();
+            for (var i = 0; i < shown.Count; i++)
+            {
+                if (shown[i] != entries[i])
+                {
+                    var item = places[i];
+                    item.Tag = entries[i];
+                    item.IsChecked = entries[i].Marked;
+                    item.Header = HeaderOf(entries[i]);
+                    AutomationProperties.SetName(item, entries[i].Count is null ? null : entries[i].Label);
+                }
+            }
+
+            foreach (var entry in entries.Skip(shown.Count))
             {
                 var item = Add(list, entry);
                 item.Tag = entry;
                 item.Click += (_, _) =>
                 {
-                    if (entry.Tag is { } tag)
+                    if (((ItemMenuEntry)item.Tag!).Tag is { } tag)
                     {
                         // The menu flips a checkable entry's mark itself before this; the mark waits for the store's answer instead.
                         item.IsChecked = ((ItemMenuEntry)item.Tag!).Marked;
-                        _ = ClickThenRead(entry.Action, tag);
+                        _ = ClickThenShow(entry.Action, tag);
                     }
                     else
                     {
@@ -579,12 +548,10 @@ public sealed class ItemMenu(Listing listing, Notices notices, Handoff handoff, 
             }
         }
 
-        private async Task ClickThenRead(ItemMenuAction list, string tag)
+        private async Task ClickThenShow(ItemMenuAction list, string tag)
         {
-            // The click and the reading after it are one act, so what either names is the tag's (G16).
-            using var acting = UserAct.Begin(Organising.TagAct);
-            await TagLists.Click(organising, list, items, tag);
-            await Read();
+            await lists.Click(list, tag);
+            Show();
         }
     }
 }

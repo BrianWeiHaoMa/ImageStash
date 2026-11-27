@@ -24,19 +24,10 @@ internal sealed class ListingOrder
     {
         if (!RecentReorderPending)
         {
-            var remaining = current.ToDictionary(item => item.Id);
-            var ordered = new List<StashItem>(current.Count);
-            foreach (var id in recent)
-            {
-                if (remaining.Remove(id, out var item))
-                {
-                    ordered.Add(item);
-                }
-            }
-
+            var byId = current.ToDictionary(item => item.Id);
+            var held = recent.Where(byId.ContainsKey).Select(id => byId[id]);
             // A refresh can discover several arrivals. Append the older ones first.
-            ordered.AddRange(current.Reverse().Where(item => remaining.ContainsKey(item.Id)));
-            current = ordered;
+            current = HeldOrder.Kept(held, current.Reverse(), item => item.Id);
         }
 
         recent = current.Select(item => item.Id).ToArray();

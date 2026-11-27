@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -18,8 +17,8 @@ using ImageStash.Store;
 
 namespace ImageStash.Window;
 
-/// <summary>A tag's stash-wide carrier count and whether the opener marks it.</summary>
-public sealed record TagPickerEntry(string Tag, int Count, bool Marked)
+/// <summary>A tag's stash-wide carrier count, whether the opener marks it, and whether its row is inert, as a dead chip place is (G4).</summary>
+public sealed record TagPickerEntry(string Tag, int Count, bool Marked, bool Inert = false)
 {
     public static IReadOnlyList<TagPickerEntry> FromCounts(IEnumerable<TagCount> counts, IEnumerable<string> markedTags)
     {
@@ -27,7 +26,7 @@ public sealed record TagPickerEntry(string Tag, int Count, bool Marked)
         return counts.Select(count => new TagPickerEntry(count.Tag, count.Items, marks.Contains(count.Tag))).ToList();
     }
 
-    internal string CountText => Count.ToString(CultureInfo.InvariantCulture);
+    internal string CountText => TagCountText.Of(Count);
 }
 
 /// <summary>
@@ -52,7 +51,7 @@ public sealed class TagPicker : Popup
     private const double MarkColumn = 20;
     private const double EntryLeft = 8;
     private const double EntryRight = 24 + 11;
-    private const double CountGap = 10;
+    private const double CountGap = TagCountText.Gap;
     private const double Edge = 1;
     private const double NarrowestCard = 180;
     private const double WidestCard = 320;
@@ -397,17 +396,13 @@ public sealed class TagPicker : Popup
     private sealed class RowButton : Button, IWeakEventSubscriber<AvaloniaPropertyChangedEventArgs>
     {
         private readonly TextBlock mark = IconGlyph.Of("", 12);
-        private readonly TextBlock count = new()
-        {
-            TextAlignment = TextAlignment.Right,
-            Opacity = 0.7,
-            Margin = new Thickness(CountGap, 0, 0, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
+        private readonly TextBlock count = TagCountText.Block();
+        private TagPickerEntry shown;
 
         public RowButton(Row row, Action<string> pick)
         {
             var tag = row.Entry.Tag;
+            shown = row.Entry;
             Tag = tag;
             var words = new TextBlock { Text = tag, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
             Grid.SetColumn(words, 1);
@@ -433,7 +428,7 @@ public sealed class TagPicker : Popup
             {
                 if (Content is not TagRenameBox)
                 {
-                    pick(tag);
+                    pick(shown.Tag);
                 }
             };
             Show(row.Entry);
@@ -448,6 +443,9 @@ public sealed class TagPicker : Popup
 
         private void Show(TagPickerEntry entry)
         {
+            // A pick acts on the tag the row shows now.
+            shown = entry;
+            IsEnabled = !entry.Inert;
             mark.Opacity = entry.Marked ? 1 : 0;
             count.Text = entry.CountText;
             AutomationProperties.SetHelpText(this, entry.CountText + (entry.Count == 1 ? " item" : " items"));

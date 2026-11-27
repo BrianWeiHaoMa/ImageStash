@@ -38,6 +38,8 @@ public sealed class TagField : StackPanel
     private readonly WrapPanel suggestionRow;
     private IReadOnlyList<TagCount>? existing = [];
     private IReadOnlyList<string> marked = [];
+    private readonly OpenTagList everyTagList = new();
+    private IReadOnlyList<TagCount> suggested = [];
     private int chosen = -1;
     // True for a keyboard request, false for a pointer request, null while no open is waiting.
     private bool? openPickerAfterRead;
@@ -81,6 +83,14 @@ public sealed class TagField : StackPanel
         // A native popup routes keys to its Popup control. Keeping that control in the visual tree gives those keys
         // the same window and field handlers as keys from the box.
         pickerAnchor = new Grid { IsVisible = false, Children = { everyTag, Picker } };
+        // A list kept open on tags that lost their last items leaves nothing to offer once it closes.
+        Picker.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == Popup.IsOpenProperty && !Picker.IsOpen && existing is { Count: 0 })
+            {
+                ShowEveryTag();
+            }
+        };
         tagsAndBox = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 6, LineSpacing = 6, Children = { box, pickerAnchor } };
         suggestionRow = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 4, LineSpacing = 4, IsVisible = false };
         Children.Add(tagsAndBox);
@@ -93,7 +103,7 @@ public sealed class TagField : StackPanel
     /// <summary>Enter, or a click on a suggestion: the words to commit, as typed, one tag per word.</summary>
     public event Action<string>? Committed;
 
-    /// <summary>A pick in the list of every tag: that tag is to be given to every item, or taken off all of them when all carry it (G17).</summary>
+    /// <summary>A pick in the list of every tag: that tag is to be given to every item, or taken off all of them when all carry it, through <see cref="Pick"/> (G17).</summary>
     public event Action<string>? Picked;
 
     internal event Action? CatalogueRequested;
@@ -138,10 +148,11 @@ public sealed class TagField : StackPanel
     /// <summary>
     /// The existing tags, which suggestions come from, but for the tags the field shows, which are carried already (G17);
     /// for a word being typed, those containing it, ignoring case and its leading <c>#</c>s as a tag drops them, the ones
-    /// that start with it first, then by spelling; at most <see cref="MostSuggestions"/>. Only existing tags' spellings
-    /// are offered, never a name or anything else (N6). A shown tag typed whole still commits as typed.
+    /// that start with it first, then the commonest first, then by spelling; at most <see cref="MostSuggestions"/>, each
+    /// with the number of items in the stash that carry it. Only existing tags' spellings are offered, never a name or
+    /// anything else (N6). A shown tag typed whole still commits as typed.
     /// </summary>
-    public static IReadOnlyList<string> SuggestionsFor(string text, IEnumerable<string> existingTags, IEnumerable<string> shownTags)
+    public static IReadOnlyList<TagCount> SuggestionsFor(string text, IEnumerable<TagCount> existingTags, IEnumerable<string> shownTags)
     {
         var word = text[(text.LastIndexOf(' ') + 1)..].TrimStart('#');
         if (word.Length == 0)
@@ -151,9 +162,10 @@ public sealed class TagField : StackPanel
 
         var shown = shownTags.ToHashSet(StringComparer.OrdinalIgnoreCase);
         return existingTags
-            .Where(tag => !shown.Contains(tag) && tag.Contains(word, StringComparison.OrdinalIgnoreCase))
-            .OrderBy(tag => tag.StartsWith(word, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-            .ThenBy(tag => tag, StringComparer.OrdinalIgnoreCase)
+            .Where(count => !shown.Contains(count.Tag) && count.Tag.Contains(word, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(count => count.Tag.StartsWith(word, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenByDescending(count => count.Items)
+            .ThenBy(count => count.Tag, StringComparer.OrdinalIgnoreCase)
             .Take(MostSuggestions)
             .ToList();
     }
@@ -394,6 +406,16 @@ public sealed class TagField : StackPanel
         }
     }
 
+    /// <summary>
+    /// A pick on <paramref name="tag"/> in the list of every tag, for <paramref name="items"/>: toggled as Add tag ▸ toggles
+    /// it, or given back when a pick in this open list took it off its last item (G17).
+    /// </summary>
+    public Task<Outcome> Pick(Organising organising, IReadOnlyList<StashItem> items, string tag) =>
+        organising.PickTag(items, tag, whileAnyCarries: false, everyTagList);
+
+    /// <summary>The open list's rows for <paramref name="counts"/>, held while it is open, marking the tags every item carries.</summary>
+    private IReadOnlyList<TagPickerEntry> EveryTagEntries(IReadOnlyList<TagCount> counts) => TagPickerEntry.FromCounts(everyTagList.Rows(counts), marked);
+
     private void OpenListFromBox()
     {
         ClearRemovalHighlight();
@@ -414,9 +436,10 @@ public sealed class TagField : StackPanel
             return;
         }
 
-        if (!Picker.IsOpen)
+        if (!Picker.IsOpen && existing.Count > 0)
         {
-            Picker.Open(everyTag, TagPickerEntry.FromCounts(existing, marked), tag => Picked?.Invoke(tag));
+            everyTagList.Close();
+            Picker.Open(everyTag, EveryTagEntries(existing), tag => Picked?.Invoke(tag));
         }
 
         if (focusEntry)
@@ -428,14 +451,15 @@ public sealed class TagField : StackPanel
     /// <summary>The button while nothing is typed and there is a tag to pick (G17); typing hides it and closes its list, and an open list shows what the field now shows.</summary>
     private void ShowEveryTag()
     {
-        var available = Text.Length == 0 && existing is { Count: > 0 };
+        // An open list keeps its rows while nothing is typed, even once the last tag has lost its last item (G17).
+        var available = Text.Length == 0 && existing is { } tags && (tags.Count > 0 || Picker.IsOpen);
         if (!available)
         {
             Picker.Close();
         }
         else if (Picker.IsOpen)
         {
-            Picker.Show(TagPickerEntry.FromCounts(existing ?? [], marked));
+            Picker.Show(EveryTagEntries(existing!));
         }
 
         pickerAnchor.IsVisible = everyTag.IsVisible = available || Text.Length == 0 && catalogueNeedsRetry;
@@ -460,25 +484,28 @@ public sealed class TagField : StackPanel
 
     private void ShowSuggestions()
     {
-        var now = SuggestionsFor(Text, (existing ?? []).Select(count => count.Tag), Tags);
-        if (now.SequenceEqual(Suggestions))
+        var counted = SuggestionsFor(Text, existing ?? [], Tags);
+        if (counted.SequenceEqual(suggested))
         {
             return;
         }
 
-        Suggestions = now;
+        suggested = counted;
+        Suggestions = counted.Select(count => count.Tag).ToList();
         chosen = -1;
         suggestionRow.Children.Clear();
-        foreach (var suggestion in now)
+        foreach (var (suggestion, count) in counted)
         {
             // Not focusable, so a click commits it without taking focus from the box.
-            var button = new Button { Content = suggestion, Height = 28, Padding = new Thickness(10, 0), VerticalContentAlignment = VerticalAlignment.Center, Focusable = false };
+            var button = new Button { Content = TagCountText.Beside(suggestion, count), Height = 28, Padding = new Thickness(10, 0), VerticalContentAlignment = VerticalAlignment.Center, Focusable = false };
             button.Classes.Add(LookStyles.TagChip);
+            // Found by its words alone, its number aside.
+            AutomationProperties.SetName(button, suggestion);
             button.Click += (_, _) => Committed?.Invoke(WithSuggestion(Text, suggestion));
             suggestionRow.Children.Add(button);
         }
 
-        suggestionRow.IsVisible = now.Count > 0;
+        suggestionRow.IsVisible = counted.Count > 0;
     }
 
     private Control TagWithRemove(string tag)
@@ -662,7 +689,7 @@ public sealed class TagFieldOverlay : Border
     {
         using var acting = UserAct.Begin(Organising.TagAct);
         var opened = items;
-        await organising.ToggleTag(opened, tag);
+        await Field.Pick(organising, opened, tag);
         if (IsVisible && ReferenceEquals(items, opened))
         {
             await Read();

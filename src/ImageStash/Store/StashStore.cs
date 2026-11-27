@@ -275,8 +275,8 @@ public sealed class StashStore : IDisposable
     internal Task<Outcome<TagRemoval>> RemoveTagFromAll(string tag, int expectedItems) =>
         thread.Run(() => ItemTags.RemoveFromAll(store, tag, expectedItems));
 
-    internal Task<ItemFactResult> ToggleExistingTag(IReadOnlyList<StashItem> items, string tag) =>
-        thread.Run(() => ItemTags.ToggleExisting(store, items, tag));
+    internal Task<ItemFactResult> ToggleExistingTag(IReadOnlyList<StashItem> items, string tag, bool whileAnyCarries = false) =>
+        thread.Run(() => ItemTags.ToggleExisting(store, items, tag, whileAnyCarries));
 
     /// <summary>Corrects a tag's spelling or gives its listed carriers the new word in its place.</summary>
     internal Task<Outcome<TagRename>> RenameTag(string tag, string text) =>

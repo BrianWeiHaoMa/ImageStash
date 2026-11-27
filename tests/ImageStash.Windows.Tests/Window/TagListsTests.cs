@@ -12,8 +12,8 @@ namespace ImageStash.Windows.Tests.Window;
 /// <summary>
 /// The item menu's tag lists in the stash window as a person's mouse reaches them (G17, F4): Add tag ▸ marking the
 /// tags every selected item carries, a click giving the tag or taking it off with the mark following and the menu and
-/// the list still open; Remove tag ▸ taking each clicked tag off and staying open until nothing is left, then gone
-/// until a tag is given again;
+/// the list still open, its entries holding their places with their counts; Remove tag ▸ taking each clicked tag off,
+/// the entry staying unmarked in its place for the next click to give back;
 /// Add tag ▸ offering Type a tag… first, in view as it opens; a list of sixty tags kept within the display's working area, no taller than the tag lists' one height rule gives,
 /// with a scroll bar, scrolled by the wheel to its last entry and by Down to the entry it selects, Remove tag ▸ alike,
 /// and a list of four as tall as its entries alone; the
@@ -63,7 +63,7 @@ public sealed class TagListsTests
     }
 
     [TestMethod]
-    public async Task AddTagDropsAnEntryWhenItLosesItsLastCarrierWhileTheMenuIsOpen()
+    public async Task AddTagKeepsAnEntryThatLostItsLastCarrierInItsPlaceForTheNextClickToGiveBack()
     {
         using var shown = Open();
         var items = await shown.OpenStash(shown.Picture("last carrier.png"), shown.Picture("other carrier.png"));
@@ -74,14 +74,21 @@ public sealed class TagListsTests
 
         await ClickEntry(list, "gone");
 
-        await Eventually(() => TrayDesktop.Get(() => Labels(list).SequenceEqual([TypeATag, "kept"])));
+        await Eventually(() => shown.TagsOf(items[0].Id).Count == 0 && TrayDesktop.Get(() => !Entry(list, "gone").IsChecked));
         TrayDesktop.Run(() =>
         {
             Assert.IsTrue(MenuAndListOpen(shown, list));
-            Assert.IsFalse(shown.Chip("#gone").IsEnabled, "the row leaves the dead tag's inactive place");
+            CollectionAssert.AreEqual(new[] { TypeATag, "gone", "kept" }, Labels(list), "the entry stays in its place, unmarked (G17)");
+            Assert.AreEqual("0", Count(Entry(list, "gone")), "reading 0");
+            Assert.IsFalse(shown.Chip("#gone").IsEnabled, "the chip row leaves the dead tag's inactive place");
+        });
+        await ClickEntry(list, "gone");
+        await Eventually(() => shown.TagsOf(items[0].Id).SequenceEqual(["gone"]) && TrayDesktop.Get(() => Entry(list, "gone").IsChecked));
+        TrayDesktop.Run(() =>
+        {
+            Assert.AreEqual("1", Count(Entry(list, "gone")), "the next click gave it back");
             shown.CloseMenu();
         });
-        Assert.IsEmpty(shown.TagsOf(items[0].Id));
     }
 
     [TestMethod]
@@ -161,7 +168,8 @@ public sealed class TagListsTests
         {
             Assert.IsTrue(MenuAndListOpen(shown, list), "the list stays open after the click");
             Assert.IsTrue(Entry(list, "tag60").IsChecked, "and marks the tag now carried");
-            Assert.AreEqual("tag60", Labels(list)[1], "the most carried tag now follows Type a tag…");
+            Assert.AreEqual("tag60", Labels(list)[^1], "tag60, now the most carried, keeps its place at the end while the list is open (G17)");
+            Assert.AreEqual("2", Count(Entry(list, "tag60")), "its count follows in place");
             shown.CloseMenu();
         });
     }
@@ -182,10 +190,11 @@ public sealed class TagListsTests
         await Task.Delay(200);
         await ClickEntry(list, "tag60");
 
-        await Eventually(() => !shown.TagsOf(item.Id).Contains("tag60") && TrayDesktop.Get(() => !Labels(list).Contains("tag60")));
+        await Eventually(() => !shown.TagsOf(item.Id).Contains("tag60") && TrayDesktop.Get(() => !Entry(list, "tag60").IsChecked));
         TrayDesktop.Run(() =>
         {
             Assert.HasCount(59, shown.TagsOf(item.Id), "the clicked tag alone taken off (G17)");
+            Assert.HasCount(60, Labels(list), "its entry stays, unmarked, for the next click to give back (G17)");
             Assert.IsTrue(MenuAndListOpen(shown, list), "the list stays open for the next (G17)");
             shown.CloseMenu();
         });
@@ -241,7 +250,7 @@ public sealed class TagListsTests
     }
 
     [TestMethod]
-    public async Task RemoveTagsClicksTakeEachTagOffWithTheListOpenUntilNothingIsLeftThenTheMenusOtherEntriesAndEnterActAsBefore()
+    public async Task RemoveTagsClicksTakeEachTagOffWithTheEntriesHeldAndAClickOnAnEntryItEmptiedGivesItBackThenTheMenusOtherEntriesAndEnterActAsBefore()
     {
         using var shown = Open();
         var item = (await shown.OpenStash(shown.Picture("remove both.png"))).Single();
@@ -251,17 +260,18 @@ public sealed class TagListsTests
         var list = await OpenList(shown, item.Id, "Remove tag", entries: 2);
         var marked = TrayDesktop.Get(() => Marked(list));
         await ClickEntry(list, "a");
-        await Eventually(() => shown.TagsOf(item.Id).SequenceEqual(["b"]) && TrayDesktop.Get(() => Labels(list).SequenceEqual(["b"])));
-        TrayDesktop.Run(() => Assert.IsTrue(MenuAndListOpen(shown, list), "the list offers b alone and stays open (G17)"));
+        await Eventually(() => shown.TagsOf(item.Id).SequenceEqual(["b"]) && TrayDesktop.Get(() => !Entry(list, "a").IsChecked));
+        TrayDesktop.Run(() =>
+        {
+            Assert.IsTrue(MenuAndListOpen(shown, list), "the list stays open (G17)");
+            CollectionAssert.AreEqual(new[] { "a", "b" }, Labels(list), "a stays in its place, unmarked: nothing slides under the pointer (G17)");
+        });
         await ClickEntry(list, "b");
-        await Eventually(() => shown.TagsOf(item.Id).Count == 0 && TrayDesktop.Get(() => !list.IsVisible));
-        var stillOpen = TrayDesktop.Get(() => shown.OpenMenu!.IsOpen && !list.IsSubMenuOpen);
-        var addTag = TrayDesktop.Get(() => Entry(shown.OpenMenu!, "Add tag"));
-        TestMouse.Click(TestMouse.Centre(addTag));
-        await Eventually(() => TrayDesktop.Get(() => addTag.IsSubMenuOpen));
-        await ClickEntry(addTag, "a");
-        await Eventually(() => shown.TagsOf(item.Id).SequenceEqual(["a"]) && TrayDesktop.Get(() => list.IsVisible && Labels(list).SequenceEqual(["a"])));
-        var back = TrayDesktop.Get(() => MenuAndListOpen(shown, addTag));
+        await Eventually(() => shown.TagsOf(item.Id).Count == 0 && TrayDesktop.Get(() => Marked(list).Count == 0));
+        var stillOpen = TrayDesktop.Get(() => MenuAndListOpen(shown, list) && list.IsVisible && Labels(list).SequenceEqual(["a", "b"]));
+        await ClickEntry(list, "a");
+        await Eventually(() => shown.TagsOf(item.Id).SequenceEqual(["a"]) && TrayDesktop.Get(() => Entry(list, "a").IsChecked));
+        var back = TrayDesktop.Get(() => MenuAndListOpen(shown, list));
         TestMouse.Click(TestMouse.Centre(TrayDesktop.Get(() => Entry(shown.OpenMenu!, "Copy"))));
         await Eventually(() => TrayDesktop.Get(() => !shown.OpenMenu!.IsOpen) && shown.Uses() == 1);
         var labels = TrayDesktop.Get(() => shown.RightClick(item.Id));
@@ -274,8 +284,8 @@ public sealed class TagListsTests
         await Eventually(() => shown.Uses() == 2);
 
         CollectionAssert.AreEqual(new[] { "a", "b" }, marked, "the one item carries both, so both are marked");
-        Assert.IsTrue(stillOpen, "emptied, Remove tag ▸ closed and hid with its list while the menu stayed open: nothing inert (G17)");
-        Assert.IsTrue(back, "a, given again from Add tag ▸, brought Remove tag ▸ back listing it, Add tag ▸ still open");
+        Assert.IsTrue(stillOpen, "emptied, Remove tag ▸ stays open on both entries, unmarked (G17)");
+        Assert.IsTrue(back, "a click on a gave it back, the list still open");
         CollectionAssert.Contains(labels, "Remove tag", "the menu's next opening offers Remove tag ▸ for a");
         CollectionAssert.AreEqual(new[] { item.FilePath }, TestClipboard.Read().Files.ToList(), "Copy closed the menu as before, and Enter in the grid still hands off (G8, G7)");
     }

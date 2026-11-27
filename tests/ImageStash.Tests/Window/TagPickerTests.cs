@@ -36,10 +36,11 @@ public sealed class TagPickerTests
             AssertEntries(row.Picker, ("shared", "2 items", true), ("singleton", "1 item", false));
 
             Assert.IsTrue((await listed.Deletion.Delete([outside])).Succeeded);
-            AssertEntries(row.Picker, ("shared", "1 item", true));
+            AssertEntries(row.Picker, ("shared", "1 item", true), ("singleton", "0 items", false));
+            Assert.IsFalse(Entry(row.Picker, row.Picker.Entries[1]).IsEnabled, "the row of a tag that lost its last item stays, inert as its dead chip place");
             await listed.Listing.SetQuery("");
             Assert.AreEqual(0, listed.Listing.Chips.Single(place => place.Tag == "singleton").Items);
-            AssertEntries(row.Picker, ("shared", "1 item", false));
+            AssertEntries(row.Picker, ("shared", "1 item", false), ("singleton", "0 items", false));
 
             await listed.Notices.Undo(listed.Notices.Shown.Single());
             await listed.Listing.SetQuery("reaction shared");
@@ -510,5 +511,140 @@ public sealed class TagPickerTests
     {
         Assert.AreEqual(180, TagPicker.CardWidth(12, 20, scaling), 1e-9, "never narrower than its narrowest");
         Assert.AreEqual(320, TagPicker.CardWidth(400, 20, scaling), 1e-9, "never wider than its widest: the name is trimmed");
+    }
+
+    [TestMethod]
+    public async Task APickBreakingATieInTheFieldsListLeavesTheRowsInTheOrderTheyOpenedWith()
+    {
+        using var listed = await ListedStash.Open();
+        var selected = await listed.Stash.Import("selected");
+        await listed.Stash.Store!.AddTag([await listed.Stash.Import("a")], "alpha");
+        await listed.Stash.Store!.AddTag([await listed.Stash.Import("b")], "beta");
+        await listed.Listing.ShowScope(Scope.All);
+
+        ControlThread.Run(() => ControlThread.FinishOnDispatcher(async () =>
+        {
+            listed.Listing.Select([selected.Id], selected.Id);
+            var host = new TagFieldOverlay(listed.Listing, listed.Organising, listed.Notices);
+            host.Open(listed.Listing.SelectedItems, new Button());
+            await OpenFieldPicker(host.Field);
+            AssertEntries(host.Field.Picker, ("alpha", "1 item", false), ("beta", "1 item", false));
+
+            await PickAndWaitForCount(listed, host.Field.Picker, "beta", "2");
+
+            CollectionAssert.AreEqual(new[] { "beta", "alpha" }, (await listed.Stash.Store!.TagCounts()).Value!.Select(count => count.Tag).ToList(), "the store now counts beta first");
+            AssertEntries(host.Field.Picker, ("alpha", "1 item", false), ("beta", "2 items", true));
+        }));
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task TheFieldsListStaysOpenOnTheStashsOnlyTagOnceAPickTookItOffItsLastItemAndTheNextPickGivesItBack(bool inPreview)
+    {
+        using var listed = await ListedStash.Open();
+        var selected = await listed.Stash.Import("selected");
+        await listed.Stash.Store!.AddTag([selected], "only");
+        await listed.Listing.ShowScope(Scope.All);
+
+        ControlThread.Run(() => ControlThread.FinishOnDispatcher(async () =>
+        {
+            var preview = PreviewOf(listed);
+            try
+            {
+                TagField field;
+                if (inPreview)
+                {
+                    preview.Open(listed.Listing.Items.Single());
+                    field = preview.TagField;
+                }
+                else
+                {
+                    listed.Listing.Select([selected.Id], selected.Id);
+                    var host = new TagFieldOverlay(listed.Listing, listed.Organising, listed.Notices);
+                    host.Open(listed.Listing.SelectedItems, new Button());
+                    field = host.Field;
+                }
+
+                await OpenFieldPicker(field);
+                AssertEntries(field.Picker, ("only", "1 item", true));
+
+                await PickAndWaitForCount(listed, field.Picker, "only", "0");
+                Assert.IsEmpty((await listed.Stash.Store!.TagCounts()).Value!, "no item carries it now");
+                AssertEntries(field.Picker, ("only", "0 items", false));
+
+                await PickAndWaitForCount(listed, field.Picker, "only", "1");
+                AssertEntries(field.Picker, ("only", "1 item", true));
+                CollectionAssert.AreEqual(new[] { "only" }, (await listed.Organising.Present([selected])).Single().Tags.ToList(), "given back, not refused as a tag no item carries (G17)");
+
+                await PickAndWaitForCount(listed, field.Picker, "only", "0");
+                field.CloseList();
+                Assert.IsFalse(Opener(field).IsVisible, "closed on a tag no item carries, the list has nothing left to offer");
+            }
+            finally
+            {
+                await preview.LetGo();
+            }
+        }));
+    }
+
+    [TestMethod]
+    public async Task TheChipRowsListHoldsItsRowsAsOtherActsChangeTheCountsAndATagMadeSinceJoinsTheEnd()
+    {
+        using var listed = await ListedStash.Open();
+        var a = await listed.Stash.Import("a");
+        var b = await listed.Stash.Import("b");
+        var other = await listed.Stash.Import("other");
+        await listed.Stash.Store!.AddTag([a], "alpha");
+        await listed.Stash.Store!.AddTag([b], "beta");
+        await listed.Listing.ShowScope(Scope.All);
+
+        ControlThread.Run(() => ControlThread.FinishOnDispatcher(async () =>
+        {
+            var row = new ChipRow(listed.Listing, listed.Organising, () => null);
+            Open(row);
+            await WaitForOpen(row.Picker);
+            AssertEntries(row.Picker, ("alpha", "1 item", false), ("beta", "1 item", false));
+
+            Assert.IsTrue((await listed.Organising.AddTag([other], "beta")).Succeeded);
+            AssertEntries(row.Picker, ("alpha", "1 item", false), ("beta", "2 items", false));
+            Assert.IsTrue((await listed.Organising.AddTag([a, b, other], "zeta")).Succeeded);
+            AssertEntries(row.Picker, ("alpha", "1 item", false), ("beta", "2 items", false), ("zeta", "3 items", false));
+            Assert.IsTrue((await listed.Organising.RemoveTag([a], "alpha")).Succeeded);
+
+            AssertEntries(row.Picker, ("alpha", "0 items", false), ("beta", "2 items", false), ("zeta", "3 items", false));
+            Assert.IsFalse(Entry(row.Picker, row.Picker.Entries[0]).IsEnabled, "inert, as a dead chip place is (G4)");
+            Assert.IsTrue(Entry(row.Picker, row.Picker.Entries[2]).IsEnabled);
+
+            Assert.IsTrue((await listed.Organising.RemoveTag([a, b, other], "beta")).Succeeded);
+            Assert.IsTrue((await listed.Organising.RemoveTag([a, b, other], "zeta")).Succeeded);
+            Assert.IsEmpty(listed.Listing.Tags, "no tag left in the stash");
+            AssertEntries(row.Picker, ("alpha", "0 items", false), ("beta", "0 items", false), ("zeta", "0 items", false));
+        }));
+    }
+
+    private static async Task PickAndWaitForCount(ListedStash listed, TagPicker picker, string tag, string count)
+    {
+        var button = Entry(picker, picker.Entries.Single(entry => entry.Tag == tag));
+        var shown = (TextBlock)((Grid)button.Content!).Children[2];
+        var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void Changed(object? sender, AvaloniaPropertyChangedEventArgs e)
+        {
+            if (e.Property == TextBlock.TextProperty && shown.Text == count)
+            {
+                changed.TrySetResult();
+            }
+        }
+
+        shown.PropertyChanged += Changed;
+        try
+        {
+            await listed.WaitForOrganising(() => Click(button));
+            await changed.Task;
+        }
+        finally
+        {
+            shown.PropertyChanged -= Changed;
+        }
     }
 }

@@ -22,12 +22,12 @@ public sealed class TagFieldTests
     [TestMethod]
     public void TheExistingTagsContainingTheWordComeThoseStartingWithItFirst()
     {
-        string[] existing = ["Scream", "reaction", "carpet", "Are"];
+        var existing = Once("Scream", "reaction", "carpet", "Are");
 
-        CollectionAssert.AreEqual(new[] { "reaction", "Are", "Scream" }, TagField.SuggestionsFor("re", existing, []).ToList(), "contains, not only starts with: tags are search words (G17)");
-        CollectionAssert.AreEqual(new[] { "reaction", "Are", "Scream" }, TagField.SuggestionsFor("RE", existing, []).ToList(), "ignoring case");
-        CollectionAssert.AreEqual(new[] { "reaction", "Are", "Scream" }, TagField.SuggestionsFor("##re", existing, []).ToList(), "a tag drops its leading #s, so the word does too");
-        CollectionAssert.AreEqual(new[] { "carpet" }, TagField.SuggestionsFor("funny car", existing, []).ToList(), "the word being typed is the last one");
+        CollectionAssert.AreEqual(new[] { "reaction", "Are", "Scream" }, TagField.SuggestionsFor("re", existing, []).Select(count => count.Tag).ToList(), "contains, not only starts with: tags are search words (G17)");
+        CollectionAssert.AreEqual(new[] { "reaction", "Are", "Scream" }, TagField.SuggestionsFor("RE", existing, []).Select(count => count.Tag).ToList(), "ignoring case");
+        CollectionAssert.AreEqual(new[] { "reaction", "Are", "Scream" }, TagField.SuggestionsFor("##re", existing, []).Select(count => count.Tag).ToList(), "a tag drops its leading #s, so the word does too");
+        CollectionAssert.AreEqual(new[] { "carpet" }, TagField.SuggestionsFor("funny car", existing, []).Select(count => count.Tag).ToList(), "the word being typed is the last one");
     }
 
     [TestMethod]
@@ -44,7 +44,7 @@ public sealed class TagFieldTests
     [TestMethod]
     public void NothingTypedOrAWordJustEndedSuggestsNothing()
     {
-        string[] existing = ["reaction", "carpet"];
+        var existing = Once("reaction", "carpet");
 
         Assert.IsEmpty(TagField.SuggestionsFor("", existing, []));
         Assert.IsEmpty(TagField.SuggestionsFor("#", existing, []));
@@ -55,22 +55,22 @@ public sealed class TagFieldTests
     [TestMethod]
     public void AtMostAFewShow()
     {
-        var existing = Enumerable.Range(0, 20).Select(i => $"tag{i:00}").ToList();
+        var existing = Once([.. Enumerable.Range(0, 20).Select(i => $"tag{i:00}")]);
 
-        CollectionAssert.AreEqual(new[] { "tag00", "tag01", "tag02", "tag03", "tag04" }, TagField.SuggestionsFor("tag", existing, []).ToList());
+        CollectionAssert.AreEqual(new[] { "tag00", "tag01", "tag02", "tag03", "tag04" }, TagField.SuggestionsFor("tag", existing, []).Select(count => count.Tag).ToList());
         Assert.HasCount(TagField.MostSuggestions, TagField.SuggestionsFor("ta", existing, []));
     }
 
     [TestMethod]
     public void ATagTheFieldShowsIsNeverSuggestedInAnySpelling()
     {
-        string[] existing = ["cat", "catnip", "dog", "dove"];
+        var existing = Once("cat", "catnip", "dog", "dove");
         string[] shown = ["cat", "dog"];
 
-        CollectionAssert.AreEqual(new[] { "catnip" }, TagField.SuggestionsFor("c", existing, shown).ToList(), "the item carries cat already (G17)");
-        CollectionAssert.AreEqual(new[] { "dove" }, TagField.SuggestionsFor("d", existing, shown).ToList());
-        CollectionAssert.AreEqual(new[] { "catnip" }, TagField.SuggestionsFor("CAT", existing, ["CAT", "Dog"]).ToList(), "shown in any spelling");
-        Assert.IsEmpty(TagField.SuggestionsFor("cat", ["cat"], shown), "every match shown, nothing to suggest");
+        CollectionAssert.AreEqual(new[] { "catnip" }, TagField.SuggestionsFor("c", existing, shown).Select(count => count.Tag).ToList(), "the item carries cat already (G17)");
+        CollectionAssert.AreEqual(new[] { "dove" }, TagField.SuggestionsFor("d", existing, shown).Select(count => count.Tag).ToList());
+        CollectionAssert.AreEqual(new[] { "catnip" }, TagField.SuggestionsFor("CAT", existing, ["CAT", "Dog"]).Select(count => count.Tag).ToList(), "shown in any spelling");
+        Assert.IsEmpty(TagField.SuggestionsFor("cat", Once("cat"), shown), "every match shown, nothing to suggest");
     }
 
     [TestMethod]
@@ -91,7 +91,7 @@ public sealed class TagFieldTests
         await listed.Stash.Store!.AddTag([carpet], "reaction Scream");
         var counts = (await listed.Stash.Store!.TagCounts()).Value!;
 
-        var suggested = TagField.SuggestionsFor("re", counts.Select(count => count.Tag), []).ToList();
+        var suggested = TagField.SuggestionsFor("re", counts, []).Select(count => count.Tag).ToList();
 
         Assert.AreEqual("red", red.Name, "an item whose name contains the word, carrying no tag");
         CollectionAssert.AreEqual(new[] { "reaction", "Scream" }, suggested, "the existing tags alone, the one starting with the word first (G17, N6)");
@@ -307,6 +307,51 @@ public sealed class TagFieldTests
     private static bool Highlighted(TagField field, string tag) =>
         RemoveButton(field, tag).FindAncestorOfType<Border>()!.Classes.Contains("accent");
 
-    private static bool Lit(TagField field, string suggestion) =>
-        field.GetVisualDescendants().OfType<Button>().Single(button => button.Content as string == suggestion).Classes.Contains("accent");
+    private static bool Lit(TagField field, string suggestion) => SuggestionButton(field, suggestion).Classes.Contains("accent");
+
+    /// <summary>Tags each carried by one item, as the store counts them.</summary>
+    private static TagCount[] Once(params string[] tags) => [.. tags.Select(tag => new TagCount(tag, 1))];
+
+    [TestMethod]
+    public void SuggestionsOfferTheCommonestOfTheTagsTheWordStartsFirstEachWithItsCountAfterTheWord() => ControlThread.Run(() =>
+    {
+        var field = new TagField();
+        field.Show([], [new("pecan", 20), new("caz", 9), new("caa", 1), new("cab", 1), new("cac", 1), new("cad", 1), new("cae", 1)], []);
+        var box = field.GetVisualDescendants().OfType<TextBox>().Single();
+
+        box.Text = "ca";
+
+        CollectionAssert.AreEqual(new[] { "caz", "caa", "cab", "cac", "cad" }, field.Suggestions.ToList(), "the tags the word starts first, the commonest of them first though last by spelling, five at most; pecan, the commonest of all, only contains it (G17)");
+        var shown = (Grid)SuggestionButton(field, "caz").Content!;
+        var count = (TextBlock)shown.Children[1];
+        Assert.AreEqual("caz", ((TextBlock)shown.Children[0]).Text);
+        Assert.AreEqual("9", count.Text, "the number of items in the stash that carry it, after the word");
+        Assert.IsLessThan(1, count.Opacity, "faint");
+
+        box.Text = "pe";
+        CollectionAssert.AreEqual(new[] { "pecan" }, field.Suggestions.ToList());
+    });
+
+    [TestMethod]
+    public void ATagTheWordStartsComesBeforeACommonerTagThatOnlyContainsIt()
+    {
+        CollectionAssert.AreEqual(new[] { "reaction", "Scream" }, TagField.SuggestionsFor("re", [new("Scream", 9), new("reaction", 1)], []).Select(count => count.Tag).ToList());
+        CollectionAssert.AreEqual(new[] { "Scream", "cream" }, TagField.SuggestionsFor("re", [new("cream", 2), new("Scream", 9)], []).Select(count => count.Tag).ToList(), "then the commonest first");
+    }
+
+    private static Button SuggestionButton(TagField field, string suggestion) =>
+        field.GetVisualDescendants().OfType<Button>().Single(button => AutomationProperties.GetName(button) == suggestion);
+
+    [TestMethod]
+    public void ASuggestionsCountFollowsTheStashWhileItsPlaceStays() => ControlThread.Run(() =>
+    {
+        var field = new TagField();
+        field.Show([], [new("cat", 1)], []);
+        field.GetVisualDescendants().OfType<TextBox>().Single().Text = "ca";
+        Assert.AreEqual("1", ((TextBlock)((Grid)SuggestionButton(field, "cat").Content!).Children[1]).Text);
+
+        field.Show([], [new("cat", 2)], []);
+
+        Assert.AreEqual("2", ((TextBlock)((Grid)SuggestionButton(field, "cat").Content!).Children[1]).Text, "the number the store now holds (G17)");
+    });
 }

@@ -189,6 +189,38 @@ public sealed class TagFieldKeyboardWindowTests
         AssertWindowState(shown, selected);
     }
 
+    [TestMethod]
+    public async Task EnterOnTheSecondOfTwoTiedTagsLeavesTheRowsInPlaceAndFocusOnTheRowPicked()
+    {
+        using var pointer = TestMouse.PutBackAfterwards();
+        using var shown = Open();
+        var items = await shown.OpenStash(shown.Picture("reaction tied.png"), shown.Picture("reaction amber.png"),
+            shown.Picture("other blue.png"));
+        await shown.Tag([items[1]], "amber");
+        await shown.Tag([items[2]], "blue");
+        var field = await OpenTags(shown, [items[0].Id]);
+        await Eventually(() => TrayDesktop.Get(() => EveryTagButton(field).IsEffectivelyVisible));
+        var picker = field.Picker;
+
+        PressKey(shown, Key.Down);
+        await PickerFocus(picker, "amber");
+        PressKey(shown, Key.Down, picker: picker);
+        await PickerFocus(picker, "blue");
+        PressKey(shown, Key.Enter, picker: picker);
+
+        await Eventually(() => TrayDesktop.Get(() => picker.IsOpen && picker.Entries.SequenceEqual([new("amber", 1, false), new("blue", 2, true)])));
+        await PickerFocus(picker, "blue");
+        TrayDesktop.Run(() =>
+        {
+            var rows = picker.Child!.GetVisualDescendants().OfType<Button>().Where(button => AutomationProperties.GetName(button) is "amber" or "blue")
+                .OrderBy(button => button.TranslatePoint(default, picker.Child!)!.Value.Y).ToList();
+            CollectionAssert.AreEqual(new[] { "amber", "blue" }, rows.Select(AutomationProperties.GetName).ToList(), "blue, now the commoner, keeps its row below amber while the list is open (G17)");
+            Assert.IsTrue(rows[1].IsFocused, "keyboard focus stays on the row picked");
+        });
+        CollectionAssert.AreEqual(new[] { "blue" }, shown.TagsOf(items[0].Id));
+        AssertWindowState(shown, [items[0].Id]);
+    }
+
     private static async Task<TagField> OpenTags(ShownWindow shown, long[] selected, long? preview = null)
     {
         await shown.ClickSearchInFront();

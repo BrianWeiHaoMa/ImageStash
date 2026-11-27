@@ -198,7 +198,7 @@ public sealed class TagRenameTests
             box.Text = "current";
 
             Assert.IsTrue((await listed.Organising.ToggleTag([third], "zulu")).Succeeded);
-            CollectionAssert.AreEqual(new[] { "alpha", "zulu", "beta" }, row.Picker.Entries.Select(entry => entry.Tag).ToArray());
+            CollectionAssert.AreEqual(new[] { "alpha", "beta", "zulu" }, row.Picker.Entries.Select(entry => entry.Tag).ToArray(), "the open list holds the order it opened with");
             Assert.AreSame(box, source.Content);
             Assert.AreEqual("current", box.Text);
             await listed.WaitForOrganising(() => Press(box, Key.Enter));

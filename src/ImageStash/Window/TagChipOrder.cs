@@ -136,14 +136,8 @@ internal sealed class TagChipOrder
     private IReadOnlyList<TagCount> KeepPlaces(IReadOnlyList<TagCount> places, IEnumerable<TagCount>? arrivals = null)
     {
         // Keep the old spelling as well as the position, so a revival cannot change the slot's width.
-        var kept = places.Select(place => place with { Items = LiveTag(place.Tag)?.Items ?? 0 }).ToList();
-        if (arrivals is not null)
-        {
-            var names = places.Select(place => place.Tag).ToHashSet(SameTag);
-            kept.AddRange(arrivals.Where(count => !names.Contains(count.Tag)));
-        }
-
-        return kept;
+        var kept = places.Select(place => place with { Items = LiveTag(place.Tag)?.Items ?? 0 });
+        return HeldOrder.Kept(kept, arrivals ?? [], place => place.Tag, SameTag);
     }
 
     private IReadOnlyList<TagCount> Ranked(string query)

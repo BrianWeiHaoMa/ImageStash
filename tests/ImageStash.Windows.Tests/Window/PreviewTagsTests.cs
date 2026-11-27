@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -285,7 +286,7 @@ public sealed class PreviewTagsTests
             ShownWindow.Type(shown.PreviewTagBox, "big scr");
         });
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.PreviewTags.Field.Suggestions.SequenceEqual(["Scream"])));
-        TrayDesktop.Run(() => shown.PreviewTags.GetVisualDescendants().OfType<Button>().Single(button => button.Content as string == "Scream").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)));
+        TrayDesktop.Run(() => shown.PreviewTags.GetVisualDescendants().OfType<Button>().Single(button => AutomationProperties.GetName(button) == "Scream").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)));
         await ShownWindow.Eventually(() => shown.TagsOf(plain.Id).Count == 4);
 
         CollectionAssert.AreEqual(new[] { "big", "funny", "reaction", "Scream" }, shown.TagsOf(plain.Id), "a click on a suggestion commits what was typed with it");
@@ -532,7 +533,7 @@ public sealed class PreviewTagsTests
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.PreviewTagBox.IsFocused && InView(shown, shown.PreviewTagBox)));
         TrayDesktop.Run(() => ShownWindow.Type(shown.PreviewTagBox, "tag"));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() =>
-            shown.PreviewTags.GetVisualDescendants().OfType<Button>().FirstOrDefault(button => button.Content as string == "tagless") is { } suggestion && InView(shown, suggestion) && InView(shown, shown.PreviewTagBox)));
+            shown.PreviewTags.GetVisualDescendants().OfType<Button>().FirstOrDefault(button => AutomationProperties.GetName(button) == "tagless") is { } suggestion && InView(shown, suggestion) && InView(shown, shown.PreviewTagBox)));
         TrayDesktop.Run(() => CollectionAssert.AreEqual(new[] { "tagless" }, shown.PreviewTags.Field.Suggestions.ToList(), "the eighty the item carries are not suggested (G17)"));
     }
 

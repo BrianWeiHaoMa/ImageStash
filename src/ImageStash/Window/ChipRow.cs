@@ -70,6 +70,7 @@ public sealed class ChipRow : Panel
     /// <summary>The chip that lists every tag anchors its popup at the row's right edge.</summary>
     private readonly Button everyTag;
     private readonly TagPicker picker = new();
+    private readonly OpenTagList everyTagList = new();
 
     /// <summary>Every tag the listing's chips hold, in order; the tag chips are made for the first of them.</summary>
     private IReadOnlyList<string> chipTags = [];
@@ -227,7 +228,8 @@ public sealed class ChipRow : Panel
         // The chips can stay the same while the stash's tags change, and with them whether the last chip shows.
         InvalidateMeasure();
         LightTagChips();
-        if (picker.IsOpen && (listing.PickerTagsStale || listing.Tags.Count == 0))
+        // An open list keeps its rows as tags lose their last items (G4); it closes on counts it cannot trust, or with no stash.
+        if (picker.IsOpen && (listing.PickerTagsStale || listing.Store is null))
         {
             picker.Close();
         }
@@ -288,8 +290,16 @@ public sealed class ChipRow : Panel
         AutomationProperties.SetName(chip, label);
     }
 
-    /// <summary>Every tag, the commonest first, whatever the query, the lit ones marked (G4); made when the list opens, not at every load (G1).</summary>
-    private IReadOnlyList<TagPickerEntry> EveryTag() => TagPickerEntry.FromCounts(listing.Tags, listing.LitTags);
+    /// <summary>
+    /// Every tag, the commonest first as the list opens and held while it is open, whatever the query, the lit ones
+    /// marked, a tag that has lost its last item inert as its dead chip place is (G4); made when the list opens, not at
+    /// every load (G1).
+    /// </summary>
+    private IReadOnlyList<TagPickerEntry> EveryTag()
+    {
+        var lit = listing.LitTags.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return everyTagList.Rows(listing.Tags).Select(row => new TagPickerEntry(row.Tag, row.Items, lit.Contains(row.Tag), Inert: row.Items == 0)).ToList();
+    }
 
     private async Task ToggleEveryTag()
     {
@@ -301,6 +311,7 @@ public sealed class ChipRow : Panel
 
         if (await ReadEveryTag() && everyTag.IsEffectivelyVisible && !picker.IsOpen && listing.Tags.Count > 0)
         {
+            everyTagList.Close();
             picker.Open(everyTag, EveryTag(), tag => _ = PickEveryTag(tag));
         }
     }
