@@ -16,7 +16,7 @@ namespace ImageStash.Window;
 /// flyout may already be hidden (G8, G16); a paste's clipboard write that fails behind the hidden flyout is named there
 /// too (<c>HandoffPaste.cs</c>). After a Save
 /// or a Rename, the clipboard's copy of the item is replaced when nothing has changed it since (G26), and after a Move
-/// every item's, at its new path. While the listing holds no store, a handoff, a copy and a drag out are refused by name
+/// every item's, at its new path; after a capture card's Undo, it is emptied when it still holds that capture (G16). While the listing holds no store, a handoff, a copy and a drag out are refused by name
 /// (G35).
 /// </summary>
 public sealed partial class Handoff(Listing listing, Notices notices, NotificationStacks notifications, IClipboardAndDrops clipboard, ITarget targets, TimeProvider clock, TimeSpan heldFileRetry, TimeSpan heldClipboardRetry)
@@ -25,6 +25,9 @@ public sealed partial class Handoff(Listing listing, Notices notices, Notificati
 
     /// <summary>The refresh after a Save or a Rename, as a failure names it (G26, G35).</summary>
     public const string RefreshAction = "Update the clipboard";
+
+    /// <summary>The emptying after a capture card's Undo, as its failure names it (G16, G35).</summary>
+    public const string EmptyAction = "Clear the clipboard";
 
     /// <summary>The act of a paste into the app the person came from, for the notices it raises (G16).</summary>
     public const string HandOverAct = "Paste into an app";
@@ -175,6 +178,27 @@ public sealed partial class Handoff(Listing listing, Notices notices, Notificati
     /// with a picture ImageStash never put there.
     /// </summary>
     public void ForgetClipboardWrite() => clipboard.ForgetWritten();
+
+    /// <summary>
+    /// After a capture card's Undo has taken <paramref name="removedItem"/> out of the stash (G16): the clipboard emptied
+    /// when ImageStash's latest write put that item there, alone or among others, whichever act wrote it, and nothing has
+    /// changed it since, so no paste hands over a file that is gone; under the one-write-at-a-time gate, so it never lands
+    /// inside a handoff's write. Anything else leaves the clipboard as it is, which is no failure. A clipboard still held
+    /// after its retries is a failure of this act alone, the caller's to name (E3, G35); it records no use (G10).
+    /// </summary>
+    public async Task<Outcome> EmptyClipboardOf(long removedItem)
+    {
+        await oneWriteAtATime.WaitAsync();
+        try
+        {
+            var emptied = await clipboard.Empty(removedItem, heldClipboardRetry);
+            return emptied.Succeeded ? Outcome.Done : emptied.Failure with { Action = EmptyAction, Subject = "" };
+        }
+        finally
+        {
+            oneWriteAtATime.Release();
+        }
+    }
 
     /// <summary>The refresh after a Save or a Rename of <paramref name="saved"/>, or after a Move when it is null: every item of the latest write.</summary>
     private async Task<Outcome> RefreshWritten(StashItem? saved)

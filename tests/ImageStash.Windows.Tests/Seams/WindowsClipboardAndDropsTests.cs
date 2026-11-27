@@ -41,7 +41,7 @@ public sealed class WindowsClipboardAndDropsTests
     private static readonly string[] OwnerAndNumber = ["GetClipboardOwner", "GetClipboardSequenceNumber"];
 
     /// <summary>The write, which remembers the owner and the number after its close, and the write again, which compares them.</summary>
-    private static readonly string[] TheWrites = ["ImageStash.Windows.Seams.WindowsClipboardAndDrops.Write", "ImageStash.Windows.Seams.WindowsClipboardAndDrops.WriteAgain"];
+    private static readonly string[] TheWrites = ["ImageStash.Windows.Seams.WindowsClipboardAndDrops.Write", "ImageStash.Windows.Seams.WindowsClipboardAndDrops.WriteAgain", "ImageStash.Windows.Seams.WindowsClipboardAndDrops.Empty"];
 
     /// <summary>The paste's type, the one caller of the seam's read (N9, R5); its compiler-made state machines and lambdas are nested in it.</summary>
     private const string ThePaste = "ImageStash.Window.ClipboardPaste";
@@ -250,7 +250,7 @@ public sealed class WindowsClipboardAndDropsTests
     }
 
     [TestMethod]
-    public void OnlyTheWriteAndItsWriteAgainReachTheClipboardsOwnerAndSequenceNumber()
+    public void OnlyTheWriteItsWriteAgainAndTheEmptyingReachTheClipboardsOwnerAndSequenceNumber()
     {
         var declared = Product.SelectMany(assembly => CompiledCalls.ClipboardReads(assembly, [], OwnerAndNumber)).Order(StringComparer.Ordinal).ToList();
         var outside = Product.SelectMany(assembly => CompiledCalls.ReadsOutsideTheRead(assembly, OwnerAndNumber, TheWrites)).ToList();
@@ -263,7 +263,7 @@ public sealed class WindowsClipboardAndDropsTests
             },
             declared,
             $"Each declared once, in the seam: {string.Join(", ", declared)}");
-        Assert.IsEmpty(outside, $"Reaching the clipboard's owner or number other than through the write and its write again: {string.Join(", ", outside)}");
+        Assert.IsEmpty(outside, $"Reaching the clipboard's owner or number other than through the write, its write again and the emptying: {string.Join(", ", outside)}");
     }
 
     [TestMethod]

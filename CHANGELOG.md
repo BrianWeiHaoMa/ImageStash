@@ -106,6 +106,7 @@ Every release of ImageStash and what it changed, newest first, in the [Keep a Ch
 
 ### Fixed
 
+- Undo on a capture's notification now also takes the capture off the clipboard, so a later `Ctrl+V` no longer pastes a file that has gone to the Recycle Bin. It does so only while the clipboard still holds what ImageStash last put there with that capture in it, whether Also copy or a `Ctrl+C` put it there, alone or with other pictures; anything copied since without that capture, by ImageStash or another program, is left as it is. If another program holds the clipboard open too long, the capture is still removed and a notification says the clipboard could not be cleared. Move…, Export stash… and Import stash… wait until this Undo has finished.
 - While an import, a copy, a Move or another action runs in a narrow window, its progress words no longer run under the item count or off the window's edge. They end in "…" where they do not fit, and hovering over them shows them whole. Ctrl+C's hint and then the count make room first, so the app Enter pastes into stays readable.
 - The editor keeps the picture in place at the same scale when you switch tools or select and deselect layers. The tool hint has its own line, and Text's font and colours keep their places.
 - Undo and Redo update Hex to the restored color when the picker stays open. If history selects a different layer, the picker closes.

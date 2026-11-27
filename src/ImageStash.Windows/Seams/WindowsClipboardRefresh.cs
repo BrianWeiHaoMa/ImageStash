@@ -27,9 +27,15 @@ public sealed partial class WindowsClipboardAndDrops
         }
 
         // Judged under the write's own open, so no other program's write can come between the check and the write.
-        return Task.Run(() => WriteNow(last.Window, content, heldClipboardRetry,
-            onlyWhile: () => ReferenceEquals(remembered, last) && GetClipboardSequenceNumber() == last.Number && GetClipboardOwner() == last.Window));
+        return Task.Run(() => WriteNow(last.Window, content, heldClipboardRetry, onlyWhile: () => StillHolds(last)));
     }
+
+    /// <summary>
+    /// Asked with the clipboard held open: <paramref name="last"/> is still the latest write remembered, and nothing has
+    /// changed the clipboard since, by its sequence number and its owner (How G26 holds), for the refresh and the emptying alike.
+    /// </summary>
+    private bool StillHolds(RememberedWrite last) =>
+        ReferenceEquals(remembered, last) && GetClipboardSequenceNumber() == last.Number && GetClipboardOwner() == last.Window;
 
     /// <summary>
     /// After a write's close, with no other open of ImageStash's possible yet: what it wrote, while it is still the

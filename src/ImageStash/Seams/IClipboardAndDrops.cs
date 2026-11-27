@@ -62,6 +62,17 @@ public interface IClipboardAndDrops
     Task<Outcome<bool>> WriteAgain(long savedItem, ClipboardContent content, TimeSpan heldClipboardRetry);
 
     /// <summary>
+    /// A capture card's Undo (G16, How G26 holds): empties the clipboard, judged as <see cref="WriteAgain"/> judges, only
+    /// when, with the clipboard held open, nothing has changed it since this seam's latest write and that write's
+    /// identities include <paramref name="removedItem"/>: true when emptied, that write then forgotten as
+    /// <see cref="ForgetWritten"/> forgets it; false, leaving the clipboard as it is, when anything else has changed it
+    /// since or the item was not among those written, which is no failure. It reads no clipboard data (N9, R5). May be
+    /// called from any thread; a clipboard another program holds open is retried for <paramref name="heldClipboardRetry"/>
+    /// before it fails with <see cref="HeldClipboard.Reason"/> (E3).
+    /// </summary>
+    Task<Outcome<bool>> Empty(long removedItem, TimeSpan heldClipboardRetry);
+
+    /// <summary>
     /// The clipboard read once, for Paste image and Ctrl+V and nothing else (N9, R5): its files when it holds any,
     /// else its image (the PNG bytes a program put there, as they are, else its bitmap as one frame), else its text with
     /// whether that is only a web address (N2), else nothing; no file's bytes are read. May be called from any thread; the

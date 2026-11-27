@@ -8,7 +8,9 @@ namespace ImageStash.Tests.Support;
 /// The clipboard seam for the portable checks: keeps every content written, in order, with the time it was written on
 /// the check's clock; can be told to refuse the next write, to wait before writing, and to run a check of its own at
 /// the moment of the write; remembers the identities of its latest completed write, which a check may also set, and
-/// keeps every write again asked for, answering each with a preset answer; answers every read, and every image-only
+/// keeps every write again asked for, answering each with a preset answer; holds what a paste would then get, which
+/// another program's write a check makes replaces, and empties it, forgetting its latest write, as the seam's
+/// <see cref="Empty"/> says, keeping every emptying asked for and able to hold or fail the next; answers every read, and every image-only
 /// read, with a preset reading, counting each kind of read, after a wait the check may set; and answers every drag
 /// with a preset ending, keeping the files each was given.
 /// </summary>
@@ -50,6 +52,8 @@ public sealed class RecordingClipboard(TimeProvider clock) : IClipboardAndDrops
 
         Written.Add((content, clock.GetUtcNow()));
         LastWritten = content.Items;
+        Holds = content;
+        changedSince = false;
         if (AtWrite is { } atWrite)
         {
             await atWrite();
@@ -67,6 +71,9 @@ public sealed class RecordingClipboard(TimeProvider clock) : IClipboardAndDrops
     public Task<Outcome> WriteText(TopLevel owner, string action, string text, TimeSpan heldClipboardRetry)
     {
         TextsWritten.Add(text);
+        // As the real seam's text write empties the clipboard first and forgets the write before it.
+        Holds = null;
+        LastWritten = [];
         AtWriteText?.Invoke();
         return Task.FromResult(Outcome.Done);
     }
@@ -93,12 +100,69 @@ public sealed class RecordingClipboard(TimeProvider clock) : IClipboardAndDrops
             await hold;
         }
 
+        if (changedSince)
+        {
+            // As the real seam writes nothing once another program has changed the clipboard since its latest write (G26).
+            return Outcome<bool>.Of(false);
+        }
+
         if (WritesAgain is { Succeeded: true, Value: true })
         {
             LastWritten = content.Items;
+            Holds = content;
+            changedSince = false;
         }
 
         return WritesAgain;
+    }
+
+    /// <summary>
+    /// What a paste would now get of the files and pictures written: the latest content written, written again or put
+    /// there by <see cref="AnotherProgramWrites"/>; null before any, once emptied, and after a text write.
+    /// </summary>
+    public ClipboardContent? Holds { get; private set; }
+
+    // Another program has written since the latest write here, as the real seam's sequence number would tell.
+    private bool changedSince;
+
+    /// <summary>Another program replaces the clipboard's contents, which this seam's latest write no longer is, though it still remembers it.</summary>
+    public void AnotherProgramWrites(ClipboardContent content)
+    {
+        Holds = content;
+        changedSince = true;
+    }
+
+    /// <summary>Every emptying asked for, by the item given, in order.</summary>
+    public List<long> EmptiesAsked { get; } = [];
+
+    /// <summary>A task the next emptyings wait on once asked for, before judging, as a clipboard another program holds keeps them waiting; null for none.</summary>
+    public Task? HoldEmpty { get; set; }
+
+    /// <summary>A failure for the next emptying, which then empties nothing, as a clipboard held past its retries fails it.</summary>
+    public Failure? FailNextEmpty { get; set; }
+
+    public async Task<Outcome<bool>> Empty(long removedItem, TimeSpan heldClipboardRetry)
+    {
+        EmptiesAsked.Add(removedItem);
+        if (HoldEmpty is { } hold)
+        {
+            await hold;
+        }
+
+        if (FailNextEmpty is { } failure)
+        {
+            FailNextEmpty = null;
+            return failure;
+        }
+
+        if (changedSince || !LastWritten.Contains(removedItem))
+        {
+            return Outcome<bool>.Of(false);
+        }
+
+        Holds = null;
+        LastWritten = [];
+        return Outcome<bool>.Of(true);
     }
 
     /// <summary>What the next reads find: an empty clipboard until a check says otherwise.</summary>

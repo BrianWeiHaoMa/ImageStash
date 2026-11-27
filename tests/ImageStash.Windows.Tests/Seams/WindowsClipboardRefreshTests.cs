@@ -18,7 +18,7 @@ namespace ImageStash.Windows.Tests.Seams;
 [TestClass]
 public sealed class WindowsClipboardRefreshTests
 {
-    private static readonly TimeSpan ShortRetry = TimeSpan.FromMilliseconds(300);
+    internal static readonly TimeSpan ShortRetry = TimeSpan.FromMilliseconds(300);
 
     [TestMethod]
     public async Task AWriteAgainForAnItemOfTheLatestWriteReplacesTheClipboardEvenRightAfterTheWrite()
@@ -121,7 +121,7 @@ public sealed class WindowsClipboardRefreshTests
     }
 
     /// <summary>A 3×2 opaque still of one grey, its PNG and its frame in the boundary pixel contract.</summary>
-    private static (byte[] Png, MediaFrame Frame) Still(byte grey)
+    internal static (byte[] Png, MediaFrame Frame) Still(byte grey)
     {
         var pixels = Enumerable.Range(0, 6).SelectMany(_ => new[] { grey, grey, grey, (byte)255 }).ToArray();
         using var image = SKImage.FromPixelCopy(new SKImageInfo(3, 2, SKColorType.Bgra8888, SKAlphaType.Unpremul), pixels);
@@ -129,8 +129,8 @@ public sealed class WindowsClipboardRefreshTests
         return (png.ToArray(), new MediaFrame(3, 2, 0, pixels));
     }
 
-    /// <summary>One seam and the window that owns its writes, as the stash window owns the product's, kept for the check.</summary>
-    private sealed class OwnedSeam : IDisposable
+    /// <summary>One seam and the window that owns its writes, as the stash window owns the product's, kept for the check; the emptying's checks share it.</summary>
+    internal sealed class OwnedSeam : IDisposable
     {
         private readonly Avalonia.Controls.Window owner;
 

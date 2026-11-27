@@ -40,8 +40,9 @@ public sealed record CaptureOpening(StashItem Item, CaptureEdit? Edit, bool Noti
 /// failure instead. Its words are one rule (<see cref="Title"/>, <see cref="Line"/>, <see cref="Aside"/>): titled by
 /// what was captured, in the stash; one line saying a recording's length, that it is on the clipboard and that Ctrl+V
 /// pastes it only when ImageStash put it there, and the saved file's size once measured; for a stashed clipboard image
-/// G13's sentence. Its Undo removes the item through Store, its file to the Recycle Bin (G29), and records nothing
-/// else. It never reads the clipboard (N9, R5), and a rename in its field rewrites it only through the handoff's guarded
+/// G13's sentence. Its Undo removes the item through Store, its file to the Recycle Bin (G29), empties the clipboard
+/// when ImageStash's latest write there holds it and nothing has changed it since (G16), and records nothing else. It
+/// never reads the clipboard (N9, R5), and a rename in its field rewrites it only through the handoff's guarded
 /// refresh, as a rename in the window does (G17, G26). It is drawn as the capture card, with the picture, those words
 /// and the name as a field, renamed through a rename path of its own
 /// whose refusals are named above the tray, never only in the window, which may be hidden (G35); its Edit, or Trim for
@@ -55,6 +56,7 @@ public sealed class CaptureNotification(NotificationStacks stacks, Listing listi
     private readonly Renaming renaming = new(listing, stacks.Tray, handoff);
 
     private readonly ConditionalWeakTable<Notice, CaptureCardWords> shownWords = [];
+    private int undoing;
 
     /// <summary>Said on the line only for a capture ImageStash put on the clipboard (G16).</summary>
     public const string OnClipboard = "On the clipboard";
@@ -64,6 +66,15 @@ public sealed class CaptureNotification(NotificationStacks stacks, Listing listi
 
     /// <summary>The cards' one rename path, its refusals named above the tray; a Move waits for it (State: Move).</summary>
     public Renaming Renaming => renaming;
+
+    /// <summary>
+    /// A card's Undo is running, from its click until its removal and the clipboard's emptying have answered: one change,
+    /// which Move, Export stash… and Import stash… wait for, though its card has already gone (G36, State: Move).
+    /// </summary>
+    public bool Undoing => Volatile.Read(ref undoing) > 0;
+
+    /// <summary>Raised whenever <see cref="Undoing"/> may have changed.</summary>
+    public event Action? Changed;
 
     /// <summary>A click into a card's name field brought the notification in front: ImageStash gained focus (G8).</summary>
     public event Action? FieldTookFocus;
@@ -151,7 +162,7 @@ public sealed class CaptureNotification(NotificationStacks stacks, Listing listi
         var stack = stacks.On(on);
         var stoodOn = ReferenceEquals(stack, stacks.Tray) ? null : on;
         // The notice's words name the item; its card shows the name in its field instead, so a rename shows there.
-        var raised = stack.Raise(NoticeText(item, kind, onClipboard, lengthMs), "Undo", () => Undo(item.Id),
+        var raised = stack.Raise(NoticeText(item, kind, onClipboard, lengthMs), "Undo", () => Undo(item.Id, stack),
             card: (notice, notices) => new CaptureCard(notice, notices, item, words, listing, renaming, quietWindows, heldFileRetry,
                 () => FieldTookFocus?.Invoke(),
                 (shown, inFront) => Open(new CaptureOpening(shown, new CaptureEdit(shown, trim), inFront) { StoodOn = stoodOn }),
@@ -181,14 +192,40 @@ public sealed class CaptureNotification(NotificationStacks stacks, Listing listi
 
     /// <summary>
     /// The capture leaves by identity through Store's removal, as an import's Undo removes its batch, whatever it was
-    /// renamed or marked meanwhile; the listing then shows the stash without it, and a refusal is the undo's outcome,
-    /// which the notices name (G29, G35).
+    /// renamed or marked meanwhile; once its picture has gone, a removal failing on a later step included, the clipboard
+    /// is emptied when ImageStash's latest write there holds it and nothing has changed it since, since a paste would
+    /// hand over a file that is gone (G16); the listing then shows the stash without it. A refusal of the removal is the
+    /// undo's outcome, which the notices name, the clipboard kept while the picture stays; an emptying the clipboard's
+    /// holder stops is named in the card's stack as its own act, the removal standing (G29, G35). <see cref="Undoing"/>
+    /// covers it all, from the click.
     /// </summary>
-    private async Task<Outcome> Undo(long id)
+    private async Task<Outcome> Undo(long id, Notices stack)
     {
-        var removed = await listing.Store!.Remove([id]);
-        await listing.Refresh();
-        return removed[0];
+        Interlocked.Increment(ref undoing);
+        Changed?.Invoke();
+        try
+        {
+            var store = listing.Store!;
+            // Its picture's path as the store has it now, a rename since the card was raised included.
+            var before = await store.Item(id);
+            var removed = await store.Remove([id]);
+            if (removed[0].Succeeded || before is { Succeeded: true, Value: { } picture } && !File.Exists(picture.FilePath))
+            {
+                var emptied = await handoff.EmptyClipboardOf(id);
+                if (!emptied.Succeeded)
+                {
+                    stack.Raise(emptied.Failure);
+                }
+            }
+
+            await listing.Refresh();
+            return removed[0];
+        }
+        finally
+        {
+            Interlocked.Decrement(ref undoing);
+            Changed?.Invoke();
+        }
     }
 }
 

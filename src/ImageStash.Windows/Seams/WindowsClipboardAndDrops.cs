@@ -21,7 +21,8 @@ namespace ImageStash.Windows.Seams;
 /// A drag out of the window is the shell's own file drag, offering a copy only. The clipboard is read with the same
 /// Win32 API by <see cref="Read"/> alone for the paste, files, else "PNG", else a bitmap, else text, and by
 /// <see cref="ReadImage"/> alone for Stash clipboard image, "PNG", else a bitmap, as How G13 holds says, each copying
-/// out only the format it takes (N9, R5). The write remembered for G26's refresh is in <c>WindowsClipboardRefresh.cs</c>.
+/// out only the format it takes (N9, R5). The write remembered for G26's refresh is in <c>WindowsClipboardRefresh.cs</c>, and
+/// the emptying a capture card's Undo asks in <c>WindowsClipboardEmptying.cs</c>.
 /// </summary>
 public sealed partial class WindowsClipboardAndDrops : IClipboardAndDrops
 {

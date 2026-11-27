@@ -18,7 +18,7 @@ namespace ImageStash.Windows.Tests.Window;
 /// those physical coordinates as a PNG item with the auto name (F3, F12); the clipboard then holds the file, its PNG
 /// bytes and an opaque CF_DIBV5 (G8), no use recorded (G10); the capture notification above the tray shows the
 /// picture, says it is on the clipboard, its measured size, the name field and Undo, which sends the file to the
-/// Recycle Bin (G16, G24, G29); the chat keeps the keystrokes afterwards; with Also copy off the clipboard is not
+/// Recycle Bin and takes it off the clipboard (G16, G24, G29); the chat keeps the keystrokes afterwards; with Also copy off the clipboard is not
 /// touched and the notification says in the stash only. Through a real press of <c>Ctrl+PrtScn</c>, registered as
 /// ImageStash binds its shortcuts (F5): over the chat, the screen frozen within a second, a notification showing then
 /// left out of the saved pixels (S4), Recent listing it first while it has no use (G4), and a second press cancelled with Esc; over the flyout, the
@@ -218,6 +218,10 @@ public sealed class ScreenshotTests
 
         Assert.IsEmpty(desk.Items(), "Undo removes the capture");
         Assert.IsFalse(File.Exists(item.FilePath));
+        var afterUndo = TestClipboard.Read();
+        Assert.IsEmpty(afterUndo.Files, "Undo takes the capture off the clipboard, which still held it (G16)");
+        Assert.IsNull(afterUndo.Png);
+        Assert.IsNull(afterUndo.DibV5);
         var entries = RecycleBinEntries.Of(item.FilePath);
         Assert.HasCount(1, entries, "its file in the Recycle Bin (G29)");
         foreach (var entry in entries)

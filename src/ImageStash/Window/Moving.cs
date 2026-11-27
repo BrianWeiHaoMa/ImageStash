@@ -124,8 +124,8 @@ public sealed class Moving
 
     /// <summary>
     /// What Move waits for beside the window: a screenshot or a recording, Stash clipboard image, a capture card's rename,
-    /// an Open with… copy being classified or adopted, and a notification whose Undo still stands, above the tray or in
-    /// any other display's stack, one opened after this call included (State: Move, G16, G27).
+    /// a capture card's Undo from its click until its clipboard work has answered, an Open with… copy being classified or
+    /// adopted, and a notification whose Undo still stands, above the tray or in any other display's stack, one opened after this call included (State: Move, G16, G27).
     /// </summary>
     public void WaitForTray(Screenshot screenshot, RecordClip recordClip, StashClipboardImage stashClipboardImage, CaptureNotification captured, OpenWith openWith, NotificationStacks notifications)
     {
@@ -133,6 +133,8 @@ public sealed class Moving
         WaitFor(() => recordClip.InProgress ? "the recording" : null);
         WaitFor(() => stashClipboardImage.InProgress ? "Stash clipboard image" : null);
         WaitFor(() => captured.Renaming.Busy is null ? null : "the rename", heard => captured.Renaming.Changed += heard);
+        // A card's Undo leaves its card at the click; its removal and the clipboard's emptying are one change until they answer.
+        WaitFor(() => captured.Undoing ? "the Undo of a notification" : null, heard => captured.Changed += heard);
         WaitFor(() => openWith.Running ? "Open with…" : null);
         WaitFor(() => UndoStanding(notifications.All, "notification"), heard => notifications.Changed += heard);
     }

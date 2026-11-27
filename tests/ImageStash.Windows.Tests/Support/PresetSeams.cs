@@ -107,6 +107,8 @@ public sealed class PresetDrags : IClipboardAndDrops
 
     public Task<Outcome<bool>> WriteAgain(long savedItem, ClipboardContent content, TimeSpan heldClipboardRetry) => real.WriteAgain(savedItem, content, heldClipboardRetry);
 
+    public Task<Outcome<bool>> Empty(long removedItem, TimeSpan heldClipboardRetry) => real.Empty(removedItem, heldClipboardRetry);
+
     /// <summary>How many reads of the clipboard's data have been asked for, image-only reads included (N9).</summary>
     public int Reads { get; private set; }
 
