@@ -572,6 +572,30 @@ public sealed class CaptureCardTests
     }
 
     [TestMethod]
+    public async Task TwoCardsANameTypedInTheFirstFieldIsKeptWhenTheSecondFieldTakesFocus()
+    {
+        using var desk = await CaptureDesk.Open(["stash first.png", "stash second.png"]);
+        var first = await desk.Raise(desk.Items()[0]);
+        var second = await desk.Raise(desk.Items()[1]);
+        var firstId = desk.Items()[0].Id;
+
+        TestMouse.Click(Centre(TrayDesktop.Get(() => NameButton(first))));
+        await Eventually(() => TrayDesktop.Get(() => first.Field.IsEditing && NameBox(first).IsFocused));
+        Type("zz");
+        await Eventually(() => TrayDesktop.Get(() => NameBox(first).Text) == "zz");
+        TestMouse.Click(Centre(TrayDesktop.Get(() => NameButton(second))));
+        await Eventually(() => TrayDesktop.Get(() => second.Field.IsEditing && NameBox(second).IsFocused && !first.Field.IsEditing));
+
+        await Eventually(() => desk.Items().Single(item => item.Id == firstId).Name == "zz");
+        Assert.AreEqual("zz", desk.Items().Single(item => item.Id == firstId).Name, "focus moving to another card's field keeps what was typed, as Enter keeps it (G16, G17)");
+        Assert.AreEqual("stash second", desk.Items().Single(item => item.Id != firstId).Name, "the second card's item is untouched");
+        await Eventually(() => TrayDesktop.Get(() => first.Field.Shown) == "zz");
+
+        TestHotKeys.Tap(Esc);
+        await Eventually(() => FrontWindow.GetForegroundWindow() == desk.Chat.Window);
+    }
+
+    [TestMethod]
     public async Task ThePlainNotificationBesideACaptureCardIsQuietAndTheNewestNamesTheWindow()
     {
         using var desk = await CaptureDesk.Open(["stash beside.png"]);

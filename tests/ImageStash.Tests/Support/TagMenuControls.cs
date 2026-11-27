@@ -96,6 +96,20 @@ internal static class TagMenuControls
         return request;
     }
 
+    internal static TextBox OpenRename(Button source)
+    {
+        Assert.IsTrue(RequestMenu(source).Handled);
+        Click(source.ContextMenu!.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Rename tag…")));
+        return source.Content as TextBox ?? throw new AssertFailedException("The tag's place did not become a text box.");
+    }
+
+    internal static void Press(TextBox box, Key key, KeyModifiers modifiers = KeyModifiers.None)
+    {
+        var args = new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key, KeyModifiers = modifiers };
+        box.RaiseEvent(args);
+        Assert.IsTrue(args.Handled);
+    }
+
     internal static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
     internal static void Click(MenuItem item) => item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));

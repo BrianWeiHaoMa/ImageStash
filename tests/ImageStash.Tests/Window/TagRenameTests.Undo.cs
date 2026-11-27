@@ -1,6 +1,9 @@
+using Avalonia.Input;
+using Avalonia.Threading;
 using ImageStash.Store;
 using ImageStash.Tests.Support;
 using ImageStash.Window;
+using static ImageStash.Tests.Support.TagMenuControls;
 
 namespace ImageStash.Tests.Window;
 
@@ -114,5 +117,44 @@ public sealed partial class TagRenameTests
         Assert.AreEqual("match  category CAT #cat kitty", ItemSearch.WithoutRenamedTag(renamed, renamed, replaced, "kitty"), "a destination already searched for stays");
         Assert.AreEqual("match  category dog #cat kitty", ItemSearch.WithoutRenamedTag("match  category dog #kitty kitty", renamed, replaced, "kitty"), "a word typed in place since stays");
         Assert.AreEqual("kitty " + renamed, ItemSearch.WithoutRenamedTag("kitty " + renamed, renamed, replaced, "kitty"), "words added since: no place is trusted, nothing changes");
+    }
+
+    [TestMethod]
+    public async Task AMergeThroughALitChipLightsTheDestinationsChipAndLeavesTheSourcesPlaceGrey()
+    {
+        using var listed = await ListedStash.Open();
+        var (a, b, c) = (await listed.Stash.Import("a", TestStash.Bytes(1)), await listed.Stash.Import("b", TestStash.Bytes(2)), await listed.Stash.Import("c", TestStash.Bytes(3)));
+        listed.Stash.Tag(a.Id, "lol");
+        listed.Stash.Tag(b.Id, "lol");
+        listed.Stash.Tag(b.Id, "lmao");
+        listed.Stash.Tag(c.Id, "lmao");
+        listed.Stash.Tag(c.Id, "other");
+        OnControls(async () =>
+        {
+            await listed.Listing.ShowScope(Scope.All);
+            var row = Chips(listed);
+            Click(Chip(row, "lol"));
+            await listed.Listing.Settle();
+            Assert.AreEqual("lol", listed.Listing.Query);
+            var places = listed.Listing.Chips.Select(chip => chip.Tag).ToList();
+
+            var box = OpenRename(Chip(row, "lol"));
+            box.Text = "lmao";
+            await listed.WaitForOrganising(() => Press(box, Key.Enter));
+            listed.Keys.Released(Key.Enter);
+            await listed.Listing.Settle();
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.AreEqual("lmao", listed.Listing.Query, "the search's word becomes the destination");
+            CollectionAssert.AreEqual(new[] { "lmao" }, listed.Listing.LitTags.ToArray());
+            Assert.IsTrue(Chip(row, "lmao").Classes.Contains("accent"), "the destination's chip is lit");
+            Assert.IsTrue(Chip(row, "lmao").IsEnabled);
+            CollectionAssert.AreEqual(places, listed.Listing.Chips.Select(chip => chip.Tag).ToList(), "every place where it was");
+            Assert.AreEqual(new TagCount("lol", 0), listed.Listing.Chips.Single(chip => chip.Tag == "lol"), "the source's place is a tag that lost its last item");
+            Assert.IsFalse(Chip(row, "lol").IsEnabled, "grey: no chip to click, light or drop on (G4)");
+            Assert.IsFalse(Chip(row, "lol").Classes.Contains("accent"));
+            CollectionAssert.AreEquivalent(new[] { a.Id, b.Id, c.Id }, listed.Listing.Items.Select(item => item.Id).ToArray(), "every former carrier, and the destination's own, listed");
+            CollectionAssert.AreEquivalent(new[] { "lmao", "other" }, (await Stored(listed, c)).Tags.ToArray(), "the destination's own carrier keeps its other tags");
+        });
     }
 }

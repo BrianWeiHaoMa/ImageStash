@@ -122,6 +122,25 @@ public sealed class TagRenameWindowTests
         await QueryIs(shown, "zulu");
     }
 
+    [TestMethod]
+    public async Task AClickElsewhereInTheWindowKeepsTheTypedNameAsEnterDoes()
+    {
+        using var pointer = TestMouse.PutBackAfterwards();
+        using var shown = Open();
+        var carrier = (await shown.OpenStash(shown.Picture("carrier.png"))).Single();
+        await shown.Tag([carrier], "elsewhere");
+        await shown.ClickSearchInFront();
+
+        var editor = await OpenRename(await FindAnchor(shown, null, "elsewhere"), "elsewhere");
+        await TypeDraft(editor, Renamed);
+        TestMouse.Click(TrayDesktop.Get(() => shown.TileOnScreen(carrier.Id)));
+        await RenameClosed(editor);
+        await Eventually(() => TrayDesktop.Get(() => shown.Listing.Settled && shown.Listing.Tags.Any(count => count.Tag == Renamed)));
+
+        CollectionAssert.AreEqual(new[] { Renamed }, shown.TagsOf(carrier.Id), "focus moving to another part of the window renames, as Enter does (G17)");
+        TrayDesktop.Run(() => Assert.IsFalse(shown.Search.IsFocused, "focus stays where the click put it, not given back to the search box it came from"));
+    }
+
     private static async Task PickAfterCancel(ShownWindow shown, StashItem match, string origin, TagPicker? picker,
         string tag, bool itemPick)
     {

@@ -525,20 +525,6 @@ public sealed partial class TagRenameTests
         });
     }
 
-    private static TextBox OpenRename(Button source)
-    {
-        Assert.IsTrue(RequestMenu(source).Handled);
-        Click(source.ContextMenu!.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Rename tag…")));
-        return source.Content as TextBox ?? throw new AssertFailedException("The tag's place did not become a text box.");
-    }
-
-    private static void Press(TextBox box, Key key, KeyModifiers modifiers = KeyModifiers.None)
-    {
-        var args = new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key, KeyModifiers = modifiers };
-        box.RaiseEvent(args);
-        Assert.IsTrue(args.Handled);
-    }
-
     private static void OnControls(Func<Task> act) => ControlThread.Run(() => ControlThread.FinishOnDispatcher(act));
 
     private static async Task<StashItem> Stored(ListedStash listed, StashItem item) =>
