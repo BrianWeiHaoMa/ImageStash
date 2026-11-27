@@ -125,6 +125,32 @@ public sealed class PreviewSteppingTests
     }
 
     [TestMethod]
+    public async Task DelInThePreviewShowsTheItemThatTookItsPlaceAndASecondDelDeletesThatOne()
+    {
+        using var listed = await ListedStash.Open();
+        var all = await Listed(listed, Scope.All, "e", "d", "c", "b", "a");
+        // Newest added first: a, b, c, d, e.
+        OpenOn(listed, all[2]);
+        listed.Listing.FocusForPreview(all[2].Id);
+
+        await Del(listed);
+        Assert.IsTrue(listed.PreviewOpen);
+        Assert.AreEqual(all[3].Id, listed.PreviewItem?.Id, "d, as › would have shown");
+        CollectionAssert.AreEqual(new[] { all[3].Id }, listed.Listing.Selection.ToList(), "and the grid's one selected item, so the keys act on it");
+
+        await Del(listed);
+        Assert.AreEqual(all[4].Id, listed.PreviewItem?.Id, "the second Del took d, the item shown, and shows e");
+        CollectionAssert.AreEqual(new[] { all[0].Id, all[1].Id, all[4].Id }, listed.Listing.Items.Select(item => item.Id).ToList());
+
+        await Del(listed);
+        Assert.AreEqual(all[1].Id, listed.PreviewItem?.Id, "e was the last: the new last");
+        await Del(listed);
+        await Del(listed);
+        Assert.IsFalse(listed.PreviewOpen, "the only item deleted: the list is empty and the preview closes");
+        Assert.IsEmpty(listed.Failures);
+    }
+
+    [TestMethod]
     public async Task ARenameEndingTheSearchsMatchLeavesTheStepOnToWhatWasTheSecondResult()
     {
         using var listed = await ListedStash.Open();
@@ -300,6 +326,13 @@ public sealed class PreviewSteppingTests
     }
 
     /// <summary>The preview told open on <paramref name="item"/>, as the check's starting point.</summary>
+    /// <summary>Del in the preview, its key let go first so the press acts.</summary>
+    private static async Task Del(ListedStash listed)
+    {
+        listed.Keys.Released(Key.Delete);
+        Assert.AreEqual(KeyAction.Delete, await listed.Press(Key.Delete, KeyModifiers.None, KeyPlace.Preview));
+    }
+
     private static void OpenOn(ListedStash listed, StashItem item)
     {
         listed.PreviewOpen = true;

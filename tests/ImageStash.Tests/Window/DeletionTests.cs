@@ -44,6 +44,32 @@ public sealed class DeletionTests
     }
 
     [TestMethod]
+    public async Task UndoSelectsWhatItBroughtBackWhereListedAndElsewhereLeavesTheScopeSearchAndSelection()
+    {
+        using var listed = await ListedStash.Open();
+        var (cat, dog, fox) = (await listed.Stash.Import("cat"), await listed.Stash.Import("dog"), await listed.Stash.Import("fox"));
+        await listed.Listing.ShowScope(Scope.All);
+        listed.Listing.Select([cat.Id, fox.Id], null);
+        await listed.Deletion.Delete(listed.Listing.SelectedItems);
+        CollectionAssert.AreEqual(new[] { dog.Id }, listed.Listing.Selection.ToList());
+
+        await listed.Notices.Undo(listed.Notices.Shown.Single());
+
+        CollectionAssert.AreEquivalent(new[] { cat.Id, fox.Id }, listed.Listing.Selection.ToList(), "what came back, selected");
+        Assert.AreEqual(fox.Id, listed.Listing.Focused, "focused on the first of them in the list");
+
+        listed.Listing.Focus(dog.Id);
+        await listed.Deletion.Delete(listed.Listing.SelectedItems);
+        await listed.Listing.SetQuery("cat");
+        CollectionAssert.AreEqual(new[] { cat.Id }, listed.Listing.Selection.ToList());
+
+        await listed.Notices.Undo(listed.Notices.Shown.Single());
+
+        Assert.AreEqual(("cat", Scope.All), (listed.Listing.Query, listed.Listing.Scope), "the search the person chose since stays");
+        CollectionAssert.AreEqual(new[] { cat.Id }, listed.Listing.Selection.ToList(), "dog is not listed there: the selection stays");
+    }
+
+    [TestMethod]
     public async Task UndoBringsBackEveryItemWithItsNameTagsFavoriteFlagUsesAndBytesAndRemovesTheRecycleBinsEntries()
     {
         using var listed = await ListedStash.Open();

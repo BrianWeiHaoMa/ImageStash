@@ -76,6 +76,7 @@ public sealed class Preview : Border
 
     /// <summary>The opening a close asked while a commit was in flight waits in, or null.</summary>
     private int? closingIn;
+    private long? deletingShown;
 
     /// <param name="pasteTarget">The paste target the footer names, which names the handoff button.</param>
     /// <param name="dialogUp">Told while Save a copy…'s picker or Open with…'s dialog is up, so the flyout stays (G2).</param>
@@ -473,7 +474,12 @@ public sealed class Preview : Border
 
         if (current is null)
         {
-            Close();
+            // Its own Delete decides what shows next, once that Delete has answered.
+            if (item.Id != deletingShown)
+            {
+                Close();
+            }
+
             return;
         }
 
@@ -502,8 +508,31 @@ public sealed class Preview : Border
     /// <summary><c>Ctrl+C</c>: the item onto the clipboard, the window staying (G9).</summary>
     public Task<Outcome> Copy(TopLevel owner) => Act(Handoff.Action, item => handoff.Copy(owner, [item]));
 
-    /// <summary>Del: the item deleted through the window's one Delete, with its notice and Undo; the preview closes once it is gone (G18).</summary>
-    public Task<Outcome> Delete() => Act(Deletion.Action, item => deletion.Delete([item]));
+    /// <summary>
+    /// Del: the item deleted through the window's one Delete, with its notice and Undo; the preview then shows the item
+    /// that took its place (<see cref="PreviewStepping.DeleteShown"/>), and closes once the list is empty (G18, G19).
+    /// </summary>
+    public Task<Outcome> Delete() => Act(Deletion.Action, async item =>
+    {
+        // A second Del while the first runs asks for nothing more, and leaves the first's hold on closing alone.
+        if (deletingShown == item.Id)
+        {
+            return Outcome.Done;
+        }
+
+        deletingShown = item.Id;
+        try
+        {
+            return Steps is { } steps ? await steps.DeleteShown(item, shown => deletion.Delete([shown])) : await deletion.Delete([item]);
+        }
+        finally
+        {
+            deletingShown = null;
+        }
+    });
+
+    /// <summary>The steps through the grid's list (<see cref="PreviewStepping"/>), which the window makes over this preview.</summary>
+    internal PreviewStepping? Steps { get; set; }
 
     /// <summary><c>Ctrl+D</c> and its star: the item's favorite flag toggled through the window's one organising entry (G17).</summary>
     public Task<Outcome> ToggleFavorite() => Act(Organising.FavoriteAct, item => organising.ToggleFavorite([item]));

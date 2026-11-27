@@ -158,7 +158,7 @@ public sealed class Editing
     public async Task<Outcome> OpenFromNotification(CaptureEdit asked)
     {
         using var acting = UserAct.Begin(Action);
-        await listing.ShowScope(Scope.All);
+        await listing.ShowNewItems([asked.Item.Id], byPerson: true);
         return Named(await Opening(asked.Item, EditOrigin.Notification, startOn: null, trim: asked.Trim));
     }
 
@@ -385,7 +385,7 @@ public sealed class Editing
                 return result.Failure!;
             case EditEnding.Continued:
                 await listing.Refresh();
-                listing.FocusIfListed(result.Item!.Id);
+                await listing.ShowNewItem(result.Item!.Id);
                 Continued?.Invoke(result.Item);
                 Changed?.Invoke();
                 return Outcome.Done;
@@ -503,6 +503,12 @@ public sealed class Editing
             var read = await Read(store, item, SaveAsNewItemAction);
             made = read.Succeeded ? await SavedEdit.SaveAsNew(store, read.Value!.Item, read.Value, read.Value.RenderedLayers, renderer, heldFileRetry) : read.Failure;
             await listing.Refresh();
+            if (made.Succeeded)
+            {
+                // Listed and selected before the edit opens on it, so a Cancel leaves the copy selected (G26); still
+                // busy meanwhile, so a Move asked now waits for the edit (State: Move).
+                await listing.ShowNewItem(made.Value!.Id);
+            }
         }
         finally
         {

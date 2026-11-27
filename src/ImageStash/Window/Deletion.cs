@@ -95,9 +95,9 @@ public sealed class Deletion(Listing listing, Notices notices)
     }
 
     /// <summary>
-    /// The notice's Undo: every item of the batch back from its held copies, the Recycle Bin's entries removed (G18).
-    /// Every failure that came after an item was back is named in a notice of its own, as is every item that could not
-    /// come back after the first, which is returned for the notices to name.
+    /// The notice's Undo: every item of the batch back from its held copies, the Recycle Bin's entries removed (G18), and
+    /// selected where the list shows them. Every failure that came after an item was back is named in a notice of its
+    /// own, as is every item that could not come back after the first, which is returned for the notices to name.
     /// </summary>
     private async Task<Outcome> Undo(StashStore store, IReadOnlyList<DeletedItem> batch)
     {
@@ -107,6 +107,7 @@ public sealed class Deletion(Listing listing, Notices notices)
             SetBusy(batch.Count == 1 ? $"Bringing back “{batch[0].Name}”…" : $"Bringing back {batch.Count} items…");
             var outcomes = await store.UndoDelete(batch);
             await listing.Refresh();
+            listing.SelectIfListed(outcomes.Where(outcome => outcome.Succeeded).Select(outcome => outcome.Value!.Id).ToList());
             NameAll(outcomes.Where(outcome => outcome.Succeeded).SelectMany(outcome => outcome.Value!.Named).ToList());
             var failed = outcomes.Where(outcome => !outcome.Succeeded).Select(outcome => outcome.Failure!).ToList();
             NameAll(failed.Skip(1).ToList());

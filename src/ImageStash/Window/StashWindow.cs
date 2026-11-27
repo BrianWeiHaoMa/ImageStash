@@ -132,6 +132,7 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
         // Esc in the field gives focus back to where Ctrl+T was pressed, the box or the grid (G7).
         tagKey = new TagKey(listing, () => preview.IsOpen, preview.FocusTags, () => tagField.IsVisible, items => tagField.Open(items, FocusManager?.GetFocusedElement() ?? grid));
         previewSteps = new PreviewStepping(listing, () => preview.Item, item => preview.Open(item));
+        preview.Steps = previewSteps;
         editor = new EditorOverlay(failure => notices.Raise(failure), seams.Fonts);
         footerHints = new FooterHints(listing, pasteTarget, handoff, notices.Clock);
         // The empty stash's rows run the acts its keys, the + menu and the tray menu run (G2, G12 to G15).
@@ -389,6 +390,15 @@ public sealed partial class StashWindow : Avalonia.Controls.Window
         // has been answered, as Esc closes it, so nothing on the grid acts before it (G20, G8); one an edit covers stays,
         // for the edit to return to (G26).
         import.FinishPreview = () => editing.IsOpen ? Task.CompletedTask : preview.DismissWhenCommitted(commitDraft: true);
+        // Read where focus is once the batch shows: anything but the box or the grid itself counts as another field.
+        import.BatchShown += () =>
+        {
+            var place = StashKeys.PlaceOf(search.IsFocused, inOtherField: !search.IsFocused && !grid.IsFocused, preview.IsOpen, preview.ButtonFocused, editing.IsOpen);
+            if (ImportEnd.TakesFocusFrom(place))
+            {
+                grid.Focus(NavigationMethod.Tab);
+            }
+        };
         // The preview's buttons are Enter's and Ctrl+C's own path on its item (G19, G8, G9).
         preview.HandOverRequested += () => _ = preview.HandOver(this, activation.TargetNow(), activation.ForPaste);
         preview.CopyRequested += () => _ = preview.Copy(this);

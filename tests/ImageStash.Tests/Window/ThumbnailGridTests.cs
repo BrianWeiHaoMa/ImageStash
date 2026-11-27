@@ -134,6 +134,41 @@ public sealed class ThumbnailGridTests
     }
 
     [TestMethod]
+    public async Task ADelDeepInTheListAsksTheGridToRevealTheItemThatTookItsPlaceNeverTheTop()
+    {
+        using var listed = await ListedStash.Open();
+        for (var index = 0; index < 16; index++)
+        {
+            await listed.Stash.Import($"picture {index}", MediaFixtures.DistinctPng(index));
+        }
+
+        await listed.Listing.ShowScope(Scope.All);
+        var listing = listed.Listing;
+        ControlThread.Run(() => ControlThread.FinishOnDispatcher(async () =>
+        {
+            var grid = LayOut(listing, 280, decoders: 0);
+            listing.Changed += () => grid.Measure(new Size(280, double.PositiveInfinity));
+            var deep = listing.Items[12];
+            var neighbour = listing.Items[13];
+            listing.Focus(deep.Id);
+            Dispatcher.UIThread.RunJobs();
+            var requested = new List<Rect>();
+            grid.AddHandler(Control.RequestBringIntoViewEvent, (_, args) => requested.Add(args.TargetRect));
+
+            listed.Keys.Released(Key.Delete);
+            await listed.Press(Key.Delete, KeyModifiers.None, KeyPlace.Grid);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.AreEqual(neighbour.Id, listing.Focused);
+            var tiles = grid.Rows.SelectMany(row => row.Tiles).ToList();
+            Assert.AreEqual(12, tiles.FindIndex(tile => tile.Id == neighbour.Id), "the neighbour stands where the deleted item stood");
+            Assert.AreNotEqual(tiles[0].Bounds.Y, tiles[12].Bounds.Y, "the neighbour is rows below the top");
+            // The scroller moves only as far as a requested rectangle needs, so a neighbour already in view leaves the offset as it was.
+            CollectionAssert.AreEqual(new[] { tiles[12].Bounds }, requested, "the grid is asked to reveal the neighbour's tile alone, never the top");
+        }));
+    }
+
+    [TestMethod]
     public async Task NavigationCanReadTheArrivingRowsAfterTheGridHides()
     {
         using var listed = await ListedStash.Open();

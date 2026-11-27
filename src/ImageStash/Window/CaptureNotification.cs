@@ -158,8 +158,7 @@ public sealed class CaptureNotification(Notices notifications, Listing listing, 
         }
 
         closePreview();
-        await listing.ShowScope(Scope.All);
-        listing.Focus(item.Id);
+        await listing.ShowNewItems([item.Id], byPerson: true);
     }
 
     /// <summary>

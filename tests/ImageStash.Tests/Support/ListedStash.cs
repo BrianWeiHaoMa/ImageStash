@@ -57,6 +57,16 @@ public sealed class ListedStash : IDisposable
         Import.FollowScopeChoices(SelectionKeys);
         // As the window: an import's result, at its end or its Show, closes the preview unless an edit covers it (G12, G26).
         Import.Finishing += () => PreviewOpen &= Editing.IsOpen;
+        // As the window: a batch shown selected takes focus to the grid from the box or the grid alone (G12, G7).
+        Import.BatchShown += () =>
+        {
+            var place = StashKeys.PlaceOf(FocusedAt == KeyPlace.SearchBox, FocusedAt == KeyPlace.Field, PreviewOpen, onPreviewButton: false, Editing.IsOpen);
+            if (ImportEnd.TakesFocusFrom(place))
+            {
+                FocusedAt = KeyPlace.Grid;
+                GridFocusRequests++;
+            }
+        };
         OpenWith = new OpenWith(Listing, Notifications, Editing, Dialogs, OpenWithClock, action => action());
         ItemMenu = new ItemMenu(Listing, Notices, Handoff, Organising, Deletion, Editing, OpenWith, Dialogs, saveACopyRetry ?? TestStash.ShortRetry);
         PasteKey = new PasteKey(Paste, Editing);
@@ -339,6 +349,12 @@ public sealed class ListedStash : IDisposable
     /// <summary>The items the "Tags of …" field is open on, none while closed: opened by <see cref="TagKey"/>, closed by the check as Esc or focus leaving closes it.</summary>
     public IReadOnlyList<StashItem> TagFieldItems { get; set; } = [];
 
+    /// <summary>Where keyboard focus stands among the box, the grid and another field, for an act that moves it; the box, as after a summon (G1).</summary>
+    public KeyPlace FocusedAt { get; set; } = KeyPlace.SearchBox;
+
+    /// <summary>How often the window was asked to move focus to the grid, as Tab would (G12).</summary>
+    public int GridFocusRequests { get; private set; }
+
     /// <summary>
     /// A key pressed at <paramref name="place"/> as the window takes it: routed by <see cref="StashKeys.Route"/>, held to
     /// one act per press by <see cref="Keys"/>, and its action's act run as the window's case runs it (Enter's handoff
@@ -401,6 +417,11 @@ public sealed class ListedStash : IDisposable
                 break;
             case KeyAction.Delete when !PreviewOpen:
                 await DeleteSelection();
+                break;
+            case KeyAction.Delete when PreviewItem is { } deleted:
+                // As the preview's own Delete, which closes, as on any item gone from the stash, once nothing took its place.
+                await PreviewStepping.DeleteShown(deleted, item => Deletion.Delete([item]));
+                PreviewOpen &= PreviewItem?.Id != deleted.Id || await Stash.Store!.Item(deleted.Id) is not { Succeeded: true, Value: null };
                 break;
             case KeyAction.ToggleFavorite when !PreviewOpen:
                 await ToggleFavoriteOfSelection();

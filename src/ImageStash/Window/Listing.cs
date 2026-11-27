@@ -67,6 +67,9 @@ public sealed partial class Listing
 
     /// <summary>A load that moves the selection to the first item has started and none has been applied since.</summary>
     private bool selectionResetWaiting;
+
+    /// <summary>A refresh asked to keep the person's place (<see cref="ItemAtPlaceLeft"/>), and no load has applied since.</summary>
+    private bool placeAsked;
     private bool loadFailed;
     private (Scope Scope, string Query)? displayedView;
     private bool stashEmpty;
@@ -395,11 +398,16 @@ public sealed partial class Listing
         return Load(keepSelection: false);
     }
 
-    /// <summary>Loads what is showing again, keeping the selection where its items still exist.</summary>
+    /// <summary>
+    /// Loads what is showing again, keeping the selection where its items still exist, and where none is still listed,
+    /// the person's place (<see cref="ItemAtPlaceLeft"/>).
+    /// </summary>
     public Task Refresh()
     {
         lock (gate)
         {
+            // Asked until a load applies: a summon's load that supersedes this one keeps the place too.
+            placeAsked = true;
             if (Scope == Scope.Recent)
             {
                 order.RecentChanged();
@@ -836,10 +844,13 @@ public sealed partial class Listing
         }
 
         // A refresh that supersedes a search or first-show reset keeps its move to the first item.
+        var sameView = displayedView == ListingView(Scope, Query);
         displayedView = ListingView(Scope, Query);
         // A newer personal selection on a displayed tile survives a pending reset if that tile is still listed.
         var choseSinceReset = selectionResetWaiting && Math.Max(LastPersonChange, LastSelectionInput) > LastSelectionReset;
-        Apply(items, !reset && (choseSinceReset || (keepSelection && !selectionResetWaiting)));
+        var refreshed = !reset && keepSelection && !selectionResetWaiting;
+        Apply(items, !reset && (choseSinceReset || refreshed), placeAsked && refreshed && sameView);
+        placeAsked = false;
         selectionResetWaiting = false;
     }
 
@@ -863,9 +874,10 @@ public sealed partial class Listing
         waiting?.TrySetResult();
     }
 
-    private void Apply(IReadOnlyList<StashItem> items, bool keepSelection)
+    private void Apply(IReadOnlyList<StashItem> items, bool keepSelection, bool keepPlace = false)
     {
         var previousFocus = Focused;
+        var previousPlaces = indexOf;
         var choseNothing = keepSelection && Items.Count > 0 && selection.Count == 0;
         Items = items;
         indexOf = new Dictionary<long, int>(items.Count);
@@ -879,6 +891,12 @@ public sealed partial class Listing
         {
             selection = kept;
             Focused = Focused is { } f && kept.Contains(f) ? f : FirstSelected();
+        }
+        else if (keepPlace && ItemAtPlaceLeft(items, previousPlaces, selection) is { } standing)
+        {
+            selection = [standing];
+            selectionByImport = false;
+            Focused = standing;
         }
         else
         {

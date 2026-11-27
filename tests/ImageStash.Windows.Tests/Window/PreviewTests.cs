@@ -292,7 +292,7 @@ public sealed class PreviewTests
     }
 
     [TestMethod]
-    public async Task DelDeletesThePreviewsItemWithItsNoticeAboveTheClosedPreviewAndUndoBringsItBack()
+    public async Task DelDeletesThePreviewsItemShowsTheOneThatTookItsPlaceAndUndoBringsItBack()
     {
         using var shown = ShownWindow.Open();
         var items = await shown.OpenStash(shown.Picture("preview delete.png"), shown.Picture("preview kept.png"));
@@ -306,21 +306,28 @@ public sealed class PreviewTests
                 .Any(text => text.IsEffectivelyVisible && text.Text == "Deleting “preview delete”…")));
         }
 
-        await ShownWindow.Eventually(() => TrayDesktop.Get(() => !shown.Preview.IsOpen && shown.Notices.Shown.Any(notice => notice.Text.StartsWith("Deleted "))));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Preview.Item?.Id == items[1].Id && shown.Notices.Shown.Any(notice => notice.Text.StartsWith("Deleted "))));
         var notice = TrayDesktop.Get(() => shown.Notices.Shown.Single(notice => notice.Text.StartsWith("Deleted ")));
         TrayDesktop.Run(() =>
         {
             Assert.AreEqual("Deleted “preview delete”.", notice.Text);
             CollectionAssert.AreEqual(new[] { items[1].Id }, shown.Listing.Items.Select(item => item.Id).ToList());
-            Assert.IsTrue(shown.Grid.IsFocused, "the preview closed with its item gone, focus on the grid");
+            Assert.IsTrue(shown.Preview.IsOpen, "the preview stays, on the item that took the deleted one's place (G19)");
+            CollectionAssert.AreEqual(new[] { items[1].Id }, shown.Listing.Selection.ToList(), "which the grid selects");
         });
         Assert.HasCount(1, RecycleBinEntries.Of(deleted.FilePath), "its file in the Recycle Bin (G18)");
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Reachable(notice)));
 
         TrayDesktop.Run(() => _ = shown.Notices.Undo(notice));
         await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Items.Count == 2));
-        TrayDesktop.Run(() => Assert.IsFalse(shown.Preview.IsOpen, "back in the grid, the preview still closed"));
+        TrayDesktop.Run(() => Assert.AreEqual(items[1].Id, shown.Preview.Item?.Id, "the preview stays on its item"));
         Assert.IsEmpty(RecycleBinEntries.Of(deleted.FilePath));
+
+        TrayDesktop.Run(() => ShownWindow.Press(shown.PreviewPicture, Key.Delete));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Items.Count == 1 && shown.Preview.Item?.Id == deleted.Id));
+        TrayDesktop.Run(() => ShownWindow.Press(shown.PreviewPicture, Key.Delete));
+        await ShownWindow.Eventually(() => TrayDesktop.Get(() => shown.Listing.Items.Count == 0 && !shown.Preview.IsOpen));
+        TrayDesktop.Run(() => Assert.IsTrue(shown.Grid.IsFocused, "the list emptied, the preview closed, focus on the grid"));
     }
 
     [TestMethod]

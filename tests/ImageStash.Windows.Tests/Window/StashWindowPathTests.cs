@@ -393,7 +393,7 @@ public sealed partial class StashWindowPathTests
         {
             Assert.IsNull(ShownEmptyStash.View(shown), "the empty stash gives way (G2)");
             Assert.IsTrue(shown.Grid.IsEffectivelyVisible, "to the grid with the pasted picture");
-            Assert.IsTrue(shown.Search.IsFocused, "the focus where it was (G7)");
+            Assert.IsTrue(shown.Grid.IsFocused, "the pasted picture selected, focus in the grid, where its keys act on it (G12)");
         });
     }
 

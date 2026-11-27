@@ -47,12 +47,12 @@ public sealed class UndoKeyTests
             shown.OpenPreview(items[0]);
             Tap(shown.PreviewPicture, Key.Delete);
         });
-        await Eventually(() => TrayDesktop.Get(() => !shown.Preview.IsOpen && shown.Notices.Shown.Count == 1));
+        await Eventually(() => TrayDesktop.Get(() => shown.Preview.Item?.Id == items[1].Id && shown.Notices.Shown.Count == 1));
 
         TrayDesktop.Run(() =>
         {
-            Assert.IsTrue(shown.Grid.IsFocused, "the preview closed with its item gone, focus on the grid");
-            Tap(shown.Grid, Key.Z, KeyModifiers.Control);
+            Assert.IsTrue(shown.Preview.IsOpen, "the preview shows the item that took the deleted one's place (G19)");
+            Tap(shown.PreviewPicture, Key.Z, KeyModifiers.Control);
         });
 
         await Eventually(() => TrayDesktop.Get(() => shown.Listing.Items.Count == 2 && shown.Notices.Shown.Count == 0));

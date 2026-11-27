@@ -58,7 +58,7 @@ public sealed class CaptionEditingTests
     }
 
     [TestMethod]
-    public async Task SavingACopyOutsideTheActiveSearchLeavesTheSourceSelectedOnReturn()
+    public async Task SavingACopyOutsideTheActiveSearchShowsAllWithTheCopySelectedOnReturn()
     {
         using var listed = await ListedStash.Open();
         var source = await SaveCaption(listed.Stash, "echidna");
@@ -71,8 +71,9 @@ public sealed class CaptionEditingTests
         Assert.IsTrue(copied.Succeeded, copied.Failure?.ToString());
         Assert.AreNotEqual(source.Id, session.Item.Id, "the editor continues on the saved copy");
         Assert.IsTrue(listed.Editing.Cancel());
-        Assert.AreEqual(source.Id, listed.Listing.Items.Single().Id);
-        CollectionAssert.AreEqual(new[] { source.Id }, listed.Listing.Selection.ToArray());
+        Assert.AreEqual(("", Scope.All), (listed.Listing.Query, listed.Listing.Scope), "the search could not list the copy");
+        CollectionAssert.AreEquivalent(new[] { source.Id, session.Item.Id }, listed.Listing.Items.Select(item => item.Id).ToArray());
+        CollectionAssert.AreEqual(new[] { session.Item.Id }, listed.Listing.Selection.ToArray());
     }
 
     [TestMethod]

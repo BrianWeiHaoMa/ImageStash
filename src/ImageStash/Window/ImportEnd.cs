@@ -33,4 +33,11 @@ public static class ImportEnd
         var added = files.Where(file => file.Result == ImportResultKind.Added).Select(file => file.Item!.Id).ToList();
         return added.Count > 0 ? added : files.Where(file => file.Result == ImportResultKind.AlreadyInStash).Select(file => file.Item!.Id).Distinct().ToList();
     }
+
+    /// <summary>
+    /// Whether a batch shown selected (<see cref="Import.BatchShown"/>) moves keyboard focus to the grid from
+    /// <paramref name="place"/>, as Tab would, so Del, Space, F2 and <c>Ctrl+Z</c> act on what was added (G12, G7): only
+    /// from the search box or the grid. A name or tag field being typed in, the preview, the editor and Settings keep it.
+    /// </summary>
+    public static bool TakesFocusFrom(KeyPlace place) => place is KeyPlace.SearchBox or KeyPlace.Grid;
 }

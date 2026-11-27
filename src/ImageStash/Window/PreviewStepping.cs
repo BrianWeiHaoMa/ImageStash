@@ -84,4 +84,30 @@ public sealed class PreviewStepping
 
     /// <summary>Left and Up (back), Right and Down (on) in the preview outside its fields: the step decided and made at once.</summary>
     public bool Step(StepWay way) => Next(way) is { } item && MoveTo(item);
+
+    /// <summary>
+    /// The preview's own Delete (G18, G19): <paramref name="item"/>, the one shown, deleted through
+    /// <paramref name="delete"/>; once the grid's list no longer holds it and the stash has it no more, the preview shows
+    /// what › would have shown from where it stood, the new last item where it stood last, so a second Delete acts on the
+    /// item the person is on. With the list emptied it still shows the deleted item, which its owner closes as it closes
+    /// on any item the stash no longer has.
+    /// </summary>
+    public async Task<Outcome> DeleteShown(StashItem item, Func<StashItem, Task<Outcome>> delete)
+    {
+        Observe();
+        var outcome = await delete(item);
+        if (shown()?.Id != item.Id || listing.PlaceOf(item.Id) is not null || listing.Store is not { } store
+            || await store.Item(item.Id) is not { Succeeded: true, Value: null } || shown()?.Id != item.Id)
+        {
+            // Still listed or still in the stash, or the person has stepped or closed the preview meanwhile: theirs stands.
+            return outcome;
+        }
+
+        if ((Next(StepWay.On) ?? Next(StepWay.Back)) is { } standing)
+        {
+            MoveTo(standing);
+        }
+
+        return outcome;
+    }
 }

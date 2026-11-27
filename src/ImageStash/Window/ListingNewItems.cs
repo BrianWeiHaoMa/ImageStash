@@ -2,10 +2,45 @@ using ImageStash.Store;
 
 namespace ImageStash.Window;
 
+/// <summary>
+/// The one home of showing new items: All, the search cleared, those items selected. An import's end and its Show call it
+/// with the import's own conditions (G12); a capture card's click and its Edit (G16), and Save as new item where the view
+/// cannot list the copy (G26), call it as they are asked.
+/// </summary>
 public sealed partial class Listing
 {
-    /// <summary>Prepares All while the person's current view and its keys stay live. Only a current result takes over (G12).</summary>
-    internal async Task<bool> ShowImportResult(IReadOnlyList<long> ids, ImportBegan began, int replacements,
+    /// <summary>
+    /// A capture card's click or Edit (G16), or Save as new item (G26): <paramref name="ids"/> shown on All and selected,
+    /// unless the person changes the view meanwhile; false when they did, or the read failed, which is named.
+    /// </summary>
+    internal Task<bool> ShowNewItems(IReadOnlyList<long> ids, bool byPerson) =>
+        ShowNewItems(ids, ImportBegan.In(this), Replacements, SettleTagChoices, finishView: null, byPerson);
+
+    /// <summary>
+    /// Save as new item's copy (G26): selected where the view lists it, else shown on All with no search, as an import
+    /// shows what it added; the copy is the window's choice, never recorded as anything that would list it in Recent (G4).
+    /// </summary>
+    internal async Task ShowNewItem(long id)
+    {
+        if (PlaceOf(id) is not null || !await ShowNewItems([id], byPerson: false))
+        {
+            FocusIfListed(id);
+        }
+    }
+
+    private async Task SettleTagChoices()
+    {
+        while (TagChoicePending)
+        {
+            await Settle();
+        }
+    }
+
+    /// <summary>
+    /// Prepares All while the person's current view and its keys stay live. Only a current result takes over (G12): an
+    /// import's, when the person has not moved on since <paramref name="began"/>.
+    /// </summary>
+    internal async Task<bool> ShowNewItems(IReadOnlyList<long> ids, ImportBegan began, int replacements,
         Func<Task> settleChoices, Func<Task>? finishView, bool byPerson = false)
     {
         if (byPerson)
@@ -69,7 +104,7 @@ public sealed partial class Listing
                 // Show can outlive the stash that issued its notice, whose item IDs a replacement may reuse.
                 var selected = replacements == Replacements ? ids : [];
                 CountChange(byPerson, began.Input);
-                ApplyImportResult(read, selected, byPerson);
+                ApplyNewItems(read, selected, byPerson);
             }
 
             if (!counted.Succeeded)
@@ -83,7 +118,7 @@ public sealed partial class Listing
         }
     }
 
-    private void ApplyImportResult(StoreListing read, IReadOnlyList<long> ids, bool byPerson)
+    private void ApplyNewItems(StoreListing read, IReadOnlyList<long> ids, bool byPerson)
     {
         var (all, counted, version) = read;
         SetScope(Scope.All, byPerson);

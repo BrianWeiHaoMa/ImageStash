@@ -1,4 +1,6 @@
 using Avalonia.Input;
+using ImageStash.Media;
+using ImageStash.Seams;
 using ImageStash.Store;
 using ImageStash.Tests.Support;
 using ImageStash.Window;
@@ -486,6 +488,69 @@ public sealed class ImportEndTests
     }
 
     /// <summary>The import's result as shown: no search, All lit, exactly <paramref name="items"/> selected, the first of them in order focused.</summary>
+    [TestMethod]
+    public async Task APicturePastedFromTheBoxGivesTheGridFocusWhereCtrlZRunsTheNoticesUndo()
+    {
+        using var listed = await ListedStash.Open();
+        await listed.Stash.ImportFixture("older", "still.png");
+        await listed.Summon();
+        Assert.AreEqual(KeyAction.None, StashKeys.Route(Key.Z, KeyModifiers.Control, KeyPlace.SearchBox), "in the box Ctrl+Z is the box's own (G7)");
+        listed.Clipboard.Reading = Outcome<ClipboardReading>.Of(new ClipboardReading([], MediaFixtures.Bytes("transparent.png"), null, false));
+
+        await listed.Press(Key.V, KeyModifiers.Control, listed.FocusedAt);
+        await listed.Listing.Settle();
+
+        var added = (await listed.Stash.All()).Single(item => item.Name != "older");
+        AssertShown(listed, [added.Id], "a paste from the box");
+        Assert.AreEqual((1, KeyPlace.Grid), (listed.GridFocusRequests, listed.FocusedAt), "focus moved to the grid, as Tab moves it");
+        Assert.AreEqual(KeyAction.UndoNotice, await listed.Press(Key.Z, KeyModifiers.Control, listed.FocusedAt));
+        Assert.IsFalse((await listed.Stash.All()).Any(item => item.Id == added.Id), "the batch is gone");
+        Assert.IsTrue(StashKeys.TypesIntoSearch("c"), "a letter typed in the grid still goes to the box and searches (G7)");
+    }
+
+    [TestMethod]
+    public async Task ASearchChangedWhileTheImportRanKeepsFocusInTheBoxAndShowMovesIt()
+    {
+        using var listed = await ListedStash.Open();
+        await listed.Stash.ImportFixture("older", "still.png");
+        var dropped = new HeldBackFile(MediaFixtures.Path("photo.jpg"));
+        var running = listed.Import.Drop(dropped.Drop);
+        await listed.Listing.SetQuery("old");
+        dropped.Release();
+        var added = (await running).Single().Item!;
+
+        Assert.AreEqual("old", listed.Listing.Query, "the person moved on (G12)");
+        Assert.AreEqual((0, KeyPlace.SearchBox), (listed.GridFocusRequests, listed.FocusedAt));
+        var notice = listed.Notices.Shown.Single();
+        Assert.AreEqual(ImportEnd.Show, notice.Button?.Label);
+
+        await NoticeButton.Press(listed.Notices, notice);
+
+        AssertShown(listed, [added.Id], "Show");
+        Assert.AreEqual((1, KeyPlace.Grid), (listed.GridFocusRequests, listed.FocusedAt), "Show moves focus the same way");
+    }
+
+    [TestMethod]
+    public async Task AFieldBeingTypedInAndTheEditorKeepFocusAtTheImportsEnd()
+    {
+        using var listed = await ListedStash.Open();
+        var older = await listed.Stash.ImportFixture("older", "still.png");
+        listed.FocusedAt = KeyPlace.Field;
+        var first = new HeldBackFile(MediaFixtures.Path("photo.jpg"));
+        first.Release();
+        AssertShown(listed, [(await listed.Import.Drop(first.Drop)).Single().Item!.Id], "a field's typing changes no view");
+        Assert.AreEqual((0, KeyPlace.Field), (listed.GridFocusRequests, listed.FocusedAt), "a name or tag field keeps focus");
+
+        listed.FocusedAt = KeyPlace.SearchBox;
+        await listed.Editing.Open(older, EditOrigin.Grid);
+        var second = new HeldBackFile(MediaFixtures.Path("animated.gif"));
+        second.Release();
+        await listed.Import.Drop(second.Drop);
+
+        Assert.IsTrue(listed.Editing.IsOpen);
+        Assert.AreEqual(0, listed.GridFocusRequests, "the open edit keeps focus");
+    }
+
     internal static void AssertShown(ListedStash listed, IReadOnlyList<long> items, string because)
     {
         Assert.AreEqual("", listed.Listing.Query, because + ": the search cleared");

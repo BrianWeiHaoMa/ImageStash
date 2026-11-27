@@ -129,6 +129,12 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
     /// </summary>
     public event Action? Finishing;
 
+    /// <summary>
+    /// Raised once the window shows a batch's result with its items selected, at its end or at its notice's Show, so the
+    /// keys that act on the selection reach them from where focus is (<see cref="ImportEnd.TakesFocusFrom"/>, G12, G7).
+    /// </summary>
+    public event Action? BatchShown;
+
     internal Func<Task>? FinishPreview { get; set; }
 
     private Task FinishView()
@@ -372,7 +378,8 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
 
     /// <summary>
     /// One batch, after any already running: its busy state while <paramref name="steps"/> run, then its result shown
-    /// (<see cref="Listing.ShowImportResult"/>), or, when the person moved on since <paramref name="began"/>, their search, scope,
+    /// (<see cref="Listing.ShowNewItems(IReadOnlyList{long}, ImportBegan, int, Func{Task}, Func{Task}?, bool)"/>), or, when
+    /// the person moved on since <paramref name="began"/>, their search, scope,
     /// selection and preview kept over what the stash now holds; and the notice for every file, followed by
     /// <paramref name="also"/> when given, with an Undo, offered when the batch put an item in the stash or gave a tag to
     /// one already there, that takes back both, and Show when the window was kept (G12, R9).
@@ -393,11 +400,15 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
             await SettleScopeAndTagChoices();
 
             var replacements = listing.Replacements;
-            var kept = !await listing.ShowImportResult(shown, began, replacements, SettleScopeAndTagChoices, FinishView);
+            var kept = !await listing.ShowNewItems(shown, began, replacements, SettleScopeAndTagChoices, FinishView);
             if (kept)
             {
                 // What the person left stays, its list reading what the stash now holds (G5); Show brings the result up.
                 await listing.Refresh();
+            }
+            else
+            {
+                Shown(shown);
             }
 
             var show = kept ? new NoticeButton(ImportEnd.Show, () => ShowAgain(shown, replacements)) : null;
@@ -445,7 +456,19 @@ public sealed class Import(Listing listing, Notices notices, TimeSpan heldFileRe
             return;
         }
 
-        await listing.ShowImportResult(items, ImportBegan.In(listing), replacements, SettleScopeAndTagChoices, FinishView, byPerson: true);
+        if (await listing.ShowNewItems(items, ImportBegan.In(listing), replacements, SettleScopeAndTagChoices, FinishView, byPerson: true))
+        {
+            Shown(items);
+        }
+    }
+
+    /// <summary>The batch's result shown: told when it selected any of <paramref name="items"/>, none being left to act on otherwise.</summary>
+    private void Shown(IReadOnlyList<long> items)
+    {
+        if (listing.Selection.Overlaps(items))
+        {
+            BatchShown?.Invoke();
+        }
     }
 
     /// <summary>
